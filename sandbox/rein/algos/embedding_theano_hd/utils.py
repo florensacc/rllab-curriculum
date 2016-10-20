@@ -2,7 +2,7 @@ import numpy as np
 from rllab.misc import tensor_utils
 import time
 
-
+print('NOTE: n_seq_frames=4 hardcoded!')
 def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1, n_seq_frames=4):
     observations = []
     actions = []
@@ -23,11 +23,11 @@ def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1, n_seq
     while path_length < max_path_length:
         obs_bfr[top_ptr] = o
         # last frame [-1]
-        o = np.concatenate((obs_bfr[(top_ptr + 1) % n_seq_frames:],
+        _o = np.concatenate((obs_bfr[(top_ptr + 1) % n_seq_frames:],
                             obs_bfr[:(top_ptr + 1) % n_seq_frames]), axis=0)
         # format for policy/baseline is w x h x n_samp
         # o = o.transpose((2, 1, 0))
-        a, agent_info = agent.get_action(o)
+        a, agent_info = agent.get_action(_o)
         next_o, r, d, env_info = env.step(a)
         observations.append(env.observation_space.flatten(o))
         rewards.append(r)

@@ -3,7 +3,7 @@ import numpy as np
 
 from rllab.misc import special, tensor_utils
 from rllab.algos import util
-from sandbox.rein.algos.embedding_theano_par.utils_ram_img import rollout
+from sandbox.rein.algos.embedding_theano_hd.utils import rollout
 
 
 class WorkerBatchSampler(object):

@@ -3,19 +3,18 @@ import numpy as np
 
 import sys
 import time
-import sandbox.rein.algos.embedding_theano2.seed
+import sandbox.rein.algos.embedding_theano_par.n_parallel
+
+shared_model_params = mp.RawArray('d', 100000000)
 
 
 class ParallelTrainer(object):
     def __init__(self):
-        # self._parallel_pool = MemmapingPool(
-        #     1,
-        #     temp_folder="/tmp",
-        #     initializer=self._initialize
-        # )
+
         self._parallel_pool = mp.Pool(
             1, initializer=self._initialize
         )
+        self._n_parallel = sandbox.rein.algos.embedding_theano_par.n_parallel.n_parallel_
         self._model = None
         self._model_pool_args = None
         self._pool = None
@@ -27,13 +26,15 @@ class ParallelTrainer(object):
         # Param q to input param if needed and to get the train_model exec running.
         self.q_train_flag = manager.Queue()
         # Output param q to return learned params.
-        self.q_train_param_out = manager.Queue()
+        self.q_train_param_out = []
         self.q_train_acc_out = manager.Queue()
+        for _ in range(self._n_parallel):
+            self.q_train_param_out.append(manager.Queue())
 
     @staticmethod
     def _initialize():
         import theano.sandbox.cuda
-        theano.sandbox.cuda.use("gpu"+str(sandbox.rein.algos.embedding_theano2.seed._seed))
+        theano.sandbox.cuda.use("gpu")
 
     def _loop(self, q_pool_data_in=None, q_pool_data_out=None, q_pool_data_out_flag=None, q_train_flag=None,
               q_train_param_out=None, q_train_acc_out=None, model_args=None, model_pool_args=None):
@@ -46,11 +47,12 @@ class ParallelTrainer(object):
         :param model_pool_args:
         :return: None
         """
+        print('start loop')
         assert model_args is not None
         assert model_pool_args is not None
         # Init theano gpu context before any other theano context is initialized.
         import theano.sandbox.cuda
-        theano.sandbox.cuda.use("gpu"+str(sandbox.rein.algos.embedding_theano2.seed._seed))
+        theano.sandbox.cuda.use("gpu")
         # Init all main var + compile.
         from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
         model = ConvBNNVIME(
@@ -99,6 +101,7 @@ class ParallelTrainer(object):
 
     def random_batch(self, num_samples):
         self.q_pool_data_out_flag.put(num_samples)
+        return self.q_pool_data_out.get()
 
     def train_model(self):
         self.q_train_flag.put(0)
@@ -109,6 +112,9 @@ class ParallelTrainer(object):
             self._loop,
             args=(self.q_pool_data_in, self.q_pool_data_out, self.q_pool_data_out_flag, self.q_train_flag,
                   self.q_train_param_out, self.q_train_acc_out, model_args, model_pool_args))
+        # p = mp.Process(target=self._loop, args=(self.q_pool_data_in, self.q_pool_data_out, self.q_pool_data_out_flag, self.q_train_flag,
+        #           self.q_train_param_out, self.q_train_acc_out, model_args, model_pool_args))
+        # p.start()
 
     @staticmethod
     def decode_obs(obs, model):
@@ -144,6 +150,7 @@ class ParallelTrainer(object):
         Train autoencoder model.
         :return:
         """
+        global shared_model_params
         assert q_train_param_out is not None
         assert model is not None
         assert pool is not None
@@ -160,7 +167,7 @@ class ParallelTrainer(object):
             old_running_avg = np.inf
             while done < 7:
                 running_avg = 0.
-                for _ in range(100):
+                for _ in range(10):
                     # Replay pool return uint8 target format, so decode _x.
                     batch = pool.random_batch(model_pool_args['batch_size'])
                     _x = self.decode_obs(batch['observations'], model)
@@ -178,6 +185,7 @@ class ParallelTrainer(object):
                 print('Autoencoder loss= {:.5f}, D= {:+.5f}, done={}'.format(
                     running_avg, running_avg_delta, done))
                 sys.stdout.flush()
+                break
 
             for i in range(10):
                 batch = pool.random_batch(32)
@@ -195,8 +203,12 @@ class ParallelTrainer(object):
             sys.stdout.flush()
 
         # Put updated params in the output queue.
-        q_train_param_out.put(model.get_param_values())
+        params = model.get_param_values()
+        shared_model_params[:params.shape[0]] = params
         q_train_acc_out.put(acc_after)
+        # Notify main processes that the params have been updated.
+        for q in q_train_param_out:
+            q.put(0)
 
 
 trainer = ParallelTrainer()

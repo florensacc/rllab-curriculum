@@ -43,7 +43,7 @@ except ImportError:
         "atari.py: Couldn't import opencv. Atari image environments will raise an error (RAM ones will still work).")
     cv2 = NoCV2()
 
-IMG_WH = (52, 52)  # width, height of images
+IMG_WH = (84, 84)  # width, height of images
 
 
 def to_rgb(ale):

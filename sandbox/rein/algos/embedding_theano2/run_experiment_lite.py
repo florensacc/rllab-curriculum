@@ -71,6 +71,9 @@ def run_experiment(argv):
 
     args = parser.parse_args(argv[1:])
 
+    # Import needed for CUDA GPU init!
+    from sandbox.rein.algos.embedding_theano2 import parallel_trainer
+
     if args.seed is not None:
         set_seed(args.seed)
 

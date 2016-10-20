@@ -1,16 +1,14 @@
 import time
 
-from sandbox.rein.algos.embedding_theano2.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
-from sandbox.rein.algos.embedding_theano2.plotter import Plotter
-from sandbox.rein.algos.embedding_theano2.trpo import TRPO
+from sandbox.rein.algos.embedding_theano_hd.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
+from sandbox.rein.algos.embedding_theano_hd.plotter import Plotter
+from sandbox.rein.algos.embedding_theano_hd.trpo import TRPO
 from rllab.misc import special
 import numpy as np
 from rllab.misc import tensor_utils
 import rllab.misc.logger as logger
 from rllab.algos import util
 from sandbox.rein.dynamics_models.utils import iterate_minibatches
-import rllab.misc.ext
-import sandbox.rein.algos.embedding_theano2.seed
 
 # --
 # Nonscientific printing of numpy arrays.
@@ -66,7 +64,7 @@ class TRPOPlusLSH(TRPO):
 
     def init_gpu(self):
 
-        from sandbox.rein.algos.embedding_theano2 import parallel_trainer
+        from sandbox.rein.algos.embedding_theano_hd import parallel_trainer
         # start parallel trainer
         logger.log('parallel trainer')
         self._model_trainer = parallel_trainer.trainer
@@ -76,7 +74,7 @@ class TRPOPlusLSH(TRPO):
         logger.log('done.')
 
         import theano.sandbox.cuda
-        theano.sandbox.cuda.use("gpu"+str(sandbox.rein.algos.embedding_theano2.seed._seed))
+        theano.sandbox.cuda.use("gpu")
 
         from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
 
@@ -100,7 +98,6 @@ class TRPOPlusLSH(TRPO):
 
         self._hashing_evaluator = ALEHashingBonusEvaluator(
             state_dim=state_dim,
-            action_dim=self.env.spec.action_space.flat_dim,
             count_target='embeddings',
             sim_hash_args=self._sim_hash_args,
         )
@@ -268,9 +265,9 @@ class TRPOPlusLSH(TRPO):
             if self._model_embedding:
                 # Encode/decode to get uniform representation.
                 # FIXME: to img change
-                obs_ed = self.decode_obs(self.encode_obs(path['env_infos']['images']))
-                # obs_ed = self.decode_obs(
-                #     self.encode_obs(path['observations'][:, -np.prod(self._model.state_dim):]))
+                # obs_ed = self.decode_obs(self.encode_obs(path['env_infos']['images']))
+                obs_ed = self.decode_obs(
+                    self.encode_obs(path['observations'][:, -np.prod(self._model.state_dim):]))
                 # Get continuous embedding.
                 cont_emb = self._model.discrete_emb(obs_ed)
                 if self._continuous_embedding:
@@ -280,8 +277,7 @@ class TRPOPlusLSH(TRPO):
                     # return np.cast['int'](np.round(cont_emb))
                     bin_emb = np.cast['int'](np.round(cont_emb))
                     bin_emb_downsampled = bin_emb.reshape(-1, 8).mean(axis=1).reshape((bin_emb.shape[0], -1))
-                    obs_key = np.cast['int'](np.round(bin_emb_downsampled))
-                    return np.concatenate((obs_key, np.cast['int'](path['actions'])), axis=1)
+                    return np.cast['int'](np.round(bin_emb_downsampled))
             else:
                 return path['observations']
 
@@ -326,8 +322,8 @@ class TRPOPlusLSH(TRPO):
             # Encode observations into replay pool format. Also make sure we only add final image in case of
             # autoencoder.
             # FIXME: to img change
-            obs_enc = self.encode_obs(path['env_infos']['images'][:, -np.prod(self._model.state_dim):])
-            # obs_enc = self.encode_obs(path['observations'][:, -np.prod(self._model.state_dim):])
+            # obs_enc = self.encode_obs(path['env_infos']['images'][:, -np.prod(self._model.state_dim):])
+            obs_enc = self.encode_obs(path['observations'][:, -np.prod(self._model.state_dim):])
             path_len = len(path['rewards'])
             tot_path_len += path_len
             for i in range(path_len):
@@ -382,8 +378,7 @@ class TRPOPlusLSH(TRPO):
             else:
                 path['rewards'] = path["ext_rewards"] + self._eta * path['S']
 
-    @staticmethod
-    def preprocess(paths):
+    def preprocess(self, paths):
         """
         Preprocess data.
         :param paths:
@@ -393,6 +388,19 @@ class TRPOPlusLSH(TRPO):
         # Save external rewards.
         for path in paths:
             path['ext_rewards'] = np.array(path['rewards'])
+
+        # --
+        # Because the observations are received as single frames,
+        # they have to be glued together again for n_seq_frames
+        for path in paths:
+            o = path['observations']
+            o_ext = np.zeros((o.shape[0] + 3, o.shape[1]))
+            o_ext[3:] = o
+            o_lst = []
+            for i in range(self._n_seq_frames - 1):
+                o_lst.append(o_ext[i:i - self._n_seq_frames + 1])
+            o_lst.append(o_ext[self._n_seq_frames - 1:])
+            path['observations'] = np.concatenate(o_lst, axis=1)
 
             # # --
             # # Observations are concatenations of RAM and img.
@@ -415,12 +423,12 @@ class TRPOPlusLSH(TRPO):
             # Select random images form the first path, evaluate them at every iteration to inspect emb.
             rnd = np.random.randint(0, len(paths[0]['rewards']), 32)
             # FIXME: to img change
+            #     self._test_obs = self.encode_obs(
+            #         paths[0]['env_infos']['images'][rnd, -np.prod(self._model.state_dim):])
+            # obs = self.encode_obs(paths[0]['env_infos']['images'][-32:, -np.prod(self._model.state_dim):])
             self._test_obs = self.encode_obs(
-                paths[0]['env_infos']['images'][rnd, -np.prod(self._model.state_dim):])
-        obs = self.encode_obs(paths[0]['env_infos']['images'][-32:, -np.prod(self._model.state_dim):])
-        #     self._test_obs = self.encode_obs(
-        #         paths[0]['observations'][rnd, -np.prod(self._model.state_dim):])
-        # obs = self.encode_obs(paths[0]['observations'][-32:, -np.prod(self._model.state_dim):])
+                paths[0]['observations'][rnd, -np.prod(self._model.state_dim):])
+        obs = self.encode_obs(paths[0]['observations'][-32:, -np.prod(self._model.state_dim):])
 
         # inputs = np.random.randint(0, 2, (10, 128))
         # self._plotter.plot_gen_imgs(

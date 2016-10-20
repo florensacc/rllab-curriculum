@@ -501,9 +501,10 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             log_p_D_given_w += lh
 
         cont_emb = lasagne.layers.get_output(self.discrete_emb_sym, input, noise_mask=0, deterministic=False)
-        if self._binary_penalty:
+        if self._binary_penalty > 0:
             print('Using binary penalty.')
-            binary_penalty = 10 * T.mean(T.minimum(T.square(cont_emb - 0), T.square(cont_emb - 1)))
+            # binary_penalty = self._binary_penalty * T.mean(T.minimum(T.square(cont_emb - 0), T.square(cont_emb - 1)))
+            binary_penalty=0.
         else:
             binary_penalty = 0.
 

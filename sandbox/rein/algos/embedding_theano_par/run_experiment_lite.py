@@ -3,6 +3,10 @@ Differences from normal run_experiment_lite.py:
 1. initializes modified parallel_sampler.
 """
 
+import matplotlib
+
+matplotlib.use('AGG')  # Do this BEFORE importing matplotlib.pyplot
+
 import sys
 
 sys.path.append(".")
@@ -68,15 +72,20 @@ def run_experiment(argv):
     parser.add_argument('--use_cloudpickle', type=bool, default=False,
                         help='???')
 
-
     args = parser.parse_args(argv[1:])
+
+    import sandbox.rein.algos.embedding_theano_par.n_parallel
+    sandbox.rein.algos.embedding_theano_par.n_parallel.set_n_parallel(args.n_parallel)
+
+    # Don't remove this, for GPU cuda
+    import sandbox.rein.algos.embedding_theano_par.parallel_trainer
 
     if args.seed is not None:
         set_seed(args.seed)
 
     if args.n_parallel > 0:
         # from rllab.sampler import parallel_sampler
-        from sandbox.adam.modified_sampler import parallel_sampler
+        from sandbox.rein.algos.embedding_theano_par import parallel_sampler
         parallel_sampler.initialize(n_parallel=args.n_parallel)
         if args.seed is not None:
             parallel_sampler.set_seed(args.seed)
