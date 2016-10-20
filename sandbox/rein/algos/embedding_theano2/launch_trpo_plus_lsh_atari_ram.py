@@ -14,8 +14,8 @@ stub(globals())
 
 n_seq_frames = 1
 model_batch_size = 32
-exp_prefix = 'trpo-auto-sac-p'
-seeds = [0, 1, 2]
+exp_prefix = 'trpo-auto-sac-q'
+seeds = [0]
 etas = [0.01]
 mdps = [  # AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
     # AtariEnv(game='breakout', obs_type="ram+image", frame_skip=4),
@@ -225,7 +225,7 @@ for mdp, eta, seed in param_cart_product:
     run_experiment_lite(
         algo.train(),
         exp_prefix=exp_prefix,
-        n_parallel=5,
+        n_parallel=8,
         snapshot_mode="last",
         seed=seed,
         mode="lab_kube",

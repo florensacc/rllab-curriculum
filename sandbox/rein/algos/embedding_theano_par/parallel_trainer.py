@@ -112,9 +112,6 @@ class ParallelTrainer(object):
             self._loop,
             args=(self.q_pool_data_in, self.q_pool_data_out, self.q_pool_data_out_flag, self.q_train_flag,
                   self.q_train_param_out, self.q_train_acc_out, model_args, model_pool_args))
-        # p = mp.Process(target=self._loop, args=(self.q_pool_data_in, self.q_pool_data_out, self.q_pool_data_out_flag, self.q_train_flag,
-        #           self.q_train_param_out, self.q_train_acc_out, model_args, model_pool_args))
-        # p.start()
 
     @staticmethod
     def decode_obs(obs, model):

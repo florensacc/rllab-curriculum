@@ -92,9 +92,6 @@ class ParallelBatchPolopt(RLAlgorithm):
         self.sampler = WorkerBatchSampler(self)
         self.clip_reward = clip_reward
 
-        from sandbox.rein.algos.embedding_theano_par.parallel_trainer import trainer
-        self._model_trainer = trainer
-
     def __getstate__(self):
         """ Do not pickle parallel objects. """
         return {k: v for k, v in iter(self.__dict__.items()) if k != "_par_objs"}

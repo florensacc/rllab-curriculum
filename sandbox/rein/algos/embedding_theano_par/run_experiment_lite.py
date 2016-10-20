@@ -78,7 +78,7 @@ def run_experiment(argv):
     sandbox.rein.algos.embedding_theano_par.n_parallel.set_n_parallel(args.n_parallel)
 
     # Don't remove this, for GPU cuda
-    import sandbox.rein.algos.embedding_theano_par.parallel_trainer
+    from sandbox.rein.algos.embedding_theano_par import parallel_trainer
 
     if args.seed is not None:
         set_seed(args.seed)

@@ -90,13 +90,6 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
 
     def init_gpu(self):
 
-        from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
-
-        self._model = ConvBNNVIME(
-            **self._model_args
-        )
-        self._model_n_params = self._model.get_param_values().shape[0]
-
         from sandbox.rein.algos.embedding_theano_par import parallel_trainer
         # start parallel trainer
         self._model_trainer = parallel_trainer.trainer
@@ -105,6 +98,13 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
             self._model_trainer.populate_trainer(self._model_args, self._model_pool_args)
             self._model_trainer.q_pool_data_out_flag.get()
         logger.log('done.')
+
+        from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
+
+        self._model = ConvBNNVIME(
+            **self._model_args
+        )
+        self._model_n_params = self._model.get_param_values().shape[0]
 
         if self._model_embedding:
             state_dim = self._model.discrete_emb_size

@@ -287,7 +287,7 @@ for mdp, eta, seed in param_cart_product:
         seed=seed,
         mode="lab_kube",
         dry=False,
-        use_gpu=False,
+        use_gpu=True,
         script="sandbox/rein/algos/embedding_theano_par/run_experiment_lite.py",
         # Sync ever 1h.
         periodic_sync_interval=60 * 60,
