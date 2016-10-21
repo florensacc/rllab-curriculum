@@ -216,10 +216,6 @@ class ParallelTrainer(object):
                 first_run = False
                 thread = threading.Thread(target=load_data)
                 thread.start()
-                load_data()
-                print('loaded')
-                sys.stdout.flush()
-                sys.stderr.flush()
                 for _ in range(itr_per_epoch):
                     # Replay pool return uint8 target format, so decode _x.
                     index = np.random.randint(0, itr_per_epoch)

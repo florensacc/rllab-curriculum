@@ -15,16 +15,16 @@ from sandbox.haoran.parallel_trpo.conjugate_gradient_optimizer import ParallelCo
 stub(globals())
 
 n_seq_frames = 4
-n_parallel = 3
+n_parallel = 20
 model_batch_size = 32
-exp_prefix = 'trpo-par-big-auto-a'
-seeds = [0, 1, 2, 3, 4]
-etas = [0.001]
+exp_prefix = 'trpo-i-auto-big-a'
+seeds = [0]
+etas = [0.01]
 mdps = [  # AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
     # AtariEnv(game='breakout', obs_type="ram+image", frame_skip=4),
     # AtariEnv(game='frostbite', obs_type="ram+image", frame_skip=4),
-    # AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4)]
-    AtariEnv(game='venture', obs_type="image", frame_skip=4)]
+    AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4)]
+    # AtariEnv(game='venture', obs_type="image", frame_skip=4)]
 trpo_batch_size = 100000
 max_path_length = 4500
 dropout = False
