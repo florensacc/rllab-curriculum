@@ -38,6 +38,14 @@
             </div>
         </div>
         <div class="form-group">
+            <label for="legend_sort_processor" class="control-label pull-left"> Processor for Sorting Legends:</label>
+            <div class="col-xs-8">
+                <input type="text" class="form-control" id="legend_sort_processor" name="legend_sort_processor"
+                       placeholder="Write an anonymous function with return type str, and the only argument is 'legend'"
+                       autocomplete="on"/>
+            </div>
+        </div>
+        <div class="form-group">
             <label for="legend_post_processor" class="control-label pull-left">Post Processor for Legends:</label>
             <div class="col-xs-8">
                 <input type="text" class="form-control" id="legend_post_processor" name="legend_post_processor"
@@ -258,6 +266,7 @@
         var yub = $controlPanel.find("input[name=yub]").val();
         var ylb = $controlPanel.find("input[name=ylb]").val();
         var customFilter = $controlPanel.find("input[name=custom_filter]").val();
+        var legendSortProcessor = $controlPanel.find("input[name=legend_sort_processor]").val();
         var legendPostProcessor = $controlPanel.find("input[name=legend_post_processor]").val();
         var customSeriesSplitter = $controlPanel.find("input[name=custom_series_splitter]").val();
         console.log(useMedian);
@@ -269,7 +278,7 @@
                     "only_show_best": onlyShowBest, "clip_plot_value": clipPlotValue,
                     "plot_width": plotWidth, "plot_height": plotHeight, "filter_nan": filterNaN,
                     "smooth_curve": smoothCurve, "custom_filter": customFilter, "legend_post_processor":
-                    legendPostProcessor, "only_show_best_final": onlyShowBestFinal, "normalize_error": normalizeError,
+                    legendPostProcessor, "legend_sort_processor": legendSortProcessor, "only_show_best_final": onlyShowBestFinal, "normalize_error": normalizeError,
                     "custom_series_splitter": customSeriesSplitter, "only_show_best_sofar": onlyShowBestSofar,
                     "xlb": xlb, "xub": xub,
                     "yub": yub, "ylb": ylb,
