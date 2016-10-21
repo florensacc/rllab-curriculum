@@ -110,6 +110,7 @@ class ParallelTrainer(object):
         except:
             # Log exceptions like this because mp is screwing me over.
             print("".join(traceback.format_exception(*sys.exc_info())))
+            sys.stdout.flush()
             return None
 
     def __getstate__(self):
@@ -207,6 +208,8 @@ class ParallelTrainer(object):
             done = 0
             old_running_avg = np.inf
             first_run = True
+            # Load first batch of data outside of thread.
+            load_data()
             while done < 7:
                 sys.stdout.flush()
                 running_avg = 0.
