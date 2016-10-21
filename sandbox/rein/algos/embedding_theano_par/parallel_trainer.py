@@ -5,6 +5,7 @@ import sys
 import time
 import sandbox.rein.algos.embedding_theano_par.n_parallel
 import threading
+import traceback
 
 shared_model_params = mp.RawArray('d', 100000000)
 
@@ -47,63 +48,69 @@ class ParallelTrainer(object):
         :param model_pool_args:
         :return: None
         """
-        print('>>> Start loop ...')
-        sys.stdout.flush()
-        # Init theano gpu context before any other theano context is initialized.
-        import theano.sandbox.cuda
-        theano.sandbox.cuda.use("gpu")  # + str(7 - sandbox.rein.algos.embedding_theano_par.n_parallel._seed))
-        # Init all main var + compile.
-        from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
-        print(">>> Theano imported.")
-        sys.stdout.flush()
-        sys.stderr.flush()
+        try:
+            print('>>> Start loop ...')
+            sys.stdout.flush()
+            # Init theano gpu context before any other theano context is initialized.
+            import theano.sandbox.cuda
+            theano.sandbox.cuda.use(
+                "gpu")  # + str(7 - sandbox.rein.algos.embedding_theano_par.n_parallel._seed))
+            # Init all main var + compile.
+            from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
+            print(">>> Theano imported.")
+            sys.stdout.flush()
+            sys.stderr.flush()
 
-        model_args = None
-        model_pool_args = None
+            model_args = None
+            model_pool_args = None
 
-        self.q_pool_data_out_flag.put(0)
+            self.q_pool_data_out_flag.put(0)
 
-        while model_args is None:
-            if not q_model_args.empty():
-                model_args = q_model_args.get()
+            while model_args is None:
+                if not q_model_args.empty():
+                    model_args = q_model_args.get()
 
-        print(">>> Model/pool data received.")
-        sys.stdout.flush()
+            print(">>> Model/pool data received.")
+            sys.stdout.flush()
 
-        model = ConvBNNVIME(
-            **model_args
-        )
+            model = ConvBNNVIME(
+                **model_args
+            )
 
-        while model_pool_args is None:
-            if not q_model_pool_args.empty():
-                model_pool_args = q_model_pool_args.get()
+            while model_pool_args is None:
+                if not q_model_pool_args.empty():
+                    model_pool_args = q_model_pool_args.get()
 
-        model_pool_args = model_pool_args
-        observation_dtype = "uint8"
-        from sandbox.rein.algos.replay_pool import SingleStateReplayPool
-        pool = SingleStateReplayPool(
-            max_pool_size=model_pool_args['size'],
-            observation_shape=(np.prod(model.state_dim),),
-            observation_dtype=observation_dtype,
-            **model_pool_args
-        )
-        print('>>> Compiled.')
-        sys.stdout.flush()
-        self.q_pool_data_out_flag.put(0)
-        # Actual main loop.
-        while True:
-            while not q_pool_data_in.empty():
-                lst_sample = q_pool_data_in.get()
-                for sample in lst_sample:
-                    pool.add_sample(sample)
-            if not q_train_flag.empty():
-                q_train_flag.get()
-                self._train_model(q_train_param_out, q_train_acc_out, model, pool, model_pool_args)
-            if not q_pool_data_out_flag.empty():
-                num_samples = q_pool_data_out_flag.get()
-                samples = pool.random_batch(num_samples)
-                q_pool_data_out.put(samples)
-            time.sleep(0.1)
+            model_pool_args = model_pool_args
+            observation_dtype = "uint8"
+            from sandbox.rein.algos.replay_pool import SingleStateReplayPool
+            pool = SingleStateReplayPool(
+                max_pool_size=model_pool_args['size'],
+                observation_shape=(np.prod(model.state_dim),),
+                observation_dtype=observation_dtype,
+                **model_pool_args
+            )
+            print('>>> Compiled.')
+            sys.stdout.flush()
+            self.q_pool_data_out_flag.put(0)
+            # Actual main loop.
+            while True:
+                while not q_pool_data_in.empty():
+                    lst_sample = q_pool_data_in.get()
+                    for sample in lst_sample:
+                        pool.add_sample(sample)
+                if not q_train_flag.empty():
+                    q_train_flag.get()
+                    self._train_model(q_train_param_out, q_train_acc_out, model, pool, model_pool_args)
+                if not q_pool_data_out_flag.empty():
+                    num_samples = q_pool_data_out_flag.get()
+                    samples = pool.random_batch(num_samples)
+                    q_pool_data_out.put(samples)
+                time.sleep(0.1)
+        except:
+            # Log exceptions like this because mp is screwing me over.
+            print("".join(traceback.format_exception(*sys.exc_info())))
+            return None
 
     def __getstate__(self):
         self_dict = self.__dict__.copy()
@@ -168,7 +175,7 @@ class ParallelTrainer(object):
         Train autoencoder model.
         :return:
         """
-
+        import theano
         def load_data():
             x_lst, y_lst = [], []
             for _ in range(itr_per_epoch):
@@ -180,8 +187,8 @@ class ParallelTrainer(object):
                 y_lst.append(_y)
             x_arr = np.concatenate(x_lst, axis=0)
             y_arr = np.concatenate(y_lst, axis=0)
-            model.shared_x.set_value(x_arr)
-            model.shared_y.set_value(y_arr)
+            model.shared_x.set_value(np.asarray(x_arr, dtype=theano.config.floatX))
+            model.shared_y.set_value(np.asarray(y_arr, dtype=theano.config.floatX))
 
         global shared_model_params
         assert q_train_param_out is not None
@@ -199,9 +206,9 @@ class ParallelTrainer(object):
             # Actual training of model.
             done = 0
             old_running_avg = np.inf
-            load_data()
             first_run = True
             while done < 7:
+                sys.stdout.flush()
                 running_avg = 0.
                 start_time = time.time()
                 if not first_run:
@@ -209,6 +216,10 @@ class ParallelTrainer(object):
                 first_run = False
                 thread = threading.Thread(target=load_data)
                 thread.start()
+                load_data()
+                print('loaded')
+                sys.stdout.flush()
+                sys.stderr.flush()
                 for _ in range(itr_per_epoch):
                     # Replay pool return uint8 target format, so decode _x.
                     index = np.random.randint(0, itr_per_epoch)

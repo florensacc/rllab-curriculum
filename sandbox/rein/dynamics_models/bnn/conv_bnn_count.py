@@ -777,10 +777,10 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         # self.train_fn = ext.compile_function(
         #     [input_var, target_var, kl_factor], loss, updates=updates, log_name='fn_train')
         index = T.lscalar()
-        self.shared_x = theano.shared(np.asarray(np.zeros((2,2)),
+        self.shared_x = theano.shared(np.asarray(np.zeros((2, 2)),
                                                  dtype=theano.config.floatX),
                                       borrow=True)
-        self.shared_y = theano.shared(np.asarray(np.zeros((2,2)),
+        self.shared_y = theano.shared(np.asarray(np.zeros((2, 2)),
                                                  dtype=theano.config.floatX),
                                       borrow=True)
         self.train_fn = ext.compile_function(
