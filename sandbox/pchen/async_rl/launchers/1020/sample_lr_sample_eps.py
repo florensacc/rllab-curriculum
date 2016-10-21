@@ -1,5 +1,7 @@
 # try eps sampling to see if it can make Q learning matches a3c paper more
 
+# in addition try lr sampling & sharing opt states or not
+
 import logging
 import os,sys
 import numpy as np
@@ -30,14 +32,14 @@ from rllab.misc.instrument import VariantGenerator, variant
 
 class VG(VariantGenerator):
     @variant
-    def seed(self):
-        return [42, 888, 44]
+    def seed(self, lr):
+        return [np.random.randint(10000), ]
 
     @variant
     def total_t(self):
         # return [2*7 * 3*10**6]
         # half time, short trial
-        return [7 * 3*10**6]
+        return [35 * 10**6]
 
     @variant
     def n_processes(self):
@@ -84,11 +86,11 @@ class VG(VariantGenerator):
         ]
 
     @variant
-    def lr(self, ):
-        yield 7e-4
-        # yield 1e-4
-        yield 2e-3
-        # yield 5e-3
+    def lr(self, game):
+        return [
+            np.random.uniform(-4, -2)
+            for _ in range(4)
+        ]
 
     @variant
     def random_seed(self, ):
@@ -105,6 +107,10 @@ class VG(VariantGenerator):
     @variant
     def temp_init(self, ):
         return [1e-2, ]
+
+    @variant
+    def opt_share(self, ):
+        return [True, False]
 
 vg = VG()
 variants = vg.variants(randomized=False)
@@ -152,13 +158,14 @@ for v in variants[:]:
         share_model=share_model,
         optimizer_args=dict(
             lr=lr,
-            eps=1e-1,
-            alpha=0.99,
+            eps=1e-5,
+            alpha=0.9,
         ),
         bellman=bellman,
         # adaptive_entropy=adaptive_entropy,
         # temp_init=temp_init,
         sample_eps=True,
+        share_optimizer_states=opt_share,
     )
     algo = DQNALE(
         total_steps=total_t,
@@ -177,7 +184,8 @@ for v in variants[:]:
         NUMEXPR_NUM_THREADS=comp_cores,
         OMP_NUM_THREADS=comp_cores,
     )
-    config.AWS_INSTANCE_TYPE = "c4.8xlarge"
+    # config.AWS_INSTANCE_TYPE = "c4.8xlarge"
+    config.AWS_INSTANCE_TYPE = "m4.10xlarge"
     config.AWS_SPOT = True
     config.AWS_SPOT_PRICE = '1.'
     config.AWS_REGION_NAME = 'us-west-1'
@@ -188,7 +196,7 @@ for v in variants[:]:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="1019_async_q_sample_eps",
+        exp_prefix="1020_async_q_opt_share",
         seed=v["seed"],
         variant=v,
         mode="ec2",

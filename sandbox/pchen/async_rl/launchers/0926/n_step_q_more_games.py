@@ -1,6 +1,4 @@
-"""
-Test whatever you want here
-"""
+
 
 import logging
 import os,sys
@@ -111,6 +109,7 @@ for v in variants[:]:
         color_averaging=False,
         random_seed=random_seed,
         color_max=True,
+        initial_manual_activation=True,
     )
     env = SlidingMemEnv(env)
     test_env = SlidingMemEnv(AtariEnvCX(
@@ -120,6 +119,7 @@ for v in variants[:]:
         color_averaging=False,
         random_seed=random_seed,
         color_max=True,
+        initial_manual_activation=True,
     ))
 
     agent = DQNAgent(

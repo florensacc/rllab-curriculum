@@ -87,6 +87,7 @@ class BoltzmannDQNAgent(Agent,Shareable,Picklable):
             share_model=False,
             sample_eps=False,
     ):
+        raise "deprecated"
         if optimizer_args is None:
             optimizer_args = dict(lr=7e-4, eps=1e-1, alpha=0.99)
         if optimizer_hook_args is None:
@@ -120,6 +121,8 @@ class BoltzmannDQNAgent(Agent,Shareable,Picklable):
         else:
             raise NotImplementedError
         self.optimizer.setup(self.shared_model)
+        import ipdb; ipdb.set_trace()
+
         if "gradient_clipping" in optimizer_hook_args:
             self.optimizer.add_hook(chainer.optimizer.GradientClipping(
                 optimizer_hook_args["gradient_clipping"]
