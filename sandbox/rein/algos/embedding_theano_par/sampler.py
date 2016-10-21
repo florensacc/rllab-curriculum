@@ -1,13 +1,7 @@
-
 import numpy as np
-
-from rllab.misc import special, tensor_utils
-from rllab.algos import util
-from sandbox.rein.algos.embedding_theano_hd.utils import rollout
 
 
 class WorkerBatchSampler(object):
-
     def __init__(self, algo):
         """
         :type algo: ParallelBatchPolopt
@@ -22,6 +16,7 @@ class WorkerBatchSampler(object):
         paths = []
         # TODO: progbar for rank 0?
         while n_steps_collected < n_samples:
+            from sandbox.rein.algos.embedding_theano_hd.utils import rollout
             paths.append(rollout(self.algo.env, self.algo.policy, self.algo.max_path_length))
             n_steps_collected += len(paths[-1]["rewards"])
         if self.algo.whole_paths:
@@ -39,6 +34,7 @@ class WorkerBatchSampler(object):
         :param paths: a list of paths
         :return: a list of paths, truncated so that the number of samples adds up to max-samples
         """
+        from rllab.misc import tensor_utils
         # chop samples collected by extra paths
         # make a copy
         paths = list(paths)
@@ -60,6 +56,8 @@ class WorkerBatchSampler(object):
         return paths
 
     def process_samples(self, paths):
+        from rllab.misc import special, tensor_utils
+        from rllab.algos import util
         baselines = []
         returns = []
         for path in paths:

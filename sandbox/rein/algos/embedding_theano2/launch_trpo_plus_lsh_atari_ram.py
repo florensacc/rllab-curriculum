@@ -225,10 +225,10 @@ for mdp, eta, seed in param_cart_product:
     run_experiment_lite(
         algo.train(),
         exp_prefix=exp_prefix,
-        n_parallel=8,
+        n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/algos/embedding_theano2/run_experiment_lite_ram_img.py",

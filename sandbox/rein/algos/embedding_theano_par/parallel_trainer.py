@@ -4,15 +4,16 @@ import numpy as np
 import sys
 import time
 import sandbox.rein.algos.embedding_theano_par.n_parallel
+import threading
 
 shared_model_params = mp.RawArray('d', 100000000)
 
 
 class ParallelTrainer(object):
     def __init__(self):
-
+        print(">>> Creating parallel trainer ...")
         self._parallel_pool = mp.Pool(
-            1, initializer=self._initialize
+            1
         )
         self._n_parallel = sandbox.rein.algos.embedding_theano_par.n_parallel.n_parallel_
         self._model = None
@@ -31,13 +32,12 @@ class ParallelTrainer(object):
         for _ in range(self._n_parallel):
             self.q_train_param_out.append(manager.Queue())
 
-    @staticmethod
-    def _initialize():
-        import theano.sandbox.cuda
-        theano.sandbox.cuda.use("gpu"+str(sandbox.rein.algos.embedding_theano_par.n_parallel._seed))
+        self.q_model_args = manager.Queue()
+        self.q_model_pool_args = manager.Queue()
+        print(">>> Parallel trainer created.")
 
     def _loop(self, q_pool_data_in=None, q_pool_data_out=None, q_pool_data_out_flag=None, q_train_flag=None,
-              q_train_param_out=None, q_train_acc_out=None, model_args=None, model_pool_args=None):
+              q_train_param_out=None, q_train_acc_out=None, q_model_args=None, q_model_pool_args=None):
         """
         Main Loop.
         :param data_q:
@@ -47,17 +47,36 @@ class ParallelTrainer(object):
         :param model_pool_args:
         :return: None
         """
-        print('start loop')
-        assert model_args is not None
-        assert model_pool_args is not None
+        print('>>> Start loop ...')
+        sys.stdout.flush()
         # Init theano gpu context before any other theano context is initialized.
         import theano.sandbox.cuda
-        theano.sandbox.cuda.use("gpu"+str(sandbox.rein.algos.embedding_theano_par.n_parallel._seed))
+        theano.sandbox.cuda.use("gpu")  # + str(7 - sandbox.rein.algos.embedding_theano_par.n_parallel._seed))
         # Init all main var + compile.
         from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
+        print(">>> Theano imported.")
+        sys.stdout.flush()
+        sys.stderr.flush()
+
+        model_args = None
+        model_pool_args = None
+
+        self.q_pool_data_out_flag.put(0)
+
+        while model_args is None:
+            if not q_model_args.empty():
+                model_args = q_model_args.get()
+
+        print(">>> Model/pool data received.")
+        sys.stdout.flush()
+
         model = ConvBNNVIME(
             **model_args
         )
+
+        while model_pool_args is None:
+            if not q_model_pool_args.empty():
+                model_pool_args = q_model_pool_args.get()
 
         model_pool_args = model_pool_args
         observation_dtype = "uint8"
@@ -68,7 +87,8 @@ class ParallelTrainer(object):
             observation_dtype=observation_dtype,
             **model_pool_args
         )
-        print('compiled')
+        print('>>> Compiled.')
+        sys.stdout.flush()
         self.q_pool_data_out_flag.put(0)
         # Actual main loop.
         while True:
@@ -106,12 +126,13 @@ class ParallelTrainer(object):
     def train_model(self):
         self.q_train_flag.put(0)
 
-    def populate_trainer(self, model_args=None, model_pool_args=None):
+    def populate_trainer(self):
         print('Starting async model training loop.')
+
         self._parallel_pool.apply_async(
             self._loop,
             args=(self.q_pool_data_in, self.q_pool_data_out, self.q_pool_data_out_flag, self.q_train_flag,
-                  self.q_train_param_out, self.q_train_acc_out, model_args, model_pool_args))
+                  self.q_train_param_out, self.q_train_acc_out, self.q_model_args, self.q_model_pool_args))
 
     @staticmethod
     def decode_obs(obs, model):
@@ -147,11 +168,27 @@ class ParallelTrainer(object):
         Train autoencoder model.
         :return:
         """
+
+        def load_data():
+            x_lst, y_lst = [], []
+            for _ in range(itr_per_epoch):
+                # Replay pool return uint8 target format, so decode _x.
+                batch = pool.random_batch(model_pool_args['batch_size'])
+                _x = self.decode_obs(batch['observations'], model)
+                _y = batch['observations']
+                x_lst.append(_x)
+                y_lst.append(_y)
+            x_arr = np.concatenate(x_lst, axis=0)
+            y_arr = np.concatenate(y_lst, axis=0)
+            model.shared_x.set_value(x_arr)
+            model.shared_y.set_value(y_arr)
+
         global shared_model_params
         assert q_train_param_out is not None
         assert model is not None
         assert pool is not None
         assert model_pool_args is not None
+        itr_per_epoch = 100
 
         acc_before, acc_after, train_loss, running_avg = 0., 0., 0., 0.
         print('Updating autoencoder using replay pool ({}) ...'.format(pool.size))
@@ -162,25 +199,32 @@ class ParallelTrainer(object):
             # Actual training of model.
             done = 0
             old_running_avg = np.inf
+            load_data()
+            first_run = True
             while done < 7:
                 running_avg = 0.
-                for _ in range(100):
+                start_time = time.time()
+                if not first_run:
+                    thread.join()
+                first_run = False
+                thread = threading.Thread(target=load_data)
+                thread.start()
+                for _ in range(itr_per_epoch):
                     # Replay pool return uint8 target format, so decode _x.
-                    batch = pool.random_batch(model_pool_args['batch_size'])
-                    _x = self.decode_obs(batch['observations'], model)
-                    _y = batch['observations']
-                    train_loss = float(model.train_fn(_x, _y, 0))
+                    index = np.random.randint(0, itr_per_epoch)
+                    train_loss = float(model.train_fn(index, 0))
                     assert not np.isinf(train_loss)
                     assert not np.isnan(train_loss)
-                    running_avg += train_loss / 100.
+                    running_avg += train_loss / float(itr_per_epoch)
                 running_avg_delta = old_running_avg - running_avg
                 if running_avg_delta < 1e-4:
                     done += 1
                 else:
                     old_running_avg = running_avg
                     done = 0
-                print('Autoencoder loss= {:.5f}, D= {:+.5f}, done={}'.format(
-                    running_avg, running_avg_delta, done))
+                end_time = time.time()
+                print('Autoencoder loss= {:.5f}, D= {:+.5f}, done={}\t{:.3f} sec/epoch'.format(
+                    running_avg, running_avg_delta, done, (end_time - start_time) / float(itr_per_epoch)))
                 sys.stdout.flush()
 
             for i in range(10):

@@ -1,15 +1,10 @@
-from rllab.misc import ext
-# from rllab.misc import krylov
 from rllab.misc import logger
 from rllab.core.serializable import Serializable
-import theano.tensor as TT
-import theano
+
 import numpy as np
 import multiprocessing as mp
-from rllab.misc.ext import sliced_fun
 
 from sandbox.adam.parallel.util import SimpleContainer
-from sandbox.adam.parallel import krylov
 
 
 class ParallelPerlmutterHvp(Serializable):
@@ -27,6 +22,9 @@ class ParallelPerlmutterHvp(Serializable):
         self._par_objs = None
 
     def update_opt(self, f, target, inputs, reg_coeff):
+        import theano.tensor as TT
+        import theano
+        from rllab.misc import ext
         self.target = target
         self.reg_coeff = reg_coeff
         params = target.get_params(trainable=True)
@@ -53,6 +51,7 @@ class ParallelPerlmutterHvp(Serializable):
         )
 
     def build_eval(self, inputs):
+        from rllab.misc.ext import sliced_fun
         def parallel_eval(x):
             """
             Parallelized.
@@ -62,7 +61,8 @@ class ParallelPerlmutterHvp(Serializable):
             xs = tuple(self.target.flat_to_params(x, trainable=True))
 
             shareds.grads_2d[:, self.pd.rank] = self.pd.avg_fac * \
-                sliced_fun(self.opt_fun["f_Hx_plain"], self._num_slices)(inputs, xs)
+                                                sliced_fun(self.opt_fun["f_Hx_plain"], self._num_slices)(inputs,
+                                                                                                         xs)
             barriers.Hx[0].wait()
 
             shareds.Hx[self.pd.vb[0]:self.pd.vb[1]] = \
@@ -155,7 +155,7 @@ class ParallelConjugateGradientOptimizer(Serializable):
             hvp_approach=None,
             num_slices=1,
             name=None,
-            ):
+    ):
         """
 
         :param cg_iters: The number of CG iterations used to calculate A^-1 g
@@ -186,7 +186,8 @@ class ParallelConjugateGradientOptimizer(Serializable):
 
         self._name = name
 
-    def update_opt(self, loss, target, leq_constraint, inputs, extra_inputs=None, constraint_name="constraint", *args,
+    def update_opt(self, loss, target, leq_constraint, inputs, extra_inputs=None, constraint_name="constraint",
+                   *args,
                    **kwargs):
         """
         :param loss: Symbolic expression for the loss function.
@@ -198,7 +199,8 @@ class ParallelConjugateGradientOptimizer(Serializable):
         :param extra_inputs: A list of symbolic variables as extra inputs which should not be subsampled
         :return: No return value.
         """
-
+        import theano
+        from rllab.misc import ext
         inputs = tuple(inputs)
         if extra_inputs is None:
             extra_inputs = tuple()
@@ -320,6 +322,7 @@ class ParallelConjugateGradientOptimizer(Serializable):
         """
         Parallelized: returns the same value in all workers.
         """
+        from rllab.misc.ext import sliced_fun
         shareds, barriers = self._par_objs
         shareds.loss[self.rank] = self.avg_fac * sliced_fun(
             self._opt_fun["f_loss"], self._num_slices)(inputs, extra_inputs)
@@ -330,6 +333,7 @@ class ParallelConjugateGradientOptimizer(Serializable):
         """
         Parallelized: returns the same value in all workers.
         """
+        from rllab.misc.ext import sliced_fun
         shareds, barriers = self._par_objs
         shareds.constraint_val[self.rank] = self.avg_fac * sliced_fun(
             self._opt_fun["f_constraint"], self._num_slices)(inputs, extra_inputs)
@@ -340,9 +344,11 @@ class ParallelConjugateGradientOptimizer(Serializable):
         """
         Parallelized: returns the same values in all workers.
         """
+        from rllab.misc.ext import sliced_fun
+
         shareds, barriers = self._par_objs
         loss, constraint_val = sliced_fun(self._opt_fun["f_loss_constraint"],
-            self._num_slices)(inputs, extra_inputs)
+                                          self._num_slices)(inputs, extra_inputs)
         shareds.loss[self.rank] = self.avg_fac * loss
         shareds.constraint_val[self.rank] = self.avg_fac * constraint_val
         barriers.loss_cnstr.wait()
@@ -352,10 +358,12 @@ class ParallelConjugateGradientOptimizer(Serializable):
         """
         Parallelized: returns the same values in all workers.
         """
+        from rllab.misc.ext import sliced_fun
         shareds, barriers = self._par_objs
         # Each worker records result available to all.
         shareds.grads_2d[:, self.rank] = self.avg_fac * \
-            sliced_fun(self._opt_fun["f_grad"], self._num_slices)(inputs, extra_inputs)
+                                         sliced_fun(self._opt_fun["f_grad"], self._num_slices)(inputs,
+                                                                                               extra_inputs)
         barriers.flat_g[0].wait()
         # Each worker sums over an equal share of the grad elements across
         # workers (row major storage--sum along rows).
@@ -403,14 +411,14 @@ class ParallelConjugateGradientOptimizer(Serializable):
         else:
             self._optimize(inputs, extra_inputs, subsample_inputs)
 
-    def log(self,message):
+    def log(self, message):
         if self._name is not None:
             logger.log(self._name + ": " + message)
         else:
             logger.log(message)
 
     def _optimize_master(self, inputs, extra_inputs, subsample_inputs):
-
+        from sandbox.adam.parallel import krylov
         shareds, barriers = self._par_objs
 
         self.log("computing loss before")
@@ -422,7 +430,7 @@ class ParallelConjugateGradientOptimizer(Serializable):
         Hx = self._hvp_approach.build_eval(subsample_inputs + extra_inputs)
         # Krylov is parallelized, but only to save on memory (could run serial).
         krylov.cg(Hx, shareds.flat_g, self._cg_par_objs, self.rank,
-            cg_iters=self._cg_iters)
+                  cg_iters=self._cg_iters)
         # # Serial call version:
         # shareds.descent[:] = krylov.cg(Hx, shareds.flat_g, cg_iters=self._cg_iters)
 
@@ -445,14 +453,14 @@ class ParallelConjugateGradientOptimizer(Serializable):
                 break
 
         if ((np.isnan(loss) or np.isnan(constraint_val) or loss >= loss_before or
-                constraint_val >= self._max_constraint_val) and not self._accept_violation):
+                     constraint_val >= self._max_constraint_val) and not self._accept_violation):
             self._target.set_param_values(shareds.prev_param, trainable=True)
             self.log("Line search condition violated. Rejecting the step!")
             if np.isnan(loss):
                 self.log("Violated because loss is NaN")
             if np.isnan(constraint_val):
                 self.log("Violated because constraint %s is NaN" %
-                           self._constraint_name)
+                         self._constraint_name)
             if loss >= loss_before:
                 self.log("Violated because loss not improving")
             if constraint_val >= self._max_constraint_val:
@@ -476,6 +484,7 @@ class ParallelConjugateGradientOptimizer(Serializable):
         logger.record_tabular(log_prefix + 'bktrk_iters', n_iter)
 
     def _optimize(self, inputs, extra_inputs, subsample_inputs):
+        from sandbox.adam.parallel import krylov
 
         shareds, barriers = self._par_objs
 
@@ -484,7 +493,7 @@ class ParallelConjugateGradientOptimizer(Serializable):
         Hx = self._hvp_approach.build_eval(subsample_inputs + extra_inputs)
         # Krylov is parallelized, but only to save on memory (could run serial).
         krylov.cg(Hx, shareds.flat_g, self._cg_par_objs, self.rank,
-            cg_iters=self._cg_iters)
+                  cg_iters=self._cg_iters)
         # Serial call version:
         # _ = krylov.cg(Hx, shareds.flat_g, cg_iters=self._cg_iters)
 
@@ -499,5 +508,5 @@ class ParallelConjugateGradientOptimizer(Serializable):
                 break
 
         if ((np.isnan(loss) or np.isnan(constraint_val) or loss >= loss_before or
-                constraint_val >= self._max_constraint_val) and not self._accept_violation):
+                     constraint_val >= self._max_constraint_val) and not self._accept_violation):
             self._target.set_param_values(shareds.prev_param, trainable=True)

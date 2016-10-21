@@ -1,10 +1,7 @@
 import os
 
-import theano
-import theano.tensor as TT
 import numpy as np
 
-from rllab.misc import ext
 from rllab.misc.overrides import overrides
 
 from sandbox.rein.algos.embedding_theano_par.batch_polopt import ParallelBatchPolopt
@@ -13,11 +10,6 @@ from sandbox.rein.algos.embedding_theano_par.conjugate_gradient_optimizer import
 import rllab.misc.logger as logger
 from sandbox.rein.algos.embedding_theano_par.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
 from sandbox.rein.algos.embedding_theano_par.plotter import Plotter
-from sandbox.rein.algos.embedding_theano_par.replay_pool import SingleStateReplayPool
-from sandbox.rein.dynamics_models.utils import iterate_minibatches
-from sandbox.adam.parallel.util import SimpleContainer
-import multiprocessing as mp
-import sandbox.rein.algos.embedding_theano_par.n_parallel
 
 # --
 # Nonscientific printing of numpy arrays.
@@ -94,14 +86,13 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
         from sandbox.rein.algos.embedding_theano_par import parallel_trainer
         # start parallel trainer
         self._model_trainer = parallel_trainer.trainer
-        logger.log('parallel trainer')
+        logger.log('Sending model/pool data to parallel trainer and waiting for response ...')
         if self._train_model:
-            self._model_trainer.populate_trainer(self._model_args, self._model_pool_args)
+            # self._model_trainer.populate_trainer(self._model_args, self._model_pool_args)
+            self._model_trainer.q_model_args.put(self._model_args)
+            self._model_trainer.q_model_pool_args.put(self._model_pool_args)
             self._model_trainer.q_pool_data_out_flag.get()
-        logger.log('done.')
-
-        import theano.sandbox.cuda
-        theano.sandbox.cuda.use("gpu" + str(sandbox.rein.algos.embedding_theano_par.n_parallel._seed))
+        logger.log('Done.')
 
         from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
 
@@ -143,6 +134,9 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
         """
         Same as normal NPO, except for setting MKL_NUM_THREADS.
         """
+        import theano
+        import theano.tensor as TT
+        from rllab.misc import ext
         # Set BEFORE Theano compiling; make equal to number of cores per worker.
         os.environ['MKL_NUM_THREADS'] = str(self.mkl_num_threads)
 
@@ -215,6 +209,7 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
 
     @overrides
     def prep_samples(self, samples_data):
+        from rllab.misc import ext
         all_input_values = tuple(ext.extract(
             samples_data,
             "observations", "actions", "advantages"

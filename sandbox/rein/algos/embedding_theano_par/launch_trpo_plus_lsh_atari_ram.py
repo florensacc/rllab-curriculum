@@ -6,7 +6,6 @@ from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.rein.algos.embedding_theano_par.theano_atari import AtariEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from sandbox.rein.algos.embedding_theano_par.trpo_plus_lsh import ParallelTRPOPlusLSH
-from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
 from rllab.envs.env_spec import EnvSpec
 from rllab.spaces.box import Box
 from rllab.core.network import ConvNetwork
@@ -16,17 +15,17 @@ from sandbox.haoran.parallel_trpo.conjugate_gradient_optimizer import ParallelCo
 stub(globals())
 
 n_seq_frames = 4
-n_parallel = 9
+n_parallel = 3
 model_batch_size = 32
-exp_prefix = 'trpo-par-a'
-seeds = [0, 1, 2]
-etas = [0.001]
+exp_prefix = 'trpo-par-auto-a'
+seeds = [0, 1, 2, 3, 4]
+etas = [0.01]
 mdps = [  # AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
     # AtariEnv(game='breakout', obs_type="ram+image", frame_skip=4),
     # AtariEnv(game='frostbite', obs_type="ram+image", frame_skip=4),
-    # AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4)]
-    AtariEnv(game='venture', obs_type="image", frame_skip=4)]
-trpo_batch_size = 50000
+    AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4)]
+    # AtariEnv(game='venture', obs_type="image", frame_skip=4)]
+trpo_batch_size = 100000
 max_path_length = 4500
 dropout = False
 batch_norm = True
@@ -280,6 +279,8 @@ for mdp, eta, seed in param_cart_product:
     )
 
     print("Remember, GPUs are linked to seeds!")
+    # Note: you have to make sure that imports in all of the imported modules are at their correct location,
+    # not the top location. Otherwise, GPU compilation of the AE will fail.
     run_experiment_lite(
         algo.train(),
         exp_prefix=exp_prefix,

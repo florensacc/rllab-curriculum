@@ -5,7 +5,7 @@ import time
 from rllab.algos.base import RLAlgorithm
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
-from rllab.misc import ext
+
 from sandbox.rein.algos.embedding_theano_par.sampler import WorkerBatchSampler
 from sandbox.adam.parallel.util import SimpleContainer
 
@@ -452,6 +452,7 @@ class ParallelBatchPolopt(RLAlgorithm):
             # self.baseline.log_diagnostics(paths)
 
     def init_rank(self, rank):
+        from rllab.misc import ext
         self.rank = rank
         if self.set_cpu_affinity:
             self._set_affinity(rank)

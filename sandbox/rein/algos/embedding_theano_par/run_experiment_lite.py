@@ -5,25 +5,23 @@ Differences from normal run_experiment_lite.py:
 
 import matplotlib
 
+
+
 matplotlib.use('AGG')  # Do this BEFORE importing matplotlib.pyplot
 
 import sys
 
 sys.path.append(".")
 
-from rllab.misc.ext import is_iterable, set_seed
-from rllab.misc.instrument import concretize
-from rllab import config
-import rllab.misc.logger as logger
-import argparse
-import os.path as osp
+import os
+# os.environ['THEANO_FLAGS'] = 'device=cpu'
+
 import datetime
 import dateutil.tz
 import ast
 import uuid
-import pickle as pickle
-import base64
-import joblib
+import argparse
+from rllab import config
 
 
 def run_experiment(argv):
@@ -79,7 +77,19 @@ def run_experiment(argv):
     sandbox.rein.algos.embedding_theano_par.n_parallel.set_seed(args.seed)
 
     # Don't remove this, for GPU cuda
+    print("Importing parallel trainer ...")
     from sandbox.rein.algos.embedding_theano_par import parallel_trainer
+    parallel_trainer.trainer.populate_trainer()
+    parallel_trainer.trainer.q_pool_data_out_flag.get()
+    print('Notification received that theano has been imported.')
+
+    from rllab.misc.ext import is_iterable, set_seed
+    from rllab.misc.instrument import concretize
+    import rllab.misc.logger as logger
+    import os.path as osp
+    import pickle as pickle
+    import base64
+    import joblib
 
     if args.seed is not None:
         set_seed(args.seed)
