@@ -736,8 +736,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         input_var = T.matrix('inputs',
                              dtype=theano.config.floatX)
 
-        target_var = T.matrix('targets',
-                              dtype=theano.config.floatX)
+        target_var = T.imatrix('targets')
 
         # Make the likelihood standard deviation a trainable parameter.
         self.likelihood_sd = theano.shared(
@@ -781,7 +780,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                                                  dtype=theano.config.floatX),
                                       borrow=True)
         self.shared_y = theano.shared(np.asarray(np.zeros((2, 2)),
-                                                 dtype=theano.config.floatX),
+                                                 dtype='int32'),
                                       borrow=True)
         self.train_fn = ext.compile_function(
             [index, kl_factor], loss, updates=updates, log_name='fn_train',

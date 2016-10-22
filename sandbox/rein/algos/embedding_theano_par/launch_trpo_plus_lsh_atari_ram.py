@@ -15,18 +15,18 @@ from sandbox.haoran.parallel_trpo.conjugate_gradient_optimizer import ParallelCo
 stub(globals())
 
 n_seq_frames = 4
-n_parallel = 20
+n_parallel = 2
 model_batch_size = 32
-exp_prefix = 'trpo-i-auto-big-a'
+exp_prefix = 'trpo-i-auto-test'
 seeds = [0]
-etas = [0.01]
+etas = [0.001]
 mdps = [  # AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
     # AtariEnv(game='breakout', obs_type="ram+image", frame_skip=4),
-    # AtariEnv(game='frostbite', obs_type="ram+image", frame_skip=4),
-    AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4)]
-    # AtariEnv(game='venture', obs_type="image", frame_skip=4)]
-trpo_batch_size = 100000
-max_path_length = 4500
+    # AtariEnv(game='frostbite', obs_type="image", frame_skip=4),
+    AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4),
+    AtariEnv(game='venture', obs_type="image", frame_skip=4)]
+trpo_batch_size = 1000
+max_path_length = 450
 dropout = False
 batch_norm = True
 
@@ -153,32 +153,32 @@ for mdp, eta, seed in param_cart_product:
             dict(name='reshape',
                  shape=([0], -1)),
             dict(name='gaussian',
-                 n_units=512,
+                 n_units=1024,
                  matrix_variate_gaussian=False,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=dropout,
                  deterministic=True),
             dict(name='discrete_embedding',
-                 n_units=512,
+                 n_units=128,
                  batch_norm=batch_norm,
                  deterministic=True),
             dict(name='gaussian',
-                 n_units=512,
+                 n_units=1024,
                  matrix_variate_gaussian=False,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=dropout,
                  deterministic=True),
             dict(name='gaussian',
-                 n_units=1536,
+                 n_units=1024,
                  matrix_variate_gaussian=False,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=False,
                  deterministic=True),
             dict(name='reshape',
-                 shape=([0], 96, 4, 4)),
+                 shape=([0], 64, 4, 4)),
             dict(name='deconvolution',
                  n_filters=64,
                  filter_size=(6, 6),
@@ -229,7 +229,7 @@ for mdp, eta, seed in param_cart_product:
         update_prior=False,
         update_likelihood_sd=False,
         output_type='classfication',
-        num_classes=64,
+        num_classes=32,
         likelihood_sd_init=0.1,
         disable_variance=False,
         ind_softmax=True,
@@ -251,7 +251,7 @@ for mdp, eta, seed in param_cart_product:
         baseline=baseline,
         batch_size=trpo_batch_size,
         max_path_length=max_path_length,
-        n_itr=2000,
+        n_itr=2,
         step_size=0.01,
         optimizer_args=policy_opt_args,
         n_seq_frames=n_seq_frames,
@@ -270,7 +270,7 @@ for mdp, eta, seed in param_cart_product:
         continuous_embedding=False,
         model_embedding=True,
         sim_hash_args=dict(
-            dim_key=64,
+            dim_key=128,
             bucket_sizes=None,
             disable_rnd_proj=True,
         ),
@@ -287,7 +287,7 @@ for mdp, eta, seed in param_cart_product:
         n_parallel=n_parallel,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/algos/embedding_theano_par/run_experiment_lite.py",
