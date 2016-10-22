@@ -1,6 +1,6 @@
 from rllab.algos.base import RLAlgorithm
 # FIXME: to img change
-from sandbox.rein.algos.embedding_theano2 import parallel_sampler_ram_img as parallel_sampler_ram_img
+from sandbox.rein.algos.embedding_theano_hd import parallel_sampler as parallel_sampler_ram_img
 from rllab.sampler.base import BaseSampler
 import rllab.misc.logger as logger
 import rllab.plotter as plotter

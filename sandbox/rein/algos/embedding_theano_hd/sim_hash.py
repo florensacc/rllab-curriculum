@@ -4,7 +4,7 @@ import multiprocessing as mp
 
 
 class SimHash(Hash):
-    def __init__(self, item_dim, action_dim=0, dim_key=128, bucket_sizes=None, parallel=False, disable_rnd_proj=False):
+    def __init__(self, item_dim, dim_key=128, bucket_sizes=None, parallel=False, disable_rnd_proj=False):
         """
         Encode each item (vector) as the signs of its dot products with random vectors
         (with uniformly sampled orientations) to get a binary code.
@@ -16,8 +16,6 @@ class SimHash(Hash):
         When querying the count of an item, compute the key counts for all buckets but return the minimum.
         This way the count is less prone to errors caused by key compression.
         """
-        dim_key += action_dim
-        print('dim_key: {}'.format(dim_key))
         # each column is a vector of uniformly random orientation
         self._disable_rnd_proj = disable_rnd_proj
         if not disable_rnd_proj:

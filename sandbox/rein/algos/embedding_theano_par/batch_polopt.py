@@ -5,7 +5,7 @@ import time
 from rllab.algos.base import RLAlgorithm
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
-from rllab.misc import ext
+
 from sandbox.rein.algos.embedding_theano_par.sampler import WorkerBatchSampler
 from sandbox.adam.parallel.util import SimpleContainer
 
@@ -133,11 +133,12 @@ class ParallelBatchPolopt(RLAlgorithm):
         )
         barriers = SimpleContainer(
             dgnstc=mp.Barrier(n),
+            training=mp.Barrier(n),
         )
         self._par_objs = (shareds, barriers)
         self.baseline.init_par_objs(n_parallel=n)
-        if self._hashing_evaluator_ram is not None:
-            self._hashing_evaluator_ram.init_par_objs(n_parallel=n)
+        # if self._hashing_evaluator_ram is not None:
+        #     self._hashing_evaluator_ram.init_par_objs(n_parallel=n)
         if self._hashing_evaluator is not None:
             self._hashing_evaluator.init_par_objs(n_parallel=n)
 
@@ -193,10 +194,14 @@ class ParallelBatchPolopt(RLAlgorithm):
 
     def train(self):
         self.init_opt()
-        if self.serial_compile:
-            self.force_compile()
+        # if self.serial_compile:
+        #     self.force_compile()
+        self.init_gpu()
         self.init_par_objs()
-        processes = [mp.Process(target=self._train, args=(rank,))
+
+        processes = [mp.Process(target=self._train, args=(
+            rank,
+        ))
                      for rank in range(self.n_parallel)]
         for p in processes:
             p.start()
@@ -226,8 +231,12 @@ class ParallelBatchPolopt(RLAlgorithm):
         self.init_rank(rank)
         if self.rank == 0:
             start_time = time.time()
+            acc = 0.
+        from sandbox.rein.algos.embedding_theano_par.parallel_trainer import shared_model_params
+
         for itr in range(self.current_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
+                (shareds, barriers) = self._par_objs
                 if rank == 0:
                     logger.log("Collecting samples ...")
                 paths = self.sampler.obtain_samples()
@@ -235,23 +244,72 @@ class ParallelBatchPolopt(RLAlgorithm):
                 # --
                 # Additional
                 self.preprocess(paths)
+
                 if self._train_model:
+
+                    # --
+                    # Fill replay pool.
                     self.fill_replay_pool(paths)
-                    self.train_model(itr)
+
+                    # First iteration, train sequentially.
+                    if itr == 0:
+                        # Wait for first replay pool fill.
+                        barriers.training.wait()
+                        if self.rank == 0:
+                            self._model_trainer.train_model()
+                        self._model_trainer.q_train_param_out[self.rank].get()
+                        params = np.frombuffer(shared_model_params)[:self._model_n_params]
+                        self._model.set_param_values(params)
+                        if self.rank == 0:
+                            acc = self._model_trainer.q_train_acc_out.get()
+
+                    if itr != 0 and itr % self._train_model_freq == 0:
+                        if itr != self._train_model_freq:
+                            logger.log('Getting update model params ...')
+                            # params = self._model_trainer.q_train_param_out[self.rank].get()
+                            self._model_trainer.q_train_param_out[self.rank].get()
+                            params = np.frombuffer(shared_model_params)[:self._model_n_params]
+                            self._model.set_param_values(params)
+                            barriers.training.wait()
+                            if self.rank == 0:
+                                acc = self._model_trainer.q_train_acc_out.get()
+                                logger.log('Model accuracy: {}'.format(acc))
+
+                        if self.rank == 0:
+                            self._model_trainer.train_model()
+
+                    if self.rank == 0:
+                        print('accuracy: {}'.format(acc))
+                        logger.record_tabular('AE_accuracy', acc)
+
                 self.comp_int_rewards(paths)
 
                 if self.rank == 0:
                     # --
                     # Analysis
+                    if self._train_model and itr % 100 == 0:
+                        logger.log('Plotting random samples ...')
+                        batch = self._model_trainer.random_batch(32)
+                        _x = self.decode_obs(batch['observations'])
+                        _y = batch['observations']
+                        self._plotter.plot_pred_imgs(model=self._model, inputs=_x, targets=_y, itr=0,
+                                                     dir=RANDOM_SAMPLES_DIR)
+                        self._plotter.print_embs(model=self._model, counting_table=None, inputs=_x,
+                                                 dir=RANDOM_SAMPLES_DIR, hamming_distance=0)
+
                     # Get consistency images in first iteration.
                     if itr == 0:
                         # Select random images form the first path,
                         # evaluate them at every iteration to inspect emb.
-                        rnd = np.random.randint(0, len(paths[0]['env_infos']['images']), 32)
+                        rnd = np.random.randint(0, len(paths[0]['rewards']), 32)
+                        # FIXME: to img change
+                        #     self._test_obs = self.encode_obs(
+                        #         paths[0]['env_infos']['images'][rnd, -np.prod(self._model.state_dim):])
+                        # obs = self.encode_obs(
+                        #     paths[0]['env_infos']['images'][-32:, -np.prod(self._model.state_dim):])
                         self._test_obs = self.encode_obs(
-                            paths[0]['env_infos']['images'][rnd, -np.prod(self._model.state_dim):])
-                    obs = self.encode_obs(
-                        paths[0]['env_infos']['images'][-32:, -np.prod(self._model.state_dim):])
+                            paths[0]['observations'][rnd, -np.prod(self._model.state_dim):])
+                    obs = self.encode_obs(paths[0]['observations'][-32:, -np.prod(self._model.state_dim):])
 
                     if self._model_embedding and self._train_model and itr % 20 == 0:
                         logger.log('Plotting consistency images ...')
@@ -394,13 +452,14 @@ class ParallelBatchPolopt(RLAlgorithm):
             # self.baseline.log_diagnostics(paths)
 
     def init_rank(self, rank):
+        from rllab.misc import ext
         self.rank = rank
         if self.set_cpu_affinity:
             self._set_affinity(rank)
         self.baseline.init_rank(rank)
         self.optimizer.init_rank(rank)
-        if self._hashing_evaluator_ram is not None:
-            self._hashing_evaluator_ram.init_rank(rank)
+        # if self._hashing_evaluator_ram is not None:
+        #     self._hashing_evaluator_ram.init_rank(rank)
         if self._hashing_evaluator is not None:
             self._hashing_evaluator.init_rank(rank)
 

@@ -3,7 +3,7 @@ from rllab.misc import tensor_utils
 import time
 
 
-def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1, n_seq_frames=4):
+def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1, n_seq_frames=1):
     observations = []
     actions = []
     rewards = []
@@ -16,7 +16,7 @@ def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1, n_seq
         env.render()
     # buffer of empty frames.
     top_ptr = 0
-    obs_bfr = np.zeros((n_seq_frames, env.spec.observation_space.shape[2], env.spec.observation_space.shape[1]))
+    obs_bfr = np.zeros((n_seq_frames, env.spec.observation_space.shape[1]))
     # We fill up with the starting frame, better than black.
     for i in range(n_seq_frames):
         obs_bfr[i] = o
@@ -27,9 +27,11 @@ def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1, n_seq
                             obs_bfr[:(top_ptr + 1) % n_seq_frames]), axis=0)
         # format for policy/baseline is w x h x n_samp
         # o = o.transpose((2, 1, 0))
-        a, agent_info = agent.get_action(o)
+        # Split RAM from image
+        a, agent_info = agent.get_action(o[:, :128])
         next_o, r, d, env_info = env.step(a)
-        observations.append(env.observation_space.flatten(o))
+        env_info['images'] = o[:, 128:].flatten()
+        observations.append(env.observation_space.flatten(o[:, :128]))
         rewards.append(r)
         actions.append(env.action_space.flatten(a))
         agent_infos.append(agent_info)

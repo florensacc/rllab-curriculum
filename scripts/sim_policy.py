@@ -1,5 +1,5 @@
 # from rllab.sampler.utils import rollout
-from sandbox.rein.algos.embedding_theano2.utils_ram_img import rollout
+from sandbox.rein.algos.embedding_theano2.utils import rollout
 import argparse
 import joblib
 import uuid
@@ -33,6 +33,7 @@ if __name__ == "__main__":
         data = joblib.load(args.file)
         policy = data['policy']
         env = data['env']
+        env.ale.setBool(b'color_averaging', False)
         while True:
             path = rollout(env, policy, max_path_length=args.max_path_length,
                            animated=True, speedup=args.speedup)

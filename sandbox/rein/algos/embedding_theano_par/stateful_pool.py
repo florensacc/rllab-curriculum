@@ -1,3 +1,9 @@
+"""
+Differences from normal stateful_pool:
+1. _worker_run_collect() function measures the worker threshold differently (to
+   match ParallelTRPO)
+"""
+
 from joblib.pool import MemmapingPool
 import multiprocessing as mp
 from rllab.misc import logger
@@ -8,6 +14,7 @@ import sys
 
 
 class ProgBarCounter(object):
+
     def __init__(self, total_count):
         self.total_count = total_count
         self.max_progress = 1000000
@@ -27,7 +34,7 @@ class ProgBarCounter(object):
             self.cur_progress = new_progress
 
     def stop(self):
-        if self.pbar is not None and self.pbar.active:
+        if not logger.get_log_tabular_only():
             self.pbar.stop()
 
 
@@ -54,13 +61,12 @@ class StatefulPool(object):
         if n_parallel > 1:
             self.queue = mp.Queue()
             self.worker_queue = mp.Queue()
-            # FIXME: memmap is slow.
             # self.pool = MemmapingPool(
             #     self.n_parallel,
             #     temp_folder="/tmp",
             # )
             self.pool = mp.Pool(
-                self.n_parallel
+                self.n_parallel,
             )
 
     def run_each(self, runner, args_list=None):
@@ -95,8 +101,7 @@ class StatefulPool(object):
 
     def run_imap_unordered(self, runner, args_list):
         if self.n_parallel > 1:
-            for x in self.pool.imap_unordered(_worker_run_map, [(runner, args) for args in args_list]):
-                yield x
+            yield from self.pool.imap_unordered(_worker_run_map, [(runner, args) for args in args_list])
         else:
             for args in args_list:
                 yield runner(self.G, *args)
@@ -106,7 +111,7 @@ class StatefulPool(object):
         Run the collector method using the worker pool. The collect_once method will receive 'G' as
         its first argument, followed by the provided args, if any. The method should return a pair of values.
         The first should be the object to be collected, and the second is the increment to be added.
-        This will continue until the total ncrement reaches or exceeds the given threshold.
+        This will continue until the total increment reaches or exceeds the given threshold.
 
         Sample script:
 
@@ -142,12 +147,7 @@ class StatefulPool(object):
                     if show_prog_bar:
                         pbar.inc(counter.value - last_value)
                     last_value = counter.value
-            print('Done sampling.')
-            start = time.time()
-            out = sum(results.get(), [])
-            stop = time.time()
-            print('Returning results ({} sec).'.format(stop - start))
-            return out
+            return sum(results.get(), [])
         else:
             count = 0
             results = []
@@ -178,21 +178,46 @@ def _worker_run_each(all_args):
     except Exception:
         raise Exception("".join(traceback.format_exception(*sys.exc_info())))
 
+# ORIGINAL:
+# def _worker_run_collect(all_args):
+#     try:
+#         collect_once, counter, lock, threshold, args = all_args
+#         collected = []
+#         while True:
+#             with lock:
+#                 if counter.value >= threshold:
+#                     return collected
+#             result, inc = collect_once(singleton_pool.G, *args)
+#             collected.append(result)
+#             with lock:
+#                 counter.value += inc
+#                 if counter.value >= threshold:
+#                     return collected
+#     except Exception:
+#         raise Exception("".join(traceback.format_exception(*sys.exc_info())))
 
+
+# MODIFIED:
 def _worker_run_collect(all_args):
+    """
+    Samples according to the same scheme used in Parallel TRPO, for equivalent
+    algorithm comparison. (The work is evenly divided among workers a head of
+    time, and they each work up to the same individual threshold.)
+    """
     try:
+        # print("In modified worker_run_collect.")
         collect_once, counter, lock, threshold, args = all_args
+        worker_threshold = threshold // singleton_pool.n_parallel
+        worker_counter = 0
         collected = []
         while True:
-            with lock:
-                if counter.value >= threshold:
-                    return collected
             result, inc = collect_once(singleton_pool.G, *args)
             collected.append(result)
             with lock:
                 counter.value += inc
-                if counter.value >= threshold:
-                    return collected
+            worker_counter += inc
+            if worker_counter >= worker_threshold:
+                return collected
     except Exception:
         raise Exception("".join(traceback.format_exception(*sys.exc_info())))
 

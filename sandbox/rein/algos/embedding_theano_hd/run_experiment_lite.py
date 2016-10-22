@@ -10,7 +10,6 @@ sys.path.append(".")
 from rllab.misc.ext import is_iterable, set_seed
 from rllab.misc.instrument import concretize
 from rllab import config
-
 import rllab.misc.logger as logger
 import argparse
 import os.path as osp
@@ -72,21 +71,17 @@ def run_experiment(argv):
 
     args = parser.parse_args(argv[1:])
 
-    import sandbox.rein.algos.embedding_theano2.seed
-    sandbox.rein.algos.embedding_theano2.seed.set_seed(args.seed)
-
-
     # Import needed for CUDA GPU init!
-    from sandbox.rein.algos.embedding_theano2 import parallel_trainer
+    from sandbox.rein.algos.embedding_theano_hd import parallel_trainer
 
     if args.seed is not None:
         set_seed(args.seed)
 
     if args.n_parallel > 0:
-        from sandbox.rein.algos.embedding_theano2 import parallel_sampler_ram_img
-        parallel_sampler_ram_img.initialize(n_parallel=args.n_parallel)
+        from sandbox.rein.algos.embedding_theano_hd import parallel_sampler
+        parallel_sampler.initialize(n_parallel=args.n_parallel)
         if args.seed is not None:
-            parallel_sampler_ram_img.set_seed(args.seed)
+            parallel_sampler.set_seed(args.seed)
 
     if args.plot:
         from rllab.plotter import plotter

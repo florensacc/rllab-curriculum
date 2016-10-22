@@ -501,9 +501,10 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             log_p_D_given_w += lh
 
         cont_emb = lasagne.layers.get_output(self.discrete_emb_sym, input, noise_mask=0, deterministic=False)
-        if self._binary_penalty:
+        if self._binary_penalty > 0:
             print('Using binary penalty.')
-            binary_penalty = 10 * T.mean(T.minimum(T.square(cont_emb - 0), T.square(cont_emb - 1)))
+            binary_penalty = self._binary_penalty * T.mean(
+                T.minimum(T.square(cont_emb - 0), T.square(cont_emb - 1)))
         else:
             binary_penalty = 0.
 
@@ -773,8 +774,22 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
         # We want to resample when actually updating the BNN itself, otherwise
         # you will fit to the specific noise.
+        # self.train_fn = ext.compile_function(
+        #     [input_var, target_var, kl_factor], loss, updates=updates, log_name='fn_train')
+        index = T.lscalar()
+        self.shared_x = theano.shared(np.asarray(np.zeros((2, 2)),
+                                                 dtype=theano.config.floatX),
+                                      borrow=True)
+        self.shared_y = theano.shared(np.asarray(np.zeros((2, 2)),
+                                                 dtype=theano.config.floatX),
+                                      borrow=True)
         self.train_fn = ext.compile_function(
-            [input_var, target_var, kl_factor], loss, updates=updates, log_name='fn_train')
+            [index, kl_factor], loss, updates=updates, log_name='fn_train',
+            givens={
+                input_var: self.shared_x[index * self.batch_size: (index + 1) * self.batch_size],
+                target_var: self.shared_y[index * self.batch_size: (index + 1) * self.batch_size]
+            }
+        )
 
         # self.fn_loss = ext.compile_function(
         #     [input_var, target_var, kl_factor], loss, log_name='fn_loss')

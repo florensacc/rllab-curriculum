@@ -1,10 +1,7 @@
 import os
 
-import theano
-import theano.tensor as TT
 import numpy as np
 
-from rllab.misc import ext
 from rllab.misc.overrides import overrides
 
 from sandbox.rein.algos.embedding_theano_par.batch_polopt import ParallelBatchPolopt
@@ -13,8 +10,6 @@ from sandbox.rein.algos.embedding_theano_par.conjugate_gradient_optimizer import
 import rllab.misc.logger as logger
 from sandbox.rein.algos.embedding_theano_par.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
 from sandbox.rein.algos.embedding_theano_par.plotter import Plotter
-from sandbox.rein.algos.embedding_theano_par.replay_pool import SingleStateReplayPool
-from sandbox.rein.dynamics_models.utils import iterate_minibatches
 
 # --
 # Nonscientific printing of numpy arrays.
@@ -50,7 +45,9 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
             continuous_embedding=True,
             model_embedding=True,
             sim_hash_args=None,
-            model=None,
+            clip_rewards=False,
+            model_args=None,
+            n_seq_frames=1,
             **kwargs):
         if optimizer is None:
             if optimizer_args is None:
@@ -60,47 +57,60 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
         self.step_size = step_size
         self.truncate_local_is_ratio = truncate_local_is_ratio
         self.mkl_num_threads = mkl_num_threads
+        self._n_seq_frames = n_seq_frames
 
-        # # FIXME: this is a hack!
-        # print('FIXME: this is a hack!! Only works for montezuma.')
-        # import joblib
-        # data = joblib.load('sandbox/rein/algos/embedding_theano_par/model/params.pkl')
-        # model = data['model']
-
+        assert model_args is not None
         assert eta >= 0
         assert train_model_freq >= 1
         if train_model:
             assert model_embedding
-            assert model is not None
 
-        self._model = model
         self._eta = eta
         self._train_model = train_model
         self._train_model_freq = train_model_freq
         self._continuous_embedding = continuous_embedding
         self._model_embedding = model_embedding
         self._sim_hash_args = sim_hash_args
+        self._clip_rewards = clip_rewards
+        self._model_args = model_args
+
+        if model_pool_args is None:
+            self._model_pool_args = dict(size=100000, min_size=32, batch_size=32)
+        else:
+            self._model_pool_args = model_pool_args
+
+        super(ParallelTRPOPlusLSH, self).__init__(**kwargs)
+
+    def init_gpu(self):
+
+        from sandbox.rein.algos.embedding_theano_par import parallel_trainer
+        # start parallel trainer
+        self._model_trainer = parallel_trainer.trainer
+        logger.log('Sending model/pool data to parallel trainer and waiting for response ...')
+        if self._train_model:
+            # self._model_trainer.populate_trainer(self._model_args, self._model_pool_args)
+            self._model_trainer.q_model_args.put(self._model_args)
+            self._model_trainer.q_model_pool_args.put(self._model_pool_args)
+            self._model_trainer.q_pool_data_out_flag.get()
+        logger.log('Done.')
+
+        from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
+
+        self._model = ConvBNNVIME(
+            **self._model_args
+        )
+        self._model_n_params = self._model.get_param_values().shape[0]
 
         if self._model_embedding:
             state_dim = self._model.discrete_emb_size
-            self._hashing_evaluator_ram = ALEHashingBonusEvaluator(
-                state_dim=128,
-                log_prefix="ram_",
-                sim_hash_args=dict(
-                    dim_key=256,
-                    bucket_sizes=None,
-                ),
-                parallel=True
-            )
         else:
-            self._hashing_evaluator_ram = None
             state_dim = 128
 
         self._hashing_evaluator = ALEHashingBonusEvaluator(
             state_dim=state_dim,
+            action_dim=self.env.spec.action_space.flat_dim,
             count_target='embeddings',
-            sim_hash_args=sim_hash_args,
-            parallel=True,
+            sim_hash_args=self._sim_hash_args,
         )
 
         if self._model_embedding:
@@ -117,27 +127,16 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
         else:
             logger.log('Model embedding disabled, using LSH directly on states.')
 
-        if model_pool_args is None:
-            self._model_pool_args = dict(size=100000, min_size=32, batch_size=32)
-        else:
-            self._model_pool_args = model_pool_args
-
-        if self._train_model:
-            observation_dtype = "uint8"
-            self._pool = SingleStateReplayPool(
-                max_pool_size=self._model_pool_args['size'],
-                observation_shape=(np.prod(self._model.state_dim),),
-                observation_dtype=observation_dtype,
-                **self._model_pool_args
-            )
         self._plotter = Plotter()
-        super(ParallelTRPOPlusLSH, self).__init__(**kwargs)
 
     @overrides
     def init_opt(self):
         """
         Same as normal NPO, except for setting MKL_NUM_THREADS.
         """
+        import theano
+        import theano.tensor as TT
+        from rllab.misc import ext
         # Set BEFORE Theano compiling; make equal to number of cores per worker.
         os.environ['MKL_NUM_THREADS'] = str(self.mkl_num_threads)
 
@@ -205,10 +204,12 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
             inputs=input_list,
             constraint_name="mean_kl"
         )
+
         return dict()
 
     @overrides
     def prep_samples(self, samples_data):
+        from rllab.misc import ext
         all_input_values = tuple(ext.extract(
             samples_data,
             "observations", "actions", "advantages"
@@ -266,14 +267,21 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
         def obs_to_key(path):
             if self._model_embedding:
                 # Encode/decode to get uniform representation.
-                obs_ed = self.decode_obs(self.encode_obs(path['env_infos']['images']))
+                # FIXME: to img change
+                # obs_ed = self.decode_obs(self.encode_obs(path['env_infos']['images']))
+                obs_ed = self.decode_obs(
+                    self.encode_obs(path['observations'][:, -np.prod(self._model.state_dim):]))
                 # Get continuous embedding.
                 cont_emb = self._model.discrete_emb(obs_ed)
                 if self._continuous_embedding:
                     return cont_emb
                 else:
                     # Cast continuous embedding into binary one.
-                    return np.cast['int'](np.round(cont_emb))
+                    # return np.cast['int'](np.round(cont_emb))
+                    bin_emb = np.cast['int'](np.round(cont_emb))
+                    bin_emb_downsampled = bin_emb.reshape(-1, 8).mean(axis=1).reshape((bin_emb.shape[0], -1))
+                    obs_key = np.cast['int'](np.round(bin_emb_downsampled))
+                    return np.concatenate((obs_key, np.cast['int'](path['actions'])), axis=1)
             else:
                 return path['observations']
 
@@ -299,12 +307,12 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
         if self._model_embedding:
             if self.rank == 0:
                 logger.log('Update counting table and compute intrinsic reward (RAM) ...')
-            self._hashing_evaluator_ram.fit_before_process_samples(paths)
-            for path in paths:
-                path['ram_S'] = self._hashing_evaluator_ram.predict(path)
-            arr_surprise_ram = np.hstack([path['ram_S'] for path in paths])
-            logger.record_tabular('ram_MeanS', np.mean(arr_surprise_ram))
-            logger.record_tabular('ram_StdS', np.std(arr_surprise_ram))
+                # self._hashing_evaluator_ram.fit_before_process_samples(paths)
+                # for path in paths:
+                #     path['ram_S'] = self._hashing_evaluator_ram.predict(path)
+                # arr_surprise_ram = np.hstack([path['ram_S'] for path in paths])
+                # logger.record_tabular('ram_MeanS', np.mean(arr_surprise_ram))
+                # logger.record_tabular('ram_StdS', np.std(arr_surprise_ram))
 
         if self.rank == 0:
             logger.log('Intrinsic rewards computed')
@@ -319,14 +327,19 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
         assert self._train_model
         tot_path_len = 0
         for path in paths:
+            lst_obs_enc = []
             # Encode observations into replay pool format. Also make sure we only add final image in case of
             # autoencoder.
-            obs_enc = self.encode_obs(path['env_infos']['images'][:, -np.prod(self._model.state_dim):])
+            # FIXME: to img change
+            # obs_enc = self.encode_obs(path['env_infos']['images'][:, -np.prod(self._model.state_dim):])
+            obs_enc = self.encode_obs(path['observations'][:, -np.prod(self._model.state_dim):])
             path_len = len(path['rewards'])
             tot_path_len += path_len
             for i in range(path_len):
-                self._pool.add_sample(obs_enc[i])
-        logger.log('{} samples added to replay pool ({}).'.format(tot_path_len, self._pool.size))
+                lst_obs_enc.append(obs_enc[i])
+                # self._pool.add_sample(obs_enc[i])
+            self._model_trainer.add_sample(lst_obs_enc)
+        logger.log('{} samples added to replay pool'.format(tot_path_len))
 
     @overrides
     def encode_obs(self, obs):
@@ -348,86 +361,6 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
         assert np.min(obs_dec) >= -1.0
         return obs_dec
 
-    def accuracy(self, _inputs, _targets):
-        """
-        Calculate accuracy for inputs/outputs.
-        :param _inputs:
-        :param _targets:
-        :return:
-        """
-        acc = 0.
-        for batch in iterate_minibatches(_inputs, _targets, 1000, shuffle=False):
-            _i, _t, _ = batch
-            _o = self._model.pred_fn(_i)
-            _o_s = _o.reshape((-1, np.prod(self._model.state_dim), self._model.num_classes))
-            _o_s = np.argmax(_o_s, axis=2)
-            acc += np.sum(np.abs(_o_s - _t))
-        return acc / _inputs.shape[0]
-
-    @overrides
-    def train_model(self, itr):
-        """
-        Train autoencoder model.
-        :return:
-        """
-        acc_before, acc_after, train_loss, running_avg = 0., 0., 0., 0.
-        if itr == 0 or itr % self._train_model_freq == 0:
-            logger.log('Updating autoencoder using replay pool ({}) ...'.format(self._pool.size))
-            if self._pool.size >= self._model_pool_args['min_size']:
-
-                for _ in range(100):
-                    batch = self._pool.random_batch(32)
-                    _x = self.decode_obs(batch['observations'])
-                    _y = batch['observations']
-                    acc_before += self.accuracy(_x, _y) / 10.
-
-                # --
-                # Actual training of model.
-                done = 0
-                old_running_avg = np.inf
-                while done < 7:
-                    running_avg = 0.
-                    for _ in range(100):
-                        # Replay pool return uint8 target format, so decode _x.
-                        batch = self._pool.random_batch(self._model_pool_args['batch_size'])
-                        _x = self.decode_obs(batch['observations'])
-                        _y = batch['observations']
-                        train_loss = float(self._model.train_fn(_x, _y, 0))
-                        assert not np.isinf(train_loss)
-                        assert not np.isnan(train_loss)
-                        running_avg += train_loss / 100.
-                    running_avg_delta = old_running_avg - running_avg
-                    if running_avg_delta < 1e-4:
-                        done += 1
-                    else:
-                        old_running_avg = running_avg
-                        done = 0
-                    logger.log('Autoencoder loss= {:.5f}, D= {:.5f}, done={}'.format(
-                        running_avg, running_avg_delta, done))
-
-                for i in range(10):
-                    batch = self._pool.random_batch(32)
-                    _x = self.decode_obs(batch['observations'])
-                    _y = batch['observations']
-                    acc_after += self.accuracy(_x, _y) / 10.
-
-                logger.log('Autoencoder updated.')
-
-                logger.log('Plotting random samples ...')
-                self._plotter.plot_pred_imgs(model=self._model, inputs=_x, targets=_y, itr=0,
-                                             dir=RANDOM_SAMPLES_DIR)
-                self._plotter.print_embs(model=self._model, counting_table=None, inputs=_x,
-                                         dir=RANDOM_SAMPLES_DIR, hamming_distance=0)
-
-            else:
-                logger.log('Autoencoder not updated: minimum replay pool size ({}) not met ({}).'.format(
-                    self._model_pool_args['min_size'], self._pool.size
-                ))
-
-        logger.record_tabular('AE_SqErrBefore', acc_before)
-        logger.record_tabular('AE_SqErrAfter', acc_after)
-        logger.record_tabular('AE_TrainLoss', running_avg)
-
     @overrides
     def preprocess(self, paths):
         """
@@ -440,8 +373,20 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
         # for path in paths:
         #     path['raw_rewards'] = np.array(path['rewards'])
 
+        # # --
+        # # Observations are concatenations of RAM and img.
+        # # Actual observation = RAM, split off img into 'img'
+        # for path in paths:
+        #     path['images'] = np.array(path['observations'][128:])
         # --
-        # Observations are concatenations of RAM and img.
-        # Actual observation = RAM, split off img into 'img'
+        # Because the observations are received as single frames,
+        # they have to be glued together again for n_seq_frames
         for path in paths:
-            path['images'] = np.array(path['observations'][128:])
+            o = path['observations']
+            o_ext = np.zeros((o.shape[0] + 3, o.shape[1]))
+            o_ext[3:] = o
+            o_lst = []
+            for i in range(self._n_seq_frames - 1):
+                o_lst.append(o_ext[i:i - self._n_seq_frames + 1])
+            o_lst.append(o_ext[self._n_seq_frames - 1:])
+            path['observations'] = np.concatenate(o_lst, axis=1)

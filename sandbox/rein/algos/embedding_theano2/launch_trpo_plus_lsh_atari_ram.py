@@ -1,25 +1,26 @@
 import itertools
 import lasagne
 
+from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.rein.algos.embedding_theano2.theano_atari import AtariEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from sandbox.rein.algos.embedding_theano2.trpo_plus_lsh import TRPOPlusLSH
-from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.env_spec import EnvSpec
+from rllab.optimizers.lbfgs_optimizer import LbfgsOptimizer
 from rllab.spaces.box import Box
 
 stub(globals())
 
 n_seq_frames = 1
 model_batch_size = 32
-exp_prefix = 'trpo-auto-test-a'
+exp_prefix = 'trpo-auto-sac-q'
 seeds = [0]
 etas = [0.01]
 mdps = [  # AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
     # AtariEnv(game='breakout', obs_type="ram+image", frame_skip=4),
     # AtariEnv(game='frostbite', obs_type="ram+image", frame_skip=4),
-    AtariEnv(game='montezuma_revenge', obs_type="ram+image", frame_skip=8)]
+    AtariEnv(game='montezuma_revenge', obs_type="ram+image", frame_skip=4)]
 # AtariEnv(game='venture', obs_type="ram+image", frame_skip=4)]
 # AtariEnv(game='private_eye', obs_type="ram+image", frame_skip=4)]
 trpo_batch_size = 50000
@@ -41,7 +42,17 @@ for mdp, eta, seed in param_cart_product:
         env_spec=mdp_spec,
         hidden_sizes=(32, 32),
     )
-    baseline = LinearFeatureBaseline(env_spec=mdp_spec)
+    baseline = GaussianMLPBaseline(
+        env_spec=mdp_spec,
+        regressor_args=dict(
+            hidden_sizes=(32, 32),
+            use_trust_region=False,
+            optimizer=LbfgsOptimizer(
+                n_slices=30,
+            ),
+        ),
+        subsample_factor=0.1,
+    )
 
     env_spec = EnvSpec(
         observation_space=Box(low=-1, high=1, shape=(n_seq_frames, 52, 52)),
@@ -52,12 +63,12 @@ for mdp, eta, seed in param_cart_product:
     policy_opt_args = dict(
         cg_iters=10,
         reg_coeff=1e-5,
-        subsample_factor=1.,
+        subsample_factor=0.1,
         max_backtracks=15,
         backtrack_ratio=0.8,
         accept_violation=False,
         hvp_approach=None,
-        num_slices=10,
+        num_slices=30,
     )
 
     model_args = dict(
@@ -173,7 +184,7 @@ for mdp, eta, seed in param_cart_product:
         # --
         # Count settings
         # Put penalty for being at 0.5 in sigmoid postactivations.
-        binary_penalty=True,
+        binary_penalty=10,
     )
 
     algo = TRPOPlusLSH(
@@ -206,17 +217,18 @@ for mdp, eta, seed in param_cart_product:
             bucket_sizes=None,
             disable_rnd_proj=True,
         ),
-        clip_rewards=False,
+        clip_rewards=True,
         model_args=model_args,
     )
 
+    print("Remember, GPUs are linked to seeds!")
     run_experiment_lite(
         algo.train(),
         exp_prefix=exp_prefix,
-        n_parallel=3,
+        n_parallel=1,
         snapshot_mode="last",
         seed=seed,
-        mode="lab_kube",
+        mode="local",
         dry=False,
         use_gpu=True,
         script="sandbox/rein/algos/embedding_theano2/run_experiment_lite_ram_img.py",
