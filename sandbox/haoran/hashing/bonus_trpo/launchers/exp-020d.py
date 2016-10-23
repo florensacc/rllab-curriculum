@@ -1,12 +1,8 @@
 """
 Image obs, ram hash
-+ need to test openai-alpha
-+ need to fix the rom problem in Venture first
-? need to fix TotalStateCount for BinaryHash
-+ use dim_key=256, which appears to work reasonably for the 4 games we choose
-+ use bucket_sizes=90M, which appears to work better when dim_key=256
-+ img obs and network settings copied from exp-017g, but without the specific env settings there
-+ batch_size=100k can fit in c4.8xlarge, since images have size 42 x 42
+Repeat exp-020 with more seeds
+- which bucket size? (let's wait for results of exp-019f)
+-
 """
 # imports -----------------------------------------------------
 """ baseline """

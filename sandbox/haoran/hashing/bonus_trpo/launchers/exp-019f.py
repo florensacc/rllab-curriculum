@@ -1,12 +1,6 @@
 """
-Image obs, ram hash
-+ need to test openai-alpha
-+ need to fix the rom problem in Venture first
-? need to fix TotalStateCount for BinaryHash
-+ use dim_key=256, which appears to work reasonably for the 4 games we choose
-+ use bucket_sizes=90M, which appears to work better when dim_key=256
-+ img obs and network settings copied from exp-017g, but without the specific env settings there
-+ batch_size=100k can fit in c4.8xlarge, since images have size 42 x 42
+Baseline experiments: par-TRPO on RAM obs for many Atari games; also test the effect of exploration bonus
+Re-run exp-019 with different seeds, since we cannot draw meaningful conclusions there.
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -15,8 +9,6 @@ from sandbox.adam.parallel.gaussian_conv_baseline import ParallelGaussianConvBas
 
 """ policy """
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
-from rllab.policies.categorical_conv_policy import CategoricalConvPolicy
-from sandbox.haoran.hashing.bonus_trpo.misc.dqn_args_theano import trpo_dqn_args,nips_dqn_args
 
 """ optimizer """
 from sandbox.haoran.parallel_trpo.conjugate_gradient_optimizer import ParallelConjugateGradientOptimizer
@@ -77,7 +69,7 @@ else:
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [0,100,200,300,400]
+        return [500,600,700,800,900]
 
     @variant
     def bonus_coeff(self):
@@ -93,7 +85,7 @@ class VG(VariantGenerator):
 
     @variant
     def bucket_sizes(self):
-        return ["90M"]
+        return ["6M"]
 
     @variant
     def count_target(self):
@@ -128,26 +120,25 @@ for v in variants:
     policy_opt_args = dict(
         name="pi_opt",
         cg_iters=10,
-        reg_coeff=1e-3,
-        subsample_factor=0.1,
+        reg_coeff=1e-5,
+        subsample_factor=1.,
         max_backtracks=15,
         backtrack_ratio=0.8,
         accept_violation=False,
         hvp_approach=None,
         num_slices=1, # reduces memory requirement
     )
-    network_args = nips_dqn_args
 
     # env
     game=v["game"]
     env_seed=1 # deterministic env
     frame_skip=4
     max_start_nullops = 30
-    img_width=42
-    img_height=42
-    n_last_screens=4
+    img_width=84
+    img_height=84
+    n_last_screens=1
     clip_reward = True
-    obs_type = "image"
+    obs_type = "ram"
     count_target = v["count_target"]
     record_image=(count_target == "images")
     record_rgb_image=False
@@ -165,7 +156,6 @@ for v in variants:
         bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
     else:
         raise NotImplementedError
-
 
     # others
     baseline_prediction_clip = 1000
@@ -212,7 +202,7 @@ for v in variants:
 
         config.KUBE_DEFAULT_RESOURCES = {
             "requests": {
-                "cpu": int(info["vCPU"]*0.75)
+                "cpu": n_parallel
             }
         }
         config.KUBE_DEFAULT_NODE_SELECTOR = {
@@ -236,20 +226,25 @@ for v in variants:
         frame_skip=frame_skip,
         max_start_nullops=max_start_nullops,
     )
-    policy = CategoricalConvPolicy(
+    policy = CategoricalMLPPolicy(
         env_spec=env.spec,
-        name="policy",
-        **network_args
+        hidden_sizes=(32,32),
     )
 
     # baseline
-    network_args_for_vf = copy.deepcopy(network_args)
-    network_args_for_vf.pop("output_nonlinearity")
+    # baseline = ParallelLinearFeatureBaseline(env_spec=env.spec)
+    network_args_for_vf = dict(
+        hidden_sizes=(32,32),
+        conv_filters=[],
+        conv_filter_sizes=[],
+        conv_strides=[],
+        conv_pads=[],
+    )
     baseline = ParallelGaussianConvBaseline(
         env_spec=env.spec,
         regressor_args = dict(
             optimizer=ParallelConjugateGradientOptimizer(
-                subsample_factor=0.1,
+                subsample_factor=0.5,
                 cg_iters=10,
                 name="vf_opt",
             ),

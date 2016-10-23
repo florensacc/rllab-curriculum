@@ -1,12 +1,8 @@
 """
 Image obs, ram hash
-+ need to test openai-alpha
-+ need to fix the rom problem in Venture first
-? need to fix TotalStateCount for BinaryHash
-+ use dim_key=256, which appears to work reasonably for the 4 games we choose
-+ use bucket_sizes=90M, which appears to work better when dim_key=256
-+ img obs and network settings copied from exp-017g, but without the specific env settings there
-+ batch_size=100k can fit in c4.8xlarge, since images have size 42 x 42
+Repeat exp-020 with more seeds
+
+- use 6M buckets to relieve burden on s3
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -77,11 +73,11 @@ else:
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [0,100,200,300,400]
+        return [0,100,200,300,400,500,600,700,800,900]
 
     @variant
     def bonus_coeff(self):
-        return [0,0.01]
+        return [0.01]
 
     @variant
     def game(self):
@@ -93,7 +89,7 @@ class VG(VariantGenerator):
 
     @variant
     def bucket_sizes(self):
-        return ["90M"]
+        return ["6M"]
 
     @variant
     def count_target(self):

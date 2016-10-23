@@ -15,7 +15,6 @@ from sandbox.haoran.ale_python_interface import ALEInterface
 class AtariEnv(Env,Serializable):
     def __init__(self,
             game,
-            rom_filename="",
             seed=None,
             plot=False, # live demo
             max_start_nullops=0,
@@ -34,6 +33,7 @@ class AtariEnv(Env,Serializable):
             frame_skip=4,
             terminator=None,
             legal_actions=[],
+            rom_filename="",
         ):
         """
         plot: not compatible with rllab yet

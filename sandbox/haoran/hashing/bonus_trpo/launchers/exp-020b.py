@@ -1,12 +1,6 @@
 """
 Image obs, ram hash
-+ need to test openai-alpha
-+ need to fix the rom problem in Venture first
-? need to fix TotalStateCount for BinaryHash
-+ use dim_key=256, which appears to work reasonably for the 4 games we choose
-+ use bucket_sizes=90M, which appears to work better when dim_key=256
-+ img obs and network settings copied from exp-017g, but without the specific env settings there
-+ batch_size=100k can fit in c4.8xlarge, since images have size 42 x 42
++ use hacky hash; to see whether ram SimHash is indeed close to hacky hash
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -35,6 +29,7 @@ from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.ale_hashing_bonus_evalua
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.identity_preprocessor import IdentityPreprocessor
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.sim_hash_v2 import SimHashV2
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.image_vectorize_preprocessor import ImageVectorizePreprocessor
+from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.ale_hacky_hash_v5 import ALEHackyHashV5
 
 """ others """
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
@@ -43,6 +38,7 @@ from rllab import config
 from rllab.misc.instrument import stub, run_experiment_lite
 import sys,os
 import copy
+import numpy as np
 
 stub(globals())
 
@@ -53,7 +49,7 @@ exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "bonus-trpo-atari/" + exp_index
 mode = "ec2"
 ec2_instance = "c4.8xlarge"
-subnet = "us-west-1a"
+subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
 n_parallel = 2 # only for local exp
@@ -77,27 +73,29 @@ else:
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [0,100,200,300,400]
+        return [0,100,200,300,400,500,600,700,800,900]
 
     @variant
     def bonus_coeff(self):
-        return [0,0.01]
+        return [0.01]
 
     @variant
     def game(self):
-        return ["freeway", "frostbite", "montezuma_revenge", "venture"]
-
-    @variant
-    def dim_key(self):
-        return [256]
-
-    @variant
-    def bucket_sizes(self):
-        return ["90M"]
+        return ["montezuma_revenge"]
 
     @variant
     def count_target(self):
         return ["ram_states"]
+
+    @variant
+    def ram_names(self):
+        return [
+            ["x","y","room","objects","beam_wall","beam_countdown"]
+        ]
+
+    @variant
+    def grid_size(self):
+        return [10]
 variants = VG().variants()
 
 # test whether all game names are spelled correctly (comment out stub(globals) first)
@@ -155,16 +153,19 @@ for v in variants:
     record_internal_state=False
 
     # bonus
-    bonus_coeff=v["bonus_coeff"]
+    bonus_coeff=v["bonus_coeff"] * np.sqrt(v["grid_size"])
     bonus_form="1/sqrt(n)"
     count_target=v["count_target"]
     retrieve_sample_size=100000 # compute keys for all paths at once
-    if v["bucket_sizes"] == "6M":
-        bucket_sizes = [999931, 999953, 999959, 999961, 999979, 999983]
-    elif v["bucket_sizes"] == "90M":
-        bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
-    else:
-        raise NotImplementedError
+    ram_names = v["ram_names"]
+    hacky_hash_extra_info = {
+        "x": {
+            "grid_size": v["grid_size"]
+        },
+        "y": {
+            "grid_size": v["grid_size"]
+        }
+    }
 
 
     # others
@@ -278,10 +279,11 @@ for v in variants:
     else:
         raise NotImplementedError
 
-    _hash = SimHashV2(
+    _hash = ALEHackyHashV5(
         item_dim=state_preprocessor.get_output_dim(), # get around stub
-        dim_key=v["dim_key"],
-        bucket_sizes=bucket_sizes,
+        game=game,
+        ram_names=ram_names,
+        extra_info=hacky_hash_extra_info,
         parallel=use_parallel,
     )
     bonus_evaluator = ALEHashingBonusEvaluator(

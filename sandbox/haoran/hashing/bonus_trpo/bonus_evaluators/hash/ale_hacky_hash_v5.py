@@ -88,6 +88,12 @@ class ALEHackyHashV5(Hash):
                 _items_short = _items - value_min
                 if "grid_size" in info.keys():
                     _items_short = np.floor(_items_short / info["grid_size"]).astype(int)
+                if "random" in info.keys() and info["random"]:
+                    _items_short = np.random.randint(
+                        low=0,
+                        high=self.n_values[i],
+                        size=_items_short.shape
+                    )
             elif value_type == "categorical":
                 # v -> index of v
                 _items_short = np.zeros_like(_items)
