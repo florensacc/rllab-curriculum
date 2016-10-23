@@ -32,6 +32,7 @@
 # adding bigger zdim exp
 
 # does convar block matter?
+# plstm a lot more expressive, gresnet performing worse than previous experiments for some reason
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer

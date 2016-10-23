@@ -76,6 +76,7 @@ class AtariEnv(Env, Serializable):
             raise IOError("You asked for game %s but path %s does not exist" % (game, game_path))
         self.ale = atari_py.ALEInterface()
         self.ale.loadROM(game_path)
+        # self.ale.setBool(b'color_averaging', True)
         self._obs_type = obs_type
         self._action_set = self.ale.getMinimalActionSet()
         self.frame_skip = frame_skip

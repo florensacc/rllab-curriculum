@@ -3,7 +3,7 @@ from rllab.misc import tensor_utils
 import time
 
 
-def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1, n_seq_frames=1):
+def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1, n_seq_frames=4):
     observations = []
     actions = []
     rewards = []

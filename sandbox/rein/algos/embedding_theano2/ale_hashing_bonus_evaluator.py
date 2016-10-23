@@ -14,6 +14,7 @@ class ALEHashingBonusEvaluator(object):
     def __init__(
             self,
             state_dim,
+            action_dim,
             state_preprocessor=None,
             hash=None,
             bonus_form="1/sqrt(n)",
@@ -23,6 +24,7 @@ class ALEHashingBonusEvaluator(object):
             retrieve_sample_size=np.inf,
             sim_hash_args=None,
     ):
+        state_dim += action_dim
         self.state_dim = state_dim
         if state_preprocessor is not None:
             assert state_preprocessor.get_output_dim() == state_dim
@@ -35,12 +37,13 @@ class ALEHashingBonusEvaluator(object):
             self.hash = hash
         elif sim_hash_args is not None:
             # Default: SimHash
+            sim_hash_args['dim_key'] += action_dim
             self.hash = SimHash(state_dim, **sim_hash_args)
             self.hash.reset()
         else:
             # Default: SimHash
             sim_hash_args = {
-                "dim_key": 64,
+                "dim_key": 64 + action_dim,
                 "bucket_sizes": None,
                 "parallel": parallel
             }

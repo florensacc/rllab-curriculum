@@ -32,6 +32,7 @@
 # adding bigger zdim exp
 
 # this uses resumption to test much smaller lr & aggressive annealing
+# annealing creates jumps but overall slope is killed
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer

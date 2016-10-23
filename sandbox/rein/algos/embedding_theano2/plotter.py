@@ -30,20 +30,20 @@ class Plotter:
                 key = np.cast['int'](np.round(cont_emb))
                 key = key.reshape(-1, 8).mean(axis=1)
                 key = np.cast['int'](np.round(key))
-                key_int = self.bin_to_int(key)
-                if counting_table is not None:
-                    if key_int in counting_table.keys():
-                        count = counting_table[key_int]
-                        if hamming_distance == 1:
-                            for i in range(len(key)):
-                                key_trans = np.array(key)
-                                key_trans[i] = 1 - key_trans[i]
-                                key_trans_int = self.bin_to_int(key_trans)
-                                # If you access the counting table directly, it puts a 0, which inflates the size.
-                                if key_trans_int in counting_table.keys():
-                                    count += counting_table[self.bin_to_int(key_trans)]
-                    else:
-                        count = 0
+                # key_int = self.bin_to_int(key)
+                # if counting_table is not None:
+                #     if key_int in counting_table.keys():
+                #         count = counting_table[key_int]
+                #         if hamming_distance == 1:
+                #             for i in range(len(key)):
+                #                 key_trans = np.array(key)
+                #                 key_trans[i] = 1 - key_trans[i]
+                #                 key_trans_int = self.bin_to_int(key_trans)
+                #                 # If you access the counting table directly, it puts a 0, which inflates the size.
+                #                 if key_trans_int in counting_table.keys():
+                #                     count += counting_table[self.bin_to_int(key_trans)]
+                #     else:
+                #         count = 0
 
                 # --
                 # Write-out
@@ -51,8 +51,8 @@ class Plotter:
                 emb_cont_as_str = ' '.join(['{:.1f}'.format(c) for c in cont_emb])
                 bin_codes_file.write(emb_bin_as_str + '\n')
                 # cont_codes_file.write(emb_cont_as_str + '\n')
-                if counting_table is not None:
-                    counts_file.write(str(count) + '\n')
+                # if counting_table is not None:
+                #     counts_file.write(str(count) + '\n')
 
     def print_consistency_embs(self, model, counting_table, inputs, dir='/imgs', hamming_distance=None):
         assert hamming_distance is not None
@@ -71,20 +71,20 @@ class Plotter:
                 key = np.cast['int'](np.round(cont_emb))
                 key = key.reshape(-1, 8).mean(axis=1)
                 key = np.cast['int'](np.round(key))
-                key_int = self.bin_to_int(key)
-                if counting_table is not None:
-                    if key_int in counting_table.keys():
-                        count = counting_table[key_int]
-                        if hamming_distance == 1:
-                            for i in range(len(key)):
-                                key_trans = np.array(key)
-                                key_trans[i] = 1 - key_trans[i]
-                                key_trans_int = self.bin_to_int(key_trans)
-                                # If you access the counting table directly, it puts a 0, which inflates the size.
-                                if key_trans_int in counting_table.keys():
-                                    count += counting_table[self.bin_to_int(key_trans)]
-                    else:
-                        count = 0
+                # key_int = self.bin_to_int(key)
+                # if counting_table is not None:
+                #     if key_int in counting_table.keys():
+                #         count = counting_table[key_int]
+                #         if hamming_distance == 1:
+                #             for i in range(len(key)):
+                #                 key_trans = np.array(key)
+                #                 key_trans[i] = 1 - key_trans[i]
+                #                 key_trans_int = self.bin_to_int(key_trans)
+                #                 # If you access the counting table directly, it puts a 0, which inflates the size.
+                #                 if key_trans_int in counting_table.keys():
+                #                     count += counting_table[self.bin_to_int(key_trans)]
+                #     else:
+                #         count = 0
 
                 # --
                 # Write-out
@@ -92,8 +92,8 @@ class Plotter:
                 emb_cont_as_str = ' '.join(['{:.1f}'.format(c) for c in cont_emb])
                 bin_codes_file.write(emb_bin_as_str + '\n')
                 # cont_codes_file.write(emb_cont_as_str + '\n')
-                if counting_table is not None:
-                    counts_file.write(str(count) + '\n')
+                # if counting_table is not None:
+                #     counts_file.write(str(count) + '\n')
 
     def plot_pred_imgs(self, model, inputs, targets, itr, dir='/imgs'):
         import matplotlib.pyplot as plt
@@ -172,7 +172,6 @@ class Plotter:
         sanity_pred = model.y_gen(inputs)
         # Plotting all images
         for idx in range(inputs.shape[0]):
-            print(inputs[idx])
             sanity_pred_im = sanity_pred[idx, :]
             if model.output_type == model.OutputType.CLASSIFICATION:
                 sanity_pred_im = sanity_pred_im.reshape((-1, model.num_classes))

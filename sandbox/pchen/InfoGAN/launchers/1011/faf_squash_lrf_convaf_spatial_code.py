@@ -35,6 +35,9 @@
 # this experiment seems to train a little bit faster, indicating zdim can be a capacity bottleneck
 # or is this squash helping (not as likely)
 
+# overfits immediately after 1500? while normal slowkl doesnt seem to do that?
+# due to large zdim which stick through strange info? -> likely as it's using 0.022 nat kl as opposed to 0.01+
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \

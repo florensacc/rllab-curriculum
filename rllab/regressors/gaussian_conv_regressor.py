@@ -67,7 +67,6 @@ class GaussianConvRegressor(LasagnePowered, Serializable):
         """
         Serializable.quick_init(self, locals())
 
-
         if optimizer is None:
             if use_trust_region:
                 optimizer = PenaltyLbfgsOptimizer("optimizer")

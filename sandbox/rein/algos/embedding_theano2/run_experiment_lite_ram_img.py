@@ -72,6 +72,10 @@ def run_experiment(argv):
 
     args = parser.parse_args(argv[1:])
 
+    import sandbox.rein.algos.embedding_theano2.seed
+    sandbox.rein.algos.embedding_theano2.seed.set_seed(args.seed)
+
+
     # Import needed for CUDA GPU init!
     from sandbox.rein.algos.embedding_theano2 import parallel_trainer
 

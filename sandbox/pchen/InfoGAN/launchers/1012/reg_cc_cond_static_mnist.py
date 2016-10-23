@@ -5,6 +5,9 @@
 
 # try tying arconv param & fewer conv ar channels
 
+# verdict: tying arconv param reduces overfitting
+# fewer conv were not implemented correctly
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
