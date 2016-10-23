@@ -118,6 +118,9 @@
             <div class="checkbox pull-left" style="margin-left: 20px">
                 <label><input type="checkbox" name="use_median" value="">Use Median</label><br>
             </div>
+            <div class="checkbox pull-left" style="margin-left: 20px">
+                <label><input type="checkbox" name="use_five_numbers" value="">Use Five Numbers</label><br>
+            </div>
             <div class="checkbox pull-left" style="margin-left: 10px">
                 <label><input type="checkbox" name="only_show_best" value="">Only show best</label><br>
             </div>
@@ -231,6 +234,7 @@
             }
         });
         var useMedian = $controlPanel.find("input[type=checkbox][name=use_median]").is(':checked');
+        var useFiveNumbers = $controlPanel.find("input[type=checkbox][name=use_five_numbers]").is(':checked');
         var onlyShowBest = $controlPanel.find("input[type=checkbox][name=only_show_best]").is(':checked');
         var onlyShowBestFinal = $controlPanel.find("input[type=checkbox][name=only_show_best_final]").is(':checked');
         var onlyShowBestSofar = $controlPanel.find("input[type=checkbox][name=only_show_best_sofar]").is(':checked');
@@ -239,6 +243,9 @@
         var normalizeError = $controlPanel.find("input[type=checkbox][name=normalize_error]").is(':checked');
         if (useMedian === true) {
             useMedian = "True";
+        }
+        if (useFiveNumbers === true) {
+            useFiveNumbers = "True";
         }
         if (onlyShowBest === true) {
             onlyShowBest = "True";
@@ -270,11 +277,14 @@
         var legendPostProcessor = $controlPanel.find("input[name=legend_post_processor]").val();
         var customSeriesSplitter = $controlPanel.find("input[name=custom_series_splitter]").val();
         console.log(useMedian);
+        console.log(useFiveNumbers);
         console.log("updating");
         $.get("/plot_div",
                 $.extend({
                     "plot_key": plotKey, "split_key": splitKey,
-                    "group_key": groupKey, "filters": JSON.stringify(filters), "use_median": useMedian,
+                    "group_key": groupKey, "filters": JSON.stringify(filters),
+                    "use_median": useMedian,
+                    "use_five_numbers": useFiveNumbers,
                     "only_show_best": onlyShowBest, "clip_plot_value": clipPlotValue,
                     "plot_width": plotWidth, "plot_height": plotHeight, "filter_nan": filterNaN,
                     "smooth_curve": smoothCurve, "custom_filter": customFilter, "legend_post_processor":

@@ -52,9 +52,10 @@ def send_css(path):
     return flask.send_from_directory('css', path)
 
 
-def make_plot(plot_list, use_median=False, plot_width=None, plot_height=None, title=None,xlim=None,ylim=None):
+def make_plot(plot_list, use_median=False, use_five_numbers=False, plot_width=None, plot_height=None, title=None,xlim=None,ylim=None):
     data = []
     p25, p50, p75 = [], [], []
+    p0, p100 = [],[]
     for idx, plt in enumerate(plot_list):
         color = core.color_defaults[idx % len(core.color_defaults)]
         if use_median:
@@ -65,11 +66,28 @@ def make_plot(plot_list, use_median=False, plot_width=None, plot_height=None, ti
             y = list(plt.percentile50)
             y_upper = list(plt.percentile75)
             y_lower = list(plt.percentile25)
+            y_extras = []
+        elif use_five_numbers:
+            p0.append(np.mean(plt.percentile0))
+            p25.append(np.mean(plt.percentile25))
+            p50.append(np.mean(plt.percentile50))
+            p75.append(np.mean(plt.percentile75))
+            p100.append(np.mean(plt.percentile100))
+            x = list(range(len(plt.percentile50)))
+            y = list(plt.percentile50)
+            y_upper = list(plt.percentile75)
+            y_lower = list(plt.percentile25)
+            y_extras = [
+                list(ys)
+                for ys in [plt.percentile0, plt.percentile100]
+            ]
+
         else:
             x = list(range(len(plt.means)))
             y = list(plt.means)
             y_upper = list(plt.means + plt.stds)
             y_lower = list(plt.means - plt.stds)
+            y_extras = []
 
         data.append(go.Scatter(
             x=x + x[::-1],
@@ -88,19 +106,26 @@ def make_plot(plot_list, use_median=False, plot_width=None, plot_height=None, ti
             legendgroup=plt.legend,
             line=dict(color=core.hex_to_rgb(color)),
         ))
-    p25str = '['
-    p50str = '['
-    p75str = '['
-    for p25e, p50e, p75e in zip(p25, p50, p75):
-        p25str += (str(p25e) + ',')
-        p50str += (str(p50e) + ',')
-        p75str += (str(p75e) + ',')
-    p25str += ']'
-    p50str += ']'
-    p75str += ']'
-    print(p25str)
-    print(p50str)
-    print(p75str)
+
+        for y_extra in y_extras:
+            data.append(go.Scatter(
+                x=x,
+                y=y_extra,
+                showlegend=False,
+                legendgroup=plt.legend,
+                line=dict(color=core.hex_to_rgb(color),dash='dot')
+                # choices: solid, dot, dash, longdash, dashdot, longdashdot
+            ))
+
+    def numeric_list_to_string(numbers):
+        s = '['
+        for num in numbers:
+            s += (str(num) + ',')
+        s += ']'
+        return s
+    print(numeric_list_to_string(p25))
+    print(numeric_list_to_string(p50))
+    print(numeric_list_to_string(p75))
 
     layout = go.Layout(
         legend=dict(
@@ -224,6 +249,7 @@ def get_plot_instruction(
     group_key=None,
     filters=None,
     use_median=False,
+    use_five_numbers=False,
     only_show_best=False,
     only_show_best_final=False,
     gen_eps=False,
@@ -293,10 +319,10 @@ def get_plot_instruction(
         # group_legends = [split_legend]
 
         # reorder the legends
-        group_legends_for_sort = [legend_sort_processor(x) for x in group_legends]
-        orders = np.argsort(group_legends_for_sort)
-        group_selectors = [group_selectors[i] for i in orders]
-        group_legends = [group_legends[i] for i in orders]
+        # group_legends_for_sort = [str(legend_sort_processor(x)) for x in group_legends]
+        # orders = np.argsort(group_legends_for_sort)
+        # group_selectors = [group_selectors[i] for i in orders]
+        # group_legends = [group_legends[i] for i in orders]
 
         to_plot = []
         for group_selector, group_legend in zip(group_selectors, group_legends):
@@ -334,7 +360,7 @@ def get_plot_instruction(
                                 progresses = np.asarray(progresses)[:, -1]
                             if only_show_best_sofar:
                                 progresses =np.max(np.asarray(progresses), axis=1)
-                            if use_median:
+                            if use_median or use_five_numbers:
                                 medians = np.nanmedian(progresses, axis=0)
                                 regret = np.mean(medians)
                             else:
@@ -392,6 +418,45 @@ def get_plot_instruction(
                             to_plot.append(
                                 ext.AttrDict(percentile25=percentile25, percentile50=percentile50,
                                              percentile75=percentile75, legend=legend_post_processor(legend)))
+                        elif use_five_numbers:
+                            # min, 25%, median, 25%, max
+                            percentile0 = np.nanpercentile(
+                                progresses, q=0, axis=0)
+                            percentile25 = np.nanpercentile(
+                                progresses, q=25, axis=0)
+                            percentile50 = np.nanpercentile(
+                                progresses, q=50, axis=0)
+                            percentile75 = np.nanpercentile(
+                                progresses, q=75, axis=0)
+                            percentile100 = np.nanpercentile(
+                                progresses, q=100, axis=0)
+                            if smooth_curve:
+                                percentile0 = sliding_mean(percentile0,
+                                                            window=window_size)
+                                percentile25 = sliding_mean(percentile25,
+                                                            window=window_size)
+                                percentile50 = sliding_mean(percentile50,
+                                                            window=window_size)
+                                percentile75 = sliding_mean(percentile75,
+                                                            window=window_size)
+                                percentile100 = sliding_mean(percentile100,
+                                                            window=window_size)
+                            if clip_plot_value is not None:
+                                percentile0 = np.clip(percentile0, -clip_plot_value, clip_plot_value)
+                                percentile25 = np.clip(percentile25, -clip_plot_value, clip_plot_value)
+                                percentile50 = np.clip(percentile50, -clip_plot_value, clip_plot_value)
+                                percentile75 = np.clip(percentile75, -clip_plot_value, clip_plot_value)
+                                percentile100 = np.clip(percentile100, -clip_plot_value, clip_plot_value)
+                            to_plot.append(
+                                ext.AttrDict(
+                                    percentile0=percentile0,
+                                    percentile25=percentile25,
+                                    percentile50=percentile50,
+                                    percentile75=percentile75,
+                                    percentile100=percentile100,
+                                    legend=legend_post_processor(legend)
+                                )
+                            )
                         else:
                             means = np.nanmean(progresses, axis=0)
                             stds = np.nanstd(progresses, axis=0)
@@ -442,6 +507,45 @@ def get_plot_instruction(
                         to_plot.append(
                             ext.AttrDict(percentile25=percentile25, percentile50=percentile50,
                                          percentile75=percentile75, legend=legend_post_processor(group_legend)))
+                    elif use_five_numbers:
+                        # min, 25%, median, 25%, max
+                        percentile0 = np.nanpercentile(
+                            progresses, q=0, axis=0)
+                        percentile25 = np.nanpercentile(
+                            progresses, q=25, axis=0)
+                        percentile50 = np.nanpercentile(
+                            progresses, q=50, axis=0)
+                        percentile75 = np.nanpercentile(
+                            progresses, q=75, axis=0)
+                        percentile100 = np.nanpercentile(
+                            progresses, q=100, axis=0)
+                        if smooth_curve:
+                            percentile0 = sliding_mean(percentile0,
+                                                        window=window_size)
+                            percentile25 = sliding_mean(percentile25,
+                                                        window=window_size)
+                            percentile50 = sliding_mean(percentile50,
+                                                        window=window_size)
+                            percentile75 = sliding_mean(percentile75,
+                                                        window=window_size)
+                            percentile100 = sliding_mean(percentile100,
+                                                        window=window_size)
+                        if clip_plot_value is not None:
+                            percentile0 = np.clip(percentile0, -clip_plot_value, clip_plot_value)
+                            percentile25 = np.clip(percentile25, -clip_plot_value, clip_plot_value)
+                            percentile50 = np.clip(percentile50, -clip_plot_value, clip_plot_value)
+                            percentile75 = np.clip(percentile75, -clip_plot_value, clip_plot_value)
+                            percentile100 = np.clip(percentile100, -clip_plot_value, clip_plot_value)
+                        to_plot.append(
+                            ext.AttrDict(
+                                percentile0=percentile0,
+                                percentile25=percentile25,
+                                percentile50=percentile50,
+                                percentile75=percentile75,
+                                percentile100=percentile100,
+                                legend=legend_post_processor(group_legend)
+                            )
+                        )
                     else:
                         means = np.nanmean(progresses, axis=0)
                         stds = np.nanstd(progresses, axis=0)
@@ -461,7 +565,8 @@ def get_plot_instruction(
             # plots.append("<h3>%s</h3>" % fig_title)
             plots.append(make_plot(
                 to_plot,
-                use_median=use_median, title=fig_title,
+                use_median=use_median, use_five_numbers=use_five_numbers,
+                title=fig_title,
                 plot_width=plot_width, plot_height=plot_height,
                 xlim=xlim,ylim=ylim,
             ))
@@ -497,6 +602,7 @@ def plot_div():
     # print split_key
     # exp_filter = distinct_params[0]
     use_median = args.get("use_median", "") == 'True'
+    use_five_numbers = args.get("use_five_numbers", "") == 'True'
     gen_eps = args.get("eps", "") == 'True'
     only_show_best = args.get("only_show_best", "") == 'True'
     only_show_best_final = args.get("only_show_best_final", "") == 'True'
@@ -540,6 +646,7 @@ def plot_div():
         group_key=group_key,
         filters=filters,
         use_median=use_median,
+        use_five_numbers=use_five_numbers,
         gen_eps=gen_eps,
         only_show_best=only_show_best,
         only_show_best_final=only_show_best_final,

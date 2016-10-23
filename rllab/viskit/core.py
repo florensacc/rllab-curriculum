@@ -135,6 +135,8 @@ def load_exps_data(exp_folder_paths,disable_variant=False):
                     try:
                         if all_keys[key].__name__ == 'NoneType':
                             default = None
+                        elif all_keys[key].__name__ == 'bool':
+                            default = eval(default)
                         else:
                             default = all_keys[key](default)
                     except ValueError:
