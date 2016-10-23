@@ -42,11 +42,10 @@
 
 # using nar & experiment with radically smaller min kl
 
-# try smaller receptive field, unconditional resnets=3 seems to do very well on its own
-# resume above with larger llr^
+# 0.001 kl shows markedly better performance than 0,01 kl
+# 0.001 kl @ 3.0488 and still growing
 
-# SRF and SRF w/ llr are at ~ 3.07 and seems it would top off at 3.06
-# llr quite a bit better than small llr. there is a jump in llr training when it suddenly transitions to use
+# resuming 0.001kl
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -81,7 +80,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def lr(self):
-        return [0.002*5, ] #0.001]
+        return [0.002, ] #0.001]
 
     @variant
     def seed(self):
@@ -94,7 +93,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.001]# 0.1]
+        return [0.01,0.001]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -174,7 +173,7 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ar_nr_resnets(self, num_gpus):
         return [
-            (2,)
+            (3,)
         ]
 
     @variant(hide=False)
@@ -186,7 +185,7 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ar_nr_extra_nins(self, num_gpus):
         return [
-            2,
+            1
         ]
 
     @variant
@@ -199,7 +198,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 0
+i = 1
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -291,7 +290,7 @@ for v in variants[i:i+1]:
             num_gpus=v["num_gpus"],
             vis_ar=False,
             slow_kl=True,
-            resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
+            resume_from="data/local/1019-real-FAR-small-vae-share-lvae-play/1019_real_FAR_small_vae_share_lvae_play_2016_10_19_10_07_35_0001/",
             # staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
@@ -301,7 +300,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1020_resume_SRF_real_FAR_small_vae_share_lvae_play",
+            exp_prefix="1022_resume_real_FAR_small_vae_share_lvae_play",
             seed=v["seed"],
             variant=v,
             mode="local",

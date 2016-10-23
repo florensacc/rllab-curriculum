@@ -38,15 +38,10 @@
 # this is based on the observation that as kl is used more, overfitting is started to be observed.
 # try smaller vae
 
-# error: no nar used!
+# sanity checking how good the unconditional model can be
 
-# using nar & experiment with radically smaller min kl
-
-# try smaller receptive field, unconditional resnets=3 seems to do very well on its own
-# resume above with larger llr^
-
-# SRF and SRF w/ llr are at ~ 3.07 and seems it would top off at 3.06
-# llr quite a bit better than small llr. there is a jump in llr training when it suddenly transitions to use
+# uncodntional model is @ 3.06 and still improving
+# resuming above to see the limit
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -81,7 +76,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def lr(self):
-        return [0.002*5, ] #0.001]
+        return [0.002, ] #0.001]
 
     @variant
     def seed(self):
@@ -94,7 +89,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.001]# 0.1]
+        return [0.01]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -124,7 +119,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [4,]
+        return [0,]
 
     @variant(hide=False)
     def nr(self, zdim, base_filters):
@@ -174,7 +169,7 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ar_nr_resnets(self, num_gpus):
         return [
-            (2,)
+            (3,)
         ]
 
     @variant(hide=False)
@@ -186,12 +181,12 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ar_nr_extra_nins(self, num_gpus):
         return [
-            2,
+            1
         ]
 
     @variant
     def enc_tie_weights(self):
-        return [True, ]
+        return [True, False]
 
 
 vg = VG()
@@ -199,7 +194,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 0
+i = 1
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -222,7 +217,6 @@ for v in variants[i:i+1]:
                 neuron_ratio=v["nr"],
                 data_init_wnorm=True,
                 img_shape=[8,8,zdim//64],
-                mean_only=True,
             )
 
         latent_spec = [
@@ -284,14 +278,16 @@ for v in variants[i:i+1]:
             monte_carlo_kl=True,
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=1000*5,
+            vali_eval_interval=1000*8,
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
             num_gpus=v["num_gpus"],
             vis_ar=False,
             slow_kl=True,
-            resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
+            kl_coeff=0.,
+            unconditional=True,
+            resume_from="data/local/1019-sanity-small-vae-share-lvae-play/1019_sanity_small_vae_share_lvae_play_2016_10_19_10_00_44_0001/",
             # staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
@@ -301,7 +297,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1020_resume_SRF_real_FAR_small_vae_share_lvae_play",
+            exp_prefix="1022_resume_sanity_small_vae_share_lvae_play",
             seed=v["seed"],
             variant=v,
             mode="local",

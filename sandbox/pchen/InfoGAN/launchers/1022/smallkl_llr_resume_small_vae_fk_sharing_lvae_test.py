@@ -38,15 +38,11 @@
 # this is based on the observation that as kl is used more, overfitting is started to be observed.
 # try smaller vae
 
-# error: no nar used!
 
-# using nar & experiment with radically smaller min kl
+# try resuming with large llr
+# it seems 0.01 is actually a lot of free bits for nr_resnet=3. it never learns to exceed that.
 
-# try smaller receptive field, unconditional resnets=3 seems to do very well on its own
-# resume above with larger llr^
-
-# SRF and SRF w/ llr are at ~ 3.07 and seems it would top off at 3.06
-# llr quite a bit better than small llr. there is a jump in llr training when it suddenly transitions to use
+# hence resuming from 0.001
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -94,7 +90,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.001]# 0.1]
+        return [0.001,]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -124,7 +120,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [4,]
+        return [0,]
 
     @variant(hide=False)
     def nr(self, zdim, base_filters):
@@ -174,7 +170,7 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ar_nr_resnets(self, num_gpus):
         return [
-            (2,)
+            (3,)
         ]
 
     @variant(hide=False)
@@ -186,7 +182,7 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ar_nr_extra_nins(self, num_gpus):
         return [
-            2,
+            1
         ]
 
     @variant
@@ -222,7 +218,6 @@ for v in variants[i:i+1]:
                 neuron_ratio=v["nr"],
                 data_init_wnorm=True,
                 img_shape=[8,8,zdim//64],
-                mean_only=True,
             )
 
         latent_spec = [
@@ -291,7 +286,8 @@ for v in variants[i:i+1]:
             num_gpus=v["num_gpus"],
             vis_ar=False,
             slow_kl=True,
-            resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
+            # resume_from="data/local/1018-FAR-small-vae-share-lvae-play/1018_FAR_small_vae_share_lvae_play_2016_10_18_15_35_34_0001",
+            resume_from="data/local/1019-llr-resume-FAR-small-vae-share-lvae-play/1019_llr_resume_FAR_small_vae_share_lvae_play_2016_10_19_09_28_06_0001"
             # staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
@@ -301,7 +297,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1020_resume_SRF_real_FAR_small_vae_share_lvae_play",
+            exp_prefix="1022_smallkl_llr_resume_FAR_small_vae_share_lvae_play",
             seed=v["seed"],
             variant=v,
             mode="local",

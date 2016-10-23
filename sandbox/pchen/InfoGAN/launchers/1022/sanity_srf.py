@@ -48,6 +48,9 @@
 # SRF and SRF w/ llr are at ~ 3.07 and seems it would top off at 3.06
 # llr quite a bit better than small llr. there is a jump in llr training when it suddenly transitions to use
 
+# SRF actually has pretty big receptive field. give it enough processing power to see what an unconditional srf
+# can do. if it's plenty powerful already, we are iterating on the wrong thing
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -104,7 +107,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def rep(self, ):
-        return [1, ]
+        return [0, ]
 
     @variant(hide=False)
     def base_filters(self, ):
@@ -124,7 +127,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [4,]
+        return [0,]
 
     @variant(hide=False)
     def nr(self, zdim, base_filters):
@@ -251,6 +254,7 @@ for v in variants[i:i+1]:
             nr_filters=v["context_dim"],
             nr_cond_nins=v["ar_nr_cond_nins"],
             nr_extra_nins=v["ar_nr_extra_nins"],
+            extra_compute=True,
         )
 
         model = RegularizedHelmholtzMachine(
@@ -291,7 +295,9 @@ for v in variants[i:i+1]:
             num_gpus=v["num_gpus"],
             vis_ar=False,
             slow_kl=True,
-            resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
+            unconditional=True,
+            kl_coeff=0.,
+            # resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
             # staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
@@ -301,7 +307,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1020_resume_SRF_real_FAR_small_vae_share_lvae_play",
+            exp_prefix="1022_sanity_srf",
             seed=v["seed"],
             variant=v,
             mode="local",

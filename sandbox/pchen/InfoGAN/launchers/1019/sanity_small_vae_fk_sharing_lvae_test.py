@@ -40,6 +40,8 @@
 
 # sanity checking how good the unconditional model can be
 
+# uncodntional model is @ 3.06 and still improving
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer

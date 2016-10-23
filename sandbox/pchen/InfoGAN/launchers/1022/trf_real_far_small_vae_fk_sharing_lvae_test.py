@@ -45,8 +45,8 @@
 # try smaller receptive field, unconditional resnets=3 seems to do very well on its own
 # resume above with larger llr^
 
-# SRF and SRF w/ llr are at ~ 3.07 and seems it would top off at 3.06
-# llr quite a bit better than small llr. there is a jump in llr training when it suddenly transitions to use
+### try tiny receptive field: left 3 up 4
+# but maintain a good amount of computation
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -71,7 +71,7 @@ timestamp = ""#now.strftime('%Y_%m_%d_%H_%M_%S')
 root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 # batch_size = 32 * 3
-batch_size = 32*4
+batch_size = 32*3
 # updates_per_epoch = 100
 
 stub(globals())
@@ -81,7 +81,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def lr(self):
-        return [0.002*5, ] #0.001]
+        return [0.002*2, ] #0.001]
 
     @variant
     def seed(self):
@@ -103,10 +103,6 @@ class VG(VariantGenerator):
         # yield "dummy"
 
     @variant(hide=False)
-    def rep(self, ):
-        return [1, ]
-
-    @variant(hide=False)
     def base_filters(self, ):
         return [64]
 
@@ -120,15 +116,11 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def num_gpus(self):
-        return [4]
+        return [3]
 
-    @variant(hide=False)
-    def nar(self):
-        return [4,]
-
-    @variant(hide=False)
-    def nr(self, zdim, base_filters):
-        return [4]
+    # @variant(hide=False)
+    # def nr(self, zdim, base_filters):
+    #     return [4]
         # return [base_filters // (zdim // 8 // 8 * 2) , ]
 
     @variant(hide=False)
@@ -174,7 +166,7 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ar_nr_resnets(self, num_gpus):
         return [
-            (2,)
+            (1,)
         ]
 
     @variant(hide=False)
@@ -183,16 +175,79 @@ class VG(VariantGenerator):
             1,
         ]
 
+    # @variant(hide=False)
+    # def ar_nr_extra_nins(self, num_gpus):
+    #     return [
+    #         2,
+    #     ]
+    #
+    # @variant
+    # def enc_tie_weights(self):
+    #     return [True, ]
+    #
+    # @variant
+    # def unconditional(self):
+    #     return [True, False]
+    #
+    # @variant(hide=False)
+    # def nar(self, unconditional):
+    #     return [0 if unconditional else 4,]
+    #
+    # @variant(hide=False)
+    # def rep(self, unconditional):
+    #     if unconditional:
+    #         return [1, ]
+    #     else:
+    #         return [1, 3]
+
     @variant(hide=False)
     def ar_nr_extra_nins(self, num_gpus):
         return [
-            2,
+            6,
         ]
 
     @variant
     def enc_tie_weights(self):
         return [True, ]
 
+    @variant
+    def unconditional(self):
+        return [True, ]
+
+    @variant(hide=False)
+    def nar(self, unconditional):
+        return [0 if unconditional else 4,]
+
+    @variant(hide=False)
+    def rep(self, unconditional):
+        if unconditional:
+            return [0, ]
+
+    # @variant(hide=False)
+    # def ar_nr_extra_nins(self, num_gpus):
+    #     return [
+    #         2,
+    #     ]
+    #
+    # @variant
+    # def enc_tie_weights(self):
+    #     return [True, ]
+    #
+    # @variant
+    # def unconditional(self):
+    #     return [False]
+    #
+    # @variant(hide=False)
+    # def nar(self, unconditional):
+    #     return [6,]
+    #
+    # @variant(hide=False)
+    # def nr(self, zdim, base_filters):
+    #     return [8]
+    #
+    # @variant(hide=False)
+    # def rep(self, unconditional):
+    #     return [3]
 
 vg = VG()
 
@@ -251,6 +306,7 @@ for v in variants[i:i+1]:
             nr_filters=v["context_dim"],
             nr_cond_nins=v["ar_nr_cond_nins"],
             nr_extra_nins=v["ar_nr_extra_nins"],
+            extra_compute=True,
         )
 
         model = RegularizedHelmholtzMachine(
@@ -291,7 +347,9 @@ for v in variants[i:i+1]:
             num_gpus=v["num_gpus"],
             vis_ar=False,
             slow_kl=True,
-            resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
+            unconditional=v["unconditional"],
+            kl_coeff=0. if v["unconditional"] else 1,
+            # resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
             # staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
@@ -301,7 +359,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1020_resume_SRF_real_FAR_small_vae_share_lvae_play",
+            exp_prefix="1020_TRF_real_FAR_small_vae_share_lvae_play",
             seed=v["seed"],
             variant=v,
             mode="local",

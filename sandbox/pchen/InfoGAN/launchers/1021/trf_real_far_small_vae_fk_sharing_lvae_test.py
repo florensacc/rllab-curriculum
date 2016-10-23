@@ -200,33 +200,10 @@ class VG(VariantGenerator):
     #     else:
     #         return [1, 3]
 
-    # @variant(hide=False)
-    # def ar_nr_extra_nins(self, num_gpus):
-    #     return [
-    #         4,
-    #     ]
-    #
-    # @variant
-    # def enc_tie_weights(self):
-    #     return [True, ]
-    #
-    # @variant
-    # def unconditional(self):
-    #     return [True, ]
-    #
-    # @variant(hide=False)
-    # def nar(self, unconditional):
-    #     return [0 if unconditional else 4,]
-    #
-    # @variant(hide=False)
-    # def rep(self, unconditional):
-    #     if unconditional:
-    #         return [0, ]
-
     @variant(hide=False)
     def ar_nr_extra_nins(self, num_gpus):
         return [
-            2,
+            4,
         ]
 
     @variant
@@ -235,19 +212,42 @@ class VG(VariantGenerator):
 
     @variant
     def unconditional(self):
-        return [False]
+        return [True, ]
 
     @variant(hide=False)
     def nar(self, unconditional):
-        return [6,]
-
-    @variant(hide=False)
-    def nr(self, zdim, base_filters):
-        return [8]
+        return [0 if unconditional else 4,]
 
     @variant(hide=False)
     def rep(self, unconditional):
-        return [3]
+        if unconditional:
+            return [0, ]
+
+    # @variant(hide=False)
+    # def ar_nr_extra_nins(self, num_gpus):
+    #     return [
+    #         2,
+    #     ]
+    #
+    # @variant
+    # def enc_tie_weights(self):
+    #     return [True, ]
+    #
+    # @variant
+    # def unconditional(self):
+    #     return [False]
+    #
+    # @variant(hide=False)
+    # def nar(self, unconditional):
+    #     return [6,]
+    #
+    # @variant(hide=False)
+    # def nr(self, zdim, base_filters):
+    #     return [8]
+    #
+    # @variant(hide=False)
+    # def rep(self, unconditional):
+    #     return [3]
 
 vg = VG()
 
