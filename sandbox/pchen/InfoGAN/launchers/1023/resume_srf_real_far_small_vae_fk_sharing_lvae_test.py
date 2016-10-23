@@ -35,8 +35,16 @@
 
 # ^ this hence explores no kl
 
-# no kl means no bits is used but this uncond pixel cnn w/ 96 channels (3,) and extranin=3 can get to 3.03 vali and 2.99 train!!
-# something to THINK ==== can we resume from this pixel cnn? and add in a more powerful vae to make it surpass sota?
+# this is based on the observation that as kl is used more, overfitting is started to be observed.
+# try smaller vae
+
+# error: no nar used!
+
+# using nar & experiment with radically smaller min kl
+
+# try smaller receptive field, unconditional resnets=3 seems to do very well on its own
+
+# 3.079 and growing, even though i still think this receptive might be a bit too big
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -84,11 +92,13 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0., 0.01]# 0.1]
+        return [0.001]# 0.1]
     #
     @variant(hide=False)
     def network(self):
-        yield "pixelcnn_based_shared_spatial_code"
+        # yield "pixelcnn_based_shared_spatial_code"
+        yield "pixelcnn_based_shared_spatial_code_tiny"
+        # yield "dummy"
 
     @variant(hide=False)
     def rep(self, ):
@@ -96,7 +106,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def base_filters(self, ):
-        return [96]
+        return [64]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -112,11 +122,12 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [2, ]
+        return [4,]
 
     @variant(hide=False)
-    def nr(self):
-        return [6,]
+    def nr(self, zdim, base_filters):
+        return [4]
+        # return [base_filters // (zdim // 8 // 8 * 2) , ]
 
     @variant(hide=False)
     def i_nar(self):
@@ -161,7 +172,7 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ar_nr_resnets(self, num_gpus):
         return [
-            (3,)
+            (2,)
         ]
 
     @variant(hide=False)
@@ -173,8 +184,12 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ar_nr_extra_nins(self, num_gpus):
         return [
-            1, 3
+            2,
         ]
+
+    @variant
+    def enc_tie_weights(self):
+        return [True, ]
 
 
 vg = VG()
@@ -182,7 +197,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 3
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -204,6 +219,8 @@ for v in variants[i:i+1]:
                 dist,
                 neuron_ratio=v["nr"],
                 data_init_wnorm=True,
+                img_shape=[8,8,zdim//64],
+                mean_only=True,
             )
 
         latent_spec = [
@@ -247,6 +264,7 @@ for v in variants[i:i+1]:
                 base_filters=v["base_filters"],
                 enc_rep=v["rep"],
                 dec_rep=v["rep"],
+                enc_tie_weights=v["enc_tie_weights"],
             ),
         )
 
@@ -271,6 +289,7 @@ for v in variants[i:i+1]:
             num_gpus=v["num_gpus"],
             vis_ar=False,
             slow_kl=True,
+            resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001/",
             # staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
@@ -280,7 +299,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1018_nokl_staged_FIXKL_share_lvae_play",
+            exp_prefix="1023_resume_SRF_real_FAR_small_vae_share_lvae_play",
             seed=v["seed"],
             variant=v,
             mode="local",

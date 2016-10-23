@@ -2026,7 +2026,7 @@ class CondPixelCNN(Distribution):
             nr_filters=64,
             nr_cond_nins=1,
             nr_logistic_mix=10,
-            nr_extra_nins=0,
+            nr_extra_nins=0, # when this is a list, use repetively gated arch
             extra_compute=False,
     ):
         Serializable.quick_init(self, locals())
@@ -2037,10 +2037,16 @@ class CondPixelCNN(Distribution):
         global G_IDX
         G_IDX += 1
         self._custom_phase = CustomPhase.train
-        self.infer_temp = tf.make_template(
-            "infer",
-            self.infer,
-        )
+        if isinstance(nr_extra_nins, list):
+           self.infer_temp = tf.make_template(
+               "infer",
+               self.infer_rep,
+           )
+        else:
+            self.infer_temp = tf.make_template(
+                "infer",
+                self.infer,
+            )
         self.cond_temp = tf.make_template(
             "cond",
             self.cond,
@@ -2134,6 +2140,86 @@ class CondPixelCNN(Distribution):
 
         assert len(u_list) == 0
         assert len(ul_list) == 0
+
+        return x_out
+
+    def infer_rep(self, x, context=None):
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+        x = tf.reshape(
+            x,
+            [-1,] + list(self._shape)
+        )
+        counters = {}
+
+        def extra_nin(x, extra):
+            for _ in range(extra):
+                x = nn.gated_resnet(x, conv=nn.nin)
+            return x
+
+        for idx, extra in enumerate(self.nr_extra_nins):
+            with scopes.arg_scope(
+                    [nn.down_shifted_conv2d, nn.down_right_shifted_conv2d, nn.down_shifted_deconv2d, nn.down_right_shifted_deconv2d, nn.nin],
+                    counters=counters, init=self._custom_phase == CustomPhase.init, ema=None
+            ):
+
+                # ////////// up pass ////////
+                xs = nn.int_shape(x)
+                x_pad = tf.concat(3,[x,tf.ones(xs[:-1]+[1])]) # add channel of ones to distinguish image from padding later on
+                u_list = [nn.down_shifted_conv2d(x_pad, num_filters=self.nr_filters, filter_size=[2, 3])] # stream for current row + up
+                ul_list = [nn.down_shift(nn.down_shifted_conv2d(x_pad, num_filters=self.nr_filters, filter_size=[1,3])) + \
+                           nn.right_shift(nn.down_right_shifted_conv2d(x, num_filters=self.nr_filters, filter_size=[2,1]))] # stream for up and to the left
+
+                for rep in range(self.nr_resnets[0]):
+                    if idx == 0:
+                        u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
+                    else:
+                        u_list.append(nn.aux_gated_resnet(u_list[-1], nn.up_shift(x_out), conv=nn.down_shifted_conv2d))
+                    if self.extra_compute:
+                        u_list[-1] = extra_nin(u_list[-1], extra)
+
+                    ul_list.append(nn.aux_gated_resnet(ul_list[-1], nn.down_shift(u_list[-1]), conv=nn.down_right_shifted_conv2d))
+                    if self.extra_compute:
+                        ul_list[-1] = extra_nin(ul_list[-1], extra)
+
+                for nr_resnet in self.nr_resnets[1:]:
+                    u_list.append(nn.down_shifted_conv2d(u_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
+                    ul_list.append(nn.down_right_shifted_conv2d(ul_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
+
+                    for rep in range(nr_resnet):
+                        u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
+                        ul_list.append(nn.aux_gated_resnet(ul_list[-1], nn.down_shift(u_list[-1]), conv=nn.down_right_shifted_conv2d))
+
+                # /////// down pass ////////
+                u = u_list.pop()
+                ul = ul_list.pop()
+                if idx != 0:
+                    u = nn.aux_gated_resnet(u, nn.up_shift(x_out), conv=nn.nin)
+                    ul = nn.aux_gated_resnet(ul, x_out, conv=nn.nin)
+
+                for idx, nr_resnet in enumerate(self.nr_resnets[:0:-1]):
+                    for rep in range(nr_resnet+(0 if idx == 0 else 1)):
+                        u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
+                        u = extra_nin(u, extra)
+                        ul = nn.aux_gated_resnet(ul, tf.concat(3,[nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
+                        ul = extra_nin(ul, extra)
+
+                    u = nn.down_shifted_deconv2d(u, num_filters=self.nr_filters, stride=[2, 2])
+                    ul = nn.down_right_shifted_deconv2d(ul, num_filters=self.nr_filters, stride=[2, 2])
+
+                for rep in range(self.nr_resnets[0]+(1 if len(self.nr_resnets) > 1 else 0)):
+                    u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
+                    u = extra_nin(u, extra)
+                    ul = nn.aux_gated_resnet(ul, tf.concat(3, [nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
+                    ul = extra_nin(ul, extra)
+
+                if idx != 0:
+                    ul = nn.aux_gated_resnet(ul, x_out, conv=nn.nin)
+
+                x_out = nn.nin(nn.concat_elu(ul), self.nr_filters)
+
+                assert len(u_list) == 0
+                assert len(ul_list) == 0
 
         return x_out
 

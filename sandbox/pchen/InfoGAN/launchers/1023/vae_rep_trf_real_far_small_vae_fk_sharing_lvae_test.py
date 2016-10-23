@@ -35,8 +35,20 @@
 
 # ^ this hence explores no kl
 
-# no kl means no bits is used but this uncond pixel cnn w/ 96 channels (3,) and extranin=3 can get to 3.03 vali and 2.99 train!!
-# something to THINK ==== can we resume from this pixel cnn? and add in a more powerful vae to make it surpass sota?
+# this is based on the observation that as kl is used more, overfitting is started to be observed.
+# try smaller vae
+
+# error: no nar used!
+
+# using nar & experiment with radically smaller min kl
+
+# try smaller receptive field, unconditional resnets=3 seems to do very well on its own
+# resume above with larger llr^
+
+### try tiny receptive field: left 3 up 4
+# but maintain a good amount of computation
+
+# try repetiviely shortcircuted gated pixelcnn to expand parameters rather than extranins
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -71,7 +83,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def lr(self):
-        return [0.002, ] #0.001]
+        return [0.002*2, ] #0.001]
 
     @variant
     def seed(self):
@@ -84,19 +96,17 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0., 0.01]# 0.1]
+        return [0.001]# 0.1]
     #
     @variant(hide=False)
     def network(self):
-        yield "pixelcnn_based_shared_spatial_code"
-
-    @variant(hide=False)
-    def rep(self, ):
-        return [1, ]
+        # yield "pixelcnn_based_shared_spatial_code"
+        yield "pixelcnn_based_shared_spatial_code_tiny"
+        # yield "dummy"
 
     @variant(hide=False)
     def base_filters(self, ):
-        return [96]
+        return [64]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -110,17 +120,14 @@ class VG(VariantGenerator):
     def num_gpus(self):
         return [4]
 
-    @variant(hide=False)
-    def nar(self):
-        return [2, ]
-
-    @variant(hide=False)
-    def nr(self):
-        return [6,]
+    # @variant(hide=False)
+    # def nr(self, zdim, base_filters):
+    #     return [4]
+        # return [base_filters // (zdim // 8 // 8 * 2) , ]
 
     @variant(hide=False)
     def i_nar(self):
-        return [0, ]
+        return [4, ]
 
     @variant(hide=False)
     def i_nr(self):
@@ -130,8 +137,8 @@ class VG(VariantGenerator):
     def i_context(self):
         # return [True, False]
         return [
-            # [],
-            ["linear"],
+            [],
+            # ["linear"],
             # ["gating"],
             # ["linear", "gating"]
         ]
@@ -161,7 +168,7 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ar_nr_resnets(self, num_gpus):
         return [
-            (3,)
+            (1,)
         ]
 
     @variant(hide=False)
@@ -170,19 +177,90 @@ class VG(VariantGenerator):
             1,
         ]
 
+    # @variant(hide=False)
+    # def ar_nr_extra_nins(self, num_gpus):
+    #     return [
+    #         2,
+    #     ]
+    #
+    # @variant
+    # def enc_tie_weights(self):
+    #     return [True, ]
+    #
+    # @variant
+    # def unconditional(self):
+    #     return [True, False]
+    #
+    # @variant(hide=False)
+    # def nar(self, unconditional):
+    #     return [0 if unconditional else 4,]
+    #
+    # @variant(hide=False)
+    # def rep(self, unconditional):
+    #     if unconditional:
+    #         return [1, ]
+    #     else:
+    #         return [1, 3]
+
     @variant(hide=False)
     def ar_nr_extra_nins(self, num_gpus):
         return [
-            1, 3
+            [0,0], # 1min15s, 660k infer params
+            [0,0,0], # 1min40s, 1M infer params
         ]
 
+    @variant
+    def enc_tie_weights(self):
+        return [True, ]
+
+    @variant
+    def unconditional(self):
+        return [False, ]
+
+    @variant(hide=False)
+    def nar(self, unconditional):
+        return [4,]
+
+    @variant(hide=False)
+    def nr(self, unconditional):
+        return [4,]
+
+    @variant(hide=False)
+    def rep(self, unconditional):
+        return [1]
+
+    # @variant(hide=False)
+    # def ar_nr_extra_nins(self, num_gpus):
+    #     return [
+    #         2,
+    #     ]
+    #
+    # @variant
+    # def enc_tie_weights(self):
+    #     return [True, ]
+    #
+    # @variant
+    # def unconditional(self):
+    #     return [False]
+    #
+    # @variant(hide=False)
+    # def nar(self, unconditional):
+    #     return [6,]
+    #
+    # @variant(hide=False)
+    # def nr(self, zdim, base_filters):
+    #     return [8]
+    #
+    # @variant(hide=False)
+    # def rep(self, unconditional):
+    #     return [3]
 
 vg = VG()
 
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 3
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -204,6 +282,8 @@ for v in variants[i:i+1]:
                 dist,
                 neuron_ratio=v["nr"],
                 data_init_wnorm=True,
+                img_shape=[8,8,zdim//64],
+                mean_only=True,
             )
 
         latent_spec = [
@@ -220,11 +300,12 @@ for v in variants[i:i+1]:
                 zdim,
                 inf_dist,
                 neuron_ratio=v["i_nr"],
-                data_init_scale=v["i_init_scale"],
+                data_init_scale=0.01,
                 linear_context="linear" in v["i_context"],
                 gating_context="gating" in v["i_context"],
                 share_context=True,
-                var_scope="IAR_scope" if v["tiear"] else None,
+                img_shape=[8,8,zdim//64],
+                mean_only=True,
             )
 
         pixelcnn = CondPixelCNN(
@@ -232,6 +313,7 @@ for v in variants[i:i+1]:
             nr_filters=v["context_dim"],
             nr_cond_nins=v["ar_nr_cond_nins"],
             nr_extra_nins=v["ar_nr_extra_nins"],
+            extra_compute=True,
         )
 
         model = RegularizedHelmholtzMachine(
@@ -247,6 +329,7 @@ for v in variants[i:i+1]:
                 base_filters=v["base_filters"],
                 enc_rep=v["rep"],
                 dec_rep=v["rep"],
+                enc_tie_weights=v["enc_tie_weights"],
             ),
         )
 
@@ -271,6 +354,9 @@ for v in variants[i:i+1]:
             num_gpus=v["num_gpus"],
             vis_ar=False,
             slow_kl=True,
+            unconditional=v["unconditional"],
+            kl_coeff=0. if v["unconditional"] else 1,
+            # resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
             # staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
@@ -280,7 +366,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1018_nokl_staged_FIXKL_share_lvae_play",
+            exp_prefix="1020_TRF_real_FAR_small_vae_share_lvae_play",
             seed=v["seed"],
             variant=v,
             mode="local",
