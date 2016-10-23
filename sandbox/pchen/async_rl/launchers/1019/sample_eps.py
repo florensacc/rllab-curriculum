@@ -1,4 +1,4 @@
-
+# try eps sampling to see if it can make Q learning matches a3c paper more
 
 import logging
 import os,sys
@@ -6,6 +6,7 @@ import numpy as np
 import itertools
 
 from rllab.envs.sliding_mem_env import SlidingMemEnv
+from sandbox.pchen.async_rl.async_rl.agents.boltzmann_dqn_agent import BoltzmannDQNAgent
 from sandbox.pchen.dqn.envs.atari import AtariEnvCX
 
 sys.path.append('.')
@@ -30,11 +31,13 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [42, 2222, 333333333333333]
+        return [42, 888, 44]
 
     @variant
     def total_t(self):
-        return [2*7 * 3*10**6]
+        # return [2*7 * 3*10**6]
+        # half time, short trial
+        return [7 * 3*10**6]
 
     @variant
     def n_processes(self):
@@ -55,12 +58,14 @@ class VG(VariantGenerator):
     @variant
     def eval_frequency(self, target_update_frequency):
         # yield target_update_frequency * 1
-        yield 1000000
+        yield 10**6
 
     @variant
     def game(self, ):
-        return ["pong", "beam_rider", "breakout", "qbert", "space_invaders"]
+        return ["pong", "breakout", "space_invaders", ]
         # return ["space_invaders"]
+        # return ["breakout"]
+        # return ["seaquest", "enduro", "breakout",]
 
     @variant
     def n_step(self, ):
@@ -73,17 +78,33 @@ class VG(VariantGenerator):
     @variant
     def bellman(self, ):
         # return ["q"]
-        return [Bellman.q, Bellman.q]
+        return [
+            Bellman.q,
+            # Bellman.sarsa,
+        ]
 
     @variant
     def lr(self, ):
         yield 7e-4
-        # yield 2e-3
-        yield 5e-3
+        # yield 1e-4
+        yield 2e-3
+        # yield 5e-3
 
     @variant
     def random_seed(self, ):
         return [True, ]
+
+    @variant
+    def manual_start(self, ):
+        return [True, ]
+
+    @variant
+    def adaptive_entropy(self, ):
+        return [True, ]
+
+    @variant
+    def temp_init(self, ):
+        return [1e-2, ]
 
 vg = VG()
 variants = vg.variants(randomized=False)
@@ -94,7 +115,7 @@ for v in variants[:]:
     locals().update(v)
 
     # Problem setting
-    eval_n_runs = 25
+    eval_n_runs = 30
 
     # The meat ---------------------------------------------
     # env = AtariEnv(
@@ -109,7 +130,7 @@ for v in variants[:]:
         color_averaging=False,
         random_seed=random_seed,
         color_max=True,
-        initial_manual_activation=True,
+        initial_manual_activation=manual_start,
     )
     env = SlidingMemEnv(env)
     test_env = SlidingMemEnv(AtariEnvCX(
@@ -119,7 +140,7 @@ for v in variants[:]:
         color_averaging=False,
         random_seed=random_seed,
         color_max=True,
-        initial_manual_activation=True,
+        initial_manual_activation=manual_start,
     ))
 
     agent = DQNAgent(
@@ -135,6 +156,9 @@ for v in variants[:]:
             alpha=0.99,
         ),
         bellman=bellman,
+        # adaptive_entropy=adaptive_entropy,
+        # temp_init=temp_init,
+        sample_eps=True,
     )
     algo = DQNALE(
         total_steps=total_t,
@@ -147,35 +171,46 @@ for v in variants[:]:
     )
 
     # sys stuff
-    comp_cores = max(int(18 / n_processes), 1)
+    comp_cores = max(int(20 / n_processes), 1)
     config.ENV = dict(
         MKL_NUM_THREADS=comp_cores,
         NUMEXPR_NUM_THREADS=comp_cores,
         OMP_NUM_THREADS=comp_cores,
     )
+    config.AWS_INSTANCE_TYPE = "c4.8xlarge"
+    config.AWS_SPOT = True
+    config.AWS_SPOT_PRICE = '1.'
+    config.AWS_REGION_NAME = 'us-west-1'
+    config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[config.AWS_REGION_NAME]
+    config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[config.AWS_REGION_NAME]
+    config.AWS_SECURITY_GROUP_IDS = config.ALL_REGION_AWS_SECURITY_GROUP_IDS[config.AWS_REGION_NAME]
+
+
     run_experiment_lite(
         algo.train(),
-        exp_prefix="0926_dqn_color_max_more",
+        exp_prefix="1019_async_q_sample_eps",
         seed=v["seed"],
         variant=v,
+        mode="ec2",
+        # terminate_machine=False,
         # mode="local_docker",
         # mode="local",
         #
 
-        mode="lab_kube",
-        n_parallel=0,
-        use_gpu=False,
-        node_selector={
-            "aws/type": "c4.8xlarge",
-            "openai/computing": "true",
-        },
-        resources=dict(
-            requests=dict(
-                cpu=17.1,
-            ),
-            limits=dict(
-                cpu=17.1,
-            )
-        )
+        # mode="lab_kube",
+        # n_parallel=0,
+        # use_gpu=False,
+        # node_selector={
+        #     "aws/type": "c4.8xlarge",
+        #     "openai/computing": "true",
+        # },
+        # resources=dict(
+        #     requests=dict(
+        #         cpu=17.1,
+        #     ),
+        #     limits=dict(
+        #         cpu=17.1,
+        #     )
+        # )
     )
 

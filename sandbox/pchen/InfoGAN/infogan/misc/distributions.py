@@ -1880,6 +1880,7 @@ class PixelCNN(Distribution):
             nr_filters=64,
             nr_logistic_mix=10,
             nr_extra_nins=10,
+            square=False,
     ):
         Serializable.quick_init(self, locals())
 
@@ -1898,6 +1899,7 @@ class PixelCNN(Distribution):
         self.nr_filters = nr_filters
         self.nr_logistic_mix = nr_logistic_mix
         self.nr_extra_nins = nr_extra_nins
+        self.square = square
 
     @overrides
     def init_mode(self):
@@ -1976,7 +1978,7 @@ class PixelCNN(Distribution):
 
         return x_out
 
-    def logli(self, x_var, info):
+    def logli(self, x_var, info, spatial=False):
         import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
         import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
         x_var = tf.reshape(
@@ -1989,10 +1991,13 @@ class PixelCNN(Distribution):
             x_var,
             tgt_vec
         )
-        return tf.reduce_sum(
-            tf.reshape(logli, [-1, self._shape[0] * self._shape[1]]),
-            reduction_indices=1
-        )
+        if spatial:
+            return tf.reshape(logli, [-1,] + list(self._shape[:2]))
+        else:
+            return tf.reduce_sum(
+                tf.reshape(logli, [-1, self._shape[0] * self._shape[1]]),
+                reduction_indices=1
+            )
 
     def prior_dist_info(self, batch_size):
         return {}
@@ -2022,6 +2027,7 @@ class CondPixelCNN(Distribution):
             nr_cond_nins=1,
             nr_logistic_mix=10,
             nr_extra_nins=0,
+            extra_compute=False,
     ):
         Serializable.quick_init(self, locals())
 
@@ -2045,6 +2051,7 @@ class CondPixelCNN(Distribution):
         self.nr_logistic_mix = nr_logistic_mix
         self.nr_cond_nins = nr_cond_nins
         self.nr_extra_nins = nr_extra_nins
+        self.extra_compute = extra_compute
 
     @overrides
     def init_mode(self):
@@ -2089,7 +2096,11 @@ class CondPixelCNN(Distribution):
 
             for rep in range(self.nr_resnets[0]):
                 u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
+                if self.extra_compute:
+                    u_list[-1] = extra_nin(u_list[-1])
                 ul_list.append(nn.aux_gated_resnet(ul_list[-1], nn.down_shift(u_list[-1]), conv=nn.down_right_shifted_conv2d))
+                if self.extra_compute:
+                    ul_list[-1] = extra_nin(ul_list[-1])
 
             for nr_resnet in self.nr_resnets[1:]:
                 u_list.append(nn.down_shifted_conv2d(u_list[-1], num_filters=self.nr_filters, stride=[2, 2]))

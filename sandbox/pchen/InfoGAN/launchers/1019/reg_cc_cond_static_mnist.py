@@ -8,6 +8,8 @@
 # verdict: tying arconv param reduces overfitting
 # fewer conv were not implemented correctly
 
+# retry arconv & larger learning rate + mean_only ar
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -33,6 +35,7 @@ batch_size = 128
 # updates_per_epoch = 100
 
 stub(globals())
+from rllab import config
 
 from rllab.misc.instrument import VariantGenerator, variant
 
@@ -43,7 +46,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.002, ] #0.001]
+        return [0.002*5, ] #0.001]
 
     @variant
     def seed(self):
@@ -177,7 +180,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_tie(self):
-        return [True, False]
+        return [True, ]
 
     @variant(hide=False)
     def ar_chns(self):
@@ -191,7 +194,7 @@ variants = vg.variants(randomized=False)
 
 print(len(variants))
 
-for v in variants[:]:
+for v in variants[:1]:
 
     # with skip_if_exception():
         max_epoch = v["max_epoch"]
@@ -230,6 +233,7 @@ for v in variants[:]:
                 neuron_ratio=v["nr"],
                 data_init_wnorm=v["ar_wnorm"],
                 var_scope="AR_scope" if v["tiear"] else None,
+                mean_only=True,
             )
 
         latent_spec = [
@@ -258,7 +262,7 @@ for v in variants[:]:
             shape=(28, 28, 1),
             filter_size=3,
             depth=v["ar_depth"],
-            nr_channels=12,
+            nr_channels=v["ar_chns"],
             pixel_bias=True,
             # block="plstm",
             context_dim=v["context_dim"],
@@ -297,27 +301,42 @@ for v in variants[:]:
             vis_ar=False,
         )
 
+        # sys stuff
+        config.USE_GPU = True
+        config.DOCKER_IMAGE = "neocxi/rllab_exp_gpu_tf:py3"
+        # config.DOCKER_IMAGE = "dementrock/rllab3-shared-gpu"
+        config.AWS_INSTANCE_TYPE = "p2.xlarge"
+        config.AWS_SPOT = True
+        config.AWS_SPOT_PRICE = '1.'
+        config.AWS_REGION_NAME = 'us-east-1'
+        config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[config.AWS_REGION_NAME]
+        config.AWS_IMAGE_ID = "ami-1c5a090b" #config.ALL_REGION_AWS_IMAGE_IDS[config.AWS_REGION_NAME]
+        config.AWS_SECURITY_GROUP_IDS = config.ALL_REGION_AWS_SECURITY_GROUP_IDS[config.AWS_REGION_NAME]
+
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1012_reg_smnist_cc_af_gres",
+            exp_prefix="1020_ami_test_llr_reg_smnist_cc_af_gres",
             seed=v["seed"],
             variant=v,
-            # mode="local",
-            mode="lab_kube",
-            n_parallel=0,
+            mode="ec2",
+            terminate_machine=False,
             use_gpu=True,
-            node_selector={
-                "aws/type": "p2.xlarge",
-                "openai/computing": "true",
-            },
-            resources=dict(
-                requests=dict(
-                    cpu=1.6,
-                ),
-                limits=dict(
-                    cpu=1.6,
-                )
-            )
+            # mode="local",
+            # mode="lab_kube",
+            # n_parallel=0,
+            # use_gpu=True,
+            # node_selector={
+            #     "aws/type": "p2.xlarge",
+            #     "openai/computing": "true",
+            # },
+            # resources=dict(
+            #     requests=dict(
+            #         cpu=1.6,
+            #     ),
+            #     limits=dict(
+            #         cpu=1.6,
+            #     )
+            # )
         )
 
 

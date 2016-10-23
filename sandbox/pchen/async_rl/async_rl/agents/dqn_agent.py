@@ -10,6 +10,7 @@ from chainer import serializers
 from chainer import functions as F
 import chainer.links as L
 
+from rllab.misc.special import softmax
 from sandbox.pchen.async_rl.async_rl.utils import chainer_utils
 from sandbox.pchen.async_rl.async_rl.utils.init_like_torch import init_like_torch
 from sandbox.pchen.async_rl.async_rl.agents.base import Agent
@@ -86,6 +87,11 @@ class DQNAgent(Agent,Shareable,Picklable):
             phase="Train",
             sync_t_gap_limit=np.inf,
             share_model=False,
+            sample_eps=False,
+            boltzmann=False,
+            temp_init=1.,
+            adaptive_entropy=False,
+            share_optimizer_states=False,
     ):
         if optimizer_args is None:
             optimizer_args = dict(lr=7e-4, eps=1e-1, alpha=0.99)
@@ -99,6 +105,10 @@ class DQNAgent(Agent,Shareable,Picklable):
         self.env = env
         self.bellman = bellman
         self.share_model = share_model
+
+        self.boltzmann = boltzmann
+        self.temp = temp_init
+        self.adaptive_entropy = adaptive_entropy
 
         action_space = env.action_space
 
@@ -126,6 +136,7 @@ class DQNAgent(Agent,Shareable,Picklable):
                 optimizer_hook_args["weight_decay"]
             ))
         self.init_lr = self.optimizer.lr
+        self.share_optimizer_states = share_optimizer_states
 
         self.shared_target_model = copy.deepcopy(self.shared_model)
         # Thread specific model
@@ -137,7 +148,13 @@ class DQNAgent(Agent,Shareable,Picklable):
         self.clip_reward = clip_reward
         self.keep_loss_scale_same = keep_loss_scale_same
         self.eps_start = eps_start
-        self.eps_end = eps_end
+        if not sample_eps:
+            self.eps_end = eps_end
+        else:
+            self.eps_end = np.random.choice(
+                a=[0.1, 0.01, 0.5],
+                p=[0.4, 0.3, 0.3]
+            )
         self.eps_test = eps_test
         self.target_update_frequency = target_update_frequency
         self.eps_anneal_time = eps_anneal_time
@@ -160,6 +177,7 @@ class DQNAgent(Agent,Shareable,Picklable):
         self.past_extra_infos = {}
         self.epoch_td_loss_list = []
         self.epoch_q_list = []
+        self.epoch_entropies_list = []
         self.epoch_path_len_list = [0]
         self.epoch_sync_t_gap_list = []
         self.cur_path_len = 0
@@ -171,6 +189,7 @@ class DQNAgent(Agent,Shareable,Picklable):
         self.shared_params = dict(
             model_params=chainer_utils.extract_link_params(self.shared_model),
             target_model_params=chainer_utils.extract_link_params(self.shared_target_model),
+            optimizer_states=chainer_utils.extract_optimizer_params(self.optimizer),
         )
 
     def process_copy(self):
@@ -183,6 +202,11 @@ class DQNAgent(Agent,Shareable,Picklable):
             new_agent.shared_target_model,
             self.shared_params["target_model_params"],
         )
+        if self.share_optimizer_states:
+            chainer_utils.set_optimizer_params(
+                new_agent.optimizer,
+                self.shared_params["optimizer_states"]
+            )
         new_agent.sync_parameters(init=True)
         new_agent.shared_params = self.shared_params
         new_agent.eps = self.eps # important for testing!
@@ -319,10 +343,28 @@ class DQNAgent(Agent,Shareable,Picklable):
                 eps = self.eps_test
             else:
                 eps = self.eps
-            if np.random.uniform() < eps:
-                a = np.random.randint(low=0, high=len(qs.data))
+
+            if self.boltzmann and (self.phase != "Test"):
+                q_vals = qs.data
+                pms = softmax(q_vals / self.temp)
+                al = len(pms)
+                a = np.random.choice(al, p=pms)
+                entropy = np.sum(-pms*np.log(pms + 1e-8))
+                other_p = (eps)/al
+                eps_p = (1-eps) + eps/al
+                tgt_entropy = -eps_p*np.log(eps_p) - (al-1)*other_p*np.log(other_p)
+                if self.adaptive_entropy:
+                    if tgt_entropy > entropy + 0.1:
+                        self.temp *= 1.05
+                    elif tgt_entropy < entropy - 0.1:
+                        self.temp *= 0.95
+                    self.temp = np.clip(self.temp, 1e-3, 1e3)
+                self.epoch_entropies_list.append(entropy)
             else:
-                a = np.argmax(qs.data)
+                if np.random.uniform() < eps:
+                    a = np.random.randint(low=0, high=len(qs.data))
+                else:
+                    a = np.argmax(qs.data)
 
             # update info for training; doing this in testing will lead to insufficient memory
             if self.phase == "Train":
