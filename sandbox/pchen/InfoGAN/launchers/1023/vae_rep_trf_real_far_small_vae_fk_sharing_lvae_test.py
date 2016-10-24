@@ -205,7 +205,7 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ar_nr_extra_nins(self, num_gpus):
         return [
-            [0,0], # 1min15s, 660k infer params
+            # [0,0], # 1min15s, 660k infer params
             [0,0,0], # 1min40s, 1M infer params
         ]
 
@@ -313,7 +313,7 @@ for v in variants[i:i+1]:
             nr_filters=v["context_dim"],
             nr_cond_nins=v["ar_nr_cond_nins"],
             nr_extra_nins=v["ar_nr_extra_nins"],
-            extra_compute=True,
+            extra_compute=False,
         )
 
         model = RegularizedHelmholtzMachine(

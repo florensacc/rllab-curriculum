@@ -7,6 +7,7 @@ from prettytensor.pretty_tensor_class import Layer
 from progressbar import ProgressBar
 
 from rllab.core.serializable import Serializable
+from rllab.misc.ext import AttrDict
 from rllab.misc.overrides import overrides
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import CustomPhase, resconv_v1_customconv, plstmconv_v1, int_shape, \
     universal_int_shape, get_linear_ar_mask
@@ -2157,69 +2158,71 @@ class CondPixelCNN(Distribution):
                 x = nn.gated_resnet(x, conv=nn.nin)
             return x
 
-        for idx, extra in enumerate(self.nr_extra_nins):
-            with scopes.arg_scope(
-                    [nn.down_shifted_conv2d, nn.down_right_shifted_conv2d, nn.down_shifted_deconv2d, nn.down_right_shifted_deconv2d, nn.nin],
-                    counters=counters, init=self._custom_phase == CustomPhase.init, ema=None
-            ):
+        with scopes.arg_scope(
+                [nn.down_shifted_conv2d, nn.down_right_shifted_conv2d, nn.down_shifted_deconv2d, nn.down_right_shifted_deconv2d, nn.nin],
+                counters=counters, init=self._custom_phase == CustomPhase.init, ema=None
+        ):
 
-                # ////////// up pass ////////
-                xs = nn.int_shape(x)
-                x_pad = tf.concat(3,[x,tf.ones(xs[:-1]+[1])]) # add channel of ones to distinguish image from padding later on
-                u_list = [nn.down_shifted_conv2d(x_pad, num_filters=self.nr_filters, filter_size=[2, 3])] # stream for current row + up
-                ul_list = [nn.down_shift(nn.down_shifted_conv2d(x_pad, num_filters=self.nr_filters, filter_size=[1,3])) + \
-                           nn.right_shift(nn.down_right_shifted_conv2d(x, num_filters=self.nr_filters, filter_size=[2,1]))] # stream for up and to the left
+            # ////////// up pass ////////
+            xs = nn.int_shape(x)
+            x_pad = tf.concat(3,[x,tf.ones(xs[:-1]+[1])]) # add channel of ones to distinguish image from padding later on
 
-                for rep in range(self.nr_resnets[0]):
+            u_lists = {}
+            ul_lists = {}
+            for idx, extra in enumerate(self.nr_extra_nins):
+                u_lists[idx] = [nn.down_shifted_conv2d(x_pad, num_filters=self.nr_filters, filter_size=[2, 3])] # stream for current row + up
+                ul_lists[idx] = [nn.down_shift(nn.down_shifted_conv2d(x_pad, num_filters=self.nr_filters, filter_size=[1,3])) + \
+                       nn.right_shift(nn.down_right_shifted_conv2d(x, num_filters=self.nr_filters, filter_size=[2,1]))] # stream for up and to the left
+
+            for rep in range(self.nr_resnets[0]):
+                for idx, extra in enumerate(self.nr_extra_nins):
                     if idx == 0:
-                        u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
+                        u_lists[idx].append(nn.gated_resnet(u_lists[idx][-1], conv=nn.down_shifted_conv2d))
+                        assert not self.extra_compute
+                        ul_lists[idx].append(nn.aux_gated_resnet(ul_lists[idx][-1], nn.down_shift(u_lists[idx][-1]), conv=nn.down_right_shifted_conv2d))
                     else:
-                        u_list.append(nn.aux_gated_resnet(u_list[-1], nn.up_shift(x_out), conv=nn.down_shifted_conv2d))
-                    if self.extra_compute:
-                        u_list[-1] = extra_nin(u_list[-1], extra)
+                        u_lists[idx].append(
+                            nn.aux_gated_resnet(u_lists[idx][-1], u_lists[idx-1][-1], conv=nn.down_right_shifted_conv2d)
+                        )
+                        ul_lists[idx].append(
+                            nn.aux_gated_resnet(
+                                ul_lists[idx][-1],
+                                tf.concat(3, [nn.down_shift(u_lists[idx][-1]), ul_lists[idx-1][-1]]),
+                                conv=nn.down_right_shifted_conv2d
+                            )
+                        )
+            assert len(self.nr_resnets) == 1
 
-                    ul_list.append(nn.aux_gated_resnet(ul_list[-1], nn.down_shift(u_list[-1]), conv=nn.down_right_shifted_conv2d))
-                    if self.extra_compute:
-                        ul_list[-1] = extra_nin(ul_list[-1], extra)
+            # /////// down pass ////////
+            us = [u_lists[idx].pop() for idx in range(len(self.nr_extra_nins))]
+            uls = [ul_lists[idx].pop() for idx in range(len(self.nr_extra_nins))]
 
-                for nr_resnet in self.nr_resnets[1:]:
-                    u_list.append(nn.down_shifted_conv2d(u_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
-                    ul_list.append(nn.down_right_shifted_conv2d(ul_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
+            for rep in range(self.nr_resnets[0]+(1 if len(self.nr_resnets) > 1 else 0)):
+                for idx, extra in enumerate(self.nr_extra_nins):
+                    if idx == 0:
+                        us[idx] = nn.aux_gated_resnet(us[idx], u_lists[idx].pop(), conv=nn.down_shifted_conv2d)
+                        us[idx] = extra_nin(us[idx], extra)
+                        uls[idx] = nn.aux_gated_resnet(uls[idx], tf.concat(3, [nn.down_shift(us[idx]), ul_lists[idx].pop()]), conv=nn.down_right_shifted_conv2d)
+                        uls[idx] = extra_nin(uls[idx], extra)
+                    else:
+                        us[idx] = nn.aux_gated_resnet(
+                            us[idx],
+                            tf.concat(3, [u_lists[idx].pop(), us[idx-1]]),
+                            conv=nn.down_shifted_conv2d
+                        )
+                        us[idx] = extra_nin(us[idx], extra)
+                        uls[idx] = nn.aux_gated_resnet(uls[idx], tf.concat(3, [nn.down_shift(us[idx]), ul_lists[idx].pop()]), conv=nn.down_right_shifted_conv2d)
+                        uls[idx] = extra_nin(uls[idx], extra)
 
-                    for rep in range(nr_resnet):
-                        u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
-                        ul_list.append(nn.aux_gated_resnet(ul_list[-1], nn.down_shift(u_list[-1]), conv=nn.down_right_shifted_conv2d))
-
-                # /////// down pass ////////
-                u = u_list.pop()
-                ul = ul_list.pop()
-                if idx != 0:
-                    u = nn.aux_gated_resnet(u, nn.up_shift(x_out), conv=nn.nin)
-                    ul = nn.aux_gated_resnet(ul, x_out, conv=nn.nin)
-
-                for idx, nr_resnet in enumerate(self.nr_resnets[:0:-1]):
-                    for rep in range(nr_resnet+(0 if idx == 0 else 1)):
-                        u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
-                        u = extra_nin(u, extra)
-                        ul = nn.aux_gated_resnet(ul, tf.concat(3,[nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
-                        ul = extra_nin(ul, extra)
-
-                    u = nn.down_shifted_deconv2d(u, num_filters=self.nr_filters, stride=[2, 2])
-                    ul = nn.down_right_shifted_deconv2d(ul, num_filters=self.nr_filters, stride=[2, 2])
-
-                for rep in range(self.nr_resnets[0]+(1 if len(self.nr_resnets) > 1 else 0)):
-                    u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
-                    u = extra_nin(u, extra)
-                    ul = nn.aux_gated_resnet(ul, tf.concat(3, [nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
-                    ul = extra_nin(ul, extra)
-
-                if idx != 0:
-                    ul = nn.aux_gated_resnet(ul, x_out, conv=nn.nin)
-
-                x_out = nn.nin(nn.concat_elu(ul), self.nr_filters)
-
+            for u_list in u_lists.values():
                 assert len(u_list) == 0
+            for ul_list in ul_lists.values():
                 assert len(ul_list) == 0
+
+            for idx in range(1, len(self.nr_extra_nins)):
+                uls[idx] = nn.aux_gated_resnet(uls[idx], uls[idx-1], conv=nn.nin)
+
+            x_out = nn.nin(nn.concat_elu(uls[-1]), self.nr_filters)
 
         return x_out
 
