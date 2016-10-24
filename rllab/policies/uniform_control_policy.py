@@ -1,5 +1,6 @@
 from rllab.core.parameterized import Parameterized
 from rllab.core.serializable import Serializable
+from rllab.distributions.delta import Delta
 from rllab.policies.base import Policy
 from rllab.misc.overrides import overrides
 
@@ -28,3 +29,8 @@ class UniformControlPolicy(Policy, Serializable):
 
     def reset(self, dones=None):
         pass
+
+    @property
+    def distribution(self):
+        # Just a placeholder
+        return Delta()

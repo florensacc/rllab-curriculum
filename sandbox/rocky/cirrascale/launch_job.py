@@ -21,7 +21,7 @@ def get_directory():
 
 CACHED_GPUS = None
 
-FORBIDDEN = [5, 6, 7, 8, 54, 56]
+FORBIDDEN = [5, 6, 7, 8, 9, 30, 54, 56]
 
 
 def get_first_available_gpu(type_filter=None):
@@ -37,6 +37,7 @@ def get_first_available_gpu(type_filter=None):
     gpus = [g for g in gpus if int(g.host.split('.')[0]) not in FORBIDDEN]
     gpu = gpus[0]
     gpu.reserved = True
+    gpu.force_available = False
     return gpu
 
 

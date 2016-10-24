@@ -1,3 +1,5 @@
+from vizdoom import ScreenResolution
+
 from cached_property import cached_property
 import os
 import numpy as np
@@ -7,9 +9,10 @@ from sandbox.rocky.neural_learner.envs.doom_env import DoomEnv
 
 
 class DoomDefaultWadEnv(DoomEnv, Serializable):
-    def __init__(self, wad_name="symphod.wad", *args, **kwargs):
+    def __init__(self, wad_name="symphod.wad", full_wad_name=None, *args, **kwargs):
         Serializable.quick_init(self, locals())
         self.wad_name = wad_name
+        self.full_wad_name = full_wad_name
         DoomEnv.__init__(self, *args, **kwargs)
 
     def get_doom_config(self):
@@ -17,7 +20,11 @@ class DoomDefaultWadEnv(DoomEnv, Serializable):
 
         doom_config = DoomEnv.get_doom_config(self)
 
-        wad_file_name = os.path.join(config.PROJECT_PATH, "sandbox/rocky/neural_learner/envs/wads/", self.wad_name)
+        if self.full_wad_name is None:
+            wad_file_name = os.path.join(config.PROJECT_PATH, "sandbox/rocky/neural_learner/envs/wads/", self.wad_name)
+        else:
+            wad_file_name = self.full_wad_name
+
         doom_config.vizdoom_path = os.path.join(DOOM_PATH, "bin/vizdoom").encode("utf-8")
         doom_config.doom_game_path = os.path.join(DOOM_PATH, "scenarios/freedoom2.wad").encode("utf-8")
         doom_config.doom_scenario_path = wad_file_name.encode("utf-8")

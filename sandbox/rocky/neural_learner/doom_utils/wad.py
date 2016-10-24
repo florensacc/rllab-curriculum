@@ -200,7 +200,8 @@ def compile_script(script):
         with open(acs_file_name, "wb") as acs_file:
             acs_file.write(script)
         command = [os.path.join(ACC_PATH, "acc"), "-i", ACC_PATH, acs_file_name, o_file_name]
-        subprocess.Popen(command, stderr=subprocess.PIPE, stdout=subprocess.PIPE).communicate()
+        p = subprocess.Popen(command, stderr=subprocess.STDOUT, stdout=subprocess.PIPE)
+        p.communicate()
         with open(o_file_name, "rb") as o_file:
             WAD._cached_behaviors[script_hash] = o_file.read()
     return WAD._cached_behaviors[script_hash]

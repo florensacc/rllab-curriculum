@@ -25,13 +25,14 @@ class VecEnvExecutor(object):
                 self.ts[i] = 0
         return obs, rewards, dones, tensor_utils.stack_tensor_dict_list(env_infos)
 
-    def reset(self):
-        results = [env.reset() for env in self.envs]
-        self.ts[:] = 0
+    def reset(self, dones):
+        dones = np.cast['bool'](dones)
+        results = [env.reset() for idx, env in enumerate(self.envs) if dones[idx]]
+        self.ts[dones] = 0
         return results
 
     @property
-    def num_envs(self):
+    def n_envs(self):
         return len(self.envs)
 
     @property
