@@ -19,6 +19,7 @@ TINY = 1e-8
 #     ret[nonzero_n] = nonzero_a
 #     return ret
 
+# see misc.special.py for "from onehot/sym" function
 
 # return an array with ONE LESS axis than x_var, as the last one has been collapsed to the corresp index
 def from_onehot(x_var):
