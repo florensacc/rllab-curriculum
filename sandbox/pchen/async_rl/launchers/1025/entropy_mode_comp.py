@@ -32,13 +32,13 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [42, 888, 999, ]
+        return [42, ]
 
     @variant
     def total_t(self):
         # return [2*7 * 3*10**6]
         # half time, short trial
-        return [46*10**6]
+        return [5*10**6]
 
     @variant
     def n_processes(self):
@@ -67,7 +67,7 @@ class VG(VariantGenerator):
         # return ["pong", "breakout",  ]
         # return ["space_invaders"]
         # return ["breakout"]
-        return ["enduro", ]
+        return ["enduro", "pong"]
 
     @variant
     def n_step(self, ):
@@ -120,6 +120,10 @@ class VG(VariantGenerator):
     @variant
     def opt_share(self, ):
         return [False]
+
+    @variant
+    def adaptive_entropy_mode(self):
+        return ["naive", "first_order"]
 
 vg = VG()
 variants = vg.variants(randomized=False)
@@ -176,7 +180,7 @@ for v in variants[:]:
         boltzmann=boltzmann,
         sample_eps=sample_eps,
         share_optimizer_states=opt_share,
-        adaptive_entropy_mode="first_order",
+        adaptive_entropy_mode=adaptive_entropy_mode,
     )
     algo = DQNALE(
         total_steps=total_t,
@@ -206,13 +210,13 @@ for v in variants[:]:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="1024_soft_hard_sarsa",# use the batch after 1am
+        exp_prefix="1025_entropy_mode_test",# use the batch after 1am
         seed=v["seed"],
         variant=v,
-        # mode="ec2",
+        mode="ec2",
         # terminate_machine=False,
         # mode="local_docker",
-        mode="local",
+        # mode="local",
         #
 
         # mode="lab_kube",

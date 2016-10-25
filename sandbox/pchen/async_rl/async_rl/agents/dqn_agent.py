@@ -7,7 +7,7 @@ import time
 import numpy as np
 import chainer
 from chainer import serializers
-from chainer import functions as F
+from chainer import functions as CF
 import chainer.links as L
 
 from rllab.misc.special import softmax
@@ -73,7 +73,8 @@ class DQNAgent(Agent,Shareable,Picklable):
             optimizer_type="rmsprop_async",
             optimizer_args=None,
             optimizer_hook_args=None,
-            t_max=5,
+            t_max=5, # async gradients delay
+            n_step=5,
             gamma=0.99,
             beta=1e-2,
             eps_start=1.0,
@@ -81,8 +82,8 @@ class DQNAgent(Agent,Shareable,Picklable):
             eps_anneal_time=4 * 10 ** 6,
             eps_test=None, # eps used for testing regardless of training eps
             target_update_frequency=40000,
-            process_id=0, clip_reward=True,
-            keep_loss_scale_same=False,
+            process_id=0,
+            clip_reward=True,
             bonus_evaluator=None,
             bonus_count_target="image",
             phase="Train",
@@ -92,8 +93,10 @@ class DQNAgent(Agent,Shareable,Picklable):
             boltzmann=False,
             temp_init=1.,
             adaptive_entropy=False,
+            adaptive_entropy_mode="naive",
             share_optimizer_states=False,
     ):
+        print("n_step", n_step, "boltmann", boltzmann)
         if optimizer_args is None:
             optimizer_args = dict(lr=7e-4, eps=1e-1, alpha=0.99)
         if optimizer_hook_args is None:
@@ -110,6 +113,7 @@ class DQNAgent(Agent,Shareable,Picklable):
         self.boltzmann = boltzmann
         self.temp = temp_init
         self.adaptive_entropy = adaptive_entropy
+        self.adaptive_entropy_mode = adaptive_entropy_mode
 
         action_space = env.action_space
 
@@ -144,10 +148,10 @@ class DQNAgent(Agent,Shareable,Picklable):
         self.model = copy.deepcopy(self.shared_model)
 
         self.t_max = t_max # maximum time steps before sending gradient update
+        self.n_step = n_step
         self.gamma = gamma # discount
         self.process_id = process_id
         self.clip_reward = clip_reward
-        self.keep_loss_scale_same = keep_loss_scale_same
         self.eps_start = eps_start
         if not sample_eps:
             self.eps_end = eps_end
@@ -271,38 +275,112 @@ class DQNAgent(Agent,Shareable,Picklable):
             (self.t - self.t_start == self.t_max)
         )
 
+        if not is_state_terminal:
+            # choose an action
+            qs = self.model.compute_qs(statevar)[0]
+            # WARN: even when testing, do not just use argmax; it may get stuck at the beginning of Breakout (doing no_op)
+            if self.phase == "Test" and self.eps_test is not None:
+                eps = self.eps_test
+            else:
+                eps = self.eps
+
+            if self.boltzmann and (self.phase != "Test"):
+                q_vals = qs.data
+                al = len(q_vals)
+                other_p = (eps)/al
+                eps_p = (1-eps) + eps/al
+                tgt_entropy = -eps_p*np.log(eps_p) - (al-1)*other_p*np.log(other_p)
+                if self.adaptive_entropy:
+                    if self.adaptive_entropy_mode == "naive":
+                        pms = softmax(q_vals / self.temp)
+                        entropy = np.sum(-pms*np.log(pms + 1e-8))
+                        if tgt_entropy > entropy + 0.1:
+                            self.temp *= 1.05
+                        elif tgt_entropy < entropy - 0.1:
+                            self.temp *= 0.95
+                    elif self.adaptive_entropy_mode == "first_order":
+                        q_vals = qs.data
+                        al = len(q_vals)
+                        temp_var = chainer.Variable(np.array([self.temp]))
+                        pms_var = CF.softmax(CF.reshape(q_vals / CF.broadcast_to(temp_var, q_vals.shape), [1, al]))
+                        entropy_var = CF.sum(-pms_var*CF.log(pms_var + 1e-8))
+                        entropy_var.backward()
+                        grad = temp_var.grad
+                        self.temp += (tgt_entropy - entropy_var.data) / float(grad)
+                    else:
+                        raise NotImplemented
+
+                self.temp = np.clip(self.temp, 1e-3, 1e3)
+                pms = softmax(q_vals / self.temp)
+                a = np.random.choice(al, p=pms)
+                entropy = np.sum(-pms*np.log(pms + 1e-8))
+                self.epoch_misc_stats["entropy"].append(entropy)
+                self.epoch_misc_stats["_tgt_entropy"].append(tgt_entropy)
+            else:
+                if np.random.uniform() < eps:
+                    a = np.random.randint(low=0, high=len(qs.data))
+                else:
+                    a = np.argmax(qs.data)
+
         # start computing gradient and synchronize model params
         # avoid updating model params during testing
         if ready_to_commit:
             assert self.t_start < self.t
 
-            # assign bonus rewards
-            if is_state_terminal:
-                R = 0
-            else:
-                # bootstrap from target network
-                qs = self.shared_target_model.compute_qs(statevar)[0] # fixed [0]
-                if self.bellman == Bellman.q:
-                    R = float(np.amax(qs.data))
-                elif self.bellman == Bellman.sarsa:
-                    R = float(qs.data[self.past_actions[self.t - 1]])
+            if self.n_step == self.t_max:
+                if is_state_terminal:
+                    R = 0
                 else:
-                    raise NotImplementedError
+                    # bootstrap from target network
+                    qs = self.shared_target_model.compute_qs(statevar)[0] # fixed [0]
+                    if self.bellman == Bellman.q:
+                        R = float(np.amax(qs.data))
+                    elif self.bellman == Bellman.sarsa:
+                        R = float(qs.data[a])
+                    else:
+                        raise NotImplementedError
 
-            loss = 0
-            for i in reversed(range(self.t_start, self.t)):
-                R *= self.gamma
-                R += self.past_rewards[i]
-                q = self.past_qvalues[i]
-                cur_loss = 0.5 * (q - R) ** 2
-                loss += cur_loss
+                loss = 0
+                for i in reversed(range(self.t_start, self.t)):
+                    R *= self.gamma
+                    R += self.past_rewards[i]
+                    qs = self.past_qvalues[i]
+                    a = self.past_actions[i]
+                    cur_loss = 0.5 * (qs[a] - R) ** 2
+                    loss += cur_loss
                 self.epoch_misc_stats["td_loss"].append(cur_loss.data)
+            elif self.n_step == 1:
+                if is_state_terminal:
+                    R = 0
+                else:
+                    # bootstrap from target network
+                    # qs already calculated
+                    if self.bellman == Bellman.q:
+                        R = float(np.amax(qs.data))
+                    elif self.bellman == Bellman.sarsa:
+                        R = float(qs.data[a])
+                    else:
+                        raise NotImplementedError
 
-            # Normalize the loss of sequences truncated by terminal states
-            if self.keep_loss_scale_same and \
-                    self.t - self.t_start < self.t_max:
-                factor = self.t_max / (self.t - self.t_start)
-                loss *= factor
+                loss = 0
+                for i in reversed(range(self.t_start, self.t)):
+                    R *= self.gamma
+                    R += self.past_rewards[i]
+                    qs = self.past_qvalues[i]
+                    a = self.past_actions[i]
+                    cur_loss = 0.5 * (qs[a] - R) ** 2
+                    loss += cur_loss
+                    # reset R to be boostraped value
+                    q_vals = qs.data
+                    if self.bellman == Bellman.q:
+                        R = float(np.amax(q_vals))
+                    elif self.bellman == Bellman.sarsa:
+                        R = float(q_vals[a])
+                    else:
+                        raise NotImplementedError
+                self.epoch_misc_stats["td_loss"].append(cur_loss.data)
+            else:
+                raise NotImplemented
 
             # record the time elapsed since last model synchroization
             # if the time is too long, we may discard the current update and synchronize instead
@@ -338,43 +416,12 @@ class DQNAgent(Agent,Shareable,Picklable):
 
         # store traj info and return action
         if not is_state_terminal:
-            # choose an action
-            qs = self.model.compute_qs(statevar)[0]
-            # WARN: even when testing, do not just use argmax; it may get stuck at the beginning of Breakout (doing no_op)
-            if self.phase == "Test" and self.eps_test is not None:
-                eps = self.eps_test
-            else:
-                eps = self.eps
-
-            if self.boltzmann and (self.phase != "Test"):
-                q_vals = qs.data
-                pms = softmax(q_vals / self.temp)
-                al = len(pms)
-                a = np.random.choice(al, p=pms)
-                entropy = np.sum(-pms*np.log(pms + 1e-8))
-                other_p = (eps)/al
-                eps_p = (1-eps) + eps/al
-                tgt_entropy = -eps_p*np.log(eps_p) - (al-1)*other_p*np.log(other_p)
-                if self.adaptive_entropy:
-                    if tgt_entropy > entropy + 0.1:
-                        self.temp *= 1.05
-                    elif tgt_entropy < entropy - 0.1:
-                        self.temp *= 0.95
-                    self.temp = np.clip(self.temp, 1e-3, 1e3)
-                self.epoch_misc_stats["entropy"].append(entropy)
-                self.epoch_misc_stats["_tgt_entropy"].append(tgt_entropy)
-            else:
-                if np.random.uniform() < eps:
-                    a = np.random.randint(low=0, high=len(qs.data))
-                else:
-                    a = np.argmax(qs.data)
-
             # update info for training; doing this in testing will lead to insufficient memory
             if self.phase == "Train":
                 # record the state to allow bonus computation
                 self.past_states[self.t] = statevar
                 self.past_actions[self.t] = a
-                self.past_qvalues[self.t] = qs[a] # beware to record the variable (not just its data) to allow gradient computation
+                self.past_qvalues[self.t] = qs # beware to record the variable (not just its data) to allow gradient computation
                 self.past_extra_infos[self.t] = extra_infos
                 self.epoch_misc_stats["q_val"].append(float(qs[a].data))
                 self.cur_path_len += 1
