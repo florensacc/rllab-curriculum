@@ -33,13 +33,13 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [42, 888, 44]
+        return [42, 888, 999, ]
 
     @variant
     def total_t(self):
         # return [2*7 * 3*10**6]
         # half time, short trial
-        return [10 *10**6]
+        return [46*10**6]
 
     @variant
     def n_processes(self):
@@ -60,14 +60,15 @@ class VG(VariantGenerator):
     @variant
     def eval_frequency(self, target_update_frequency):
         # yield target_update_frequency * 1
-        yield 10**6
+        yield 10**5
+        # yield 10**6
 
     @variant
     def game(self, ):
         # return ["pong", "breakout",  ]
         # return ["space_invaders"]
         # return ["breakout"]
-        return ["space_invaders", "seaquest", "enduro", "breakout",]
+        return ["enduro", ]
 
     @variant
     def n_step(self, ):
@@ -81,15 +82,16 @@ class VG(VariantGenerator):
     def bellman(self, ):
         # return ["q"]
         return [
-            Bellman.q,
-            # Bellman.sarsa,
+            # Bellman.q,
+            Bellman.sarsa,
         ]
 
     @variant
     def lr(self, ):
         yield 7e-4
         # yield 1e-4
-        yield 2e-3
+        # yield 2e-3
+        # yield 5e-3
         # yield 5e-3
 
     @variant
@@ -105,12 +107,20 @@ class VG(VariantGenerator):
         return [True, ]
 
     @variant
+    def boltzmann(self, ):
+        return [True, ]
+
+    @variant
+    def sample_eps(self, ):
+        return [False, ]
+
+    @variant
     def temp_init(self, ):
         return [1e-2, ]
 
     @variant
     def opt_share(self, ):
-        return [True, False]
+        return [False]
 
 vg = VG()
 variants = vg.variants(randomized=False)
@@ -162,9 +172,10 @@ for v in variants[:]:
             alpha=0.99,
         ),
         bellman=bellman,
-        # adaptive_entropy=adaptive_entropy,
-        # temp_init=temp_init,
-        sample_eps=True,
+        adaptive_entropy=adaptive_entropy,
+        temp_init=temp_init,
+        boltzmann=boltzmann,
+        sample_eps=sample_eps,
         share_optimizer_states=opt_share,
     )
     algo = DQNALE(
@@ -195,13 +206,13 @@ for v in variants[:]:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="1024_hard_soft_sarsa_comp",
+        exp_prefix="1024_soft_hard_sarsa",# use the batch after 1am
         seed=v["seed"],
         variant=v,
-        mode="ec2",
+        # mode="ec2",
         # terminate_machine=False,
         # mode="local_docker",
-        # mode="local",
+        mode="local",
         #
 
         # mode="lab_kube",

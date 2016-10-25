@@ -20,6 +20,7 @@ from sandbox.pchen.async_rl.async_rl.utils.picklable import Picklable
 from sandbox.pchen.async_rl.async_rl.utils.rmsprop_async import RMSpropAsync
 
 from rllab.misc import logger as mylogger
+from collections import defaultdict
 
 logger = getLogger(__name__)
 
@@ -175,13 +176,14 @@ class DQNAgent(Agent,Shareable,Picklable):
         self.past_rewards = {}
         self.past_qvalues = {}
         self.past_extra_infos = {}
-        self.epoch_td_loss_list = []
-        self.epoch_q_list = []
-        self.epoch_entropies_list = []
-        self.epoch_path_len_list = [0]
-        self.epoch_sync_t_gap_list = []
+        # self.epoch_td_loss_list = []
+        # self.epoch_q_list = []
+        # self.epoch_entropies_list = []
+        # self.epoch_path_len_list = [0]
+        # self.epoch_sync_t_gap_list = []
+        # self.epoch_effective_return_list = [0] # the return the agent truly sees
+        self.epoch_misc_stats = defaultdict(list)
         self.cur_path_len = 0
-        self.epoch_effective_return_list = [0] # the return the agent truly sees
         self.cur_path_effective_return = 0
         self.unpicklable_list = ["shared_params","shared_model","shared_target_model"]
 
@@ -294,7 +296,7 @@ class DQNAgent(Agent,Shareable,Picklable):
                 q = self.past_qvalues[i]
                 cur_loss = 0.5 * (q - R) ** 2
                 loss += cur_loss
-                self.epoch_td_loss_list.append(cur_loss.data)
+                self.epoch_misc_stats["td_loss"].append(cur_loss.data)
 
             # Normalize the loss of sequences truncated by terminal states
             if self.keep_loss_scale_same and \
@@ -322,7 +324,7 @@ class DQNAgent(Agent,Shareable,Picklable):
                 mylogger.log("Process %d banned from commiting gradient update from %d time steps ago."%(self.process_id,sync_t_gap))
 
             self.sync_parameters()
-            self.epoch_sync_t_gap_list.append(sync_t_gap)
+            self.epoch_misc_stats["_sync_t_gap"].append(sync_t_gap)
             self.last_sync_t = global_vars["global_t"].value
 
             # initialize stats for a new traj
@@ -359,7 +361,8 @@ class DQNAgent(Agent,Shareable,Picklable):
                     elif tgt_entropy < entropy - 0.1:
                         self.temp *= 0.95
                     self.temp = np.clip(self.temp, 1e-3, 1e3)
-                self.epoch_entropies_list.append(entropy)
+                self.epoch_misc_stats["entropy"].append(entropy)
+                self.epoch_misc_stats["_tgt_entropy"].append(tgt_entropy)
             else:
                 if np.random.uniform() < eps:
                     a = np.random.randint(low=0, high=len(qs.data))
@@ -373,14 +376,15 @@ class DQNAgent(Agent,Shareable,Picklable):
                 self.past_actions[self.t] = a
                 self.past_qvalues[self.t] = qs[a] # beware to record the variable (not just its data) to allow gradient computation
                 self.past_extra_infos[self.t] = extra_infos
-                self.epoch_q_list.append(float(qs[a].data))
+                self.epoch_misc_stats["q_val"].append(float(qs[a].data))
                 self.cur_path_len += 1
+                self.cur_path_effective_return += reward
                 self.t += 1
             return a
         else:
-            self.epoch_path_len_list.append(self.cur_path_len)
+            self.epoch_misc_stats["path_len"].append(self.cur_path_len)
+            self.epoch_misc_stats["effective_return"].append(self.cur_path_effective_return)
             self.cur_path_len = 0
-            self.epoch_effective_return_list.append(self.cur_path_effective_return)
             self.cur_path_effective_return = 0
             self.model.reset_state()
             return None
@@ -392,26 +396,30 @@ class DQNAgent(Agent,Shareable,Picklable):
         if log:
             mylogger.record_tabular("_ProcessID",self.process_id)
             mylogger.record_tabular("_LearningRate", self.optimizer.lr)
-            mean_td_loss = np.average(self.epoch_td_loss_list)
-            mylogger.record_tabular("_TDLossAverage",mean_td_loss)
-
-            max_q = np.amax(self.epoch_q_list)
-            mylogger.record_tabular("_MaxQ",max_q)
 
             mylogger.record_tabular("_Epsilon",self.eps)
 
-            mylogger.record_tabular_misc_stat("_PathLen",self.epoch_path_len_list)
+            for k,vs in self.epoch_misc_stats.items():
+                mylogger.record_tabular_misc_stat(k, vs)
+            # mylogger.record_tabular_misc_stat("Entropy", self.epoch_entropies_list)
+            # mylogger.record_tabular_misc_stat("_PathLen",self.epoch_path_len_list)
+            # mylogger.record_tabular_misc_stat("_EffectiveReturn",self.epoch_effective_return_list)
+            # mylogger.record_tabular_misc_stat(
+            #     "_SyncTimeGap",
+            #     self.epoch_sync_t_gap_list,
+            # )
+            # mean_td_loss = np.average(self.epoch_td_loss_list)
+            # mylogger.record_tabular("_TDLossAverage",mean_td_loss)
+            # max_q = np.amax(self.epoch_q_list)
+            # mylogger.record_tabular("_MaxQ",max_q)
 
-            mylogger.record_tabular_misc_stat("_EffectiveReturn",self.epoch_effective_return_list)
-            mylogger.record_tabular_misc_stat(
-                "_SyncTimeGap",
-                self.epoch_sync_t_gap_list,
-            )
-        self.epoch_td_loss_list = []
-        self.epoch_q_list = []
-        self.epoch_path_len_list = [0]
-        self.epoch_effective_return_list = [0]
-        self.epoch_sync_t_gap_list = []
+        self.epoch_misc_stats.clear()
+        # self.epoch_td_loss_list = []
+        # self.epoch_q_list = []
+        # self.epoch_path_len_list = [0]
+        # self.epoch_effective_return_list = [0]
+        # self.epoch_sync_t_gap_list = []
+        # self.epoch_entropies_list = []
 
         if log:
             mylogger.log(
