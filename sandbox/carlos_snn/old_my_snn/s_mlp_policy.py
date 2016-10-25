@@ -1,6 +1,7 @@
 import lasagne
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
+import theano
 import theano.tensor as TT
 import numpy as np
 from contextlib import contextmanager
@@ -153,6 +154,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
 #  this is currently not used, although it could, in dist_info_sym and in get_actions. Also we could refactor all..
         # this would actually be WRONG with the current obs_var definition
         latent_var = Box(low=-np.inf, high=np.inf, shape=(1,)).new_tensor_variable('latents', extra_dims=1)
+
         extended_obs_var = TT.concatenate([obs_var, latent_var,
                                            TT.flatten(obs_var[:, :, np.newaxis] * latent_var[:, np.newaxis, :],
                                                       outdim=2)]
@@ -161,6 +163,7 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
             inputs=[obs_var, latent_var],
             outputs=[extended_obs_var]
         )
+
     ##CF
     @property
     def latent_space(self):
@@ -170,7 +173,12 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
 
     ##CF - the mean and var now also depend on the particular latents sampled
 
-    def dist_info_sym(self, obs_var, latent_var):
+    def dist_info_sym(self, obs_var, latent_var=None):  # this is ment to be for one path!
+        # now this is not doing anything! And for computing the dist_info_vars of npo_snn_rewardMI it doesn't work
+        if latent_var is None:
+            latent_var1 = theano.shared(np.expand_dims(self.latent_fix, axis=0))  # new fix to avoid putting the latent as an input: just take the one fixed!
+            latent_var = TT.tile(latent_var1, [obs_var.shape[0], 1])
+
         # generate the generalized input (append latents to obs.)
         if self.bilinear_integration:
             extended_obs_var = TT.concatenate([obs_var, latent_var,
@@ -189,14 +197,16 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
         actions, outputs = self.get_actions([observation])
         return actions[0], {k: v[0] for k, v in outputs.items()}
 
-    def get_actions(self, observations):
+    def get_actions(self, observations):  # this is ment to be for (at most) one path!
         ##CF
         # how can I impose that I only reset for a whole rollout? before calling get_actions!!
+        # print('what come to get_actions: ', observations)
         observations = np.array(observations)  # needed to do the outer product for the bilinear
+        # print('aftera applying np.array: ', observations)
         if self.latent_dim:
             if self.resample:
                 latents = [self.latent_dist.sample(self.latent_dist_info) for _ in observations]
-                print ('resampling the latents')
+                print('resampling the latents')
             else:
                 if not np.size(self.latent_fix) == self.latent_dim:  # we decide to reset based on if smthing in the fix
                     # logger.log('Reset for latents: the latent_fix {} not match latent_dim{}'.format(self.latent_fix, self.latent_dim))
@@ -256,18 +266,20 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
 
     @overrides
     def reset(self):  # executed at the start of every rollout. Will fix the latent if needed.
-        # print 'entering reset'
-        if not self.resample:
+        if not self.resample and self.latent_dim:
             if self.pre_fix_latent.size > 0:
                 self.latent_fix = self.pre_fix_latent
             else:
                 self.latent_fix = self.latent_dist.sample(self.latent_dist_info)
-                # print 'I reset to latent {} because the pre_fix_latent is {}'.format(self.latent_fix, self.pre_fix_latent)
         else:
             pass
 
     def log_diagnostics(self, paths):
         log_stds = np.vstack([path["agent_infos"]["log_std"] for path in paths])
+        means = np.vstack([path['agent_infos']['mean'] for path in paths])
+        # print('exp of the log std', np.exp(log_stds[0]))
+        # std_param_value = L.get_all_param_values(self._l_log_std)
+        # print('params of the std layer:', std_param_value)
         logger.record_tabular('MaxPolicyStd', np.max(np.exp(log_stds)))
         logger.record_tabular('MinPolicyStd', np.min(np.exp(log_stds)))
         logger.record_tabular('AveragePolicyStd', np.mean(np.exp(log_stds)))

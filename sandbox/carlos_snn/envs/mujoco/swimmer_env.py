@@ -27,17 +27,27 @@ class SwimmerEnv(MujocoEnv, Serializable):
     def __init__(
             self,
             ctrl_cost_coeff=1e-2,
+            ego_obs=False,
+            sparse_rew=False,
             *args, **kwargs):
         self.ctrl_cost_coeff = ctrl_cost_coeff
+        self.ego_obs = ego_obs
+        self.sparse_rew = sparse_rew
         super(SwimmerEnv, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
 
     def get_current_obs(self):
-        return np.concatenate([
-            self.model.data.qpos.flat,
-            self.model.data.qvel.flat,
-            self.get_body_com("torso").flat,
-        ]).reshape(-1)
+        if self.ego_obs:
+            return np.concatenate([
+                self.model.data.qpos.flat[2:],
+                self.model.data.qvel.flat,
+            ]).reshape(-1)
+        else:
+            return np.concatenate([
+                self.model.data.qpos.flat,
+                self.model.data.qvel.flat,
+                self.get_body_com("torso").flat,
+            ]).reshape(-1)
 
 ## hack that I will have to remove!!!  I think I actually don't need it anymore! Check maze_env.py
     @property
@@ -62,14 +72,21 @@ class SwimmerEnv(MujocoEnv, Serializable):
         forward_reward = np.linalg.norm(self.get_body_comvel("torso"))  # swimmer has no problem of jumping reward
         reward = forward_reward - ctrl_cost
         done = False
-        # print 'obs x: {}, obs y: {}'.format(next_obs[-3],next_obs[-2])
-        return Step(next_obs, reward, done)
+        if self.sparse_rew:
+            if abs(self.get_body_com("torso")[0]) > 2.0:
+                reward = 1.0
+                done = True
+            else:
+                reward = 0.
+        com = np.concatenate([self.get_body_com("torso").flat]).reshape(-1)
+        return Step(next_obs, reward, done, com=com)
 
     @overrides
     def log_diagnostics(self, paths):
         # instead of just path["obs"][-1][-3] we will look at the distance to origin
         progs = [
-            np.linalg.norm(path["observations"][-1][-3:-1] - path["observations"][0][-3:-1])
+            # np.linalg.norm(path["observations"][-1][-3:-1] - path["observations"][0][-3:-1])
+            np.linalg.norm(path["env_infos"]['com'][-1] - path["env_infos"]['com'][0])
             # gives (x,y) coord -not last z
             for path in paths
             ]
@@ -82,8 +99,12 @@ class SwimmerEnv(MujocoEnv, Serializable):
     def plot_visitation(self, paths, mesh_density=50, maze=None, scaling=2):
         fig, ax = plt.subplots()
         # now we will grid the space and check how much of it the policy is covering
-        x_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -3] for path in paths]))))
-        y_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -2] for path in paths]))))
+        if self.ego_obs:
+            x_max = np.ceil(np.max(np.abs(np.concatenate([path["env_infos"]['com'][:, 0] for path in paths]))))
+            y_max = np.ceil(np.max(np.abs(np.concatenate([path["env_infos"]['com'][:, 1] for path in paths]))))
+        else:
+            x_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -3] for path in paths]))))
+            y_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -2] for path in paths]))))
         furthest = max(x_max, y_max)
         print('THE FUTHEST IT WENT COMPONENT-WISE IS: x_max={}, y_max={}'.format(x_max, y_max))
         # if maze:
@@ -107,9 +128,14 @@ class SwimmerEnv(MujocoEnv, Serializable):
             overlap = 0
             # now plot all the paths
             for path in paths:
-                lats = [np.nonzero(lat)[1][0] for lat in path['agent_infos'][selectors_name]]  # list of all lats by idx
-                com_x = np.ceil(((np.array(path['observations'][:, -3]) + furthest) * mesh_density)).astype(int)
-                com_y = np.ceil(((np.array(path['observations'][:, -2]) + furthest) * mesh_density)).astype(int)
+                # before this was [1][0] !! Idk why not it changed, but [0][0] should be the correct one!
+                lats = [np.nonzero(lat)[0][0] for lat in path['agent_infos'][selectors_name]]  # list of all lats by idx
+                # if self.ego_obs:
+                com_x = np.ceil(((np.array(path['env_infos']['com'][:, 0]) + furthest) * mesh_density)).astype(int)
+                com_y = np.ceil(((np.array(path['env_infos']['com'][:, 1]) + furthest) * mesh_density)).astype(int)
+                # else:
+                #     com_x = np.ceil(((np.array(path['observations'][:, -3]) + furthest) * mesh_density)).astype(int)
+                #     com_y = np.ceil(((np.array(path['observations'][:, -2]) + furthest) * mesh_density)).astype(int)
                 coms = list(zip(com_x, com_y))
                 for i, com in enumerate(coms):
                     dict_visit[lats[i]][com] += 1
@@ -158,8 +184,8 @@ class SwimmerEnv(MujocoEnv, Serializable):
         else:
             visitation_all = np.zeros((2 * furthest * mesh_density + 1, 2 * furthest * mesh_density + 1))
             for path in paths:
-                com_x = np.ceil(((np.array(path['observations'][:, -3]) + furthest) * mesh_density)).astype(int)
-                com_y = np.ceil(((np.array(path['observations'][:, -2]) + furthest) * mesh_density)).astype(int)
+                com_x = np.ceil(((np.array(path['env_infos']['com'][:, 0]) + furthest) * mesh_density)).astype(int)
+                com_y = np.ceil(((np.array(path['env_infos']['com'][:, 1]) + furthest) * mesh_density)).astype(int)
                 coms = list(zip(com_x, com_y))
                 for com in coms:
                     visitation_all[com] += 1
