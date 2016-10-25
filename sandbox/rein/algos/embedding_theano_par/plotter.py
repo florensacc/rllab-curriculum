@@ -13,7 +13,7 @@ class Plotter:
             integer = (integer << 1) | bit
         return integer
 
-    def print_embs(self, model, counting_table, inputs, dir='/imgs', hamming_distance=None):
+    def print_embs(self, model, projection_matrix, inputs, dir='/imgs', hamming_distance=None):
         assert hamming_distance is not None
         arr_cont_emb = model.discrete_emb(inputs)
 
@@ -28,8 +28,11 @@ class Plotter:
             for idx in range(inputs.shape[0]):
                 cont_emb = arr_cont_emb[idx]
                 key = np.cast['int'](np.round(cont_emb))
-                key = key.reshape(-1, 8).mean(axis=1)
+                key = key.reshape(-1, 1).mean(axis=1)
                 key = np.cast['int'](np.round(key))
+                obs_key = np.cast['int'](np.round(key))
+                key = np.cast['int'](np.sign(np.asarray(obs_key).dot(projection_matrix)))
+                key[key < 0] = 0
                 # key_int = self.bin_to_int(key)
                 # if counting_table is not None:
                 #     if key_int in counting_table.keys():
@@ -54,7 +57,7 @@ class Plotter:
                 # if counting_table is not None:
                 #     counts_file.write(str(count) + '\n')
 
-    def print_consistency_embs(self, model, counting_table, inputs, dir='/imgs', hamming_distance=None):
+    def print_consistency_embs(self, model, projection_matrix, inputs, dir='/imgs', hamming_distance=None):
         assert hamming_distance is not None
         arr_cont_emb = model.discrete_emb(inputs)
         # Plotting all images
@@ -69,8 +72,11 @@ class Plotter:
                                               'a') as counts_file:
                 cont_emb = arr_cont_emb[idx]
                 key = np.cast['int'](np.round(cont_emb))
-                key = key.reshape(-1, 8).mean(axis=1)
+                key = key.reshape(-1, 1).mean(axis=1)
                 key = np.cast['int'](np.round(key))
+                obs_key = np.cast['int'](np.round(key))
+                key = np.cast['int'](np.sign(np.asarray(obs_key).dot(projection_matrix)))
+                key[key < 0] = 0
                 # key_int = self.bin_to_int(key)
                 # if counting_table is not None:
                 #     if key_int in counting_table.keys():

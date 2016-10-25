@@ -85,7 +85,7 @@ class SGDOptimizer(Serializable):
             inputs=self.input_vars,
             outputs=[train_op, loss] + list(diagnostic_vars.values()),
         )
-        self.f_loss_diagostics = tensor_utils.compile_function(
+        self.f_loss_diagnostics = tensor_utils.compile_function(
             inputs=self.input_vars,
             outputs=[loss] + list(diagnostic_vars.values()),
         )
@@ -105,7 +105,7 @@ class SGDOptimizer(Serializable):
 
         for batch_idx in range(0, N, batch_size):
             batch_sliced_inputs = [x[batch_idx:batch_idx + self.batch_size] for x in inputs]
-            loss, *diagnostics = self.f_loss_diagostics(*(batch_sliced_inputs + extra_inputs))
+            loss, *diagnostics = self.f_loss_diagnostics(*(batch_sliced_inputs + extra_inputs))
             losses.append(loss)
             for k, diag_val in zip(self.diagnostic_vars.keys(), diagnostics):
                 diags[k].append(diag_val)

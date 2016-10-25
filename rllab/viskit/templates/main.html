@@ -38,6 +38,14 @@
             </div>
         </div>
         <div class="form-group">
+            <label for="legend_sort_processor" class="control-label pull-left"> Processor for Sorting Legends:</label>
+            <div class="col-xs-8">
+                <input type="text" class="form-control" id="legend_sort_processor" name="legend_sort_processor"
+                       placeholder="Write an anonymous function with return type str, and the only argument is 'legend'"
+                       autocomplete="on"/>
+            </div>
+        </div>
+        <div class="form-group">
             <label for="legend_post_processor" class="control-label pull-left">Post Processor for Legends:</label>
             <div class="col-xs-8">
                 <input type="text" class="form-control" id="legend_post_processor" name="legend_post_processor"
@@ -109,6 +117,9 @@
             </div>
             <div class="checkbox pull-left" style="margin-left: 20px">
                 <label><input type="checkbox" name="use_median" value="">Use Median</label><br>
+            </div>
+            <div class="checkbox pull-left" style="margin-left: 20px">
+                <label><input type="checkbox" name="use_five_numbers" value="">Use Five Numbers</label><br>
             </div>
             <div class="checkbox pull-left" style="margin-left: 10px">
                 <label><input type="checkbox" name="only_show_best" value="">Only show best</label><br>
@@ -223,6 +234,7 @@
             }
         });
         var useMedian = $controlPanel.find("input[type=checkbox][name=use_median]").is(':checked');
+        var useFiveNumbers = $controlPanel.find("input[type=checkbox][name=use_five_numbers]").is(':checked');
         var onlyShowBest = $controlPanel.find("input[type=checkbox][name=only_show_best]").is(':checked');
         var onlyShowBestFinal = $controlPanel.find("input[type=checkbox][name=only_show_best_final]").is(':checked');
         var onlyShowBestSofar = $controlPanel.find("input[type=checkbox][name=only_show_best_sofar]").is(':checked');
@@ -231,6 +243,9 @@
         var normalizeError = $controlPanel.find("input[type=checkbox][name=normalize_error]").is(':checked');
         if (useMedian === true) {
             useMedian = "True";
+        }
+        if (useFiveNumbers === true) {
+            useFiveNumbers = "True";
         }
         if (onlyShowBest === true) {
             onlyShowBest = "True";
@@ -258,18 +273,22 @@
         var yub = $controlPanel.find("input[name=yub]").val();
         var ylb = $controlPanel.find("input[name=ylb]").val();
         var customFilter = $controlPanel.find("input[name=custom_filter]").val();
+        var legendSortProcessor = $controlPanel.find("input[name=legend_sort_processor]").val();
         var legendPostProcessor = $controlPanel.find("input[name=legend_post_processor]").val();
         var customSeriesSplitter = $controlPanel.find("input[name=custom_series_splitter]").val();
         console.log(useMedian);
+        console.log(useFiveNumbers);
         console.log("updating");
         $.get("/plot_div",
                 $.extend({
                     "plot_key": plotKey, "split_key": splitKey,
-                    "group_key": groupKey, "filters": JSON.stringify(filters), "use_median": useMedian,
+                    "group_key": groupKey, "filters": JSON.stringify(filters),
+                    "use_median": useMedian,
+                    "use_five_numbers": useFiveNumbers,
                     "only_show_best": onlyShowBest, "clip_plot_value": clipPlotValue,
                     "plot_width": plotWidth, "plot_height": plotHeight, "filter_nan": filterNaN,
                     "smooth_curve": smoothCurve, "custom_filter": customFilter, "legend_post_processor":
-                    legendPostProcessor, "only_show_best_final": onlyShowBestFinal, "normalize_error": normalizeError,
+                    legendPostProcessor, "legend_sort_processor": legendSortProcessor, "only_show_best_final": onlyShowBestFinal, "normalize_error": normalizeError,
                     "custom_series_splitter": customSeriesSplitter, "only_show_best_sofar": onlyShowBestSofar,
                     "xlb": xlb, "xub": xub,
                     "yub": yub, "ylb": ylb,

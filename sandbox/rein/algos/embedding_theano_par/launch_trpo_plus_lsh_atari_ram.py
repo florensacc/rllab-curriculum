@@ -17,14 +17,14 @@ stub(globals())
 n_seq_frames = 4
 n_parallel = 20
 model_batch_size = 32
-exp_prefix = 'trpo-i-auto-big-a'
-seeds = [0]
-etas = [0.01]
+exp_prefix = 'trpo-i-auto-pro-a'
+seeds = [0, 1, 2]
+etas = [0.001]
 mdps = [  # AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
     # AtariEnv(game='breakout', obs_type="ram+image", frame_skip=4),
-    # AtariEnv(game='frostbite', obs_type="ram+image", frame_skip=4),
-    AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4)]
-    # AtariEnv(game='venture', obs_type="image", frame_skip=4)]
+    # AtariEnv(game='frostbite', obs_type="image", frame_skip=4),
+    # AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4)]
+    AtariEnv(game='venture', obs_type="image", frame_skip=4)]
 trpo_batch_size = 100000
 max_path_length = 4500
 dropout = False
@@ -47,7 +47,7 @@ for mdp, eta, seed in param_cart_product:
     # baseline = ParallelLinearFeatureBaseline(env_spec=mdp_spec)
 
     mdp_spec = EnvSpec(
-        observation_space=Box(low=-1, high=1, shape=(1, 84, 84)),
+        observation_space=Box(low=-1, high=1, shape=(1, 52, 52)),
         action_space=mdp.spec.action_space
     )
 
@@ -68,7 +68,7 @@ for mdp, eta, seed in param_cart_product:
     )
 
     env_spec = EnvSpec(
-        observation_space=Box(low=-1, high=1, shape=(n_seq_frames, 84, 84)),
+        observation_space=Box(low=-1, high=1, shape=(n_seq_frames, 52, 52)),
         action_space=mdp.spec.action_space
     )
 
@@ -100,14 +100,149 @@ for mdp, eta, seed in param_cart_product:
     # Alex' settings
     policy_opt_args = dict(
         cg_iters=10,
-        reg_coeff=1e-5,
+        reg_coeff=1e-3,
         subsample_factor=0.1,
         max_backtracks=15,
         backtrack_ratio=0.8,
         accept_violation=False,
         hvp_approach=None,
-        num_slices=30,
+        num_slices=1,
     )
+
+    #
+    # model_args = dict(
+    #     state_dim=mdp_spec.observation_space.shape,
+    #     action_dim=(env_spec.action_space.flat_dim,),
+    #     reward_dim=(1,),
+    #     layers_disc=[
+    #         dict(name='convolution',
+    #              n_filters=64,
+    #              filter_size=(6, 6),
+    #              stride=(2, 2),
+    #              pad=(0, 0),
+    #              batch_norm=batch_norm,
+    #              nonlinearity=lasagne.nonlinearities.rectify,
+    #              dropout=False,
+    #              deterministic=True),
+    #         dict(name='convolution',
+    #              n_filters=64,
+    #              filter_size=(6, 6),
+    #              stride=(2, 2),
+    #              pad=(1, 1),
+    #              batch_norm=batch_norm,
+    #              nonlinearity=lasagne.nonlinearities.rectify,
+    #              dropout=False,
+    #              deterministic=True),
+    #         dict(name='convolution',
+    #              n_filters=64,
+    #              filter_size=(6, 6),
+    #              stride=(2, 2),
+    #              pad=(2, 2),
+    #              batch_norm=batch_norm,
+    #              nonlinearity=lasagne.nonlinearities.rectify,
+    #              dropout=False,
+    #              deterministic=True),
+    #         dict(name='convolution',
+    #              n_filters=64,
+    #              filter_size=(6, 6),
+    #              stride=(2, 2),
+    #              pad=(2, 2),
+    #              batch_norm=batch_norm,
+    #              nonlinearity=lasagne.nonlinearities.rectify,
+    #              dropout=False,
+    #              deterministic=True),
+    #         dict(name='reshape',
+    #              shape=([0], -1)),
+    #         dict(name='gaussian',
+    #              n_units=1024,
+    #              matrix_variate_gaussian=False,
+    #              nonlinearity=lasagne.nonlinearities.rectify,
+    #              batch_norm=batch_norm,
+    #              dropout=dropout,
+    #              deterministic=True),
+    #         dict(name='discrete_embedding',
+    #              n_units=128,
+    #              batch_norm=batch_norm,
+    #              deterministic=True),
+    #         dict(name='gaussian',
+    #              n_units=1024,
+    #              matrix_variate_gaussian=False,
+    #              nonlinearity=lasagne.nonlinearities.rectify,
+    #              batch_norm=batch_norm,
+    #              dropout=dropout,
+    #              deterministic=True),
+    #         dict(name='gaussian',
+    #              n_units=1024,
+    #              matrix_variate_gaussian=False,
+    #              nonlinearity=lasagne.nonlinearities.rectify,
+    #              batch_norm=batch_norm,
+    #              dropout=False,
+    #              deterministic=True),
+    #         dict(name='reshape',
+    #              shape=([0], 64, 4, 4)),
+    #         dict(name='deconvolution',
+    #              n_filters=64,
+    #              filter_size=(6, 6),
+    #              stride=(2, 2),
+    #              pad=(2, 2),
+    #              nonlinearity=lasagne.nonlinearities.rectify,
+    #              batch_norm=batch_norm,
+    #              dropout=False,
+    #              deterministic=True),
+    #         dict(name='deconvolution',
+    #              n_filters=64,
+    #              filter_size=(6, 6),
+    #              stride=(2, 2),
+    #              pad=(1, 1),
+    #              nonlinearity=lasagne.nonlinearities.rectify,
+    #              batch_norm=batch_norm,
+    #              dropout=False,
+    #              deterministic=True),
+    #         dict(name='deconvolution',
+    #              n_filters=64,
+    #              filter_size=(6, 6),
+    #              stride=(2, 2),
+    #              pad=(0, 0),
+    #              nonlinearity=lasagne.nonlinearities.rectify,
+    #              batch_norm=batch_norm,
+    #              dropout=False,
+    #              deterministic=True),
+    #         dict(name='deconvolution',
+    #              n_filters=64,
+    #              filter_size=(6, 6),
+    #              stride=(2, 2),
+    #              pad=(0, 0),
+    #              nonlinearity=lasagne.nonlinearities.linear,
+    #              batch_norm=True,
+    #              dropout=False,
+    #              deterministic=True),
+    #     ],
+    #     n_batches=1,
+    #     trans_func=lasagne.nonlinearities.rectify,
+    #     out_func=lasagne.nonlinearities.linear,
+    #     batch_size=model_batch_size,
+    #     n_samples=1,
+    #     num_train_samples=1,
+    #     prior_sd=0.05,
+    #     second_order_update=False,
+    #     learning_rate=0.0003,
+    #     surprise_type=None,
+    #     update_prior=False,
+    #     update_likelihood_sd=False,
+    #     output_type='classfication',
+    #     num_classes=32,
+    #     likelihood_sd_init=0.1,
+    #     disable_variance=False,
+    #     ind_softmax=True,
+    #     num_seq_inputs=1,
+    #     label_smoothing=0.003,
+    #     # Disable prediction of rewards and intake of actions, act as actual autoenc
+    #     disable_act_rew_paths=True,
+    #     # --
+    #     # Count settings
+    #     # Put penalty for being at 0.5 in sigmoid postactivations.
+    #     binary_penalty=10,
+    # )
 
     model_args = dict(
         state_dim=mdp_spec.observation_space.shape,
@@ -141,58 +276,40 @@ for mdp, eta, seed in param_cart_product:
                  nonlinearity=lasagne.nonlinearities.rectify,
                  dropout=False,
                  deterministic=True),
-            dict(name='convolution',
-                 n_filters=64,
-                 filter_size=(6, 6),
-                 stride=(2, 2),
-                 pad=(2, 2),
-                 batch_norm=batch_norm,
-                 nonlinearity=lasagne.nonlinearities.rectify,
-                 dropout=False,
-                 deterministic=True),
             dict(name='reshape',
                  shape=([0], -1)),
             dict(name='gaussian',
-                 n_units=512,
+                 n_units=1024,
                  matrix_variate_gaussian=False,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=dropout,
                  deterministic=True),
             dict(name='discrete_embedding',
-                 n_units=512,
+                 n_units=448,
                  batch_norm=batch_norm,
                  deterministic=True),
             dict(name='gaussian',
-                 n_units=512,
+                 n_units=1024,
                  matrix_variate_gaussian=False,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=dropout,
                  deterministic=True),
             dict(name='gaussian',
-                 n_units=1536,
+                 n_units=1600,
                  matrix_variate_gaussian=False,
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=False,
                  deterministic=True),
             dict(name='reshape',
-                 shape=([0], 96, 4, 4)),
+                 shape=([0], 64, 5, 5)),
             dict(name='deconvolution',
                  n_filters=64,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(2, 2),
-                 nonlinearity=lasagne.nonlinearities.rectify,
-                 batch_norm=batch_norm,
-                 dropout=False,
-                 deterministic=True),
-            dict(name='deconvolution',
-                 n_filters=64,
-                 filter_size=(6, 6),
-                 stride=(2, 2),
-                 pad=(1, 1),
                  nonlinearity=lasagne.nonlinearities.rectify,
                  batch_norm=batch_norm,
                  dropout=False,
@@ -240,7 +357,7 @@ for mdp, eta, seed in param_cart_product:
         # --
         # Count settings
         # Put penalty for being at 0.5 in sigmoid postactivations.
-        binary_penalty=10,
+        binary_penalty=0.1,
     )
 
     algo = ParallelTRPOPlusLSH(
@@ -251,7 +368,7 @@ for mdp, eta, seed in param_cart_product:
         baseline=baseline,
         batch_size=trpo_batch_size,
         max_path_length=max_path_length,
-        n_itr=2000,
+        n_itr=1000,
         step_size=0.01,
         optimizer_args=policy_opt_args,
         n_seq_frames=n_seq_frames,
@@ -266,11 +383,11 @@ for mdp, eta, seed in param_cart_product:
         ),
         eta=eta,
         train_model=True,
-        train_model_freq=5,
+        train_model_freq=3,
         continuous_embedding=False,
         model_embedding=True,
         sim_hash_args=dict(
-            dim_key=64,
+            dim_key=32,
             bucket_sizes=None,
             disable_rnd_proj=True,
         ),

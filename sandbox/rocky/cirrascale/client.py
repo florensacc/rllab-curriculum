@@ -20,13 +20,16 @@ class GPU(object):
         self.processes = [GPUProcess(proc_data)
                           for proc_data in data['processes']]
         self.reserved = data.get('reserved')
+        self.force_available = None
 
         (self.host, _, self.index) = self.id.partition(':')
 
     @property
     def available(self):
+        if self.force_available is not None:
+            return self.force_available
         # TODO: take into account reserved GPUs
-        return len(self.processes) == 0 and not self.reserved
+        return len(self.processes) == 0# and not self.reserved
 
     def __str__(self):
         return 'GPU(id=%s)' % (self.id)

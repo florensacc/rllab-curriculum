@@ -49,7 +49,6 @@ class ALEHashingBonusEvaluator(object):
         self.retrieve_sample_size = retrieve_sample_size
 
         # logging stats ---------------------------------
-        self.total_state_count = 0
         self.rank = None
 
 
@@ -127,10 +126,7 @@ class ALEHashingBonusEvaluator(object):
             shareds, barriers = self._par_objs
             keys = self.retrieve_keys(paths)
             prev_counts = self.hash.query_keys(keys)
-            new_state_count = list(prev_counts).count(0)
             #FIXME: if a new state is encountered by more than one process, then it is counted more than once
-            shareds.new_state_count_vec[self.rank] = new_state_count
-
             shareds.max_state_count_vec[self.rank] = max(prev_counts)
             shareds.min_state_count_vec[self.rank] = min(prev_counts)
             shareds.sum_state_count_vec[self.rank] = sum(prev_counts)
@@ -139,17 +135,6 @@ class ALEHashingBonusEvaluator(object):
             barriers.summarize_state_count.wait() # avoid updating the hash table before we count new states
 
             if self.rank == 0:
-                total_new_state_count = sum(shareds.new_state_count_vec)
-                logger.record_tabular(
-                    self.log_prefix + 'NewSteateCount',
-                    total_new_state_count
-                )
-                shareds.total_state_count += total_new_state_count
-                logger.record_tabular(
-                    self.log_prefix + 'TotalStateCount',
-                    shareds.total_state_count,
-                )
-
                 logger.record_tabular(
                     self.log_prefix + "StateCountMax",
                     max(shareds.max_state_count_vec),
@@ -162,39 +147,38 @@ class ALEHashingBonusEvaluator(object):
                     self.log_prefix + "StateCountAverage",
                     sum(shareds.sum_state_count_vec) / float(sum(shareds.n_steps_vec)),
                 )
+                prev_total_state_count = self.hash.total_state_count()
 
             self.hash.inc_keys(keys)
             barriers.update_count.wait()
+
+            if self.rank == 0:
+                total_state_count = self.hash.total_state_count()
+                logger.record_tabular(
+                    self.log_prefix + 'TotalStateCount',
+                    total_state_count,
+                )
+                logger.record_tabular(
+                    self.log_prefix + 'NewSteateCount',
+                    total_state_count - prev_total_state_count
+                )
         else:
             keys = self.retrieve_keys(paths)
 
             prev_counts = self.hash.query_keys(keys)
-            new_state_count = list(prev_counts).count(0)
+            prev_total_state_count = self.hash.total_state_count()
 
             self.hash.inc_keys(keys)
-            counts = self.hash.query_keys(keys)
 
-            logger.record_tabular_misc_stat(self.log_prefix + 'StateCount',counts)
-            logger.record_tabular(self.log_prefix + 'NewSteateCount',new_state_count)
+            logger.record_tabular_misc_stat(self.log_prefix + 'StateCount',prev_counts)
+            total_state_count = self.hash.total_state_count()
+            logger.record_tabular(self.log_prefix + 'NewSteateCount',total_state_count - prev_total_state_count)
 
-            self.total_state_count += new_state_count
             logger.record_tabular(
                 self.log_prefix + 'TotalStateCount',
-                self.total_state_count
+                total_state_count
             )
 
-            logger.record_tabular(
-                self.log_prefix + "StateCountMax",
-                max(prev_counts),
-            )
-            logger.record_tabular(
-                self.log_prefix + "StateCountMin",
-                min(prev_counts),
-            )
-            logger.record_tabular(
-                self.log_prefix + "StateCountAverage",
-                np.average(prev_counts),
-            )
 
     def predict(self, path):
         keys = self.retrieve_keys([path])

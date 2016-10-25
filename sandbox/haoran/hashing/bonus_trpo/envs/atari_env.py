@@ -33,13 +33,17 @@ class AtariEnv(Env,Serializable):
             frame_skip=4,
             terminator=None,
             legal_actions=[],
+            rom_filename="",
         ):
         """
         plot: not compatible with rllab yet
         """
         Serializable.quick_init(self,locals())
         assert not plot
-        self.rom_filename = atari_py.get_game_path(game)
+        if rom_filename == "":
+            self.rom_filename = atari_py.get_game_path(game)
+        else:
+            self.rom_filename = rom_filename
         self.seed = seed
         self.plot = plot
         self.max_start_nullops = max_start_nullops
@@ -79,7 +83,13 @@ class AtariEnv(Env,Serializable):
         self.set_seed(self.seed)
 
         self.ale.setFloat(b'repeat_action_probability', 0.0)
-        self.ale.setBool(b'color_averaging', False)
+        if self.game_name == "venture":
+            # without color averaging, the agent and reward items are invisible in Venture
+            color_averaging = True
+        else:
+            color_averaging = False
+        self.ale.setBool(b'color_averaging', color_averaging)
+
         if self.plot:
             self.prepare_plot()
         else:

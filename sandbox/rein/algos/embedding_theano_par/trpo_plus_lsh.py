@@ -108,10 +108,13 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
 
         self._hashing_evaluator = ALEHashingBonusEvaluator(
             state_dim=state_dim,
-            action_dim=self.env.spec.action_space.flat_dim,
+            action_dim=0,
             count_target='embeddings',
             sim_hash_args=self._sim_hash_args,
         )
+
+        self._projection_matrix = np.random.normal(
+            size=(self._model.discrete_emb_size, self._sim_hash_args['dim_key']))
 
         if self._model_embedding:
             logger.log('Model embedding enabled.')
@@ -279,9 +282,11 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
                     # Cast continuous embedding into binary one.
                     # return np.cast['int'](np.round(cont_emb))
                     bin_emb = np.cast['int'](np.round(cont_emb))
-                    bin_emb_downsampled = bin_emb.reshape(-1, 8).mean(axis=1).reshape((bin_emb.shape[0], -1))
+                    bin_emb_downsampled = bin_emb.reshape(-1, 1).mean(axis=1).reshape((bin_emb.shape[0], -1))
                     obs_key = np.cast['int'](np.round(bin_emb_downsampled))
-                    return np.concatenate((obs_key, np.cast['int'](path['actions'])), axis=1)
+                    obs_key[obs_key == 0] = -1
+                    obs_key = np.sign(np.asarray(obs_key).dot(self._projection_matrix))
+                    return obs_key
             else:
                 return path['observations']
 

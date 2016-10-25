@@ -458,13 +458,14 @@ class ConvMergeNetwork(LayersPowered, Serializable):
             )
             if batch_normalization:
                 l_conv_in = L.batch_norm(l_conv_in)
+
             l_extra_in = L.reshape(
-                L.SliceLayer(
+                incoming=L.SliceLayer(
                     l_in,
                     indices=slice(input_flat_dim, None),
                     name="extra_slice"
                 ),
-                ([0],) + extra_input_shape,
+                shape=([0],) + extra_input_shape,
                 name="extra_reshaped"
             )
             if batch_normalization:

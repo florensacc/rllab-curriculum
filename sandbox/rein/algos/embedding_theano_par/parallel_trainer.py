@@ -90,7 +90,7 @@ class ParallelTrainer(object):
                 observation_dtype=observation_dtype,
                 **model_pool_args
             )
-            print('>>> Compiled.')
+            print('>>> Compiled ({} params).'.format(len(model.get_param_values())))
             sys.stdout.flush()
             self.q_pool_data_out_flag.put(0)
             # Actual main loop.
@@ -176,20 +176,20 @@ class ParallelTrainer(object):
         Train autoencoder model.
         :return:
         """
-        import theano
-        def load_data():
-            x_lst, y_lst = [], []
-            for _ in range(itr_per_epoch):
-                # Replay pool return uint8 target format, so decode _x.
-                batch = pool.random_batch(model_pool_args['batch_size'])
-                _x = self.decode_obs(batch['observations'], model)
-                _y = batch['observations']
-                x_lst.append(_x)
-                y_lst.append(_y)
-            x_arr = np.concatenate(x_lst, axis=0)
-            y_arr = np.concatenate(y_lst, axis=0)
-            model.shared_x.set_value(np.asarray(x_arr, dtype=theano.config.floatX))
-            model.shared_y.set_value(np.asarray(y_arr, dtype=theano.config.floatX))
+        # import theano
+        # def load_data():
+        #     x_lst, y_lst = [], []
+        #     for _ in range(itr_per_epoch):
+        #         # Replay pool return uint8 target format, so decode _x.
+        #         batch = pool.random_batch(model_pool_args['batch_size'])
+        #         _x = self.decode_obs(batch['observations'], model)
+        #         _y = batch['observations']
+        #         x_lst.append(_x)
+        #         y_lst.append(_y)
+        #     x_arr = np.concatenate(x_lst, axis=0)
+        #     y_arr = np.concatenate(y_lst, axis=0)
+        #     model.shared_x.set_value(np.asarray(x_arr, dtype=theano.config.floatX))
+        #     model.shared_y.set_value(np.asarray(y_arr, dtype='int32'))
 
         global shared_model_params
         assert q_train_param_out is not None
@@ -207,22 +207,32 @@ class ParallelTrainer(object):
             # Actual training of model.
             done = 0
             old_running_avg = np.inf
-            first_run = True
-            # Load first batch of data outside of thread.
-            load_data()
+            # first_run = True
             while done < 7:
-                sys.stdout.flush()
+                # Load first batch of data outside of thread.
+                # load_data()
                 running_avg = 0.
                 start_time = time.time()
-                if not first_run:
-                    thread.join()
-                first_run = False
-                thread = threading.Thread(target=load_data)
-                thread.start()
-                for _ in range(itr_per_epoch):
+                # if not first_run:
+                #     thread.join()
+                # first_run = False
+                # thread = threading.Thread(target=load_data)
+                # thread.start()
+                for i in range(itr_per_epoch):
                     # Replay pool return uint8 target format, so decode _x.
-                    index = np.random.randint(0, itr_per_epoch)
-                    train_loss = float(model.train_fn(index, 0))
+                    batch = pool.random_batch(model_pool_args['batch_size'])
+                    _x = self.decode_obs(batch['observations'], model)
+                    _y = batch['observations']
+                    train_loss = float(model.train_fn(_x, _y, 0))
+                    if np.isinf(train_loss):
+                        # --
+                        # Nonscientific printing of numpy arrays.
+                        np.set_printoptions(suppress=True)
+                        np.set_printoptions(precision=4)
+                        np.set_printoptions(threshold=np.nan)
+                        print(_x)
+                        print(_y)
+                        sys.stdout.flush()
                     assert not np.isinf(train_loss)
                     assert not np.isnan(train_loss)
                     running_avg += train_loss / float(itr_per_epoch)
@@ -234,7 +244,8 @@ class ParallelTrainer(object):
                     done = 0
                 end_time = time.time()
                 print('Autoencoder loss= {:.5f}, D= {:+.5f}, done={}\t{:.3f} sec/epoch'.format(
-                    running_avg, running_avg_delta, done, (end_time - start_time) / float(itr_per_epoch)))
+                    running_avg, running_avg_delta, done, (end_time - start_time) / float(itr_per_epoch)
+                ))
                 sys.stdout.flush()
 
             for i in range(10):

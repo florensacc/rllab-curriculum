@@ -18,8 +18,8 @@ class AtariEnv(Env,Serializable):
             seed=None,
             plot=False, # live demo
             max_start_nullops=0,
-            img_width=84,
-            img_height=84,
+            img_width=52,
+            img_height=52,
             crop_or_scale = 'scale',
             obs_type="image",
             record_image=True, # image for training and counting
@@ -156,12 +156,12 @@ class AtariEnv(Env,Serializable):
         if self.obs_type == "image":
             assert len(self.last_screens) == self.n_last_screens
             imgs = np.asarray(list(self.last_screens))
-            imgs = (imgs / 255.0) * 2.0 - 1.0 # rescale to [-1,1]
+            imgs = (imgs / 256.0) * 2.0 - 1.0 # rescale to [-1,1]
             return imgs
         elif self.obs_type == "ram":
             assert len(self.last_rams) == self.n_last_rams
             rams = np.asarray(list(self.last_rams))
-            rams = (rams / 255.0) * 2.0 - 1.0
+            rams = (rams / 256.0) * 2.0 - 1.0
             return rams
         else:
             raise NotImplementedError

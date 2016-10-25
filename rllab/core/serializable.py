@@ -1,4 +1,5 @@
 import inspect
+import pickle
 
 
 class Serializable(object):
@@ -37,7 +38,7 @@ class Serializable(object):
     @classmethod
     def clone(cls, obj, **kwargs):
         assert isinstance(obj, Serializable)
-        d = obj.__getstate__()
+        d = pickle.loads(pickle.dumps(obj.__getstate__()))
         d["__kwargs"] = dict(d["__kwargs"], **kwargs)
         out = type(obj).__new__(type(obj))
         out.__setstate__(d)

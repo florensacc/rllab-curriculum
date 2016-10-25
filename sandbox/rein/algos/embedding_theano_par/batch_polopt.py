@@ -294,7 +294,7 @@ class ParallelBatchPolopt(RLAlgorithm):
                         _y = batch['observations']
                         self._plotter.plot_pred_imgs(model=self._model, inputs=_x, targets=_y, itr=0,
                                                      dir=RANDOM_SAMPLES_DIR)
-                        self._plotter.print_embs(model=self._model, counting_table=None, inputs=_x,
+                        self._plotter.print_embs(model=self._model, projection_matrix=self._projection_matrix, inputs=_x,
                                                  dir=RANDOM_SAMPLES_DIR, hamming_distance=0)
 
                     # Get consistency images in first iteration.
@@ -324,10 +324,10 @@ class ParallelBatchPolopt(RLAlgorithm):
                     if self._model_embedding:
                         logger.log('Printing embeddings ...')
                         self._plotter.print_consistency_embs(
-                            model=self._model, counting_table=None, inputs=self.decode_obs(self._test_obs),
+                            model=self._model, projection_matrix=self._projection_matrix, inputs=self.decode_obs(self._test_obs),
                             dir=CONSISTENCY_CHECK_DIR, hamming_distance=0)
                         self._plotter.print_embs(
-                            model=self._model, counting_table=None, inputs=self.decode_obs(obs),
+                            model=self._model, projection_matrix=self._projection_matrix, inputs=self.decode_obs(obs),
                             dir=UNIQUENESS_CHECK_DIR, hamming_distance=0)
 
                 self.process_paths(paths)

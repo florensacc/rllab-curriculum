@@ -40,6 +40,14 @@ def unflatten_tensor_variables(flatarr, shapes, symb_arrs):
     return arrs
 
 
+def tensor_shape(t):
+    return tuple(k.value for k in t.get_shape())
+
+
+def tensor_shapes(ts):
+    return [tensor_shape(t) for t in ts]
+
+
 def new_tensor(name, ndim, dtype):
     return tf.placeholder(dtype=dtype, shape=[None] * ndim, name=name)
 
@@ -234,3 +242,14 @@ def temporal_matmul(x, W):
     out.set_shape((x_shape[0], x_shape[1], W_shape[1]))
     return out
 
+
+def flat_dim(var):
+    return int(np.prod([k.value for k in var.get_shape()]))
+
+
+def single_threaded_session():
+    tf_config = tf.ConfigProto(
+        device_count={"CPU": 1, "GPU": 1},
+        inter_op_parallelism_threads=1,
+        intra_op_parallelism_threads=1)
+    return tf.Session(config=tf_config)
