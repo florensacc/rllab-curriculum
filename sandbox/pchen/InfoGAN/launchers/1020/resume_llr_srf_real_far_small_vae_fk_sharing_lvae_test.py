@@ -48,6 +48,8 @@
 # SRF and SRF w/ llr are at ~ 3.07 and seems it would top off at 3.06
 # llr quite a bit better than small llr. there is a jump in llr training when it suddenly transitions to use
 
+# 3.06 test bits/dim. still improving
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer

@@ -45,10 +45,10 @@
 # try smaller receptive field, unconditional resnets=3 seems to do very well on its own
 # resume above with larger llr^
 
-### try tiny receptive field: left 3 up 4
-# but maintain a good amount of computation
+# SRF and SRF w/ llr are at ~ 3.07 and seems it would top off at 3.06
+# llr quite a bit better than small llr. there is a jump in llr training when it suddenly transitions to use
 
-# try repetiviely shortcircuted gated pixelcnn to expand parameters rather than extranins
+# 3.06 test bits/dim. still improving
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -83,7 +83,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def lr(self):
-        return [0.002*2, ] #0.001]
+        return [0.002*5, ] #0.001]
 
     @variant
     def seed(self):
@@ -105,6 +105,10 @@ class VG(VariantGenerator):
         # yield "dummy"
 
     @variant(hide=False)
+    def rep(self, ):
+        return [1, ]
+
+    @variant(hide=False)
     def base_filters(self, ):
         return [64]
 
@@ -120,14 +124,18 @@ class VG(VariantGenerator):
     def num_gpus(self):
         return [4]
 
-    # @variant(hide=False)
-    # def nr(self, zdim, base_filters):
-    #     return [4]
+    @variant(hide=False)
+    def nar(self):
+        return [4,]
+
+    @variant(hide=False)
+    def nr(self, zdim, base_filters):
+        return [4]
         # return [base_filters // (zdim // 8 // 8 * 2) , ]
 
     @variant(hide=False)
     def i_nar(self):
-        return [4, ]
+        return [0, ]
 
     @variant(hide=False)
     def i_nr(self):
@@ -137,8 +145,8 @@ class VG(VariantGenerator):
     def i_context(self):
         # return [True, False]
         return [
-            [],
-            # ["linear"],
+            # [],
+            ["linear"],
             # ["gating"],
             # ["linear", "gating"]
         ]
@@ -168,7 +176,7 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ar_nr_resnets(self, num_gpus):
         return [
-            (1,)
+            (2,)
         ]
 
     @variant(hide=False)
@@ -177,91 +185,23 @@ class VG(VariantGenerator):
             1,
         ]
 
-    # @variant(hide=False)
-    # def ar_nr_extra_nins(self, num_gpus):
-    #     return [
-    #         2,
-    #     ]
-    #
-    # @variant
-    # def enc_tie_weights(self):
-    #     return [True, ]
-    #
-    # @variant
-    # def unconditional(self):
-    #     return [True, False]
-    #
-    # @variant(hide=False)
-    # def nar(self, unconditional):
-    #     return [0 if unconditional else 4,]
-    #
-    # @variant(hide=False)
-    # def rep(self, unconditional):
-    #     if unconditional:
-    #         return [1, ]
-    #     else:
-    #         return [1, 3]
-
     @variant(hide=False)
     def ar_nr_extra_nins(self, num_gpus):
         return [
-            # [0,0], # 1min15s, 660k infer params
-            [0,0,0], # 1min40s, 1M infer params
-            [0,0,0,0],
+            2,
         ]
 
     @variant
     def enc_tie_weights(self):
         return [True, ]
 
-    @variant
-    def unconditional(self):
-        return [False, ]
-
-    @variant(hide=False)
-    def nar(self, unconditional):
-        return [4,]
-
-    @variant(hide=False)
-    def nr(self, unconditional):
-        return [4,]
-
-    @variant(hide=False)
-    def rep(self, unconditional):
-        return [1]
-
-    # @variant(hide=False)
-    # def ar_nr_extra_nins(self, num_gpus):
-    #     return [
-    #         2,
-    #     ]
-    #
-    # @variant
-    # def enc_tie_weights(self):
-    #     return [True, ]
-    #
-    # @variant
-    # def unconditional(self):
-    #     return [False]
-    #
-    # @variant(hide=False)
-    # def nar(self, unconditional):
-    #     return [6,]
-    #
-    # @variant(hide=False)
-    # def nr(self, zdim, base_filters):
-    #     return [8]
-    #
-    # @variant(hide=False)
-    # def rep(self, unconditional):
-    #     return [3]
 
 vg = VG()
 
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 1
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -301,12 +241,11 @@ for v in variants[i:i+1]:
                 zdim,
                 inf_dist,
                 neuron_ratio=v["i_nr"],
-                data_init_scale=0.01,
+                data_init_scale=v["i_init_scale"],
                 linear_context="linear" in v["i_context"],
                 gating_context="gating" in v["i_context"],
                 share_context=True,
-                img_shape=[8,8,zdim//64],
-                mean_only=True,
+                var_scope="IAR_scope" if v["tiear"] else None,
             )
 
         pixelcnn = CondPixelCNN(
@@ -314,7 +253,6 @@ for v in variants[i:i+1]:
             nr_filters=v["context_dim"],
             nr_cond_nins=v["ar_nr_cond_nins"],
             nr_extra_nins=v["ar_nr_extra_nins"],
-            extra_compute=False,
         )
 
         model = RegularizedHelmholtzMachine(
@@ -355,9 +293,7 @@ for v in variants[i:i+1]:
             num_gpus=v["num_gpus"],
             vis_ar=False,
             slow_kl=True,
-            unconditional=v["unconditional"],
-            kl_coeff=0. if v["unconditional"] else 1,
-            # resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
+            resume_from="data/local/1020-resume-SRF-real-FAR-small-vae-share-lvae-play/1020_resume_SRF_real_FAR_small_vae_share_lvae_play_2016_10_20_23_30_49_0001/"
             # staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
             # img_on=True,
@@ -367,7 +303,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1020_TRF_real_FAR_small_vae_share_lvae_play",
+            exp_prefix="1024_resume_SRF_real_FAR_small_vae_share_lvae_play",
             seed=v["seed"],
             variant=v,
             mode="local",

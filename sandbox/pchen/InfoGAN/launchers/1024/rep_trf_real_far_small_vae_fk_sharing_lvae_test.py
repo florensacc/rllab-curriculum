@@ -50,6 +50,9 @@
 
 # try repetiviely shortcircuted gated pixelcnn to expand parameters rather than extranins
 
+# so far extra nins = 6 has best performance in uncondition and it seems it will actually top off at a different point
+# from [0,0,0]. here try larger unconditional
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -127,7 +130,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [4, ]
+        return [0, ]
 
     @variant(hide=False)
     def i_nr(self):
@@ -137,8 +140,8 @@ class VG(VariantGenerator):
     def i_context(self):
         # return [True, False]
         return [
-            [],
-            # ["linear"],
+            # [],
+            ["linear"],
             # ["gating"],
             # ["linear", "gating"]
         ]
@@ -206,8 +209,8 @@ class VG(VariantGenerator):
     def ar_nr_extra_nins(self, num_gpus):
         return [
             # [0,0], # 1min15s, 660k infer params
-            [0,0,0], # 1min40s, 1M infer params
-            [0,0,0,0],
+            # [0,0,0], # 1min10s, 892k infer params
+            [0,0,1,1,1],
         ]
 
     @variant
@@ -216,19 +219,16 @@ class VG(VariantGenerator):
 
     @variant
     def unconditional(self):
-        return [False, ]
+        return [True, ]
 
     @variant(hide=False)
     def nar(self, unconditional):
-        return [4,]
-
-    @variant(hide=False)
-    def nr(self, unconditional):
-        return [4,]
+        return [0 if unconditional else 4,]
 
     @variant(hide=False)
     def rep(self, unconditional):
-        return [1]
+        if unconditional:
+            return [0, ]
 
     # @variant(hide=False)
     # def ar_nr_extra_nins(self, num_gpus):
@@ -261,7 +261,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 1
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -301,12 +301,11 @@ for v in variants[i:i+1]:
                 zdim,
                 inf_dist,
                 neuron_ratio=v["i_nr"],
-                data_init_scale=0.01,
+                data_init_scale=v["i_init_scale"],
                 linear_context="linear" in v["i_context"],
                 gating_context="gating" in v["i_context"],
                 share_context=True,
-                img_shape=[8,8,zdim//64],
-                mean_only=True,
+                var_scope="IAR_scope" if v["tiear"] else None,
             )
 
         pixelcnn = CondPixelCNN(

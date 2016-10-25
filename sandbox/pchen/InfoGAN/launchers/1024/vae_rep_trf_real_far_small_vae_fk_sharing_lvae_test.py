@@ -49,6 +49,7 @@
 # but maintain a good amount of computation
 
 # try repetiviely shortcircuted gated pixelcnn to expand parameters rather than extranins
+# larger pixelcnn
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -206,8 +207,9 @@ class VG(VariantGenerator):
     def ar_nr_extra_nins(self, num_gpus):
         return [
             # [0,0], # 1min15s, 660k infer params
-            [0,0,0], # 1min40s, 1M infer params
-            [0,0,0,0],
+            # [0,0,0], # 1min40s, 1M infer params
+            # [0,0,0,0],
+            [0,0,1,1,]
         ]
 
     @variant
@@ -261,7 +263,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 1
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
