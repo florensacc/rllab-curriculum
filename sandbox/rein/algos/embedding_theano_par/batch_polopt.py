@@ -341,7 +341,7 @@ class ParallelBatchPolopt(RLAlgorithm):
                     logger.log("fitted")
                     logger.log("saving snapshot...")
                     params = self.get_itr_snapshot(itr, samples_data)
-                    params["algo"] = self
+                    # params["algo"] = self
                     if self.store_paths:
                         # NOTE: Only paths from rank==0 worker will be saved.
                         params["paths"] = samples_data["paths"]

@@ -16,7 +16,7 @@ class ParallelTrainer(object):
         self._parallel_pool = mp.Pool(
             1
         )
-        self._n_parallel = sandbox.rein.algos.embedding_theano_par.n_parallel.n_parallel_
+        self._n_parallel = 3#sandbox.rein.algos.embedding_theano_par.n_parallel.n_parallel_
         self._model = None
         self._model_pool_args = None
         self._pool = None
@@ -54,7 +54,7 @@ class ParallelTrainer(object):
             # Init theano gpu context before any other theano context is initialized.
             import theano.sandbox.cuda
             theano.sandbox.cuda.use(
-                "gpu")  # + str(7 - sandbox.rein.algos.embedding_theano_par.n_parallel._seed))
+                "gpu" + str(7 - sandbox.rein.algos.embedding_theano_par.n_parallel._seed))
             # Init all main var + compile.
             from sandbox.rein.dynamics_models.bnn.conv_bnn_count import ConvBNNVIME
             print(">>> Theano imported.")
