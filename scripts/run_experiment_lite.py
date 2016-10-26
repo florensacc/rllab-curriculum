@@ -1,5 +1,4 @@
 import sys
-
 sys.path.append(".")
 
 from rllab.misc.ext import is_iterable, set_seed

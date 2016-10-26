@@ -134,7 +134,8 @@ def probe():
                 gpu_host=host,
                 gpu_index=gpu
             ))
-        redis_cli.mset(to_set)
+        if len(to_set) > 0:
+            redis_cli.mset(to_set)
 
 
 @cli.command()
@@ -185,7 +186,7 @@ def jobs(all):
 @click.argument('job_id')
 @click.option('--force', '-f', default=False, help='force removal of the job from redis')
 def kill(job_id, force):
-    _kill_job((job_id, force))
+    _kill_job(("job/" + job_id, force))
 
 
 @cli.command()
@@ -220,6 +221,8 @@ def sim_policy(job_id):
     redis_cli = redis.StrictRedis(host=cirra_config.REDIS_HOST)
 
     content = redis_cli.get("job/%s" % job_id)
+    if content is None:
+        result = search_job(job_id)
     job = json.loads(content.decode())
     print(job)
 
@@ -280,9 +283,6 @@ def _kill_job(args):
 @click.option('--force', '-f', default=False, help='force removal of the job from redis')
 def kill_all(force):
     import redis
-    import json
-    import subprocess
-    import os
     from sandbox.rocky.cirrascale import cirra_config
     redis_cli = redis.StrictRedis(host=cirra_config.REDIS_HOST)
 
@@ -290,28 +290,6 @@ def kill_all(force):
 
     with multiprocessing.Pool(100) as pool:
         pool.map(_kill_job, zip(jobs, [force] * len(jobs)))
-        # for job_id in jobs:
-        #     content = redis_cli.get(job_id)
-        #     job = json.loads(content.decode())
-        #     print(job)
-        #
-        #     assert len(job['job_id']) > 5
-        #
-        #     command = [
-        #         "ssh",
-        #         "rocky@%s" % job['gpu_host'],
-        #         "sudo kill -9 $(ps aux | grep %s | awk '{print $2}')" % job['job_id'],
-        #     ]
-        #
-        #     print(command)
-        #
-        #     try:
-        #         print(subprocess.check_output(command))
-        #     except Exception as e:
-        #         print(e)
-        #
-        #     redis_cli.delete(job_id)
-        #     print("Job %s deleted" % job_id)
 
 
 @cli.command()
@@ -319,39 +297,36 @@ def kill_all(force):
 @click.option('--force', '-f', default=False, help='force removal of the job from redis')
 def kill_f(pattern, force):
     import redis
-    import json
-    import subprocess
-    import os
     from sandbox.rocky.cirrascale import cirra_config
     redis_cli = redis.StrictRedis(host=cirra_config.REDIS_HOST)
 
     jobs = redis_cli.keys("job/*")  # % job_id)
+
+    to_kill = []
     for job_id in jobs:
         if pattern in job_id.decode():
-            _kill_job((job_id, force))
-            # content = redis_cli.get(job_id)
-            # job = json.loads(content.decode())
-            # print(job)
-            #
-            # assert len(job['job_id']) > 5
-            #
-            # command = [
-            #     "ssh",
-            #     "rocky@%s" % job['gpu_host'],
-            #     "sudo kill -9 $(ps aux | grep %s | awk '{print $2}')" % job['job_id'],
-            # ]
-            #
-            # print(command)
-            #
-            # try:
-            #     print(subprocess.check_output(command))
-            # except Exception as e:
-            #     print(e)
-            #     return
-            #
-            # redis_cli.delete(job_id)
-            # print("Job %s deleted" % job_id)
+            to_kill.append((job_id, force))
 
+    with multiprocessing.Pool(100) as pool:
+        pool.map(_kill_job, to_kill)
+
+@cli.command()
+@click.argument('pattern')
+@click.option('--force', '-f', default=False, help='force removal of the job from redis')
+def kill_variant(pattern, force):
+    import redis
+    from sandbox.rocky.cirrascale import cirra_config
+    redis_cli = redis.StrictRedis(host=cirra_config.REDIS_HOST)
+
+    jobs = redis_cli.keys("job/*")  # % job_id)
+
+    to_kill = []
+    for job_id in jobs:
+        if pattern in job_id.decode():
+            to_kill.append((job_id, force))
+
+    with multiprocessing.Pool(100) as pool:
+        pool.map(_kill_job, to_kill)
 
 @cli.command()
 @click.argument('job_id')

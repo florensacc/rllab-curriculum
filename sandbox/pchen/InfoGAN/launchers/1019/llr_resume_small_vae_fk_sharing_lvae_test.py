@@ -42,6 +42,8 @@
 # try resuming with large llr
 # it seems 0.01 is actually a lot of free bits for nr_resnet=3. it never learns to exceed that.
 
+# 0kl: no code is used, 3.044
+# 0.01kl: no more than 0.01 used, 3.046
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE

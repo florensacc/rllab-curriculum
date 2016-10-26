@@ -97,11 +97,18 @@ class PPOSGD(BatchPolopt):
         if is_recurrent:
             valid_var = tf.placeholder(tf.float32, shape=(None, None), name="valid")
 
-            rnn_network = self.policy.prob_network
+            if hasattr(self.policy, "prob_network"):
+                rnn_network = self.policy.prob_network
+                state_dim = rnn_network.state_dim
+                recurrent_layer = rnn_network.recurrent_layer
+                state_init_param = rnn_network.state_init_param
+            else:
+                state_dim = self.policy.l_rnn.state_dim
+                recurrent_layer = self.policy.l_rnn
+                state_init_param = tf.reshape(self.policy.l_rnn.cell.zero_state(1, dtype=tf.float32), (-1,))
 
-            state_var = tf.placeholder(tf.float32, (None, rnn_network.state_dim), "state")
+            state_var = tf.placeholder(tf.float32, (None, state_dim), "state")
 
-            recurrent_layer = rnn_network.recurrent_layer
             recurrent_state_output = dict()
 
             minibatch_dist_info_vars = self.policy.dist_info_sym(
@@ -110,8 +117,12 @@ class PPOSGD(BatchPolopt):
                 recurrent_state_output=recurrent_state_output,
             )
 
-            state_output = recurrent_state_output[rnn_network.recurrent_layer]
-            final_state = tf.reverse(state_output, [False, True, False])[:, 0, :]
+            state_output = recurrent_state_output[recurrent_layer]
+
+            if hasattr(self.policy, "prob_network"):
+                final_state = tf.reverse(state_output, [False, True, False])[:, 0, :]
+            else:
+                final_state = state_output
 
             lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, minibatch_dist_info_vars)
             kl = dist.kl_sym(old_dist_info_vars, minibatch_dist_info_vars)
@@ -134,7 +145,7 @@ class PPOSGD(BatchPolopt):
                 target=self.policy,
                 inputs=[obs_var, action_var, advantage_var] + state_info_vars_list + old_dist_info_vars_list + [
                     valid_var],
-                rnn_init_state=rnn_network.state_init_param,
+                rnn_init_state=state_init_param,
                 rnn_state_input=state_var,
                 rnn_final_state=final_state,
                 diagnostic_vars=OrderedDict([
@@ -286,6 +297,7 @@ class PPOSGD(BatchPolopt):
                         (1 - step_size) * prev_params + step_size * now_params,
                         trainable=True
                     )
+                    n_trials += 1
                     surr_loss_after, kl_after = self.sliced_loss_kl(all_inputs)
                     logger.log("After shrinking step, loss = %f, Mean KL = %f" % (surr_loss_after, kl_after))
 

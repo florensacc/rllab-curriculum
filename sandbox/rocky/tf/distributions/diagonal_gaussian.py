@@ -1,6 +1,3 @@
-
-
-
 import tensorflow as tf
 import numpy as np
 from sandbox.rocky.tf.distributions.base import Distribution
@@ -92,9 +89,9 @@ class DiagonalGaussian(Distribution):
         log_stds = dist_info["log_std"]
         return np.sum(log_stds + np.log(np.sqrt(2 * np.pi * np.e)), axis=-1)
 
-    def entropy_sym(self, dist_info_var):
-        log_std_var = dist_info_var["log_std"]
-        return tf.reduce_sum(log_std_var + tf.log(tf.sqrt(2 * np.pi * np.e)), reduction_indices=-1)
+    def entropy_sym(self, dist_info):
+        log_stds = dist_info["log_std"]
+        return tf.reduce_sum(log_stds + np.log(np.sqrt(2 * np.pi * np.e)), reduction_indices=-1)
 
     @property
     def dist_info_specs(self):

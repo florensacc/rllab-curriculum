@@ -135,6 +135,8 @@ def load_exps_data(exp_folder_paths,disable_variant=False):
                     try:
                         if all_keys[key].__name__ == 'NoneType':
                             default = None
+                        elif all_keys[key].__name__ == 'bool':
+                            default = eval(default)
                         else:
                             default = all_keys[key](default)
                     except ValueError:
@@ -191,7 +193,7 @@ def extract_distinct_params(exps_data, excluded_params=('exp_name', 'seed', 'log
                 )
             ),
             key=lambda x: (
-                tuple(0. if it is None else str(it) for it in x),
+                tuple("" if it is None else str(it) for it in x),
             )
         )
     except Exception as e:

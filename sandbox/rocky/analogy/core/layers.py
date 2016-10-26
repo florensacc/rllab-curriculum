@@ -5,7 +5,10 @@ from sandbox.rocky.analogy.rnn_cells import AttentionCell
 from sandbox.rocky.tf.misc import tensor_utils
 
 
-def dynamic_rnn(input, cell, parallel_iterations=32, swap_memory=False, time_major=False, scope=None, cell_scope=None):
+def dynamic_rnn(
+        input, cell, parallel_iterations=32, swap_memory=False, time_major=False, scope=None, cell_scope=None,
+        state=None
+):
     with tf.variable_scope(scope or "dynamic_rnn") as varscope:
         if varscope.caching_device is None:
             varscope.set_caching_device(lambda op: op.device)
@@ -16,7 +19,8 @@ def dynamic_rnn(input, cell, parallel_iterations=32, swap_memory=False, time_maj
         input_shape = tf.shape(input)
         batch_size = input_shape[0]
         n_steps = input_shape[1]
-        state = cell.zero_state(batch_size=batch_size, dtype=tf.float32)
+        if state is None:
+            state = cell.zero_state(batch_size=batch_size, dtype=tf.float32)
         if not time_major:
             # make sure the first dimension of input is time
             input = tf.transpose(input, [1, 0, 2])
@@ -94,14 +98,18 @@ class TfRNNLayer(L.MergeLayer):
 
     def get_output_for(self, inputs, **kwargs):
         input, *extra_inputs = inputs
-        if "recurrent_state" in kwargs or "recurrent_state_output" in kwargs:
-            import ipdb;
-            ipdb.set_trace()
+        if "recurrent_state" in kwargs and self in kwargs["recurrent_state"]:
+            state = kwargs["recurrent_state"][self]
+        else:
+            state = None
 
         if hasattr(self.cell, 'use_extra_inputs'):
             self.cell.use_extra_inputs(extra_inputs, scope=self.cell_scope)
 
-        output, _ = dynamic_rnn(input, self.cell, scope=self.scope, cell_scope=self.cell_scope)
+        output, final_state = dynamic_rnn(input, self.cell, scope=self.scope, cell_scope=self.cell_scope, state=state)
+
+        if "recurrent_state_output" in kwargs:
+            kwargs["recurrent_state_output"][self] = final_state
         return output
 
     def get_output_shape_for(self, input_shapes):

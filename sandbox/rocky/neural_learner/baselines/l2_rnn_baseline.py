@@ -126,24 +126,28 @@ class L2RNNBaseline(Baseline, LayersPowered, Serializable):
         state_input_var = tf.placeholder(tf.float32, (None, prediction_network.state_dim), "state")
         recurrent_state_output = dict()
 
-        predict_flat_input_var = tf.reshape(
-            l_input.input_var,
-            tf.pack((
-                tf.shape(l_input.input_var)[0] *
-                tf.shape(l_input.input_var)[1],
-                tf.shape(l_input.input_var)[2]
-            ))
-        )
+        if feature_network is not None:
+            predict_flat_input_var = tf.reshape(
+                l_input.input_var,
+                tf.pack((
+                    tf.shape(l_input.input_var)[0] *
+                    tf.shape(l_input.input_var)[1],
+                    tf.shape(l_input.input_var)[2]
+                ))
+            )
+            layer_data = {feature_network.input_layer: predict_flat_input_var}
+        else:
+            layer_data = dict()
 
         prediction_var = L.get_output(
             prediction_network.output_layer,
-            {feature_network.input_layer: predict_flat_input_var},
+            layer_data,
             recurrent_state={prediction_network.recurrent_layer: state_input_var},
             recurrent_state_output=recurrent_state_output,
         )
         direct_prediction_var = L.get_output(
             prediction_network.output_layer,
-            {feature_network.input_layer: predict_flat_input_var},
+            layer_data
         )
 
         state_output = recurrent_state_output[prediction_network.recurrent_layer]
@@ -154,12 +158,10 @@ class L2RNNBaseline(Baseline, LayersPowered, Serializable):
 
         return_mean_var = tf.Variable(
             np.cast['float32'](0.),
-            # np.zeros((), dtype=np.float32),
             name="return_mean",
         )
         return_std_var = tf.Variable(
             np.cast['float32'](1.),
-            # np.ones((), dtype=np.float32),
             name="return_std",
         )
 
@@ -235,17 +237,24 @@ class L2RNNBaseline(Baseline, LayersPowered, Serializable):
         sorted_paths = sorted(enumerate(paths), key=lambda x: len(x[1]["rewards"]))
         all_results = np.zeros((N, T))
         for batch_idx in range(0, N, batch_size):
-            batch_paths = sorted_paths[batch_idx:batch_idx+batch_size]
+            batch_paths = sorted_paths[batch_idx:batch_idx + batch_size]
             batch_T = max([len(p["rewards"]) for _, p in batch_paths])
             batch_obs = tensor_utils.pad_tensor_n([p["observations"] for _, p in batch_paths], batch_T)
+            batch_actions = tensor_utils.pad_tensor_n([p["actions"] for _, p in batch_paths], batch_T)
             states = np.tile(
                 self.prediction_network.state_init_param.eval().reshape((1, -1)),
                 (len(batch_obs), 1)
             )
             for t in range(0, batch_T, n_steps):
-                time_sliced_obs = batch_obs[:, t:t+n_steps]
-                batch_results, states = self.f_predict_stateful(time_sliced_obs, states)
-                all_results[batch_idx:batch_idx+len(batch_obs), t:t+time_sliced_obs.shape[1]] = batch_results[:, :, 0]
+                time_sliced_obs = batch_obs[:, t:t + n_steps]
+                time_sliced_actions = batch_actions[:, t:t + n_steps]
+                if self.state_include_action:
+                    time_sliced_input = np.concatenate([time_sliced_obs, time_sliced_actions], axis=2)
+                else:
+                    time_sliced_input = time_sliced_obs
+                batch_results, states = self.f_predict_stateful(time_sliced_input, states)
+                all_results[batch_idx:batch_idx + len(batch_obs), t:t + time_sliced_obs.shape[1]] = batch_results[:, :,
+                                                                                                    0]
         ordered_results = [all_results[idx] for idx, _ in sorted_paths]
         return [ordered_results[idx][:len(path["rewards"])].flatten() for idx, path in enumerate(paths)]
 

@@ -41,6 +41,18 @@ _header_printed = False
 _tf_summary_dir = None
 _tf_summary_writer = None
 
+_disabled = False
+
+
+def disable():
+    global _disabled
+    _disabled = True
+
+
+def enable():
+    global _disabled
+    _disabled = False
+
 
 def _add_output(file_name, arr, fds, mode='a'):
     if file_name not in arr:
@@ -135,25 +147,26 @@ def get_log_tabular_only():
 
 
 def log(s, with_prefix=True, with_timestamp=True, color=None):
-    out = s
-    if with_prefix:
-        out = _prefix_str + out
-    if with_timestamp:
-        now = datetime.datetime.now(dateutil.tz.tzlocal())
-        timestamp = now.strftime('%Y-%m-%d %H:%M:%S.%f %Z')
-        out = "%s | %s" % (timestamp, out)
-    if color is not None:
-        out = colorize(out, color)
-    if not _log_tabular_only:
-        # Also log to stdout
-        print(out)
-        for fd in list(_text_fds.values()):
-            fd.write(out + '\n')
-            fd.flush()
-        sys.stdout.flush()
+    if not _disabled:
+        out = s
+        if with_prefix:
+            out = _prefix_str + out
+        if with_timestamp:
+            now = datetime.datetime.now(dateutil.tz.tzlocal())
+            timestamp = now.strftime('%Y-%m-%d %H:%M:%S.%f %Z')
+            out = "%s | %s" % (timestamp, out)
+        if color is not None:
+            out = colorize(out, color)
+        if not _log_tabular_only:
+            # Also log to stdout
+            print(out)
+            for fd in list(_text_fds.values()):
+                fd.write(out + '\n')
+                fd.flush()
+            sys.stdout.flush()
 
 
-def record_tabular(key, val):
+def record_tabular(key, val, *args, **kwargs):
     _tabular.append((_tabular_prefix_str + str(key), str(val)))
 
 
@@ -211,24 +224,25 @@ table_printer = TerminalTablePrinter()
 
 
 def dump_tabular(*args, **kwargs):
-    wh = kwargs.pop("write_header", None)
-    if len(_tabular) > 0:
-        if _log_tabular_only:
-            table_printer.print_tabular(_tabular)
-        else:
-            for line in tabulate(_tabular).split('\n'):
-                log(line, *args, **kwargs)
-        tabular_dict = dict(_tabular)
-        # Also write to the csv files
-        # This assumes that the keys in each iteration won't change!
-        for tabular_fd in list(_tabular_fds.values()):
-            writer = csv.DictWriter(tabular_fd, fieldnames=list(tabular_dict.keys()))
-            if wh or (wh is None and tabular_fd not in _tabular_header_written):
-                writer.writeheader()
-                _tabular_header_written.add(tabular_fd)
-            writer.writerow(tabular_dict)
-            tabular_fd.flush()
-        del _tabular[:]
+    if not _disabled:
+        wh = kwargs.pop("write_header", None)
+        if len(_tabular) > 0:
+            if _log_tabular_only:
+                table_printer.print_tabular(_tabular)
+            else:
+                for line in tabulate(_tabular).split('\n'):
+                    log(line, *args, **kwargs)
+            tabular_dict = dict(_tabular)
+            # Also write to the csv files
+            # This assumes that the keys in each iteration won't change!
+            for tabular_fd in list(_tabular_fds.values()):
+                writer = csv.DictWriter(tabular_fd, fieldnames=list(tabular_dict.keys()))
+                if wh or (wh is None and tabular_fd not in _tabular_header_written):
+                    writer.writeheader()
+                    _tabular_header_written.add(tabular_fd)
+                writer.writerow(tabular_dict)
+                tabular_fd.flush()
+            del _tabular[:]
 
 
 def pop_prefix():
@@ -376,3 +390,4 @@ def record_tabular_misc_stat(key, values, placement='back'):
         record_tabular(prefix + "Median" + suffix, np.nan)
         record_tabular(prefix + "Min" + suffix, np.nan)
         record_tabular(prefix + "Max" + suffix, np.nan)
+

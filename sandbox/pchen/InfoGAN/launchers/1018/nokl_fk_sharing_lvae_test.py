@@ -35,6 +35,9 @@
 
 # ^ this hence explores no kl
 
+# no kl means no bits is used but this uncond pixel cnn w/ 96 channels (3,) and extranin=3 can get to 3.03 vali and 2.99 train!!
+# something to THINK ==== can we resume from this pixel cnn? and add in a more powerful vae to make it surpass sota?
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer

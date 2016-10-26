@@ -323,8 +323,24 @@ class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
 
             LayersPowered.__init__(self, out_layers)
 
+            obs_var = env_spec.observation_space.new_tensor_variable("obs", extra_dims=2)
+            state_info_vars = [
+                tf.placeholder(dtype=tf.float32, shape=(None, None) + shape, name=k)
+                for k, shape in self.state_info_specs
+            ]
+
+            self.f_dist_info = tensor_utils.compile_function(
+                inputs=[obs_var] + state_info_vars,
+                outputs=self.dist_info_sym(
+                    obs_var, dict(zip(self.state_info_keys, state_info_vars))
+                )
+            )
+
     def get_params_internal(self, **tags):
         return LayersPowered.get_params_internal(self, **tags) + self.action_param.get_params_internal(**tags)
+
+    def dist_info(self, observations, state_infos):
+        return self.f_dist_info(observations, *(state_infos[k] for k in self.state_info_keys))
 
     @overrides
     def dist_info_sym(self, obs_var, state_info_vars, **kwargs):

@@ -4,6 +4,7 @@ Baseline experiments: par-TRPO on RAM obs for many Atari games; also test the ef
     - difference from 2016****:  use clip_reward
     - difference from exp-018: batch_size = 100k, baseline
 - other environment settings close to standard DQN params (except RAM obs)
+    - max_start_nullops: 30
 - some parameters are not fine-tuned:
     - max_path_length
         for some games (montezuma_revenge) the agent may still get bonus for doing nothing
@@ -63,8 +64,8 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup -----------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "bonus-trpo-atari/" + exp_index
-mode = "kube_test"
-ec2_instance = "c4.4xlarge"
+mode = "kube"
+ec2_instance = "c4.8xlarge"
 subnet = "us-west-1a"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
@@ -93,7 +94,7 @@ class VG(VariantGenerator):
 
     @variant
     def bonus_coeff(self):
-        return [0.01]
+        return [0,0.01]
 
     @variant
     def game(self):

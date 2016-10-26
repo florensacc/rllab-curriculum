@@ -10,21 +10,23 @@ import itertools
 
 
 class VectorizedSampler(Sampler):
-    def __init__(self, env, policy, n_envs):
+    def __init__(self, env, policy, n_envs, vec_env=None):
         self.env = env
         self.policy = policy
         self.n_envs = n_envs
+        self.vec_env = vec_env
+        self.env_spec = env.spec
 
     def start_worker(self):
-        n_envs = self.n_envs
-        if getattr(self.env, 'vectorized', False):
-            self.vec_env = self.env.vec_env_executor(n_envs=n_envs)
-        else:
-            envs = [pickle.loads(pickle.dumps(self.env)) for _ in range(n_envs)]
-            self.vec_env = VecEnvExecutor(
-                envs=envs,
-            )
-        self.env_spec = self.env.spec
+        if self.vec_env is None:
+            n_envs = self.n_envs
+            if getattr(self.env, 'vectorized', False):
+                self.vec_env = self.env.vec_env_executor(n_envs=n_envs)
+            else:
+                envs = [pickle.loads(pickle.dumps(self.env)) for _ in range(n_envs)]
+                self.vec_env = VecEnvExecutor(
+                    envs=envs,
+                )
 
     def shutdown_worker(self):
         self.vec_env.terminate()
@@ -33,9 +35,9 @@ class VectorizedSampler(Sampler):
         logger.log("Obtaining samples for iteration %d..." % itr)
         paths = []
         n_samples = 0
-        obses = self.vec_env.reset()
-        dones = np.asarray([True] * self.vec_env.num_envs)
-        running_paths = [None] * self.vec_env.num_envs
+        dones = np.asarray([True] * self.vec_env.n_envs)
+        obses = self.vec_env.reset(dones)
+        running_paths = [None] * self.vec_env.n_envs
 
         pbar = ProgBarCounter(batch_size)
         policy_time = 0
@@ -59,9 +61,9 @@ class VectorizedSampler(Sampler):
             agent_infos = tensor_utils.split_tensor_dict_list(agent_infos)
             env_infos = tensor_utils.split_tensor_dict_list(env_infos)
             if env_infos is None:
-                env_infos = [dict() for _ in range(self.vec_env.num_envs)]
+                env_infos = [dict() for _ in range(self.vec_env.n_envs)]
             if agent_infos is None:
-                agent_infos = [dict() for _ in range(self.vec_env.num_envs)]
+                agent_infos = [dict() for _ in range(self.vec_env.n_envs)]
             for idx, observation, action, reward, env_info, agent_info, done in zip(itertools.count(), obses, actions,
                                                                                     rewards, env_infos, agent_infos,
                                                                                     dones):

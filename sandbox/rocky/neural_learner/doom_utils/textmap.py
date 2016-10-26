@@ -39,10 +39,21 @@ class types:
                 assert abs(val - int(val)) < 1e-8
                 return self.validate(int(val))
             else:
-                raise ValueError()
+                raise ValueError("Invalid value for type SignedShort: " + str(val))
 
         def serialize(self, val):
             return str(int(val))
+
+    class Float(Type):
+
+        def validate(self, val):
+            if isinstance(val, (int, float)):
+                return float(val)
+            else:
+                raise ValueError()
+
+        def serialize(self, val):
+            return str(float(val))
 
     class UnsignedShort(Type):
 
@@ -136,6 +147,10 @@ class Thing(Entry):
     class6 = types.Bool(default=True)
     class7 = types.Bool(default=True)
     class8 = types.Bool(default=True)
+
+    scale = types.Float()
+    scalex = types.Float()
+    scaley = types.Float()
 
 
 class Vertex(Entry):

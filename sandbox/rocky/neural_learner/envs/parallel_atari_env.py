@@ -279,22 +279,21 @@ class VecAtariEnv(object):
             raise RuntimeError("This ROM is for PAL. Please use ROMs for NTSC")
 
     def reset(self, dones=None, return_obs=True):
-        if dones is None or np.any(dones):
+        if dones is None:
+            dones = np.asarray([True] * self.n_envs)
+        else:
+            dones = np.cast['bool'](dones)
+        if np.any(dones):
             self.par_games.reset_game_all(dones)
             lives = np.empty((self.n_envs,), dtype=np.intc)
             self.par_games.get_lives_all(lives)
-            if dones is None:
-                self.ts[:] = 0
-                self.lives[:] = lives
-            else:
-                dones = np.cast['bool'](dones)
-                self.ts[dones] = 0
-                self.lives[dones] = lives[dones]
+            self.ts[dones] = 0
+            self.lives[dones] = lives[dones]
             if self.env.obs_type == "image":
                 self.reset_buffer(dones)
                 self.record_frame(dones)
         if return_obs:
-            return self.get_current_obs()
+            return self.get_current_obs()[dones]
 
     def reset_buffer(self, mask):
         self.screen_buffer.reset(mask=mask)

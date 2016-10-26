@@ -1,5 +1,5 @@
 from sandbox.carlos_snn.envs.mujoco.maze.maze_env import MazeEnv
-from rllab.envs.mujoco.ant_env import AntEnv
+from sandbox.carlos_snn.envs.mujoco.ant_env import AntEnv
 
 from rllab.envs.normalized_env import normalize
 from rllab.core.serializable import Serializable
