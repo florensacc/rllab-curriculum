@@ -33,7 +33,7 @@ if __name__ == "__main__":
         data = joblib.load(args.file)
         policy = data['policy']
         env = data['env']
-        env.ale.setBool(b'color_averaging', False)
+        print('loaded')
         while True:
             path = rollout(env, policy, max_path_length=args.max_path_length,
                            animated=True, speedup=args.speedup)

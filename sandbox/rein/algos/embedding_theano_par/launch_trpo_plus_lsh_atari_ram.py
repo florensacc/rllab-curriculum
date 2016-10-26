@@ -3,7 +3,8 @@ import os
 import lasagne
 
 from rllab.misc.instrument import stub, run_experiment_lite
-from sandbox.rein.algos.embedding_theano_par.theano_atari import AtariEnv
+# from sandbox.rein.algos.embedding_theano_par.theano_atari import AtariEnv
+from sandbox.rein.algos.embedding_theano2.theano_atari import AtariEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from sandbox.rein.algos.embedding_theano_par.trpo_plus_lsh import ParallelTRPOPlusLSH
 from rllab.envs.env_spec import EnvSpec
@@ -15,18 +16,18 @@ from sandbox.haoran.parallel_trpo.conjugate_gradient_optimizer import ParallelCo
 stub(globals())
 
 n_seq_frames = 4
-n_parallel = 20
+n_parallel = 9
 model_batch_size = 32
-exp_prefix = 'trpo-i-auto-pro-a'
+exp_prefix = 'ptrpo-ae-mean-d'
 seeds = [0, 1, 2]
-etas = [0.001]
-mdps = [  # AtariEnv(game='freeway', obs_type="ram+image", frame_skip=4),
-    # AtariEnv(game='breakout', obs_type="ram+image", frame_skip=4),
-    # AtariEnv(game='frostbite', obs_type="image", frame_skip=4),
+etas = [0.01]
+mdps = [  # AtariEnv(game='freeway', obs_type="image", frame_skip=4),
+    AtariEnv(game='gravitar', obs_type="image", frame_skip=4)]
+    # AtariEnv(game='frostbite', obs_type="image", frame_skip=4)]
     # AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4)]
-    AtariEnv(game='venture', obs_type="image", frame_skip=4)]
+    # AtariEnv(game='venture', obs_type="image", frame_skip=4)]
 trpo_batch_size = 100000
-max_path_length = 4500
+max_path_length = 3500
 dropout = False
 batch_norm = True
 
@@ -100,7 +101,7 @@ for mdp, eta, seed in param_cart_product:
     # Alex' settings
     policy_opt_args = dict(
         cg_iters=10,
-        reg_coeff=1e-3,
+        reg_coeff=1e-5,
         subsample_factor=0.1,
         max_backtracks=15,
         backtrack_ratio=0.8,
@@ -116,7 +117,7 @@ for mdp, eta, seed in param_cart_product:
     #     reward_dim=(1,),
     #     layers_disc=[
     #         dict(name='convolution',
-    #              n_filters=64,
+    #              n_filters=96,
     #              filter_size=(6, 6),
     #              stride=(2, 2),
     #              pad=(0, 0),
@@ -125,7 +126,7 @@ for mdp, eta, seed in param_cart_product:
     #              dropout=False,
     #              deterministic=True),
     #         dict(name='convolution',
-    #              n_filters=64,
+    #              n_filters=96,
     #              filter_size=(6, 6),
     #              stride=(2, 2),
     #              pad=(1, 1),
@@ -134,7 +135,7 @@ for mdp, eta, seed in param_cart_product:
     #              dropout=False,
     #              deterministic=True),
     #         dict(name='convolution',
-    #              n_filters=64,
+    #              n_filters=96,
     #              filter_size=(6, 6),
     #              stride=(2, 2),
     #              pad=(2, 2),
@@ -143,7 +144,7 @@ for mdp, eta, seed in param_cart_product:
     #              dropout=False,
     #              deterministic=True),
     #         dict(name='convolution',
-    #              n_filters=64,
+    #              n_filters=96,
     #              filter_size=(6, 6),
     #              stride=(2, 2),
     #              pad=(2, 2),
@@ -181,7 +182,7 @@ for mdp, eta, seed in param_cart_product:
     #         dict(name='reshape',
     #              shape=([0], 64, 4, 4)),
     #         dict(name='deconvolution',
-    #              n_filters=64,
+    #              n_filters=96,
     #              filter_size=(6, 6),
     #              stride=(2, 2),
     #              pad=(2, 2),
@@ -190,7 +191,7 @@ for mdp, eta, seed in param_cart_product:
     #              dropout=False,
     #              deterministic=True),
     #         dict(name='deconvolution',
-    #              n_filters=64,
+    #              n_filters=96,
     #              filter_size=(6, 6),
     #              stride=(2, 2),
     #              pad=(1, 1),
@@ -199,7 +200,7 @@ for mdp, eta, seed in param_cart_product:
     #              dropout=False,
     #              deterministic=True),
     #         dict(name='deconvolution',
-    #              n_filters=64,
+    #              n_filters=96,
     #              filter_size=(6, 6),
     #              stride=(2, 2),
     #              pad=(0, 0),
@@ -208,7 +209,7 @@ for mdp, eta, seed in param_cart_product:
     #              dropout=False,
     #              deterministic=True),
     #         dict(name='deconvolution',
-    #              n_filters=64,
+    #              n_filters=96,
     #              filter_size=(6, 6),
     #              stride=(2, 2),
     #              pad=(0, 0),
@@ -250,7 +251,7 @@ for mdp, eta, seed in param_cart_product:
         reward_dim=(1,),
         layers_disc=[
             dict(name='convolution',
-                 n_filters=64,
+                 n_filters=96,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(0, 0),
@@ -259,7 +260,7 @@ for mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=True),
             dict(name='convolution',
-                 n_filters=64,
+                 n_filters=96,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(1, 1),
@@ -268,7 +269,7 @@ for mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=True),
             dict(name='convolution',
-                 n_filters=64,
+                 n_filters=96,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(2, 2),
@@ -286,7 +287,7 @@ for mdp, eta, seed in param_cart_product:
                  dropout=dropout,
                  deterministic=True),
             dict(name='discrete_embedding',
-                 n_units=448,
+                 n_units=512,
                  batch_norm=batch_norm,
                  deterministic=True),
             dict(name='gaussian',
@@ -306,7 +307,7 @@ for mdp, eta, seed in param_cart_product:
             dict(name='reshape',
                  shape=([0], 64, 5, 5)),
             dict(name='deconvolution',
-                 n_filters=64,
+                 n_filters=96,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(2, 2),
@@ -315,7 +316,7 @@ for mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=True),
             dict(name='deconvolution',
-                 n_filters=64,
+                 n_filters=96,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(0, 0),
@@ -324,7 +325,7 @@ for mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=True),
             dict(name='deconvolution',
-                 n_filters=64,
+                 n_filters=96,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(0, 0),
@@ -345,7 +346,7 @@ for mdp, eta, seed in param_cart_product:
         surprise_type=None,
         update_prior=False,
         update_likelihood_sd=False,
-        output_type='classfication',
+        output_type='classification',
         num_classes=64,
         likelihood_sd_init=0.1,
         disable_variance=False,
@@ -357,7 +358,7 @@ for mdp, eta, seed in param_cart_product:
         # --
         # Count settings
         # Put penalty for being at 0.5 in sigmoid postactivations.
-        binary_penalty=0.1,
+        binary_penalty=10,
     )
 
     algo = ParallelTRPOPlusLSH(
@@ -383,19 +384,20 @@ for mdp, eta, seed in param_cart_product:
         ),
         eta=eta,
         train_model=True,
-        train_model_freq=3,
+        train_model_freq=5,
         continuous_embedding=False,
         model_embedding=True,
         sim_hash_args=dict(
-            dim_key=32,
+            dim_key=64,
             bucket_sizes=None,
             disable_rnd_proj=True,
+            parallel=True
         ),
         clip_rewards=True,
         model_args=model_args,
     )
 
-    print("Remember, GPUs are linked to seeds!")
+    print("NOTICE: GPUs linked to seeds!")
     # Note: you have to make sure that imports in all of the imported modules are at their correct location,
     # not the top location. Otherwise, GPU compilation of the AE will fail.
     run_experiment_lite(

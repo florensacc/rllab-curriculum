@@ -172,7 +172,7 @@ for mdp, eta, seed in param_cart_product:
         surprise_type=None,
         update_prior=False,
         update_likelihood_sd=False,
-        output_type='classfication',
+        output_type='classification',
         num_classes=64,
         likelihood_sd_init=0.1,
         disable_variance=False,
@@ -209,7 +209,7 @@ for mdp, eta, seed in param_cart_product:
         ),
         eta=eta,
         train_model=True,
-        train_model_freq=5,
+        train_model_freq=3,
         continuous_embedding=False,
         model_embedding=True,
         sim_hash_args=dict(
