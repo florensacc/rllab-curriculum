@@ -2,6 +2,8 @@
 
 # opt share didnt really seem to result in better performance
 
+# adding back soft sarsa now that bug is fixed
+
 import logging
 import os,sys
 import numpy as np
@@ -59,23 +61,18 @@ class VG(VariantGenerator):
     @variant
     def eval_frequency(self, target_update_frequency):
         # yield target_update_frequency * 1
-        yield 10**5
-        # yield 10**6
+        yield 10**6
 
     @variant
     def game(self, ):
         # return ["pong", "breakout",  ]
         # return ["space_invaders"]
         # return ["breakout"]
-        return ["enduro", ]
+        return ["space_invaders", "seaquest", "pong",]
 
     @variant
     def n_step(self, ):
-        return [5,]
-
-    @variant
-    def share_model(self, n_step):
-        return [n_step == 1]
+        return [1,]
 
     @variant
     def bellman(self, ):
@@ -89,7 +86,7 @@ class VG(VariantGenerator):
     def lr(self, ):
         yield 7e-4
         # yield 1e-4
-        # yield 2e-3
+        yield 2e-3
         # yield 5e-3
         # yield 5e-3
 
@@ -107,11 +104,7 @@ class VG(VariantGenerator):
 
     @variant
     def boltzmann(self, ):
-        return [True, ]
-
-    @variant
-    def sample_eps(self, ):
-        return [False, ]
+        return [True]
 
     @variant
     def temp_init(self, ):
@@ -130,7 +123,7 @@ for v in variants[:]:
     locals().update(v)
 
     # Problem setting
-    eval_n_runs = 1
+    eval_n_runs = 30
 
     # The meat ---------------------------------------------
     # env = AtariEnv(
@@ -163,8 +156,8 @@ for v in variants[:]:
         env=env,
         target_update_frequency=target_update_frequency,
         eps_test=eps_test,
-        t_max=n_step,
-        share_model=share_model,
+        t_max=5,
+        n_step=n_step,
         optimizer_args=dict(
             lr=lr,
             eps=1e-1,
@@ -174,9 +167,8 @@ for v in variants[:]:
         adaptive_entropy=adaptive_entropy,
         temp_init=temp_init,
         boltzmann=boltzmann,
-        sample_eps=sample_eps,
+        sample_eps=True,
         share_optimizer_states=opt_share,
-        adaptive_entropy_mode="first_order_backtrack",
     )
     algo = DQNALE(
         total_steps=total_t,
@@ -195,10 +187,12 @@ for v in variants[:]:
         NUMEXPR_NUM_THREADS=comp_cores,
         OMP_NUM_THREADS=comp_cores,
     )
-    config.AWS_INSTANCE_TYPE = "c4.8xlarge"
+    config.AWS_INSTANCE_TYPE = "c3.8xlarge"
+    config.EBS_OPTIMIZED = False
     config.AWS_SPOT = True
-    config.AWS_SPOT_PRICE = '1.'
+    config.AWS_SPOT_PRICE = '1.66'
     config.AWS_REGION_NAME = 'us-west-1'
+    # config.AWS_REGION_NAME = 'us-east-2'
     config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[config.AWS_REGION_NAME]
     config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[config.AWS_REGION_NAME]
     config.AWS_SECURITY_GROUP_IDS = config.ALL_REGION_AWS_SECURITY_GROUP_IDS[config.AWS_REGION_NAME]
@@ -206,13 +200,13 @@ for v in variants[:]:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="1024_soft_hard_sarsa",# use the batch after 1am
+        exp_prefix="1024_FIX_1_step_q_and_hsarsa",# use the batch after 1am
         seed=v["seed"],
         variant=v,
-        # mode="ec2",
+        # mode="local",
+        mode="ec2",
         # terminate_machine=False,
         # mode="local_docker",
-        mode="local",
         #
 
         # mode="lab_kube",

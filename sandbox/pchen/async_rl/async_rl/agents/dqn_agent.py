@@ -277,7 +277,7 @@ class DQNAgent(Agent,Shareable,Picklable):
 
         if not is_state_terminal:
             # choose an action
-            qs = self.model.compute_qs(statevar)[0]
+            cur_qs = self.model.compute_qs(statevar)[0]
             # WARN: even when testing, do not just use argmax; it may get stuck at the beginning of Breakout (doing no_op)
             if self.phase == "Test" and self.eps_test is not None:
                 eps = self.eps_test
@@ -285,7 +285,7 @@ class DQNAgent(Agent,Shareable,Picklable):
                 eps = self.eps
 
             if self.boltzmann and (self.phase != "Test"):
-                q_vals = qs.data
+                q_vals = cur_qs.data
                 al = len(q_vals)
                 other_p = (eps)/al
                 eps_p = (1-eps) + eps/al
@@ -298,15 +298,29 @@ class DQNAgent(Agent,Shareable,Picklable):
                             self.temp *= 1.05
                         elif tgt_entropy < entropy - 0.1:
                             self.temp *= 0.95
-                    elif self.adaptive_entropy_mode == "first_order":
-                        q_vals = qs.data
+                    elif "first_order" in self.adaptive_entropy_mode:
+                        q_vals = cur_qs.data
                         al = len(q_vals)
                         temp_var = chainer.Variable(np.array([self.temp]))
                         pms_var = CF.softmax(CF.reshape(q_vals / CF.broadcast_to(temp_var, q_vals.shape), [1, al]))
                         entropy_var = CF.sum(-pms_var*CF.log(pms_var + 1e-8))
                         entropy_var.backward()
                         grad = temp_var.grad
-                        self.temp += (tgt_entropy - entropy_var.data) / float(grad)
+                        step = (tgt_entropy - entropy_var.data) / float(grad)
+                        self.temp += step
+                        if "forward" in self.adaptive_entropy_mode:
+                            for _ in range(10):
+                                pms = softmax(q_vals / self.temp)
+                                entropy = np.sum(-pms*np.log(pms + 1e-8))
+                                if step >= 0 and entropy >= tgt_entropy:
+                                    break
+                                elif step < 0 and entropy <= tgt_entropy:
+                                    break
+                                else:
+                                    step *= 1.3
+                                    self.temp = float(temp_var.data + step)
+
+
                     else:
                         raise NotImplemented
 
@@ -318,9 +332,9 @@ class DQNAgent(Agent,Shareable,Picklable):
                 self.epoch_misc_stats["_tgt_entropy"].append(tgt_entropy)
             else:
                 if np.random.uniform() < eps:
-                    a = np.random.randint(low=0, high=len(qs.data))
+                    a = np.random.randint(low=0, high=len(cur_qs.data))
                 else:
-                    a = np.argmax(qs.data)
+                    a = np.argmax(cur_qs.data)
 
         # start computing gradient and synchronize model params
         # avoid updating model params during testing
@@ -332,11 +346,10 @@ class DQNAgent(Agent,Shareable,Picklable):
                     R = 0
                 else:
                     # bootstrap from target network
-                    qs = self.shared_target_model.compute_qs(statevar)[0] # fixed [0]
                     if self.bellman == Bellman.q:
-                        R = float(np.amax(qs.data))
+                        R = float(np.amax(cur_qs.data))
                     elif self.bellman == Bellman.sarsa:
-                        R = float(qs.data[a])
+                        R = float(cur_qs.data[a])
                     else:
                         raise NotImplementedError
 
@@ -356,9 +369,9 @@ class DQNAgent(Agent,Shareable,Picklable):
                     # bootstrap from target network
                     # qs already calculated
                     if self.bellman == Bellman.q:
-                        R = float(np.amax(qs.data))
+                        R = float(np.amax(cur_qs.data))
                     elif self.bellman == Bellman.sarsa:
-                        R = float(qs.data[a])
+                        R = float(cur_qs.data[a])
                     else:
                         raise NotImplementedError
 
@@ -421,9 +434,9 @@ class DQNAgent(Agent,Shareable,Picklable):
                 # record the state to allow bonus computation
                 self.past_states[self.t] = statevar
                 self.past_actions[self.t] = a
-                self.past_qvalues[self.t] = qs # beware to record the variable (not just its data) to allow gradient computation
+                self.past_qvalues[self.t] = cur_qs # beware to record the variable (not just its data) to allow gradient computation
                 self.past_extra_infos[self.t] = extra_infos
-                self.epoch_misc_stats["q_val"].append(float(qs[a].data))
+                self.epoch_misc_stats["q_val"].append(float(cur_qs[a].data))
                 self.cur_path_len += 1
                 self.cur_path_effective_return += reward
                 self.t += 1
