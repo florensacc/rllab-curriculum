@@ -60,6 +60,9 @@ class HOGFeatureExtractor(object):
         self.last_query_image_shape = image_shape
         return self.feature_shape
 
+    def get_feature_length(self, image_shape):
+        return np.prod(self.get_feature_shape(image_shape))
+
 
     def compute_hogs(self,images):
         """

@@ -1,6 +1,9 @@
 """
-Image obs, ram hash
-- Fine tune bonus on Frostbite, w/ inspiration from exp-019g,h
+Tune HOGHash on image obs + RAM count
+I expect this to work similarly to HackyHash
+
+- tune cell_size and n_bin
+- use shorter horizon
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -9,8 +12,6 @@ from sandbox.adam.parallel.gaussian_conv_baseline import ParallelGaussianConvBas
 
 """ policy """
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
-from rllab.policies.categorical_conv_policy import CategoricalConvPolicy
-from sandbox.haoran.hashing.bonus_trpo.misc.dqn_args_theano import trpo_dqn_args,nips_dqn_args
 
 """ optimizer """
 from sandbox.haoran.parallel_trpo.conjugate_gradient_optimizer import ParallelConjugateGradientOptimizer
@@ -26,9 +27,8 @@ from sandbox.haoran.hashing.bonus_trpo.resetter.atari_save_load_resetter import 
 
 """ bonus """
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
-from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.identity_preprocessor import IdentityPreprocessor
-from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.sim_hash_v2 import SimHashV2
-from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.image_vectorize_preprocessor import ImageVectorizePreprocessor
+from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.bass_hash import BassHash
+from sandbox.haoran.hashing.feature_extractors.bass_feature_extractor import BassFeatureExtractor
 
 """ others """
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
@@ -40,6 +40,7 @@ import copy
 
 stub(globals())
 
+import numpy as np
 from rllab.misc.instrument import VariantGenerator, variant
 
 # exp setup -----------------------------------------------------
@@ -71,27 +72,32 @@ else:
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [0,100,200,300,400,500,600,700,800,900]
+        return [0,100,200,300,400]
 
     @variant
     def bonus_coeff(self):
-        return [0.1,0.5]
+        return [0.01]
 
     @variant
     def game(self):
-        return ["frostbite"]
-
-    @variant
-    def dim_key(self):
-        return [256]
-
-    @variant
-    def bucket_sizes(self):
-        return ["6M"]
+        return ["montezuma_revenge"]
 
     @variant
     def count_target(self):
-        return ["ram_states"]
+        return ["rgb_images"]
+
+    @variant
+    def cell_size(self):
+        return [20,40]
+
+    @variant
+    def n_bin(self):
+        return [10,20]
+
+    @variant
+    def max_path_length(self):
+        return [1500]
+
 variants = VG().variants()
 
 # test whether all game names are spelled correctly (comment out stub(globals) first)
@@ -115,54 +121,48 @@ for v in variants:
         batch_size = 500
     else:
         batch_size = 100000
-    max_path_length = 4500
+    max_path_length = v["max_path_length"]
     discount = 0.99
     n_itr = 1000
     step_size = 0.01
     policy_opt_args = dict(
         name="pi_opt",
         cg_iters=10,
-        reg_coeff=1e-3,
-        subsample_factor=0.1,
+        reg_coeff=1e-5,
+        subsample_factor=1.,
         max_backtracks=15,
         backtrack_ratio=0.8,
         accept_violation=False,
         hvp_approach=None,
         num_slices=1, # reduces memory requirement
     )
-    network_args = nips_dqn_args
 
     # env
     game=v["game"]
     env_seed=1 # deterministic env
     frame_skip=4
     max_start_nullops = 30
-    img_width=42
-    img_height=42
-    n_last_screens=4
+    n_last_screens=1
     clip_reward = True
-    obs_type = "image"
+    obs_type = "ram"
+    img_height=42
+    img_width=42
     count_target = v["count_target"]
-    record_image=(count_target == "images")
-    record_rgb_image=False
+    record_image=False
+    record_rgb_image=True
     record_ram=(count_target == "ram_states")
     record_internal_state=False
+    correct_luminance=True
 
     # bonus
     bonus_coeff=v["bonus_coeff"]
     bonus_form="1/sqrt(n)"
     count_target=v["count_target"]
     retrieve_sample_size=100000 # compute keys for all paths at once
-    if v["bucket_sizes"] == "6M":
-        bucket_sizes = [999931, 999953, 999959, 999961, 999979, 999983]
-    elif v["bucket_sizes"] == "90M":
-        bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
-    else:
-        raise NotImplementedError
+    decay_within_path = False
 
-
-    # others
-    baseline_prediction_clip = 1000
+    cell_size=v["cell_size"]
+    n_bin = v["n_bin"]
 
     # other exp setup --------------------------------------
     exp_name = "{exp_index}_{time}_{game}".format(
@@ -229,22 +229,27 @@ for v in variants:
         record_internal_state=record_internal_state,
         frame_skip=frame_skip,
         max_start_nullops=max_start_nullops,
-        correct_luminance=True,
+        correct_luminance=correct_luminance,
     )
-    policy = CategoricalConvPolicy(
+    policy = CategoricalMLPPolicy(
         env_spec=env.spec,
-        name="policy",
-        **network_args
+        hidden_sizes=(32,32),
     )
 
     # baseline
-    network_args_for_vf = copy.deepcopy(network_args)
-    network_args_for_vf.pop("output_nonlinearity")
+    # baseline = ParallelLinearFeatureBaseline(env_spec=env.spec)
+    network_args_for_vf = dict(
+        hidden_sizes=(32,32),
+        conv_filters=[],
+        conv_filter_sizes=[],
+        conv_strides=[],
+        conv_pads=[],
+    )
     baseline = ParallelGaussianConvBaseline(
         env_spec=env.spec,
         regressor_args = dict(
             optimizer=ParallelConjugateGradientOptimizer(
-                subsample_factor=0.1,
+                subsample_factor=0.5,
                 cg_iters=10,
                 name="vf_opt",
             ),
@@ -258,36 +263,24 @@ for v in variants:
     )
 
     # bonus
-    if count_target == "images":
-        state_preprocessor = ImageVectorizePreprocessor(
-            n_channel=n_last_screens,
-            width=img_width,
-            height=img_height,
-        )
-    elif count_target == "ram_states":
-        state_preprocessor = ImageVectorizePreprocessor(
-            n_channel=1,
-            width=128,
-            height=1,
-        )
-    else:
-        raise NotImplementedError
-
-    _hash = SimHashV2(
-        item_dim=state_preprocessor.get_output_dim(), # get around stub
-        dim_key=v["dim_key"],
-        bucket_sizes=bucket_sizes,
+    bass = BassFeatureExtractor(cell_size=cell_size,n_bin=n_bin)
+    h = BassHash(
+        bass=bass,
+        n_channel=3,
+        img_width=160,
+        img_height=210,
         parallel=use_parallel,
     )
     bonus_evaluator = ALEHashingBonusEvaluator(
         log_prefix="",
-        state_dim=state_preprocessor.get_output_dim(), # get around stub
-        state_preprocessor=state_preprocessor,
-        hash=_hash,
+        state_dim=None,
+        state_preprocessor=None,
+        hash=h,
         bonus_form=bonus_form,
         count_target=count_target,
         parallel=use_parallel,
         retrieve_sample_size=retrieve_sample_size,
+        decay_within_path=decay_within_path,
     )
 
     algo = ParallelTRPO(
