@@ -527,6 +527,7 @@ class OldFixedDQNAgent(Agent,Shareable,Picklable):
             temp_init=1.,
             adaptive_entropy=False,
             share_optimizer_states=False,
+            tgt_behavior_policy=False,
     ):
         if optimizer_args is None:
             optimizer_args = dict(lr=7e-4, eps=1e-1, alpha=0.99)
@@ -546,6 +547,8 @@ class OldFixedDQNAgent(Agent,Shareable,Picklable):
         self.adaptive_entropy = adaptive_entropy
 
         action_space = env.action_space
+
+        self.tgt_behavior_policy = tgt_behavior_policy
 
         # Globally shared model
         if model_type == "nips":
@@ -794,7 +797,10 @@ class OldFixedDQNAgent(Agent,Shareable,Picklable):
         # store traj info and return action
         if not is_state_terminal:
             # choose an action
-            qs = self.model.compute_qs(statevar)[0]
+            if self.tgt_behavior_policy:
+                qs = self.shared_target_model.compute_qs(statevar)[0]
+            else:
+                qs = self.model.compute_qs(statevar)[0]
             # WARN: even when testing, do not just use argmax; it may get stuck at the beginning of Breakout (doing no_op)
             if self.phase == "Test" and self.eps_test is not None:
                 eps = self.eps_test
