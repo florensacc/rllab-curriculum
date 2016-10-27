@@ -193,7 +193,7 @@ def extract_distinct_params(exps_data, excluded_params=('exp_name', 'seed', 'log
                 )
             ),
             key=lambda x: (
-                tuple(0. if it is None else str(it) for it in x),
+                tuple("" if it is None else str(it) for it in x),
             )
         )
     except Exception as e:

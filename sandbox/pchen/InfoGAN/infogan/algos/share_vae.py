@@ -57,6 +57,7 @@ class ShareVAE(object):
             arwarm_until=None,
             staged=False,
             unconditional=False,
+            resume_includes=None,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -69,6 +70,7 @@ class ShareVAE(object):
         Parameters
         ----------
         """
+        self.resume_includes = resume_includes
         self.unconditional = unconditional
         self.staged = staged
         self.arwarm_until = arwarm_until
@@ -545,7 +547,7 @@ class ShareVAE(object):
                     feed = self.prepare_feed(self.dataset.train, self.true_batch_size)
 
                     if counter == 0:
-                        if self.resume_from is None:
+                        if self.resume_from is None or (self.resume_includes is not None):
                             sess.run(init, feed)
                         self.init_opt(init=False, eval=True)
                         self.init_opt(init=False, eval=False)
@@ -566,7 +568,17 @@ class ShareVAE(object):
                             print("resuming from %s" % self.resume_from)
                             fn = tf.train.latest_checkpoint(self.resume_from)
                             print("latest ckpt: %s" % fn)
-                            saver.restore(sess, fn)
+                            if self.resume_includes is None:
+                                saver.restore(sess, fn)
+                            else:
+                                vars_to_resume = [
+                                    v for v in vs if any([
+                                        include in v.name for include in self.resume_includes
+                                    ]) and "optim" not in v.name
+                                ]
+                                print("resuming", [v.name for v in vars_to_resume])
+                                resume_saver = tf.train.Saver(var_list=vars_to_resume)
+                                resume_saver.restore(sess, fn)
                             print("resumed")
 
                         log_dict = dict(self.log_vars)

@@ -5,7 +5,8 @@ from rllab.envs.base import Env, Step
 import numpy as np
 import contextlib
 import random
-from .maze.dfs_maze_generator import DFSGridMazeGenerator
+
+from sandbox.rocky.neural_learner.envs.maze.dfs_grid_maze_generator import DFSGridMazeGenerator
 
 
 @contextlib.contextmanager

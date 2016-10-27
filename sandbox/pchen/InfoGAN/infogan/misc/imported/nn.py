@@ -291,6 +291,16 @@ def aux_gated_resnet(x, u, nonlinearity=concat_elu, conv=conv2d, **kwargs):
     c3 = c2[:,:,:,:num_filters] * tf.nn.sigmoid(c2[:,:,:,num_filters:])
     return x+c3
 
+def up_shift(x):
+    xs = int_shape(x)
+    return tf.concat(
+        1,
+        [
+            x[:,1:,:,:],
+            tf.zeros([xs[0],1,xs[2],xs[3]]),
+        ]
+    )
+
 def down_shift(x):
     xs = int_shape(x)
     return tf.concat(1,[tf.zeros([xs[0],1,xs[2],xs[3]]), x[:,:xs[1]-1,:,:]])

@@ -4,7 +4,6 @@ from rllab.misc import logger
 from sandbox.rein.algos.embedding_theano2.sim_hash import SimHash
 from sandbox.adam.parallel.util import SimpleContainer
 
-
 class ALEHashingBonusEvaluator(object):
     """
     Uses a hash function to store states counts. Then assign bonus reward to under-explored.
@@ -119,7 +118,7 @@ class ALEHashingBonusEvaluator(object):
     def fit_before_process_samples(self, paths):
         if self.parallel:
             shareds, barriers = self._par_objs
-            keys = self.retrieve_ys(paths)
+            keys = self.retrieve_keys(paths)
             prev_counts = self.hash.query_keys(keys)
             new_state_count = list(prev_counts).count(0)
             shareds.new_state_count_vec[self.rank] = new_state_count
@@ -127,7 +126,7 @@ class ALEHashingBonusEvaluator(object):
             if self.rank == 0:
                 total_new_state_count = sum(shareds.new_state_count_vec)
                 logger.record_tabular(
-                    self.log_prefix + 'NewSteateCount',
+                    self.log_prefix + 'NewStateCount',
                     total_new_state_count
                 )
                 shareds.total_state_count += total_new_state_count

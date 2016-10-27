@@ -34,8 +34,9 @@ class DiscreteEmbeddingNonlinearityLayer(lasagne.layers.Layer):
     def nonlinearity(self, x, noise_mask=1):
         # Force outputs to be binary through noise.
         print('noise mask: {}'.format(noise_mask))
-        return lasagne.nonlinearities.sigmoid(x) + noise_mask * self._srng.uniform(size=x.shape, low=-0.3,
-                                                                                   high=0.3)
+        return lasagne.nonlinearities.sigmoid(x) + noise_mask * self._srng.uniform(
+            size=x.shape, low=-0.3,
+            high=0.3)
 
     def get_output_for(self, input, noise_mask=1, **kwargs):
         return self.nonlinearity(input, noise_mask)
@@ -181,7 +182,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
     """
 
     # Enums
-    OutputType = enum(REGRESSION='regression', CLASSIFICATION='classfication')
+    OutputType = enum(REGRESSION='regression', CLASSIFICATION='classification')
     SurpriseType = enum(
         INFGAIN='information gain', COMPR='compression gain', BALD='BALD', VAR='variance', L1='l1')
 

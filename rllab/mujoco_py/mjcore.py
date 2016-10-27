@@ -28,9 +28,11 @@ class dict2(dict):
 
 class MjModel(MjModelWrapper):
 
-    def __init__(self, xml_path):
+    def __init__(self, xml_path=None, xml_string=None):
+        assert xml_path is not None or xml_string is not None, "Must provide either xml_path or xml_string"
+        assert xml_path is None or xml_string is None, "Must provide exactly one of xml_path or xml_string"
         buf = create_string_buffer(1000)
-        model_ptr = mjlib.mj_loadXML(xml_path, None, buf, 1000)
+        model_ptr = mjlib.mj_loadXML(xml_path, xml_string, buf, 1000)
         if len(buf.value) > 0:
             super(MjModel, self).__init__(None)
             raise MjError(buf.value)

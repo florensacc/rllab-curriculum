@@ -161,6 +161,7 @@ class BatchPolopt(RLAlgorithm):
                 returns = [sum(p["rewards"]) for p in paths]
                 logger.record_tabular("NumTrajs", len(paths))
                 logger.record_tabular_misc_stat('Return', returns, placement='front')
+                post_eval["env"].log_diagnostics(paths)
                 # log statistics for these paths
 
     def process_samples(self, itr, paths):
@@ -168,13 +169,15 @@ class BatchPolopt(RLAlgorithm):
 
     def train(self):
         with tf.Session() as sess:
-            writer = tf.train.SummaryWriter(logger.get_tf_summary_dir(), sess.graph)
-            logger.set_tf_summary_writer(writer)
+            # writer = tf.train.SummaryWriter(logger.get_tf_summary_dir(), sess.graph)
+            # logger.set_tf_summary_writer(writer)
             # summary_op = tf.merge_all_summaries()
 
             sess.run(tf.initialize_all_variables())
 
+            logger.log("Starting worker...")
             self.start_worker()
+            logger.log("Worker started")
             start_time = time.time()
             for itr in range(self.start_itr, self.n_itr):
                 itr_start_time = time.time()

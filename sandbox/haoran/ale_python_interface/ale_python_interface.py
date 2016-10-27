@@ -98,6 +98,7 @@ class ALEInterface(object):
     def __init__(self):
         self.obj = ale_lib.ALE_new()
 
+
     def getString(self, key):
         return ale_lib.getString(self.obj, key)
     def getInt(self, key):

@@ -42,6 +42,9 @@
 
 # using nar & experiment with radically smaller min kl
 
+# 0.001 kl shows markedly better performance than 0,01 kl
+# 0.001 kl @ 3.0488 and still growing
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer

@@ -64,12 +64,12 @@ class VecTfEnv(object):
     def __init__(self, vec_env):
         self.vec_env = vec_env
 
-    def reset(self):
-        return self.vec_env.reset()
+    def reset(self, dones):
+        return self.vec_env.reset(dones)
 
     @property
-    def num_envs(self):
-        return self.vec_env.num_envs
+    def n_envs(self):
+        return self.vec_env.n_envs
 
     def step(self, action_n, max_path_length):
         return self.vec_env.step(action_n, max_path_length)

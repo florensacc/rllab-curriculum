@@ -1,8 +1,10 @@
+from rllab.core.serializable import Serializable
 from .base import Env
 
 
-class ProxyEnv(Env):
+class ProxyEnv(Env, Serializable):
     def __init__(self, wrapped_env):
+        Serializable.quick_init(self, locals())
         self._wrapped_env = wrapped_env
 
     @property
@@ -26,8 +28,8 @@ class ProxyEnv(Env):
     def render(self, *args, **kwargs):
         return self._wrapped_env.render(*args, **kwargs)
 
-    def log_diagnostics(self, paths):
-        self._wrapped_env.log_diagnostics(paths)
+    def log_diagnostics(self, paths, *args, **kwargs):
+        self._wrapped_env.log_diagnostics(paths, *args, **kwargs)
 
     @property
     def horizon(self):

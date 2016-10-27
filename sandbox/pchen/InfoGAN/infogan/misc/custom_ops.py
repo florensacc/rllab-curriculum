@@ -1221,12 +1221,13 @@ def resize_nearest_neighbor(x, scale):
     x = tf.image.resize_nearest_neighbor(x, size)
     return x
 
-def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=False, context=None, conv_args=None, nin=False):
+def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=False, context=None, conv_args=None, nin=False, **kw):
     return resconv_v1_customconv(
         "conv2d_mod",
         conv_args,
         l_in=l_in, kernel=kernel, nch=nch, stride=stride, add_coeff=add_coeff,
-        keep_prob=keep_prob, nn=nn, context=context, nin=nin
+        keep_prob=keep_prob, nn=nn, context=context, nin=nin,
+        **kw
     )
     # seq = l_in.sequential()
     # with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
@@ -1258,6 +1259,7 @@ def resconv_v1_customconv(
         slow_gating=False,
         nin=False,
         context=None,
+        origin_conv=False,
 ):
     blk = origin = l_in
     if gating:
@@ -1310,15 +1312,17 @@ def resconv_v1_customconv(
     )
     if nn:
         origin = origin.apply(resize_nearest_neighbor, 1./stride)
-        origin = origin.apply(lambda o: tf.tile(o, [1,1,1,nch//int(o.get_shape()[3])]))
+        origin = origin.apply(
+            lambda o: tf.tile(o, [1,1,1,nch//int(o.get_shape()[3])])
+        )
     else:
-        if stride != 1:
+        if stride != 1 or origin_conv:
             origin = partial(origin, conv_method, conv_args)(kernel, nch, stride=stride, activation_fn=None)
 
     mix = add_coeff * blk.as_layer() + origin
     return mix.nl()
 
-def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=False, context=None, subpixel=False):
+def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=False, context=None, subpixel=False, nin=False):
     seq = l_in.sequential()
     with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
         if context is not None:
@@ -1330,7 +1334,7 @@ def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=Fals
         else:
             blk.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, prefix="de_pre")
         blk.custom_dropout(keep_prob)
-        blk.conv2d_mod(kernel, nch, activation_fn=None, prefix="post")
+        blk.conv2d_mod(1 if nin else kernel, nch, activation_fn=None, prefix="post")
         blk.apply(lambda x: x*add_coeff)
         if nn:
             origin.apply(tf.image.resize_nearest_neighbor, out_wh)

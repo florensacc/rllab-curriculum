@@ -31,7 +31,72 @@ cdef extern from "ViZDoom.h" namespace "vizdoom":
     enum Mode:
         pass
 
+    enum GameVariable:
+        KILLCOUNT = 0
+        ITEMCOUNT = 1
+        SECRETCOUNT = 2
+        FRAGCOUNT = 3
+        DEATHCOUNT = 4
+        HEALTH = 5
+        ARMOR = 6
+        DEAD = 7
+        ON_GROUND = 8
+        ATTACK_READY = 9
+        ALTATTACK_READY = 10
+        SELECTED_WEAPON = 11
+        SELECTED_WEAPON_AMMO = 12
+        AMMO0 = 13
+        AMMO1 = 14
+        AMMO2 = 15
+        AMMO3 = 16
+        AMMO4 = 17
+        AMMO5 = 18
+        AMMO6 = 19
+        AMMO7 = 20
+        AMMO8 = 21
+        AMMO9 = 22
+        WEAPON0 = 23
+        WEAPON1 = 24
+        WEAPON2 = 25
+        WEAPON3 = 26
+        WEAPON4 = 27
+        WEAPON5 = 28
+        WEAPON6 = 29
+        WEAPON7 = 30
+        WEAPON8 = 31
+        WEAPON9 = 32
+        USER1 = 33
+        USER2 = 34
+        USER3 = 35
+        USER4 = 36
+        USER5 = 37
+        USER6 = 38
+        USER7 = 39
+        USER8 = 40
+        USER9 = 41
+        USER12 = 44
+        USER13 = 45
+        USER14 = 46
+        USER15 = 47
+        USER16 = 48
+        USER17 = 49
+        USER18 = 50
+        USER19 = 51
+        USER20 = 52
+        USER21 = 53
+        USER22 = 54
+        USER23 = 55
+        USER24 = 56
+        USER25 = 57
+        USER26 = 58
+        USER27 = 59
+        USER28 = 60
+        USER29 = 61
+        USER30 = 62
+
+
     cppclass DoomGame:
+
         DoomGame() nogil
 
         void close() nogil
@@ -43,6 +108,8 @@ cdef extern from "ViZDoom.h" namespace "vizdoom":
         void setDoomScenarioPath(string path) nogil
 
         void setDoomMap(string path) nogil
+
+        string getDoomMap() nogil
 
         void setScreenResolution(ScreenResolution resolution) nogil
 
@@ -65,6 +132,8 @@ cdef extern from "ViZDoom.h" namespace "vizdoom":
         void setSoundEnabled(bool sound) nogil
 
         void addAvailableButton(Button button) nogil
+
+        void clearAvailableButtons() nogil
 
         void setMode(Mode mode) nogil
 
@@ -92,6 +161,8 @@ cdef extern from "ViZDoom.h" namespace "vizdoom":
 
         double getTotalReward() nogil
 
+        int getGameVariable(GameVariable var) nogil
+
 
 
 cdef class ParDoom(object):
@@ -106,40 +177,66 @@ cdef class ParDoom(object):
     def close_all(self, np.int32_t[:] mask=None):
         cdef int i
         cdef bool no_mask = mask is None
-        with nogil, parallel():
-            for i in prange(self.n_envs):
+        if self.n_envs == 1:
+            for i in range(self.n_envs):
                 if no_mask or mask[i]:
                     if self.games[i] != NULL:
                         self.games[i].close()
                         del self.games[i]
                         self.games[i] = NULL
+        else:
+            with nogil, parallel():
+                for i in prange(self.n_envs):
+                    if no_mask or mask[i]:
+                        if self.games[i] != NULL:
+                            self.games[i].close()
+                            del self.games[i]
+                            self.games[i] = NULL
 
     def create_all(self, np.int32_t[:] mask=None):
         cdef int i
         cdef bool no_mask = mask is None
-        with nogil, parallel():
-            for i in prange(self.n_envs):
+        if self.n_envs == 1:
+            for i in range(self.n_envs):
                 if no_mask or mask[i]:
                     if self.games[i] != NULL:
                         self.games[i].close()
                         del self.games[i]
                     self.games[i] = new DoomGame()
+        else:
+            with nogil, parallel():
+                for i in prange(self.n_envs):
+                    if no_mask or mask[i]:
+                        if self.games[i] != NULL:
+                            self.games[i].close()
+                            del self.games[i]
+                        self.games[i] = new DoomGame()
 
     def init_all(self, np.int32_t[:] mask=None):
         cdef int i
         cdef bool no_mask = mask is None
-        with nogil, parallel():
-            for i in prange(self.n_envs):
-                if no_mask or mask[i]:
-                    self.games[i].init()
+        # if self.n_envs == 1:
+        #     for i in range(self.n_envs):
+        #         if no_mask or mask[i]:
+        #             self.games[i].init()
+        # else:
+        #     with nogil, parallel():
+        for i in range(self.n_envs):
+            if no_mask or mask[i]:
+                self.games[i].init()
 
     def new_episode_all(self, np.int32_t[:] mask=None):
         cdef int i
         cdef bool no_mask = mask is None
-        with nogil, parallel():
-            for i in prange(self.n_envs):
+        if self.n_envs == 1:
+            for i in range(self.n_envs):
                 if no_mask or mask[i]:
                     self.games[i].newEpisode()
+        else:
+            with nogil, parallel():
+                for i in prange(self.n_envs):
+                    if no_mask or mask[i]:
+                        self.games[i].newEpisode()
 
     def set_vizdoom_path(self, int i, const string& path):
         self.games[i].setViZDoomPath(path)
@@ -152,6 +249,9 @@ cdef class ParDoom(object):
 
     def set_doom_map(self, int i, const string& map):
         self.games[i].setDoomMap(map)
+
+    def get_doom_map(self, int i):
+        return self.games[i].getDoomMap()
 
     def set_screen_resolution(self, int i, ScreenResolution resolution):
         self.games[i].setScreenResolution(resolution)
@@ -185,6 +285,9 @@ cdef class ParDoom(object):
 
     def add_available_button(self, int i, Button button):
         self.games[i].addAvailableButton(button)
+
+    def clear_available_buttons(self, int i):
+        self.games[i].clearAvailableButtons()
 
     def set_mode(self, int i, Mode mode):
         self.games[i].setMode(mode)
@@ -225,12 +328,29 @@ cdef class ParDoom(object):
 
     def advance_action_all(self, unsigned int tics, bool update_state, bool render_only):
         cdef int i
-        with nogil, parallel():
-            for i in prange(self.n_envs):
+        if self.n_envs == 1:
+            for i in range(self.n_envs):
                 self.games[i].advanceAction(tics, update_state, render_only)
+        else:
+            with nogil, parallel():
+                for i in prange(self.n_envs):
+                    self.games[i].advanceAction(tics, update_state, render_only)
+
+    def advance_action_all_frame_skips(self, np.int32_t[:] tics, bool update_state, bool render_only):
+        cdef int i
+        if self.n_envs == 1:
+            for i in range(self.n_envs):
+                self.games[i].advanceAction(tics[i], update_state, render_only)
+        else:
+            with nogil, parallel():
+                for i in prange(self.n_envs):
+                    self.games[i].advanceAction(tics[i], update_state, render_only)
 
     def is_episode_finished(self, int i):
         return self.games[i].isEpisodeFinished()
 
     def get_total_reward(self, int i):
         return self.games[i].getTotalReward()
+
+    def get_game_variable(self, int i, GameVariable var):
+        return self.games[i].getGameVariable(var)

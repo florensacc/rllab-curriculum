@@ -16,8 +16,8 @@ class SlidingMemEnv(ProxyEnv, Serializable):
             n_steps=4,
             axis=0,
     ):
-        super().__init__(env)
         Serializable.quick_init(self, locals())
+        super().__init__(env)
         self.n_steps = n_steps
         self.axis = axis
         self.buffer = None

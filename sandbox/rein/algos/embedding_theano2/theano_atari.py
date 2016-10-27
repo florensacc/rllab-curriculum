@@ -76,7 +76,7 @@ class AtariEnv(Env, Serializable):
             raise IOError("You asked for game %s but path %s does not exist" % (game, game_path))
         self.ale = atari_py.ALEInterface()
         self.ale.loadROM(game_path)
-        # self.ale.setBool(b'color_averaging', True)
+        self.ale.setBool(b'color_averaging', False)
         self._obs_type = obs_type
         self._action_set = self.ale.getMinimalActionSet()
         self.frame_skip = frame_skip
@@ -126,7 +126,7 @@ class AtariEnv(Env, Serializable):
             next_obs = scipy.misc.imresize(
                 next_obs, (IMG_WH[1], IMG_WH[0], 3), interp='bicubic', mode=None)
             next_obs = rgb2gray(next_obs)
-            next_obs = next_obs / 256. * 2.0 - 1.0
+            next_obs = next_obs / 255. * 2.0 - 1.0
             next_obs = next_obs[np.newaxis, :, :]
             return next_obs
         elif self._obs_type == "ram+image":

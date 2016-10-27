@@ -20,7 +20,7 @@ def new_get_distutils_extension(modname, pyxfilename, language_level=None):
     extension_mod.language = 'c++'
     extension_mod.library_dirs = [os.path.join(DOOM_PATH, "bin")]
     extension_mod.runtime_library_dirs = [os.path.join(DOOM_PATH, "bin")]
-    extension_mod.include_dirs = [os.path.join(DOOM_PATH, "include")]
+    extension_mod.include_dirs = [os.path.join(DOOM_PATH, "include"), os.path.join(DOOM_PATH, "src/lib")]
     extension_mod.extra_compile_args = ['-fopenmp']
     extension_mod.extra_link_args = ['-fopenmp']
     extension_mod.libraries = ["vizdoom"]
@@ -54,6 +54,9 @@ class DoomConfig(object):
         self.mode = None
 
     def configure(self, par_games, i):
+        # generate new seed
+        seed = np.random.randint(low=0, high=np.iinfo(np.uintc).max)
+        par_games.set_seed(i, seed)
         if self.vizdoom_path is not None:
             par_games.set_vizdoom_path(i, self.vizdoom_path)
         if self.doom_game_path is not None:
@@ -82,9 +85,7 @@ class DoomConfig(object):
             par_games.set_window_visible(i, self.window_visible)
         if self.sound_enabled is not None:
             par_games.set_sound_enabled(i, self.sound_enabled)
-        # generate new seed
-        seed = np.random.randint(low=0, high=np.iinfo(np.uintc).max)
-        par_games.set_seed(i, seed)
+        par_games.clear_available_buttons(i)
         if self.available_buttons is not None:
             for button in self.available_buttons:
                 par_games.add_available_button(i, button)
@@ -93,7 +94,17 @@ class DoomConfig(object):
 
 
 class DoomEnv(Env, Serializable):
-    def __init__(self, restart_game=True, reset_map=True, vectorized=True, verbose_debug=False, rescale_obs=(30, 40)):
+    def __init__(
+            self,
+            restart_game=True,
+            reset_map=True,
+            vectorized=True,
+            verbose_debug=False,
+            rescale_obs=(30, 40),
+            restart_game_on_reset_trial=True,
+            frame_skip=4,
+            stochastic_frame_skips=None
+    ):
         Serializable.quick_init(self, locals())
         self._vectorized = vectorized
         self._verbose_debug = verbose_debug
@@ -101,11 +112,14 @@ class DoomEnv(Env, Serializable):
         self.restart_game = restart_game
         self.reset_map = reset_map
         self.rescale_obs = rescale_obs
+        self.restart_game_on_reset_trial = restart_game_on_reset_trial
+        self.frame_skip = frame_skip
+        self.stochastic_frame_skips = stochastic_frame_skips
         self.executor = VecDoomEnv(n_envs=1, env=self)
-        self.reset_trial()
+        self.reset(restart_game=True, reset_map=True)
 
     def reset_trial(self):
-        return self.reset(restart_game=True, reset_map=True)
+        return self.reset(restart_game=self.restart_game_on_reset_trial, reset_map=True)
 
     @property
     def vectorized(self):
@@ -143,7 +157,7 @@ class DoomEnv(Env, Serializable):
         return doom_config
 
     def reset(self, restart_game=None, reset_map=None):
-        return self.executor.reset(dones=None, restart_game=restart_game, reset_map=reset_map)[0]
+        return self.executor.reset(dones=[True], restart_game=restart_game, reset_map=reset_map)[0]
 
     def step(self, action):
         if self._verbose_debug:
@@ -169,16 +183,20 @@ class DoomEnv(Env, Serializable):
             import time
             time.sleep(0.028)
 
-    def get_image_obs(self, rescale=False):
-        return self.executor.get_image_obs(rescale=rescale)[0]
+    def get_image_obs(self, rescale=False, full_size=False):
+        return self.executor.get_image_obs(rescale=rescale, full_size=full_size)[0]
 
     def render(self, close=False):
         if close:
             cv2.destroyWindow('image')
         else:
+            image_obs = self.get_image_obs(rescale=True)
+            # Then we rescale back
+            image_obs = np.cast['uint8']((image_obs + 1) * 0.5 * 255)
+            image_obs = image_obs.reshape(self.observation_space.shape)
             cv2.namedWindow('image', cv2.WINDOW_NORMAL)
             cv2.resizeWindow('image', width=400, height=400)
-            cv2.imshow('image', cv2.resize(self.get_image_obs(rescale=False), (400, 400)))
+            cv2.imshow('image', cv2.resize(image_obs, (400, 400)))
             cv2.waitKey(10)
 
     @property
@@ -196,6 +214,9 @@ class DoomEnv(Env, Serializable):
     def action_space(self):
         return Discrete(len(self.action_map))
 
+    def terminate(self):
+        self.executor.terminate()
+
 
 class VecDoomEnv(object):
     def __init__(
@@ -207,7 +228,8 @@ class VecDoomEnv(object):
         self.par_games = par_doom.ParDoom(n_envs)
         self.rewards_so_far = np.zeros((self.n_envs,))
         self.ts = np.zeros((n_envs,), dtype=np.int)
-        self.reset_trial()
+        self.frame_skips = np.zeros((n_envs,), dtype=np.int32)
+        self.reset(dones=[True] * n_envs, restart_game=True, reset_map=True)
         atexit.register(self.terminate)
 
     def terminate(self):
@@ -218,39 +240,42 @@ class VecDoomEnv(object):
     def num_envs(self):
         return self.n_envs
 
-    def reset_trial(self):
-        return self.reset(restart_game=True)
+    def reset_trial(self, dones):
+        return self.reset(dones=dones, restart_game=self.env.restart_game_on_reset_trial, reset_map=True)
 
-    def reset(self, dones=None, restart_game=None, reset_map=None, return_obs=True):
+    def reset(self, dones, restart_game=None, reset_map=None, return_obs=True):
         if restart_game is None:
             restart_game = self.env.restart_game
         if reset_map is None:
             reset_map = self.env.reset_map
-        if dones is None or np.any(dones):
+        dones = np.cast['bool'](dones)
+        int_dones = np.cast['int32'](dones)
+        if np.any(dones):
             if restart_game:
                 if self.env._verbose_debug:
                     logger.log("closing games")
-                self.par_games.close_all(dones)
-                self.init_games(dones)
+                self.par_games.close_all(int_dones)
+                self.init_games(int_dones)
             elif reset_map:
-                self.reconfigure_games(dones)
+                self.reconfigure_games(int_dones)
             if self.env._verbose_debug:
                 logger.log("start new episodes")
-            self.par_games.new_episode_all(dones)
-            if dones is None:
-                self.rewards_so_far[:] = 0
-                self.ts[:] = 0
-            else:
-                self.rewards_so_far[np.cast['bool'](dones)] = 0
-                self.ts[np.cast['bool'](dones)] = 0
+            self.par_games.new_episode_all(int_dones)
+            self.rewards_so_far[dones] = 0
+            self.ts[dones] = 0
+            if reset_map:
+                if self.env.stochastic_frame_skips is not None:
+                    self.frame_skips[dones] = np.random.choice(self.env.stochastic_frame_skips, size=np.sum(dones))
+                else:
+                    self.frame_skips[dones] = self.env.frame_skip
         if return_obs:
-            return self.get_image_obs(rescale=True)
+            return self.get_image_obs(rescale=True)[dones]
 
-    def get_image_obs(self, rescale=False):
+    def get_image_obs(self, rescale=False, full_size=False):
         images = self.par_games.get_game_screen_all()
-        if self.env.rescale_obs is not None:
-            import cv2
-            images = [cv2.resize(img, self.env.rescale_obs) for img in images]
+        if self.env.rescale_obs is not None and not full_size:
+            height, width = self.env.rescale_obs
+            images = [cv2.resize(img, (width, height)) for img in images]
         if rescale:
             images = np.array(images, dtype=np.float32)
             images /= 255.0  # [0, 1]
@@ -268,7 +293,10 @@ class VecDoomEnv(object):
         # advance in parallel
         if self.env._verbose_debug:
             logger.log("advancing action")
-        self.par_games.advance_action_all(4, True, True)
+        if self.env.stochastic_frame_skips is not None:
+            self.par_games.advance_action_all_frame_skips(self.frame_skips, True, True)
+        else:
+            self.par_games.advance_action_all(self.env.frame_skip, True, True)
         if self.env._verbose_debug:
             logger.log("checking if episode finished")
         dones = np.asarray(
@@ -294,7 +322,13 @@ class VecDoomEnv(object):
                 logger.log("resetting")
             self.reset(dones)
 
-        return next_obs, delta_rewards, np.cast['bool'](dones), dict()
+        env_infos = dict()
+        if self.env.stochastic_frame_skips is not None:
+            env_infos["frame_skip"] = np.copy(self.frame_skips)
+        else:
+            env_infos["frame_skip"] = np.asarray([self.env.frame_skip] * self.n_envs)
+
+        return next_obs, delta_rewards, np.cast['bool'](dones), env_infos
 
     def init_games(self, dones=None):
         self.par_games.create_all(dones)

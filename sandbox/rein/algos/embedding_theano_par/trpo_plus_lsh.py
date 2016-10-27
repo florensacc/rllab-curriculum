@@ -111,6 +111,7 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
             action_dim=0,
             count_target='embeddings',
             sim_hash_args=self._sim_hash_args,
+            parallel=True
         )
 
         self._projection_matrix = np.random.normal(
@@ -240,6 +241,7 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
             policy=self.policy,
             baseline=self.baseline,
             env=self.env,
+            model=self._model
         )
 
     @overrides
@@ -282,10 +284,10 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
                     # Cast continuous embedding into binary one.
                     # return np.cast['int'](np.round(cont_emb))
                     bin_emb = np.cast['int'](np.round(cont_emb))
-                    bin_emb_downsampled = bin_emb.reshape(-1, 1).mean(axis=1).reshape((bin_emb.shape[0], -1))
+                    bin_emb_downsampled = bin_emb.reshape(-1, 8).mean(axis=1).reshape((bin_emb.shape[0], -1))
                     obs_key = np.cast['int'](np.round(bin_emb_downsampled))
                     obs_key[obs_key == 0] = -1
-                    obs_key = np.sign(np.asarray(obs_key).dot(self._projection_matrix))
+                    # obs_key = np.sign(np.asarray(obs_key).dot(self._projection_matrix))
                     return obs_key
             else:
                 return path['observations']
@@ -353,7 +355,7 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
         """
         assert np.max(obs) <= 1.0
         assert np.min(obs) >= -1.0
-        obs_enc = np.round((obs + 1.0) * 0.5 * self._model.num_classes).astype("uint8")
+        obs_enc = np.round((obs + 1.0) * 0.5 * (self._model.num_classes - 1)).astype("uint8")
         return obs_enc
 
     @overrides
@@ -361,7 +363,7 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
         """
         From uint8 encoding to original observation format.
         """
-        obs_dec = obs / float(self._model.num_classes) * 2.0 - 1.0
+        obs_dec = obs / float(self._model.num_classes - 1) * 2.0 - 1.0
         assert np.max(obs_dec) <= 1.0
         assert np.min(obs_dec) >= -1.0
         return obs_dec
