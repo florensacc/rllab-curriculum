@@ -41,10 +41,18 @@ AWS_S3_PATH = "s3://$s3_bucket_name/rllab/experiments"
 
 AWS_CODE_SYNC_S3_PATH = "s3://$s3_bucket_name/rllab/code"
 
+# ALL_REGION_AWS_IMAGE_IDS = {
+#     "us-west-1": "ami-ad81c8cd",
+#     "us-west-2": "ami-7ea27a1e",
+#     "us-east-1": "ami-6b99d57c",
+# }
 ALL_REGION_AWS_IMAGE_IDS = {
-    "us-west-1": "ami-ad81c8cd",
-    "us-west-2": "ami-7ea27a1e",
-    "us-east-1": "ami-6b99d57c",
+    "us-west-1": "ami-931a51f3", # rllab_cuda7.5_nvidia_docker
+    "us-west-2": "ami-9af95dfa",
+    "us-east-1": "ami-1c5a090b",
+    'us-east-2': 'ami-1b366c7e', # rllab_cuda7.5_nvidia_docker_aws_updated
+    'ap-northeast-2': 'ami-c933e7a7',
+    'ap-south-1': 'ami-aeb4c0c1',
 }
 
 AWS_IMAGE_ID = ALL_REGION_AWS_IMAGE_IDS[AWS_REGION_NAME]
@@ -230,7 +238,8 @@ def setup_s3():
 
 
 def setup_ec2():
-    for region in ["us-east-1", "us-west-1", "us-west-2"]:
+    # for region in ["us-east-1", "us-west-1", "us-west-2"]:
+    for region in ["ap-northeast-2", "us-east-2", "ap-south-1", "us-east-1", "us-west-1", "us-west-2"]:
         print("Setting up region %s" % region)
 
         ec2 = boto3.resource(
@@ -299,6 +308,8 @@ def setup_ec2():
         os.system("ssh-add %s" % file_name)
 
         ALL_REGION_AWS_KEY_NAMES[region] = key_name
+        print(ALL_REGION_AWS_KEY_NAMES)
+        print(ALL_REGION_AWS_SECURITY_GROUP_IDS)
 
 
 def write_config():
@@ -365,3 +376,4 @@ def query_yes_no(question, default="yes", allow_skip=False):
 
 if __name__ == "__main__":
     setup()
+    # setup_ec2()
