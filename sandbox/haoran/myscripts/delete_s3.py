@@ -9,7 +9,7 @@ parser.add_argument('prefix',type=str, default='xxxxxxxxxxxxxxxxxxxxx',nargs='?'
 args = parser.parse_args()
 
 prefix = args.prefix
-bucket = 'hrtang0'
+bucket = 'rllab-hrtang'
 
 client = boto3.client('s3')
 keys = []
