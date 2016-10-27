@@ -835,6 +835,9 @@ class OldFixedDQNAgent(Agent,Shareable,Picklable):
                 # record the state to allow bonus computation
                 self.past_states[self.t] = statevar
                 self.past_actions[self.t] = a
+                if self.tgt_behavior_policy:
+                    # need to regress against model value instead
+                    qs = self.model.compute_qs(statevar)[0]
                 self.past_qvalues[self.t] = qs[a] # beware to record the variable (not just its data) to allow gradient computation
                 self.past_extra_infos[self.t] = extra_infos
                 self.epoch_q_list.append(float(qs[a].data))
