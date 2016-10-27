@@ -1,6 +1,5 @@
 """
-Image obs, ram hash
-- Fine tune bonus on Frostbite, w/ inspiration from exp-019g,h
+Image obs, img simhash
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -25,6 +24,7 @@ from sandbox.haoran.hashing.bonus_trpo.envs.atari_env import AtariEnv
 from sandbox.haoran.hashing.bonus_trpo.resetter.atari_save_load_resetter import AtariSaveLoadResetter
 
 """ bonus """
+from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.slicing_preprocessor import SlicingPreprocessor
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.identity_preprocessor import IdentityPreprocessor
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.sim_hash_v2 import SimHashV2
@@ -47,7 +47,7 @@ exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "bonus-trpo-atari/" + exp_index
 mode = "ec2"
 ec2_instance = "c4.8xlarge"
-subnet = "us-west-1b"
+subnet = "us-west-1a"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
 n_parallel = 2 # only for local exp
@@ -71,11 +71,11 @@ else:
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [0,100,200,300,400,500,600,700,800,900]
+        return [0,100,200,300,400]
 
     @variant
     def bonus_coeff(self):
-        return [0.1,0.5]
+        return [0.01]
 
     @variant
     def game(self):
@@ -91,7 +91,7 @@ class VG(VariantGenerator):
 
     @variant
     def count_target(self):
-        return ["ram_states"]
+        return ["observations"]
 variants = VG().variants()
 
 # test whether all game names are spelled correctly (comment out stub(globals) first)
@@ -229,7 +229,6 @@ for v in variants:
         record_internal_state=record_internal_state,
         frame_skip=frame_skip,
         max_start_nullops=max_start_nullops,
-        correct_luminance=True,
     )
     policy = CategoricalConvPolicy(
         env_spec=env.spec,
@@ -258,7 +257,15 @@ for v in variants:
     )
 
     # bonus
-    if count_target == "images":
+    if count_target == "observations" and obs_type == "image":
+        total_pixels=img_width * img_height
+        state_preprocessor = SlicingPreprocessor(
+            input_dim=total_pixels * n_last_screens,
+            start=total_pixels * (n_last_screens - 1),
+            stop=total_pixels * n_last_screens,
+            step=1,
+        )
+    elif count_target == "images":
         state_preprocessor = ImageVectorizePreprocessor(
             n_channel=n_last_screens,
             width=img_width,

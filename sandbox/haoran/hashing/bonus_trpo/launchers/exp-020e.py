@@ -1,6 +1,7 @@
 """
 Image obs, ram hash
-- Fine tune bonus on Frostbite, w/ inspiration from exp-019g,h
+Continue exp-020
++ Test on Gravitar
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -75,11 +76,11 @@ class VG(VariantGenerator):
 
     @variant
     def bonus_coeff(self):
-        return [0.1,0.5]
+        return [0,0.01]
 
     @variant
     def game(self):
-        return ["frostbite"]
+        return ["gravitar"]
 
     @variant
     def dim_key(self):

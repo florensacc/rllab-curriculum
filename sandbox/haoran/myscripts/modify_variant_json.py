@@ -7,6 +7,7 @@ from rllab.misc.console import colorize
 parser = argparse.ArgumentParser()
 parser.add_argument('prefix', type=str, default='??????',nargs='?')
 parser.add_argument('--param', type=str, default='', nargs='?')
+parser.add_argument('--type', type=str, default='str', nargs='?')
 parser.add_argument('--old', type=str, default='', nargs='?')
 parser.add_argument('--new', type=str, default='', nargs='?')
 parser.add_argument('--yes', default=False, action='store_true')
@@ -27,22 +28,26 @@ for json_file in json_files:
     confirm = False
     with open(json_file,"r") as f:
         params = json.load(f)
-        if args.param in params.keys():
+        if args.param in params:
             old_value = params[args.param]
             value_type = type(old_value)
-            if args.old == '' or value_type(args.old) != old_value:
-                continue
-            if args.yes:
-                confirm = True
-            else:
-                new_value = value_type(args.new)
-                confirm = query_yes_no("Replace {name}={old_value} by {new_value}?".format(
-                    name=args.param,
-                    old_value=old_value,
-                    new_value=new_value,
-                ))
-            if confirm:
-                params[args.param] = new_value 
+            assert value_type == eval(args.type)
+        else:
+            old_value = "N/A"
+            value_type = eval(args.type)
+        if args.old != '' and value_type(args.old) != old_value:
+            continue
+        new_value = value_type(args.new)
+        if args.yes:
+            confirm = True
+        else:
+            confirm = query_yes_no("Replace {name}={old_value} by {new_value}?".format(
+                name=args.param,
+                old_value=old_value,
+                new_value=new_value,
+            ))
+        if confirm:
+            params[args.param] = new_value 
     if confirm:
         with open(json_file,"w") as f:
             json.dump(params,f)

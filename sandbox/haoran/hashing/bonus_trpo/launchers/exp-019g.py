@@ -1,6 +1,8 @@
 """
-Image obs, ram hash
-- Fine tune bonus on Frostbite, w/ inspiration from exp-019g,h
+RAM obs + RAM SimHash
+Tune extremely hard on Frostbite for positive findings
+
+- Tune higher bonus rewards
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -9,8 +11,6 @@ from sandbox.adam.parallel.gaussian_conv_baseline import ParallelGaussianConvBas
 
 """ policy """
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
-from rllab.policies.categorical_conv_policy import CategoricalConvPolicy
-from sandbox.haoran.hashing.bonus_trpo.misc.dqn_args_theano import trpo_dqn_args,nips_dqn_args
 
 """ optimizer """
 from sandbox.haoran.parallel_trpo.conjugate_gradient_optimizer import ParallelConjugateGradientOptimizer
@@ -47,7 +47,7 @@ exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "bonus-trpo-atari/" + exp_index
 mode = "ec2"
 ec2_instance = "c4.8xlarge"
-subnet = "us-west-1b"
+subnet = "us-west-1a"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
 n_parallel = 2 # only for local exp
@@ -75,7 +75,7 @@ class VG(VariantGenerator):
 
     @variant
     def bonus_coeff(self):
-        return [0.1,0.5]
+        return [0.1, 0.05]
 
     @variant
     def game(self):
@@ -122,26 +122,25 @@ for v in variants:
     policy_opt_args = dict(
         name="pi_opt",
         cg_iters=10,
-        reg_coeff=1e-3,
-        subsample_factor=0.1,
+        reg_coeff=1e-5,
+        subsample_factor=1.,
         max_backtracks=15,
         backtrack_ratio=0.8,
         accept_violation=False,
         hvp_approach=None,
         num_slices=1, # reduces memory requirement
     )
-    network_args = nips_dqn_args
 
     # env
     game=v["game"]
     env_seed=1 # deterministic env
     frame_skip=4
     max_start_nullops = 30
-    img_width=42
-    img_height=42
-    n_last_screens=4
+    img_width=84
+    img_height=84
+    n_last_screens=1
     clip_reward = True
-    obs_type = "image"
+    obs_type = "ram"
     count_target = v["count_target"]
     record_image=(count_target == "images")
     record_rgb_image=False
@@ -159,7 +158,6 @@ for v in variants:
         bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
     else:
         raise NotImplementedError
-
 
     # others
     baseline_prediction_clip = 1000
@@ -206,7 +204,7 @@ for v in variants:
 
         config.KUBE_DEFAULT_RESOURCES = {
             "requests": {
-                "cpu": int(info["vCPU"]*0.75)
+                "cpu": n_parallel
             }
         }
         config.KUBE_DEFAULT_NODE_SELECTOR = {
@@ -229,22 +227,26 @@ for v in variants:
         record_internal_state=record_internal_state,
         frame_skip=frame_skip,
         max_start_nullops=max_start_nullops,
-        correct_luminance=True,
     )
-    policy = CategoricalConvPolicy(
+    policy = CategoricalMLPPolicy(
         env_spec=env.spec,
-        name="policy",
-        **network_args
+        hidden_sizes=(32,32),
     )
 
     # baseline
-    network_args_for_vf = copy.deepcopy(network_args)
-    network_args_for_vf.pop("output_nonlinearity")
+    # baseline = ParallelLinearFeatureBaseline(env_spec=env.spec)
+    network_args_for_vf = dict(
+        hidden_sizes=(32,32),
+        conv_filters=[],
+        conv_filter_sizes=[],
+        conv_strides=[],
+        conv_pads=[],
+    )
     baseline = ParallelGaussianConvBaseline(
         env_spec=env.spec,
         regressor_args = dict(
             optimizer=ParallelConjugateGradientOptimizer(
-                subsample_factor=0.1,
+                subsample_factor=0.5,
                 cg_iters=10,
                 name="vf_opt",
             ),

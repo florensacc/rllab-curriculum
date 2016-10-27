@@ -1,6 +1,7 @@
 """
-Image obs, ram hash
-- Fine tune bonus on Frostbite, w/ inspiration from exp-019g,h
+Test algo settings in RAM obs + HackyHash
+(continue exp-022a, compared to exp-021)
++ try gae_lambda
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -9,8 +10,6 @@ from sandbox.adam.parallel.gaussian_conv_baseline import ParallelGaussianConvBas
 
 """ policy """
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
-from rllab.policies.categorical_conv_policy import CategoricalConvPolicy
-from sandbox.haoran.hashing.bonus_trpo.misc.dqn_args_theano import trpo_dqn_args,nips_dqn_args
 
 """ optimizer """
 from sandbox.haoran.parallel_trpo.conjugate_gradient_optimizer import ParallelConjugateGradientOptimizer
@@ -27,7 +26,7 @@ from sandbox.haoran.hashing.bonus_trpo.resetter.atari_save_load_resetter import 
 """ bonus """
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.identity_preprocessor import IdentityPreprocessor
-from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.sim_hash_v2 import SimHashV2
+from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.ale_hacky_hash_v5 import ALEHackyHashV5
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.image_vectorize_preprocessor import ImageVectorizePreprocessor
 
 """ others """
@@ -37,6 +36,7 @@ from rllab import config
 from rllab.misc.instrument import stub, run_experiment_lite
 import sys,os
 import copy
+import numpy as np
 
 stub(globals())
 
@@ -50,7 +50,7 @@ ec2_instance = "c4.8xlarge"
 subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
-n_parallel = 2 # only for local exp
+n_parallel = 1 # only for local exp
 snapshot_mode = "gap"
 snapshot_gap = 100
 plot = False
@@ -71,27 +71,41 @@ else:
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [0,100,200,300,400,500,600,700,800,900]
+        return [0,100,200,300,400]
 
     @variant
     def bonus_coeff(self):
-        return [0.1,0.5]
+        return [0.01]
 
     @variant
     def game(self):
-        return ["frostbite"]
-
-    @variant
-    def dim_key(self):
-        return [256]
-
-    @variant
-    def bucket_sizes(self):
-        return ["6M"]
+        return ["montezuma_revenge"]
 
     @variant
     def count_target(self):
         return ["ram_states"]
+
+    @variant
+    def ram_names(self):
+        return [
+            ["x","y","room","objects","beam_wall","beam_countdown"]
+        ]
+
+    @variant
+    def max_path_length(self):
+        return [4500]
+
+    @variant
+    def grid_size(self):
+        return [10]
+
+    @variant
+    def decay_within_path(self):
+        return [False]
+
+    @variant
+    def gae_lambda(self):
+        return [0.9, 0.8]
 variants = VG().variants()
 
 # test whether all game names are spelled correctly (comment out stub(globals) first)
@@ -122,26 +136,26 @@ for v in variants:
     policy_opt_args = dict(
         name="pi_opt",
         cg_iters=10,
-        reg_coeff=1e-3,
-        subsample_factor=0.1,
+        reg_coeff=1e-5,
+        subsample_factor=1.,
         max_backtracks=15,
         backtrack_ratio=0.8,
         accept_violation=False,
         hvp_approach=None,
         num_slices=1, # reduces memory requirement
     )
-    network_args = nips_dqn_args
+    gae_lambda = v["gae_lambda"]
 
     # env
     game=v["game"]
     env_seed=1 # deterministic env
     frame_skip=4
     max_start_nullops = 30
-    img_width=42
-    img_height=42
-    n_last_screens=4
+    img_width=84
+    img_height=84
+    n_last_screens=1
     clip_reward = True
-    obs_type = "image"
+    obs_type = "ram"
     count_target = v["count_target"]
     record_image=(count_target == "images")
     record_rgb_image=False
@@ -149,17 +163,20 @@ for v in variants:
     record_internal_state=False
 
     # bonus
-    bonus_coeff=v["bonus_coeff"]
+    bonus_coeff=v["bonus_coeff"] * np.sqrt(v["grid_size"])
     bonus_form="1/sqrt(n)"
     count_target=v["count_target"]
     retrieve_sample_size=100000 # compute keys for all paths at once
-    if v["bucket_sizes"] == "6M":
-        bucket_sizes = [999931, 999953, 999959, 999961, 999979, 999983]
-    elif v["bucket_sizes"] == "90M":
-        bucket_sizes = [15485867, 15485917, 15485927, 15485933, 15485941, 15485959]
-    else:
-        raise NotImplementedError
-
+    ram_names = v["ram_names"]
+    hacky_hash_extra_info = {
+        "x": {
+            "grid_size": v["grid_size"]
+        },
+        "y": {
+            "grid_size": v["grid_size"]
+        },
+    }
+    decay_within_path = v["decay_within_path"]
 
     # others
     baseline_prediction_clip = 1000
@@ -229,22 +246,26 @@ for v in variants:
         record_internal_state=record_internal_state,
         frame_skip=frame_skip,
         max_start_nullops=max_start_nullops,
-        correct_luminance=True,
     )
-    policy = CategoricalConvPolicy(
+    policy = CategoricalMLPPolicy(
         env_spec=env.spec,
-        name="policy",
-        **network_args
+        hidden_sizes=(32,32),
     )
 
     # baseline
-    network_args_for_vf = copy.deepcopy(network_args)
-    network_args_for_vf.pop("output_nonlinearity")
+    # baseline = ParallelLinearFeatureBaseline(env_spec=env.spec)
+    network_args_for_vf = dict(
+        hidden_sizes=(32,32),
+        conv_filters=[],
+        conv_filter_sizes=[],
+        conv_strides=[],
+        conv_pads=[],
+    )
     baseline = ParallelGaussianConvBaseline(
         env_spec=env.spec,
         regressor_args = dict(
             optimizer=ParallelConjugateGradientOptimizer(
-                subsample_factor=0.1,
+                subsample_factor=0.5,
                 cg_iters=10,
                 name="vf_opt",
             ),
@@ -273,10 +294,11 @@ for v in variants:
     else:
         raise NotImplementedError
 
-    _hash = SimHashV2(
+    _hash = ALEHackyHashV5(
         item_dim=state_preprocessor.get_output_dim(), # get around stub
-        dim_key=v["dim_key"],
-        bucket_sizes=bucket_sizes,
+        game=game,
+        ram_names=ram_names,
+        extra_info=hacky_hash_extra_info,
         parallel=use_parallel,
     )
     bonus_evaluator = ALEHashingBonusEvaluator(
@@ -288,6 +310,7 @@ for v in variants:
         count_target=count_target,
         parallel=use_parallel,
         retrieve_sample_size=retrieve_sample_size,
+        decay_within_path=decay_within_path,
     )
 
     algo = ParallelTRPO(
@@ -308,6 +331,7 @@ for v in variants:
         cpu_assignments=cpu_assignments,
         serial_compile=serial_compile,
         n_parallel=n_parallel,
+        gae_lambda=gae_lambda,
     )
 
     if use_parallel:

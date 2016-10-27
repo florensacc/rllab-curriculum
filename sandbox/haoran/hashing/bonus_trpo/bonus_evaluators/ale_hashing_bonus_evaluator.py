@@ -20,6 +20,7 @@ class ALEHashingBonusEvaluator(object):
             count_target="observations",
             parallel=False,
             retrieve_sample_size=np.inf,
+            decay_within_path=False,
         ):
         self.state_dim = state_dim
         if state_preprocessor is not None:
@@ -47,6 +48,7 @@ class ALEHashingBonusEvaluator(object):
         self.parallel = parallel
         assert self.parallel == self.hash.parallel
         self.retrieve_sample_size = retrieve_sample_size
+        self.decay_within_path = decay_within_path
 
         # logging stats ---------------------------------
         self.rank = None
@@ -182,7 +184,29 @@ class ALEHashingBonusEvaluator(object):
 
     def predict(self, path):
         keys = self.retrieve_keys([path])
-        counts = np.maximum(self.hash.query_keys(keys),1)
+        counts = self.hash.query_keys(keys)
+        if self.decay_within_path:
+            # update counts of the same states within a path
+            count_dict = dict()
+            counts_updated = []
+            for key,count in zip(keys,counts):
+                # make the key hashable
+                if isinstance(key, np.ndarray) and len(key.shape) == 1:
+                    key = tuple(key)
+                elif isinstance(key, int) or isinstance(key, np.int64):
+                    pass
+                else:
+                    raise NotImplementedError
+
+                if key in count_dict:
+                    count_dict[key] += 1
+                else:
+                    count_dict[key] = count + 1
+
+                counts_updated.append(count_dict[key])
+            counts = np.asarray(counts_updated)
+        else:
+            counts = np.maximum(counts, 1)
 
         if self.bonus_form == "1/n":
             bonuses = 1./counts

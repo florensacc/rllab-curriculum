@@ -34,6 +34,7 @@ class AtariEnv(Env,Serializable):
             terminator=None,
             legal_actions=[],
             rom_filename="",
+            correct_luminance=False,
         ):
         """
         plot: not compatible with rllab yet
@@ -67,6 +68,33 @@ class AtariEnv(Env,Serializable):
         self.n_last_rams = n_last_rams
         self.avoid_life_lost = avoid_life_lost
         self.legal_actions = legal_actions
+        self.correct_luminance = correct_luminance
+        if not correct_luminance:
+            print("""
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+
+            Warning: not using the correct luminance
+
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            """)
 
         self.configure_ale()
         self.reset()
@@ -133,8 +161,12 @@ class AtariEnv(Env,Serializable):
         self.last_raw_screen = None
         assert rgb_img.shape == (210, 160, 3)
         # RGB -> Luminance
-        img = rgb_img[:, :, 0] * 0.2126 + rgb_img[:, :, 1] * \
-            0.0722 + rgb_img[:, :, 2] * 0.7152
+        if self.correct_luminance:
+            img = rgb_img[:, :, 0] * 0.2126 + rgb_img[:, :, 1] * \
+                0.0722 + rgb_img[:, :, 2] * 0.7152
+        else:
+            img = rgb_img[:, :, 0] * 0.2126 + rgb_img[:, :, 1] * \
+                0.7152 + rgb_img[:, :, 2] * 0.0722
         img = img.astype(np.uint8)
         if img.shape == (250, 160):
             raise RuntimeError("This ROM is for PAL. Please use ROMs for NTSC")

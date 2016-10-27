@@ -11,7 +11,6 @@ class HOGHashV2(BinaryHash):
             img_width,
             img_height,
             second_hash,
-            threshold=0.3,
             extract_channel_wise=False,
             bucket_sizes=None,
             parallel=False,
@@ -24,7 +23,6 @@ class HOGHashV2(BinaryHash):
         assert isinstance(second_hash, BinaryHash)
         self.second_hash = second_hash
         self.item_dim = np.prod([n_channel,img_width,img_height])
-        self.threshold = threshold
         self.extract_channel_wise = extract_channel_wise
         self.feature_shape = self.hog.get_feature_shape(
             image_shape=(n_channel,img_width,img_height)
