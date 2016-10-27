@@ -345,11 +345,12 @@ class DQNAgent(Agent,Shareable,Picklable):
                 if is_state_terminal:
                     R = 0
                 else:
+                    tgt_qs = self.shared_target_model.compute_qs(statevar)[0]
                     # bootstrap from target network
                     if self.bellman == Bellman.q:
-                        R = float(np.amax(cur_qs.data))
+                        R = float(np.amax(tgt_qs.data))
                     elif self.bellman == Bellman.sarsa:
-                        R = float(cur_qs.data[a])
+                        R = float(tgt_qs.data[a])
                     else:
                         raise NotImplementedError
 
@@ -366,12 +367,12 @@ class DQNAgent(Agent,Shareable,Picklable):
                 if is_state_terminal:
                     R = 0
                 else:
+                    tgt_qs = self.shared_target_model.compute_qs(statevar)[0]
                     # bootstrap from target network
-                    # qs already calculated
                     if self.bellman == Bellman.q:
-                        R = float(np.amax(cur_qs.data))
+                        R = float(np.amax(tgt_qs.data))
                     elif self.bellman == Bellman.sarsa:
-                        R = float(cur_qs.data[a])
+                        R = float(tgt_qs.data[a])
                     else:
                         raise NotImplementedError
 

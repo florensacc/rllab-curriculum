@@ -2,8 +2,7 @@
 
 # opt share didnt really seem to result in better performance
 
-# explore direct connection to entropy PG by backing up to Q_tgt under \pi_tgt
-# share the same exp folder to aid comp
+# debug
 
 import logging
 import os,sys
@@ -16,7 +15,7 @@ from sandbox.pchen.dqn.envs.atari import AtariEnvCX
 sys.path.append('.')
 
 from sandbox.pchen.async_rl.async_rl.agents.a3c_agent import A3CAgent
-from sandbox.pchen.async_rl.async_rl.agents.dqn_agent import DQNAgent, Bellman, OldFixedDQNAgent
+from sandbox.pchen.async_rl.async_rl.agents.dqn_agent import DQNAgent, Bellman
 from sandbox.pchen.async_rl.async_rl.algos.a3c_ale import A3CALE
 from sandbox.pchen.async_rl.async_rl.algos.dqn_ale import DQNALE
 from sandbox.pchen.async_rl.async_rl.utils.get_time_stamp import get_time_stamp
@@ -35,13 +34,13 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [42, 888, 99999, ]
+        return [42, 888, 999, ]
 
     @variant
     def total_t(self):
         # return [2*7 * 3*10**6]
         # half time, short trial
-        return [35*10**6]
+        return [20*10**6]
 
     @variant
     def n_processes(self):
@@ -69,29 +68,20 @@ class VG(VariantGenerator):
         # return ["pong", "breakout",  ]
         # return ["space_invaders"]
         # return ["breakout"]
-        return ["seaquest", "pong", "space_invaders"]
-        # return ["beamrider", "breakout", "qbert"]
+        # return ["space_invaders", "seaquest", "pong",]
+        return ["pong"]
 
     @variant
     def n_step(self, ):
-        return [5,]
+        return [1,5]
 
     @variant
     def bellman(self, ):
         # return ["q"]
         return [
-            Bellman.sarsa,
-            # Bellman.q,
+            Bellman.q,
+            # Bellman.sarsa,
         ]
-
-    @variant
-    def boltzmann(self, bellman):
-        return [True]
-
-    @variant
-    def tgt_behavior_policy(self, ):
-        return [True]
-
 
     @variant
     def lr(self, ):
@@ -112,6 +102,10 @@ class VG(VariantGenerator):
     @variant
     def adaptive_entropy(self, ):
         return [True, ]
+
+    @variant
+    def boltzmann(self, ):
+        return [False]
 
     @variant
     def temp_init(self, ):
@@ -158,13 +152,13 @@ for v in variants[:]:
         initial_manual_activation=manual_start,
     ))
 
-    # agent = DQNAgent(
-    agent = OldFixedDQNAgent(
+    agent = DQNAgent(
         # n_actions=env.number_of_actions,
         env=env,
         target_update_frequency=target_update_frequency,
         eps_test=eps_test,
         t_max=5,
+        n_step=n_step,
         optimizer_args=dict(
             lr=lr,
             eps=1e-1,
@@ -176,7 +170,6 @@ for v in variants[:]:
         boltzmann=boltzmann,
         sample_eps=True,
         share_optimizer_states=opt_share,
-        tgt_behavior_policy=tgt_behavior_policy,
     )
     algo = DQNALE(
         total_steps=total_t,
@@ -208,11 +201,11 @@ for v in variants[:]:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="1026_old5_q_and_sarsa",# use the batch after 1am
+        exp_prefix="1026_DEBUG_q",# use the batch after 1am
         seed=v["seed"],
         variant=v,
-        mode="local",
-        # mode="ec2",
+        # mode="local",
+        mode="ec2",
         # terminate_machine=False,
         # mode="local_docker",
         #

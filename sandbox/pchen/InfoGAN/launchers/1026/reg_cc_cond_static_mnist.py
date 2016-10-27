@@ -10,8 +10,7 @@
 
 # retry arconv & larger learning rate + mean_only ar
 
-# larger lr mysteriously overfits more
-# fewer arconv was worse
+# try more arconv
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
@@ -49,7 +48,7 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.002*5, 0.002] #0.001]
+        return [0.002] #0.001]
 
     @variant
     def seed(self):
@@ -139,7 +138,7 @@ class VG(VariantGenerator):
         ]
     @variant(hide=False)
     def exp_avg(self):
-        return [0.99, ]
+        return [0.998, ]
 
     @variant(hide=False)
     def tiear(self):
@@ -159,7 +158,7 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def max_epoch(self, ):
-        yield 600
+        yield 350
 
     @variant(hide=True)
     def anneal_after(self, max_epoch):
@@ -179,7 +178,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_nin(self, ar_depth):
-        return [2, ]
+        return [2, 4,]
 
     @variant(hide=False)
     def ar_tie(self):
@@ -187,7 +186,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_chns(self):
-        return [12, 6]
+        return [12, 24, ]
 
 
 
@@ -318,7 +317,7 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1020_llr_reg_smnist_cc_af_gres",
+            exp_prefix="1026_llr_reg_smnist_cc_af_gres",
             seed=v["seed"],
             variant=v,
             mode="ec2",
