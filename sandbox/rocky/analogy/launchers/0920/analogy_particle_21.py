@@ -36,7 +36,7 @@ class VG(VariantGenerator):
 
     @variant
     def n_train_trajs(self):
-        return [1000]#2000]#, 5000]#0]#5000]#, 20000]  # , 20000]#1000, 5000, 20000]
+        return [10000]#2000]#, 5000]#0]#5000]#, 20000]  # , 20000]#1000, 5000, 20000]
 
     @variant
     def hidden_dim(self):
@@ -48,7 +48,7 @@ class VG(VariantGenerator):
 
     @variant
     def batch_size(self):
-        return [32]#32]#100]  # 10, 100]
+        return [16]#32]#100]  # 10, 100]
 
     @variant
     def network_type(self):
@@ -64,8 +64,8 @@ class VG(VariantGenerator):
 
     @variant
     def obs_setup(self):
-        # yield ('image', (100, 100))
-        yield ('image', (25, 25))
+        yield ('image', (100, 100))
+        # yield ('image', (25, 25))
         # yield ('image', (50, 50))
         # yield ('state', (25, 25))
 
@@ -79,7 +79,7 @@ class VG(VariantGenerator):
 
     @variant
     def layer_normalization(self):
-        return [True]#, False]#True, False]#True, False]
+        return [True]#False]#, False]#True, False]#True, False]
 
     @variant
     def weight_normalization(self):

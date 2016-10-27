@@ -97,6 +97,7 @@ def load_exps_data(exp_folder_paths,disable_variant=False):
     exps = []
     for exp_folder_path in exp_folder_paths:
         exps += [x[0] for x in os.walk(exp_folder_path)]
+    print("finished walking exp folders")
     exps_data = []
     for exp in exps:
         try:
@@ -116,6 +117,33 @@ def load_exps_data(exp_folder_paths,disable_variant=False):
                 progress=progress, params=params, flat_params=flatten_dict(params)))
         except IOError as e:
             print(e)
+
+    # a dictionary of all keys and types of values
+    all_keys = dict()
+    for data in exps_data:
+        for key in data.flat_params.keys():
+            if key not in all_keys:
+                all_keys[key] = type(data.flat_params[key])
+
+    # if any data does not have some key, specify the value of it
+    default_values = dict()
+    for data in exps_data:
+        for key in sorted(all_keys.keys()):
+            if key not in data.flat_params:
+                if key not in default_values:
+                    default = input("Please specify the default value of \033[93m %s \033[0m: "%(key))
+                    try:
+                        if all_keys[key].__name__ == 'NoneType':
+                            default = None
+                        elif all_keys[key].__name__ == 'bool':
+                            default = eval(default)
+                        else:
+                            default = all_keys[key](default)
+                    except ValueError:
+                        print("Warning: cannot cast %s to %s"%(default,all_keys[key]))
+                    default_values[key] = default
+                data.flat_params[key] = default_values[key]
+
     return exps_data
 
 
@@ -165,7 +193,7 @@ def extract_distinct_params(exps_data, excluded_params=('exp_name', 'seed', 'log
                 )
             ),
             key=lambda x: (
-                tuple(0. if it is None else it for it in x),
+                tuple("" if it is None else str(it) for it in x),
             )
         )
     except Exception as e:
@@ -174,7 +202,7 @@ def extract_distinct_params(exps_data, excluded_params=('exp_name', 'seed', 'log
     proposals = [(k, [x[1] for x in v])
                  for k, v in itertools.groupby(stringified_pairs, lambda x: x[0])]
     filtered = [(k, v) for (k, v) in proposals if len(v) > l and all(
-        [k.find(excluded_param) == -1 for excluded_param in excluded_params])]
+        [k.find(excluded_param) != 0 for excluded_param in excluded_params])]
     return filtered
 
 

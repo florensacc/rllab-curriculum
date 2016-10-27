@@ -1,4 +1,3 @@
-import theano
 import numpy as np
 
 
@@ -10,8 +9,8 @@ class ReplayPool(object):
             max_pool_size,
             observation_shape,
             action_dim,
-            observation_dtype=theano.config.floatX,
-            action_dtype=theano.config.floatX,
+            observation_dtype=None,#theano.config.floatX,
+            action_dtype=None,#theano.config.floatX,
             num_seq_frames=1,
             **kwargs
     ):
@@ -136,14 +135,16 @@ class SingleStateReplayPool(object):
             self,
             max_pool_size,
             observation_shape,
-            observation_dtype=theano.config.floatX,
+            observation_dtype=None,#theano.config.floatX,
             subsample_factor=1.0,
+            fill_before_subsampling=False,
             **kwargs
     ):
         self._observation_shape = observation_shape
         self._observation_dtype = observation_dtype
         self._max_pool_size = max_pool_size
         self._subsample_factor = subsample_factor
+        self._fill_before_subsampling = fill_before_subsampling
 
         self._observations = np.zeros(
             (max_pool_size,) + observation_shape,
@@ -152,6 +153,14 @@ class SingleStateReplayPool(object):
         self._bottom = 0
         self._top = 0
         self._size = 0
+
+        # --
+        # For caching purposes
+        self._old_bottom = np.nan
+        self._old_top = np.nan
+        self._old_size = np.nan
+        self._old_mean = np.nan
+        self._old_std = np.nan
 
     def __str__(self):
         sb = []
@@ -163,7 +172,8 @@ class SingleStateReplayPool(object):
     def add_sample(self, observation):
         """Add sample to replay pool."""
         rnd = np.random.rand()
-        if rnd < self._subsample_factor:
+        fill_anyway = self._fill_before_subsampling and self._size < self._max_pool_size
+        if rnd < self._subsample_factor or fill_anyway:
             # Select last frame, which is the 'true' frame. Only add this one, to save replay pool memory. When
             # the samples are fetched, we rebuild the sequence.
             self._observations[self._top] = observation[-self._observation_shape[0]:]
@@ -192,3 +202,19 @@ class SingleStateReplayPool(object):
     @property
     def size(self):
         return self._size
+
+    def get_mean_std_obs(self):
+        return np.mean(self._observations, axis=0), np.std(self._observations, axis=0)
+
+    def get_cached_mean_std_obs(self):
+        if self._size != self._old_size or self._bottom != self._old_bottom or self._top != self._old_top:
+            self._old_size = self._size
+            self._old_bottom = self._bottom
+            self._old_top = self._top
+            if self._size >= self._max_pool_size:
+                all_obs = self._observations
+            else:
+                all_obs = self._observations[self._bottom:self._top]
+            self._old_mean = np.mean(all_obs, axis=0)
+            self._old_std = np.std(all_obs, axis=0)
+        return self._old_mean, self._old_std

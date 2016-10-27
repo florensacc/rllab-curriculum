@@ -1,211 +1,36 @@
 from rllab.core.serializable import Serializable
-from sandbox.rocky.tf.algos.batch_polopt import BatchPolopt
+from rllab.misc import logger
 import tensorflow as tf
 
+from sandbox.rocky.neural_learner.algos.batch_polopt import BatchPolopt
 from sandbox.rocky.tf.core.layers_powered import LayersPowered
-from sandbox.rocky.tf.distributions.recurrent_categorical import RecurrentCategorical
-from sandbox.rocky.tf.misc import tensor_utils
-from sandbox.rocky.tf.policies.base import StochasticPolicy
 import sandbox.rocky.tf.core.layers as L
-from sandbox.rocky.tf.policies.rnn_utils import create_recurrent_network
+from sandbox.rocky.tf.core.network import MLP
+from sandbox.rocky.tf.misc import tensor_utils
 import numpy as np
 
 
-# First of all, we are going to make it so that the baseline and the policy share the same network
-
-
-class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
+class PPOSGD(BatchPolopt):
     def __init__(
             self,
-            name,
-            env_spec,
-            hidden_dim=32,
-            feature_network=None,
-            state_include_action=True,
-            hidden_nonlinearity=tf.tanh,
-            network_type="gru",
+            step_size=0.01,
+            n_steps=20,
+            n_epochs=10,
+            increase_penalty_factor=2,
+            decrease_penalty_factor=0.5,
+            entropy_bonus_coeff=0.,
+            **kwargs
     ):
-        Serializable.quick_init(self, locals())
-        """
-        :param env_spec: A spec for the env.
-        :param hidden_dim: dimension of hidden layer
-        :param hidden_nonlinearity: nonlinearity used for each hidden layer
-        :return:
-        """
-        with tf.variable_scope(name):
-            assert isinstance(env_spec.action_space, Discrete)
-            super(CategoricalRNNPolicy, self).__init__(env_spec)
+        self.step_size = step_size
+        self.n_steps = n_steps
+        self.n_epochs = n_epochs
+        self.increase_penalty_factor = increase_penalty_factor
+        self.decrease_penalty_factor = decrease_penalty_factor
+        self.entropy_bonus_coeff = entropy_bonus_coeff
+        super().__init__(**kwargs)
 
-            obs_dim = env_spec.observation_space.flat_dim
-            action_dim = env_spec.action_space.flat_dim
-
-            if state_include_action:
-                input_dim = obs_dim + action_dim
-            else:
-                input_dim = obs_dim
-
-            l_input = L.InputLayer(
-                shape=(None, None, input_dim),
-                name="input"
-            )
-
-            if feature_network is None:
-                feature_dim = input_dim
-                l_flat_feature = None
-                l_feature = l_input
-            else:
-                feature_dim = feature_network.output_layer.output_shape[-1]
-                l_flat_feature = feature_network.output_layer
-                l_feature = L.OpLayer(
-                    l_flat_feature,
-                    extras=[l_input],
-                    name="reshape_feature",
-                    op=lambda flat_feature, input: tf.reshape(
-                        flat_feature,
-                        tf.pack([tf.shape(input)[0], tf.shape(input)[1], feature_dim])
-                    ),
-                    shape_op=lambda _, input_shape: (input_shape[0], input_shape[1], feature_dim)
-                )
-
-            prob_network = create_recurrent_network(
-                network_type,
-                input_shape=(feature_dim,),
-                input_layer=l_feature,
-                output_dim=env_spec.action_space.n,
-                hidden_dim=hidden_dim,
-                hidden_nonlinearity=hidden_nonlinearity,
-                output_nonlinearity=tf.nn.softmax,
-                name="prob_network"
-            )
-
-            self.prob_network = prob_network
-            self.feature_network = feature_network
-            self.l_input = l_input
-            self.state_include_action = state_include_action
-
-            flat_input_var = tf.placeholder(dtype=tf.float32, shape=(None, input_dim), name="flat_input")
-            if feature_network is None:
-                feature_var = flat_input_var
-            else:
-                feature_var = L.get_output(l_flat_feature, {feature_network.input_layer: flat_input_var})
-
-            self.f_step_prob = tensor_utils.compile_function(
-                [
-                    flat_input_var,
-                    prob_network.step_prev_state_layer.input_var
-                ],
-                L.get_output([
-                    prob_network.step_output_layer,
-                    prob_network.step_state_layer
-                ], {prob_network.step_input_layer: feature_var})
-            )
-
-            self.input_dim = input_dim
-            self.action_dim = action_dim
-            self.hidden_dim = hidden_dim
-            self.state_dim = prob_network.state_dim
-
-            self.prev_actions = None
-            self.prev_states = None
-            self.dist = RecurrentCategorical(env_spec.action_space.n)
-
-            out_layers = [prob_network.output_layer]
-            if feature_network is not None:
-                out_layers.append(feature_network.output_layer)
-
-            LayersPowered.__init__(self, out_layers)
-
-    def dist_info_sym(self, obs_var, state_info_vars):
-        n_batches = tf.shape(obs_var)[0]
-        n_steps = tf.shape(obs_var)[1]
-        obs_var = tf.reshape(obs_var, tf.pack([n_batches, n_steps, -1]))
-        obs_var = tf.cast(obs_var, tf.float32)
-        if self.state_include_action:
-            prev_action_var = tf.cast(state_info_vars["prev_action"], tf.float32)
-            all_input_var = tf.concat(2, [obs_var, prev_action_var])
-        else:
-            all_input_var = obs_var
-        if self.feature_network is None:
-            return dict(
-                prob=L.get_output(
-                    self.prob_network.output_layer,
-                    {self.l_input: all_input_var}
-                )
-            )
-        else:
-            flat_input_var = tf.reshape(all_input_var, (-1, self.input_dim))
-            return dict(
-                prob=L.get_output(
-                    self.prob_network.output_layer,
-                    {self.l_input: all_input_var, self.feature_network.input_layer: flat_input_var}
-                )
-            )
-
-    @property
-    def vectorized(self):
-        return True
-
-    def reset(self, dones=None):
-        if dones is None:
-            dones = [True]
-        dones = np.asarray(dones)
-        if self.prev_actions is None or len(dones) != len(self.prev_actions):
-            self.prev_actions = np.zeros((len(dones), self.action_space.flat_dim))
-            self.prev_states = np.zeros((len(dones), self.state_dim))
-
-        if np.any(dones):
-            self.prev_actions[dones] = 0.
-            self.prev_states[dones] = self.prob_network.state_init_param.eval()  # get_value()
-
-    # The return value is a pair. The first item is a matrix (N, A), where each
-    # entry corresponds to the action value taken. The second item is a vector
-    # of length N, where each entry is the density value for that action, under
-    # the current policy
-    def get_action(self, observation):
-        actions, agent_infos = self.get_actions([observation])
-        return actions[0], {k: v[0] for k, v in agent_infos.items()}
-
-    def get_actions(self, observations):
-        flat_obs = self.observation_space.flatten_n(observations)
-        if self.state_include_action:
-            assert self.prev_actions is not None
-            all_input = np.concatenate([
-                flat_obs,
-                self.prev_actions
-            ], axis=-1)
-        else:
-            all_input = flat_obs
-        probs, state_vec = self.f_step_prob(all_input, self.prev_states)
-        actions = special.weighted_sample_n(probs, np.arange(self.action_space.n))
-        prev_actions = self.prev_actions
-        self.prev_actions = self.action_space.flatten_n(actions)
-        self.prev_states = state_vec
-        agent_info = dict(prob=probs)
-        if self.state_include_action:
-            agent_info["prev_action"] = np.copy(prev_actions)
-        return actions, agent_info
-
-    @property
-    def recurrent(self):
-        return True
-
-    @property
-    def distribution(self):
-        return self.dist
-
-    @property
-    def state_info_specs(self):
-        if self.state_include_action:
-            return [
-                ("prev_action", (self.action_dim,)),
-            ]
-        else:
-            return []
-
-
-class PPOSGD(BatchPolopt):
     def init_opt(self):
-        assert self.policy.is_recurrent
+        assert self.policy.recurrent
 
         obs_var = self.env.observation_space.new_tensor_variable(
             'obs',
@@ -236,21 +61,13 @@ class PPOSGD(BatchPolopt):
 
         valid_var = tf.placeholder(tf.float32, shape=(None, None), name="valid")
 
-        dist_info_vars = self.policy.dist_info_sym(obs_var, state_info_vars)
-        kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
-        lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, dist_info_vars)
-        mean_kl = tf.reduce_sum(kl * valid_var) / tf.reduce_sum(valid_var)
-        surr_loss = - tf.reduce_sum(lr * advantage_var * valid_var) / tf.reduce_sum(valid_var)
-
-        input_list = [
-                         obs_var,
-                         action_var,
-                         advantage_var,
-                     ] + state_info_vars_list + old_dist_info_vars_list + [valid_var]
-
         rnn_network = self.policy.prob_network
-        recurrent_layer = rnn_network.recurrent_layer
+
         state_var = tf.placeholder(tf.float32, (None, rnn_network.state_dim), "state")
+
+        kl_penalty_var = tf.placeholder(tf.float32, shape=(), name="kl_penalty")
+
+        recurrent_layer = rnn_network.recurrent_layer
         recurrent_state_output = dict()
 
         minibatch_dist_info_vars = self.policy.dist_info_sym(
@@ -262,43 +79,99 @@ class PPOSGD(BatchPolopt):
         state_output = recurrent_state_output[rnn_network.recurrent_layer]
         final_state = tf.reverse(state_output, [False, True, False])[:, 0, :]
 
-        import ipdb; ipdb.set_trace()
+        lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, minibatch_dist_info_vars)
+        kl = dist.kl_sym(old_dist_info_vars, minibatch_dist_info_vars)
+        ent = tf.reduce_sum(dist.entropy_sym(minibatch_dist_info_vars) * valid_var) / tf.reduce_sum(valid_var)
+        mean_kl = tf.reduce_sum(kl * valid_var) / tf.reduce_sum(valid_var)
+        surr_loss = - tf.reduce_sum(lr * advantage_var * valid_var) / tf.reduce_sum(valid_var)
 
-        self.optimizer.update_opt(
-            loss=surr_loss,
-            target=self.policy,
-            leq_constraint=(mean_kl, self.step_size),
-            inputs=input_list,
-            constraint_name="mean_kl"
+        surr_pen_loss = surr_loss + kl_penalty_var * tf.maximum(0., mean_kl - self.step_size) - \
+                        self.entropy_bonus_coeff * ent
+
+        optimizer = tf.train.AdamOptimizer(learning_rate=1e-3)
+
+        params = self.policy.get_params(trainable=True)
+        train_op = optimizer.minimize(surr_pen_loss, var_list=params)
+
+        self.f_train = tensor_utils.compile_function(
+            inputs=[obs_var, action_var, advantage_var] + state_info_vars_list + old_dist_info_vars_list + \
+                   [valid_var, state_var, kl_penalty_var],
+            outputs=[train_op, surr_loss, mean_kl, final_state],
         )
-        return dict()
+        self.f_loss_kl = tensor_utils.compile_function(
+            inputs=[obs_var, action_var, advantage_var] + state_info_vars_list + old_dist_info_vars_list + \
+                   [valid_var, state_var],
+            outputs=[surr_loss, mean_kl],
+        )
 
     def optimize_policy(self, itr, samples_data):
-        all_input_values = tuple(ext.extract(
-            samples_data,
-            "observations", "actions", "advantages"
-        ))
+
+        observations = samples_data["observations"]
+        actions = samples_data["actions"]
+        advantages = samples_data["advantages"]
+        valids = samples_data["valids"]
+
+        # Perform truncated backprop
         agent_infos = samples_data["agent_infos"]
         state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
         dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
-        all_input_values += tuple(state_info_list) + tuple(dist_info_list)
-        if self.policy.recurrent:
-            all_input_values += (samples_data["valids"],)
-        logger.log("Computing loss before")
-        loss_before = self.optimizer.loss(all_input_values)
-        logger.log("Computing KL before")
-        mean_kl_before = self.optimizer.constraint_val(all_input_values)
-        logger.log("Optimizing")
-        self.optimizer.optimize(all_input_values)
-        logger.log("Computing KL after")
-        mean_kl = self.optimizer.constraint_val(all_input_values)
-        logger.log("Computing loss after")
-        loss_after = self.optimizer.loss(all_input_values)
-        logger.record_tabular('LossBefore', loss_before)
-        logger.record_tabular('LossAfter', loss_after)
-        logger.record_tabular('MeanKLBefore', mean_kl_before)
-        logger.record_tabular('MeanKL', mean_kl)
-        logger.record_tabular('dLoss', loss_before - loss_after)
+
+        all_inputs = [observations, actions, advantages] + state_info_list + dist_info_list + [valids]
+        # all_input_values += tuple(state_info_list) + tuple(dist_info_list)
+        # if self.policy.recurrent:
+        #     all_input_values += (samples_data["valids"],)
+
+        N, T, _ = observations.shape
+        if self.n_steps is None:
+            n_steps = T
+        else:
+            n_steps = self.n_steps
+
+        init_states = np.tile(
+            self.policy.prob_network.state_init_param.eval().reshape((1, -1)),
+            (N, 1)
+        )
+
+        surr_loss_before, kl_before = self.f_loss_kl(*(all_inputs + [init_states]))
+
+        kl_penalty = 1.
+
+        best_loss = None
+        best_params = None
+
+        for epoch_id in range(self.n_epochs):
+            states = init_states
+            surr_losses = []
+            mean_kls = []
+            for t in range(0, T, n_steps):
+                sliced_inputs = [x[:, t:t + n_steps] for x in all_inputs]
+                _, surr_loss, mean_kl, states = self.f_train(*(sliced_inputs + [states, kl_penalty]))
+                surr_losses.append(surr_loss)
+                mean_kls.append(mean_kl)
+            mean_kl = np.mean(mean_kls)
+            surr_loss = np.mean(surr_losses)
+            logger.log("Loss: %f; Mean KL: %f; KL penalty: %f" % (surr_loss, mean_kl, kl_penalty))
+            if mean_kl > self.step_size:
+                kl_penalty *= self.increase_penalty_factor
+            else:
+                kl_penalty *= self.decrease_penalty_factor
+            if mean_kl <= self.step_size:
+                if best_loss is None or surr_loss < best_loss:
+                    best_loss = surr_loss
+                    best_params = self.policy.get_param_values()
+
+        if best_params is not None:
+            self.policy.set_param_values(best_params)
+
+        surr_loss_after, kl_after = self.f_loss_kl(*(all_inputs + [init_states]))
+
+        # perform minibatch gradient descent on the surrogate loss, while monitoring the KL divergence
+
+        logger.record_tabular('SurrLossBefore', surr_loss_before)
+        logger.record_tabular('SurrLossAfter', surr_loss_after)
+        logger.record_tabular('MeanKLBefore', kl_before)
+        logger.record_tabular('MeanKL', kl_after)
+        logger.record_tabular('dSurrLoss', surr_loss_before - surr_loss_after)
         return dict()
 
     def get_itr_snapshot(self, itr, samples_data):

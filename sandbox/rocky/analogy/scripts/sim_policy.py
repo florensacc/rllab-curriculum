@@ -29,6 +29,18 @@ if __name__ == "__main__":
             trainer = data['trainer']
             env_cls = trainer.env_cls
 
+            print("Checking for uninitialized variables...")
+            uninitialized_vars = []
+            for var in tf.all_variables():
+                try:
+                    sess.run(var)
+                except tf.errors.FailedPreconditionError:
+                    uninitialized_vars.append(var)
+            if len(uninitialized_vars) > 0:
+                print("Initializing uninitialized variables")
+                sess.run(tf.initialize_variables(uninitialized_vars))
+            print("All variables initialized")
+
             confirmed = False
 
             while True:
@@ -36,7 +48,12 @@ if __name__ == "__main__":
                 seed = np.random.randint(np.iinfo(np.int32).max)
                 demo_env = env_cls(seed=seed, target_seed=target_seed)
                 analogy_env = env_cls(seed=seed + 10007, target_seed=target_seed)
-                demo_policy = trainer.demo_policy_cls(demo_env)
+                if hasattr(trainer, 'demo_policy_cls'):
+                    demo_policy = trainer.demo_policy_cls(demo_env)
+                elif hasattr(trainer, 'demo_collector'):
+                    demo_policy = trainer.demo_collector.policy_cls(demo_env)
+                else:
+                    raise NotImplementedError
 
                 demo_env.reset()
                 demo_env.render()

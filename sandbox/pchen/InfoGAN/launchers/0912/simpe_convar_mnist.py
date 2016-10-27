@@ -6,11 +6,27 @@ import numpy as np
 import tensorflow as tf
 import time
 
-from sandbox.pchen.InfoGAN.infogan.misc.distributions import ConvAR, MeanBernoulli
+from sandbox.pchen.InfoGAN.infogan.misc.distributions import ConvAR, MeanBernoulli, Mixture
 
 dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
+
 ar_conv_dist = ConvAR(
     tgt_dist=MeanBernoulli(1),
+    shape=(28, 28, 1),
+    filter_size=3,
+    depth=8,
+    nr_channels=32,
+    pixel_bias=True,
+    block="plstm",
+    # block="resnet",
+)
+
+ar_conv_dist = ConvAR(
+    tgt_dist=Mixture(
+        [
+            (0.1, DiscretizedLogistics)
+        ]
+    ),
     shape=(28, 28, 1),
     filter_size=3,
     depth=8,

@@ -6,7 +6,7 @@ import cv2
 import copy
 import atari_py
 
-from sandbox.rocky.tf.spaces.box import Box
+from rllab import config
 from rllab.spaces.discrete import Discrete
 from rllab.core.serializable import Serializable
 from rllab.envs.base import Env
@@ -28,15 +28,23 @@ class AtariEnv(Env,Serializable):
             record_internal_state=True,
             resetter=None,
             avoid_life_lost=False,
-            n_last_rams=4,
+            n_last_rams=1,
             n_last_screens=4,
+            frame_skip=4,
+            terminator=None,
+            legal_actions=[],
+            rom_filename="",
+            correct_luminance=False,
         ):
         """
         plot: not compatible with rllab yet
         """
         Serializable.quick_init(self,locals())
         assert not plot
-        self.rom_filename = atari_py.get_game_path(game)
+        if rom_filename == "":
+            self.rom_filename = atari_py.get_game_path(game)
+        else:
+            self.rom_filename = rom_filename
         self.seed = seed
         self.plot = plot
         self.max_start_nullops = max_start_nullops
@@ -48,14 +56,45 @@ class AtariEnv(Env,Serializable):
         self.resetter = resetter
         if resetter is not None:
             assert max_start_nullops == 0 # doing nothing when reset to a non-initial state can be dangerous in Montezuma's Revenge
+        self.terminator = terminator
+        if self.terminator is not None:
+            self.terminator.set_env(self)
         self.crop_or_scale = crop_or_scale
         self.img_width = img_width
         self.img_height = img_height
         self._prior_reward = 0
-        self.frame_skip = 4
+        self.frame_skip = frame_skip
         self.n_last_screens = n_last_screens
         self.n_last_rams = n_last_rams
         self.avoid_life_lost = avoid_life_lost
+        self.legal_actions = legal_actions
+        self.correct_luminance = correct_luminance
+        if not correct_luminance:
+            print("""
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+
+            Warning: not using the correct luminance
+
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            ################################################
+            """)
 
         self.configure_ale()
         self.reset()
@@ -72,7 +111,13 @@ class AtariEnv(Env,Serializable):
         self.set_seed(self.seed)
 
         self.ale.setFloat(b'repeat_action_probability', 0.0)
-        self.ale.setBool(b'color_averaging', False)
+        if self.game_name == "venture":
+            # without color averaging, the agent and reward items are invisible in Venture
+            color_averaging = True
+        else:
+            color_averaging = False
+        self.ale.setBool(b'color_averaging', color_averaging)
+
         if self.plot:
             self.prepare_plot()
         else:
@@ -82,7 +127,9 @@ class AtariEnv(Env,Serializable):
 
         assert self.ale.getFrameNumber() == 0
 
-        self.legal_actions = self.ale.getMinimalActionSet()
+        # limit the action set to make learning easier
+        if len(self.legal_actions) == 0:
+            self.legal_actions = self.ale.getMinimalActionSet()
 
     def prepare_plot(self,display="0.0"):
         os.environ["DISPLAY"] = display
@@ -114,8 +161,12 @@ class AtariEnv(Env,Serializable):
         self.last_raw_screen = None
         assert rgb_img.shape == (210, 160, 3)
         # RGB -> Luminance
-        img = rgb_img[:, :, 0] * 0.2126 + rgb_img[:, :, 1] * \
-            0.0722 + rgb_img[:, :, 2] * 0.7152
+        if self.correct_luminance:
+            img = rgb_img[:, :, 0] * 0.2126 + rgb_img[:, :, 1] * \
+                0.0722 + rgb_img[:, :, 2] * 0.7152
+        else:
+            img = rgb_img[:, :, 0] * 0.2126 + rgb_img[:, :, 1] * \
+                0.7152 + rgb_img[:, :, 2] * 0.0722
         img = img.astype(np.uint8)
         if img.shape == (250, 160):
             raise RuntimeError("This ROM is for PAL. Please use ROMs for NTSC")
@@ -159,12 +210,21 @@ class AtariEnv(Env,Serializable):
 
     @property
     def observation_space(self):
+        if config.USE_TF:
+            from sandbox.rocky.tf.spaces.box import Box
+        else:
+            from rllab.spaces import Box
+
         if self.obs_type == "ram":
             return Box(low=-1, high=1,
                 shape=(self.n_last_rams, self.ale.getRAMSize())
             ) #np.zeros(128), high=np.ones(128))# + 255)
         elif self.obs_type == "image":
-            return Box(low=-1, high=1, shape=(self.img_width,self.img_height,self.n_last_screens))
+            if config.USE_TF:
+                image_shape = (self.img_width, self.img_height, self.n_last_screens)
+            else:
+                image_shape = (self.n_last_screens, self.img_width, self.img_height)
+            return Box(low=-1, high=1, shape=image_shape)
             # see sandbox.haoran.tf.core.layers.BaseConvLayer for a reason why channel is at the last dimension
         else:
             raise NotImplementedError
@@ -175,10 +235,21 @@ class AtariEnv(Env,Serializable):
 
     @property
     def is_terminal(self):
-        if self.avoid_life_lost:
-            return self.ale.game_over() or self.lives_lost
+        if self.terminator is not None:
+            return self.terminator.is_terminal()
         else:
-            return self.ale.game_over()
+            if self.avoid_life_lost:
+                if self.ale.game_over() or self.lives_lost:
+                    # print("Terminate due to life loss")
+                    return True
+                else:
+                    return False
+            else:
+                if self.ale.game_over():
+                    # print("Terminate due to gameover")
+                    return True
+                else:
+                    return False
 
     @property
     def reward(self):
@@ -190,7 +261,7 @@ class AtariEnv(Env,Serializable):
         # if self.record_ram and self.obs_type != "ram":
         if self.record_ram:
             ram = np.copy(self.ale.getRAM())
-            ram = ram.reshape((len(ram),1)) # make it like an image
+            ram = ram.reshape((1,len(ram),1)) # make it like an image
             env_info["ram_states"] = ram
 
         if self.record_image and self.obs_type != "image":
@@ -236,6 +307,8 @@ class AtariEnv(Env,Serializable):
                 self.lives_lost = False
 
             if self.is_terminal:
+                if self.terminator is not None:
+                    rewards.append(self.terminator.get_terminal_reward())
                 break
         self._reward = sum(rewards)
         if self._prior_reward > 0:

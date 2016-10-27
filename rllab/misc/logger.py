@@ -38,6 +38,21 @@ _snapshot_gap = 1
 _log_tabular_only = False
 _header_printed = False
 
+_tf_summary_dir = None
+_tf_summary_writer = None
+
+_disabled = False
+
+
+def disable():
+    global _disabled
+    _disabled = True
+
+
+def enable():
+    global _disabled
+    _disabled = False
+
 
 def _add_output(file_name, arr, fds, mode='a'):
     if file_name not in arr:
@@ -86,6 +101,24 @@ def get_snapshot_dir():
     return _snapshot_dir
 
 
+def set_tf_summary_dir(dir_name):
+    global _tf_summary_dir
+    _tf_summary_dir = dir_name
+
+
+def get_tf_summary_dir():
+    return _tf_summary_dir
+
+
+def set_tf_summary_writer(writer_name):
+    global _tf_summary_writer
+    _tf_summary_writer = writer_name
+
+
+def get_tf_summary_writer():
+    return _tf_summary_writer
+
+
 def get_snapshot_mode():
     return _snapshot_mode
 
@@ -94,12 +127,15 @@ def set_snapshot_mode(mode):
     global _snapshot_mode
     _snapshot_mode = mode
 
+
 def get_snapshot_gap():
     return _snapshot_gap
+
 
 def set_snapshot_gap(gap):
     global _snapshot_gap
     _snapshot_gap = gap
+
 
 def set_log_tabular_only(log_tabular_only):
     global _log_tabular_only
@@ -111,25 +147,26 @@ def get_log_tabular_only():
 
 
 def log(s, with_prefix=True, with_timestamp=True, color=None):
-    out = s
-    if with_prefix:
-        out = _prefix_str + out
-    if with_timestamp:
-        now = datetime.datetime.now(dateutil.tz.tzlocal())
-        timestamp = now.strftime('%Y-%m-%d %H:%M:%S.%f %Z')
-        out = "%s | %s" % (timestamp, out)
-    if color is not None:
-        out = colorize(out, color)
-    if not _log_tabular_only:
-        # Also log to stdout
-        print(out)
-        for fd in list(_text_fds.values()):
-            fd.write(out + '\n')
-            fd.flush()
-        sys.stdout.flush()
+    if not _disabled:
+        out = s
+        if with_prefix:
+            out = _prefix_str + out
+        if with_timestamp:
+            now = datetime.datetime.now(dateutil.tz.tzlocal())
+            timestamp = now.strftime('%Y-%m-%d %H:%M:%S.%f %Z')
+            out = "%s | %s" % (timestamp, out)
+        if color is not None:
+            out = colorize(out, color)
+        if not _log_tabular_only:
+            # Also log to stdout
+            print(out)
+            for fd in list(_text_fds.values()):
+                fd.write(out + '\n')
+                fd.flush()
+            sys.stdout.flush()
 
 
-def record_tabular(key, val):
+def record_tabular(key, val, *args, **kwargs):
     _tabular.append((_tabular_prefix_str + str(key), str(val)))
 
 
@@ -187,24 +224,25 @@ table_printer = TerminalTablePrinter()
 
 
 def dump_tabular(*args, **kwargs):
-    wh = kwargs.pop("write_header", None)
-    if len(_tabular) > 0:
-        if _log_tabular_only:
-            table_printer.print_tabular(_tabular)
-        else:
-            for line in tabulate(_tabular).split('\n'):
-                log(line, *args, **kwargs)
-        tabular_dict = dict(_tabular)
-        # Also write to the csv files
-        # This assumes that the keys in each iteration won't change!
-        for tabular_fd in list(_tabular_fds.values()):
-            writer = csv.DictWriter(tabular_fd, fieldnames=list(tabular_dict.keys()))
-            if wh or (tabular_fd not in _tabular_header_written):
-                writer.writeheader()
-                _tabular_header_written.add(tabular_fd)
-            writer.writerow(tabular_dict)
-            tabular_fd.flush()
-        del _tabular[:]
+    if not _disabled:
+        wh = kwargs.pop("write_header", None)
+        if len(_tabular) > 0:
+            if _log_tabular_only:
+                table_printer.print_tabular(_tabular)
+            else:
+                for line in tabulate(_tabular).split('\n'):
+                    log(line, *args, **kwargs)
+            tabular_dict = dict(_tabular)
+            # Also write to the csv files
+            # This assumes that the keys in each iteration won't change!
+            for tabular_fd in list(_tabular_fds.values()):
+                writer = csv.DictWriter(tabular_fd, fieldnames=list(tabular_dict.keys()))
+                if wh or (wh is None and tabular_fd not in _tabular_header_written):
+                    writer.writeheader()
+                    _tabular_header_written.add(tabular_fd)
+                writer.writerow(tabular_dict)
+                tabular_fd.flush()
+            del _tabular[:]
 
 
 def pop_prefix():
@@ -213,23 +251,28 @@ def pop_prefix():
     _prefix_str = ''.join(_prefixes)
 
 
-def save_itr_params(itr, params):
+def save_itr_params(itr, params, use_cloudpickle=False):
     if _snapshot_dir:
         if _snapshot_mode == 'all':
-            file_name = osp.join(_snapshot_dir, 'itr_%d.pkl' % itr)
-            joblib.dump(params, file_name, compress=3)
+            file_name = osp.join(get_snapshot_dir(), 'itr_%d.pkl' % itr)
         elif _snapshot_mode == 'last':
             # override previous params
-            file_name = osp.join(_snapshot_dir, 'params.pkl')
-            joblib.dump(params, file_name, compress=3)
+            file_name = osp.join(get_snapshot_dir(), 'params.pkl')
         elif _snapshot_mode == "gap":
             if itr % _snapshot_gap == 0:
-                file_name = osp.join(_snapshot_dir, 'itr_%d.pkl' % itr)
-                joblib.dump(params, file_name, compress=3)
+                file_name = osp.join(get_snapshot_dir(), 'itr_%d.pkl' % itr)
+            else:
+                return
         elif _snapshot_mode == 'none':
-            pass
+            return
         else:
             raise NotImplementedError
+        if use_cloudpickle:
+            import cloudpickle
+            with open(file_name, 'wb') as f:
+                cloudpickle.dump(params, f, protocol=3)
+        else:
+            joblib.dump(params, file_name, compress=3)
 
 
 def log_parameters(log_file, args, classes):
@@ -328,9 +371,23 @@ def log_variant(log_file, variant_data):
         json.dump(variant_json, f, indent=2, sort_keys=True, cls=MyEncoder)
 
 
-def record_tabular_misc_stat(key, values):
-    record_tabular(key + "Average", np.average(values))
-    record_tabular(key + "Std", np.std(values))
-    record_tabular(key + "Median", np.median(values))
-    record_tabular(key + "Min", np.amin(values))
-    record_tabular(key + "Max", np.amax(values))
+def record_tabular_misc_stat(key, values, placement='back'):
+    if placement == 'front':
+        prefix = ""
+        suffix = key
+    else:
+        prefix = key
+        suffix = ""
+    if len(values) > 0:
+        record_tabular(prefix + "Average" + suffix, np.average(values))
+        record_tabular(prefix + "Std" + suffix, np.std(values))
+        record_tabular(prefix + "Median" + suffix, np.median(values))
+        record_tabular(prefix + "Min" + suffix, np.min(values))
+        record_tabular(prefix + "Max" + suffix, np.max(values))
+    else:
+        record_tabular(prefix + "Average" + suffix, np.nan)
+        record_tabular(prefix + "Std" + suffix, np.nan)
+        record_tabular(prefix + "Median" + suffix, np.nan)
+        record_tabular(prefix + "Min" + suffix, np.nan)
+        record_tabular(prefix + "Max" + suffix, np.nan)
+

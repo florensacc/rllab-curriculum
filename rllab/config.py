@@ -68,6 +68,8 @@ MUJOCO_KEY_PATH = osp.expanduser("~/.mujoco")
 
 ENV = {}
 
+EBS_OPTIMIZED = True
+
 if osp.exists(osp.join(osp.dirname(__file__), "config_personal.py")):
     from .config_personal import *
 else:

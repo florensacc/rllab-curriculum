@@ -5,12 +5,15 @@ import numpy as np
 from rllab.core.serializable import Serializable
 from rllab.misc import logger
 from rllab.misc import autoargs
+import gc
+from functools import reduce
+import os.path as osp
+import collections
 
 import matplotlib as mpl
-from functools import reduce
 mpl.use('Agg')
 import matplotlib.pyplot as plt
-import os.path as osp
+
 
 
 from rllab import spaces
@@ -24,19 +27,29 @@ class SwimmerEnv(MujocoEnv, Serializable):
     def __init__(
             self,
             ctrl_cost_coeff=1e-2,
+            ego_obs=False,
+            sparse_rew=False,
             *args, **kwargs):
         self.ctrl_cost_coeff = ctrl_cost_coeff
+        self.ego_obs = ego_obs
+        self.sparse_rew = sparse_rew
         super(SwimmerEnv, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
 
     def get_current_obs(self):
-        return np.concatenate([
-            self.model.data.qpos.flat,
-            self.model.data.qvel.flat,
-            self.get_body_com("torso").flat,
-        ]).reshape(-1)
+        if self.ego_obs:
+            return np.concatenate([
+                self.model.data.qpos.flat[2:],
+                self.model.data.qvel.flat,
+            ]).reshape(-1)
+        else:
+            return np.concatenate([
+                self.model.data.qpos.flat,
+                self.model.data.qvel.flat,
+                self.get_body_com("torso").flat,
+            ]).reshape(-1)
 
-## hack that I will have to remove!!!
+## hack that I will have to remove!!!  I think I actually don't need it anymore! Check maze_env.py
     @property
     def robot_observation_space(self):
         shp = self.get_current_obs().shape
@@ -59,14 +72,21 @@ class SwimmerEnv(MujocoEnv, Serializable):
         forward_reward = np.linalg.norm(self.get_body_comvel("torso"))  # swimmer has no problem of jumping reward
         reward = forward_reward - ctrl_cost
         done = False
-        # print 'obs x: {}, obs y: {}'.format(next_obs[-3],next_obs[-2])
-        return Step(next_obs, reward, done)
+        if self.sparse_rew:
+            if abs(self.get_body_com("torso")[0]) > 2.0:
+                reward = 1.0
+                done = True
+            else:
+                reward = 0.
+        com = np.concatenate([self.get_body_com("torso").flat]).reshape(-1)
+        return Step(next_obs, reward, done, com=com)
 
     @overrides
     def log_diagnostics(self, paths):
         # instead of just path["obs"][-1][-3] we will look at the distance to origin
         progs = [
-            np.linalg.norm(path["observations"][-1][-3:-1] - path["observations"][0][-3:-1])
+            # np.linalg.norm(path["observations"][-1][-3:-1] - path["observations"][0][-3:-1])
+            np.linalg.norm(path["env_infos"]['com'][-1] - path["env_infos"]['com'][0])
             # gives (x,y) coord -not last z
             for path in paths
             ]
@@ -74,79 +94,142 @@ class SwimmerEnv(MujocoEnv, Serializable):
         logger.record_tabular('MaxForwardProgress', np.max(progs))
         logger.record_tabular('MinForwardProgress', np.min(progs))
         logger.record_tabular('StdForwardProgress', np.std(progs))
+        self.plot_visitation(paths)
 
+    def plot_visitation(self, paths, mesh_density=50, maze=None, scaling=2):
+        fig, ax = plt.subplots()
         # now we will grid the space and check how much of it the policy is covering
-        furthest = np.ceil(np.abs(np.max(np.concatenate([path["observations"][:, -3:-1] for path in paths]))))
-        print('THE FUTHEST IT WENT COMPONENT-WISE IS', furthest)
-        furthest = max(furthest, 5)
-        mesh_density = 50
-        c_grid = int(furthest * 50 * 2)
+        if self.ego_obs:
+            x_max = np.ceil(np.max(np.abs(np.concatenate([path["env_infos"]['com'][:, 0] for path in paths]))))
+            y_max = np.ceil(np.max(np.abs(np.concatenate([path["env_infos"]['com'][:, 1] for path in paths]))))
+        else:
+            x_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -3] for path in paths]))))
+            y_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -2] for path in paths]))))
+        furthest = max(x_max, y_max)
+        print('THE FUTHEST IT WENT COMPONENT-WISE IS: x_max={}, y_max={}'.format(x_max, y_max))
+        # if maze:
+        #     x_max = max(scaling * len(
+        #         maze) / 2. - 1, x_max)  # maze enlarge plot to include the walls. ASSUME ROBOT STARTS IN CENTER!
+        #     y_max = max(scaling * len(maze[0]) / 2. - 1, y_max)  # the max here should be useless...
+        #     print("THE MAZE LIMITS ARE: x_max={}, y_max={}".format(x_max, y_max))
+        delta = 1./mesh_density
+        y, x = np.mgrid[-furthest:furthest+delta:delta, -furthest:furthest+delta:delta]
 
-        if 'agent_infos' in list(paths[0].keys()) and 'latents' in list(paths[0]['agent_infos'].keys()):
-            dict_visit = {}
+        if 'agent_infos' in list(paths[0].keys()) and ('latents' in list(paths[0]['agent_infos'].keys()) or
+                                                       'selectors' in list(paths[0]['agent_infos'].keys())):
+            selectors_name = 'latents' if 'latents' in list(paths[0]['agent_infos'].keys()) else 'selectors'
+            dict_visit = collections.OrderedDict()  # keys: latents, values: np.array with number of visitations
+            num_latents = np.size(paths[0]["agent_infos"][selectors_name][0])
+            # set all the labels for the latents and initialize the entries of dict_visit
+            for i in range(num_latents):  # use integer to define the latents
+                dict_visit[i] = np.zeros((2 * furthest * mesh_density + 1, 2 * furthest * mesh_density + 1))
+
             # keep track of the overlap
             overlap = 0
+            # now plot all the paths
             for path in paths:
-                lat = str(path['agent_infos']['latents'][0])
-                if lat not in list(dict_visit.keys()):
-                    dict_visit[lat] = np.zeros((c_grid + 1, c_grid + 1))
-                com_x = np.clip(np.ceil(((np.array(path['observations'][:, -3]) + furthest) * 50)).astype(int), 0,
-                                c_grid)
-                com_y = np.clip(np.ceil(((np.array(path['observations'][:, -2]) + furthest) * 50)).astype(int), 0,
-                                c_grid)
+                # before this was [1][0] !! Idk why not it changed, but [0][0] should be the correct one!
+                lats = [np.nonzero(lat)[0][0] for lat in path['agent_infos'][selectors_name]]  # list of all lats by idx
+                # if self.ego_obs:
+                com_x = np.ceil(((np.array(path['env_infos']['com'][:, 0]) + furthest) * mesh_density)).astype(int)
+                com_y = np.ceil(((np.array(path['env_infos']['com'][:, 1]) + furthest) * mesh_density)).astype(int)
+                # else:
+                #     com_x = np.ceil(((np.array(path['observations'][:, -3]) + furthest) * mesh_density)).astype(int)
+                #     com_y = np.ceil(((np.array(path['observations'][:, -2]) + furthest) * mesh_density)).astype(int)
                 coms = list(zip(com_x, com_y))
-                for com in coms:
-                    dict_visit[lat][com] += 1
-            num_latents = len(list(dict_visit.keys()))
-            num_colors = num_latents + 2  # +2 for the 0 and Repetitions
-            cmap = plt.get_cmap('nipy_spectral', num_colors)
-            visitation_by_lat = np.zeros((c_grid + 1, c_grid + 1))
-            for i, visit in enumerate(dict_visit.values()):
+                for i, com in enumerate(coms):
+                    dict_visit[lats[i]][com] += 1
+
+            # fix the colors for each latent
+            num_colors = num_latents + 2  # +2 for the 0 and Repetitions NOT COUNTING THE WALLS
+            cmap = plt.get_cmap('nipy_spectral', num_colors + 1)  # add one color for the walls
+            # create a matrix with entries corresponding to the latent that was there (or other if several/wall/nothing)
+            visitation_by_lat = np.zeros((2 * furthest * mesh_density + 1, 2 * furthest * mesh_density + 1))
+            for i, visit in dict_visit.items():
                 lat_visit = np.where(visit == 0, visit, i + 1)  # transform the map into 0 or i+1
                 visitation_by_lat += lat_visit
                 overlap += np.sum(np.where(visitation_by_lat > lat_visit))  # add the overlaps of this latent
                 visitation_by_lat = np.where(visitation_by_lat <= i + 1, visitation_by_lat,
                                              num_colors - 1)  # mark overlaps
-            x = np.arange(c_grid + 1) / 50. - furthest
-            y = np.arange(c_grid + 1) / 50. - furthest
-
-            plt.figure()
-            map_plot = plt.pcolormesh(x, y, visitation_by_lat, cmap=cmap, vmin=0.1, vmax=num_latents + 1)
+            # if maze:
+            #     for row in range(len(maze)):
+            #         for col in range(len(maze[0])):
+            #             if maze[row][col] == 1:
+            #                 wall_min_x = max(0, (row - 0.5) * mesh_density * scaling)
+            #                 wall_max_x = min(2 * furthest * mesh_density * scaling + 1,
+            #                                  (row + 0.5) * mesh_density * scaling)
+            #                 wall_min_y = max(0, (col - 0.5) * mesh_density * scaling)
+            #                 wall_max_y = min(2 * furthest * mesh_density * scaling + 1,
+            #                                  (col + 0.5) * mesh_density * scaling)
+            #                 visitation_by_lat[wall_min_x: wall_max_x,
+            #                 wall_min_y: wall_max_y] = num_colors
+            #     gx_min, gfurthest, gy_min, gfurthest = self._find_goal_range()
+            #     ax.add_patch(patches.Rectangle(
+            #         (gx_min, gy_min),
+            #         gfurthest - gx_min,
+            #         gfurthest - gy_min,
+            #         edgecolor='g', fill=False, linewidth=2,
+            #     ))
+            #     ax.annotate('G', xy=(0.5*(gx_min+gfurthest), 0.5*(gy_min+gfurthest)), color='g', fontsize=20)
+            map_plot = ax.pcolormesh(x, y, visitation_by_lat, cmap=cmap, vmin=0.1,
+                                     vmax=num_latents + 2)  # before 1 (will it affect when no walls?)
             color_len = (num_colors - 1.) / num_colors
             ticks = np.arange(color_len / 2., num_colors - 1, color_len)
-            cbar = plt.colorbar(map_plot, ticks=ticks)
-            latent_tick_labels = ['latent: ' + l for l in list(dict_visit.keys())]
-            cbar.ax.set_yticklabels(['No visitation'] + latent_tick_labels + ['Repetitions'])  # horizontal colorbar
-
-            # still log the total visitation and the overlap
-            visitation = reduce(np.add, [visit for visit in dict_visit.values()])
+            cbar = fig.colorbar(map_plot, ticks=ticks)
+            latent_tick_labels = ['latent: ' + str(i) for i in list(dict_visit.keys())]
+            cbar.ax.set_yticklabels(
+                ['No visitation'] + latent_tick_labels + ['Repetitions'])  # horizontal colorbar
+            # still log the total visitation
+            visitation_all = reduce(np.add, [visit for visit in dict_visit.values()])
         else:
-            visitation = np.zeros((c_grid + 1, c_grid + 1))
+            visitation_all = np.zeros((2 * furthest * mesh_density + 1, 2 * furthest * mesh_density + 1))
             for path in paths:
-                com_x = np.clip(np.ceil(((np.array(path['observations'][:, -3]) + furthest) * 50)).astype(int), 0,
-                                c_grid)
-                com_y = np.clip(np.ceil(((np.array(path['observations'][:, -2]) + furthest) * 50)).astype(int), 0,
-                                c_grid)
+                com_x = np.ceil(((np.array(path['env_infos']['com'][:, 0]) + furthest) * mesh_density)).astype(int)
+                com_y = np.ceil(((np.array(path['env_infos']['com'][:, 1]) + furthest) * mesh_density)).astype(int)
                 coms = list(zip(com_x, com_y))
                 for com in coms:
-                    visitation[com] += 1
-            x = np.arange(c_grid + 1) / 50. - furthest
-            y = np.arange(c_grid + 1) / 50. - furthest
+                    visitation_all[com] += 1
 
-            plt.figure()
-            plt.pcolormesh(x, y, visitation, vmax=50)
-            overlap = np.sum(np.where(visitation > 1, visitation, 0))  # sum of all visitations larger than 1
-        plt.xlim([x[0], x[-1]])
-        plt.ylim([y[0], y[-1]])
+            plt.pcolormesh(x, y, visitation_all, vmax=mesh_density)
+            overlap = np.sum(np.where(visitation_all > 1, visitation_all, 0))  # sum of all visitations larger than 1
+        ax.set_xlim([x[0][0], x[0][-1]])
+        ax.set_ylim([y[0][0], y[-1][0]])
 
         log_dir = logger.get_snapshot_dir()
-        exp_name = log_dir.split('/')[-1]
-        plt.title('visitation: ' + exp_name)
+        exp_name = log_dir.split('/')[-1] if log_dir else '?'
+        ax.set_title('visitation: ' + exp_name)
 
-        plt.savefig(osp.join(log_dir, 'visitation.png'))
+        plt.savefig(osp.join(log_dir, 'visitation.png'))  # this saves the current figure, here f
         plt.close()
 
-        total_visitation = np.count_nonzero(visitation)
+        total_visitation = np.count_nonzero(visitation_all)
         logger.record_tabular('VisitationTotal', total_visitation)
         logger.record_tabular('VisitationOverlap', overlap)
-        # gc.collect()
+
+        # now downsample the visitation
+        for down in [5, 10, 20]:
+            visitation_down = np.zeros(tuple((i//down for i in visitation_all.shape)))
+            delta_down = delta * down
+            y_down, x_down = np.mgrid[-furthest:furthest+delta_down:delta_down, -furthest:furthest+delta_down:delta_down]
+            for i, row in enumerate(visitation_down):
+                for j, v in enumerate(row):
+                    visitation_down[i, j] = np.sum(visitation_all[down*i:down*(1+i), down*j:down*(j+1)])
+            plt.figure()
+            plt.pcolormesh(x_down, y_down, visitation_down, vmax=mesh_density)
+            plt.title('Visitation_down')
+            plt.xlim([x_down[0][0], x_down[0][-1]])
+            plt.ylim([y_down[0][0], y_down[-1][0]])
+            plt.title('visitation_down{}: {}'.format(down, exp_name))
+            plt.savefig(osp.join(log_dir, 'visitation_down{}.png'.format(down)))
+            plt.close()
+
+            total_visitation_down = np.count_nonzero(visitation_down)
+            overlap_down = np.sum(np.where(visitation_down > 1, 1, 0))  # sum of all visitations larger than 1
+            logger.record_tabular('VisitationTotal_down{}'.format(down), total_visitation_down)
+            logger.record_tabular('VisitationOverlap_down{}'.format(down), overlap_down)
+
+        plt.cla()
+        plt.clf()
+        plt.close('all')
+        # del fig, ax, cmap, cbar, map_plot
+        gc.collect()

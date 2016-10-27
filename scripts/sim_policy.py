@@ -1,4 +1,5 @@
-from rllab.sampler.utils import rollout
+# from rllab.sampler.utils import rollout
+from sandbox.rein.algos.embedding_theano2.utils import rollout
 import argparse
 import joblib
 import uuid
@@ -28,10 +29,11 @@ if __name__ == "__main__":
     # with tf.Session():
     #     [rest of the code]
     while True:
-        with tf.Session() as sess:
-            data = joblib.load(args.file)
-            policy = data['policy']
-            env = data['env']
-            while True:
-                path = rollout(env, policy, max_path_length=args.max_path_length,
-                               animated=True, speedup=args.speedup)
+        # with tf.Session() as sess:
+        data = joblib.load(args.file)
+        policy = data['policy']
+        env = data['env']
+        print('loaded')
+        while True:
+            path = rollout(env, policy, max_path_length=args.max_path_length,
+                           animated=True, speedup=args.speedup)

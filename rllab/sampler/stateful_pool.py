@@ -1,5 +1,3 @@
-
-
 from joblib.pool import MemmapingPool
 import multiprocessing as mp
 from rllab.misc import logger
@@ -29,7 +27,7 @@ class ProgBarCounter(object):
             self.cur_progress = new_progress
 
     def stop(self):
-        if not logger.get_log_tabular_only():
+        if self.pbar is not None and self.pbar.active:
             self.pbar.stop()
 
 
@@ -56,9 +54,13 @@ class StatefulPool(object):
         if n_parallel > 1:
             self.queue = mp.Queue()
             self.worker_queue = mp.Queue()
-            self.pool = MemmapingPool(
-                self.n_parallel,
-                temp_folder="/tmp",
+            # FIXME: memmap is slow.
+            # self.pool = MemmapingPool(
+            #     self.n_parallel,
+            #     temp_folder="/tmp",
+            # )
+            self.pool = mp.Pool(
+                self.n_parallel
             )
 
     def run_each(self, runner, args_list=None):
@@ -93,7 +95,8 @@ class StatefulPool(object):
 
     def run_imap_unordered(self, runner, args_list):
         if self.n_parallel > 1:
-            yield from self.pool.imap_unordered(_worker_run_map, [(runner, args) for args in args_list])
+            for x in self.pool.imap_unordered(_worker_run_map, [(runner, args) for args in args_list]):
+                yield x
         else:
             for args in args_list:
                 yield runner(self.G, *args)
@@ -103,7 +106,7 @@ class StatefulPool(object):
         Run the collector method using the worker pool. The collect_once method will receive 'G' as
         its first argument, followed by the provided args, if any. The method should return a pair of values.
         The first should be the object to be collected, and the second is the increment to be added.
-        This will continue until the total increment reaches or exceeds the given threshold.
+        This will continue until the total ncrement reaches or exceeds the given threshold.
 
         Sample script:
 
@@ -139,7 +142,12 @@ class StatefulPool(object):
                     if show_prog_bar:
                         pbar.inc(counter.value - last_value)
                     last_value = counter.value
-            return sum(results.get(), [])
+            print('Done sampling.')
+            start = time.time()
+            out = sum(results.get(), [])
+            stop = time.time()
+            print('Returning results ({} sec).'.format(stop - start))
+            return out
         else:
             count = 0
             results = []

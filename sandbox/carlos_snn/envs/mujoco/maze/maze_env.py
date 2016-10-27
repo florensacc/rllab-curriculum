@@ -2,8 +2,15 @@ import os.path as osp
 import tempfile
 import xml.etree.ElementTree as ET
 import math
+from functools import reduce
+
+import matplotlib as mpl
+mpl.use('Agg')
+from matplotlib import patches
+from matplotlib import pyplot as plt
 
 import numpy as np
+import collections
 
 from rllab import spaces
 from rllab.envs.base import Step
@@ -13,10 +20,12 @@ from rllab.envs.proxy_env import ProxyEnv
 
 from rllab.core.serializable import Serializable
 from rllab.envs.mujoco.mujoco_env import MODEL_DIR, BIG
-from rllab.misc.overrides import overrides
 from rllab.envs.mujoco.maze.maze_env_utils import ray_segment_intersect, point_distance
-
 from rllab.envs.env_spec import EnvSpec
+
+from rllab.misc.overrides import overrides
+from rllab.misc import logger
+
 
 
 class MazeEnv(ProxyEnv, Serializable):
@@ -41,10 +50,12 @@ class MazeEnv(ProxyEnv, Serializable):
             n_bins=20,
             sensor_range=10.,
             sensor_span=math.pi,
-            maze_id=3,
-            length=0,
-            maze_height=0.2,
+            maze_id=0,
+            length=1,
+            maze_height=0.5,
             maze_size_scaling=2,
+            coef_inner_rew=0.,  # a coef of 0 gives no reward to the maze from the wrapped env.
+            goal_rew=1.,  # reward obtained when reaching the goal
             *args,
             **kwargs):
 
@@ -54,6 +65,8 @@ class MazeEnv(ProxyEnv, Serializable):
         self._maze_id = maze_id
         self.__class__.MAZE_HEIGHT = maze_height
         self.__class__.MAZE_SIZE_SCALING = maze_size_scaling
+        self.coef_inner_rew = coef_inner_rew
+        self.goal_rew = goal_rew
 
         model_cls = self.__class__.MODEL_CLASS
         if model_cls is None:
@@ -74,8 +87,8 @@ class MazeEnv(ProxyEnv, Serializable):
             M[1:c - 1, (1, c - 2)] = 0
             M[(1, c - 2), 1:c - 1] = 0
             M = M.astype(int).tolist()
-            M[1][c / 2] = 'r'
-            M[c - 2][c / 2] = 'g'
+            M[1][c // 2] = 'r'
+            M[c - 2][c // 2] = 'g'
             structure = M
             print(self.__class__.MAZE_STRUCTURE)
             self.__class__.MAZE_STRUCTURE = structure
@@ -87,10 +100,10 @@ class MazeEnv(ProxyEnv, Serializable):
             M[1:c - 1, (1, c - 2)] = 0
             M[(1, c - 2), 1:c - 1] = 0
             M = M.astype(int).tolist()
-            M[1][c / 2] = 'r'
+            M[1][c // 2] = 'r'
             # now block one of the ways and put the goal on the other side
-            M[1][c / 2 - 1] = 1
-            M[1][c / 2 - 2] = 'g'
+            M[1][c // 2 - 1] = 1
+            M[1][c // 2 - 2] = 'g'
             structure = M
             self.__class__.MAZE_STRUCTURE = structure
             print(structure)
@@ -117,7 +130,7 @@ class MazeEnv(ProxyEnv, Serializable):
             M[np.array([0, c - 1]), :] = 1
             M[:, np.array([0, c - 1])] = 1
             M = M.astype(int).tolist()
-            M[c / 2][c / 2] = 'r'
+            M[c // 2][c // 2] = 'r'
             for i in [1, c - 2]:
                 for j in [1, c - 2]:
                     M[i][j] = 'g'
@@ -378,7 +391,7 @@ class MazeEnv(ProxyEnv, Serializable):
                     return j * size_scaling, i * size_scaling
         assert False
 
-    def _find_goal_range(self):
+    def _find_goal_range(self):  # this only finds one goal!
         structure = self.__class__.MAZE_STRUCTURE
         size_scaling = self.__class__.MAZE_SIZE_SCALING
         for i in range(len(structure)):
@@ -408,25 +421,40 @@ class MazeEnv(ProxyEnv, Serializable):
     def step(self, action):
         if self.MANUAL_COLLISION:
             old_pos = self.wrapped_env.get_xy()
-            _, _, done, info = self.wrapped_env.step(action)
+            inner_next_obs, inner_rew, done, info = self.wrapped_env.step(action)
             new_pos = self.wrapped_env.get_xy()
             if self._is_in_collision(new_pos):
                 self.wrapped_env.set_xy(old_pos)
                 done = False
         else:
-            _, _, done, info = self.wrapped_env.step(action)
+            inner_next_obs, inner_rew, done, info = self.wrapped_env.step(action)
         next_obs = self.get_current_obs()
         x, y = self.wrapped_env.get_body_com("torso")[:2]
         # ref_x = x + self._init_torso_x
         # ref_y = y + self._init_torso_y
-        reward = 0
+        reward = self.coef_inner_rew * inner_rew
         minx, maxx, miny, maxy = self._goal_range
-        # print "goal range: x [%s,%s], y [%s,%s], now [%s,%s]" % (str(minx), str(maxx), str(miny), str(maxy),
-        #                                                          str(x), str(y))
+        # print("goal range: x [%s,%s], y [%s,%s], now [%s,%s]" % (str(minx), str(maxx), str(miny), str(maxy),
+        #                                                          str(x), str(y)))
         if minx <= x <= maxx and miny <= y <= maxy:
             done = True
-            reward = 1
+            reward += self.goal_rew
         return Step(next_obs, reward, done, **info)
 
     def action_from_key(self, key):
         return self.wrapped_env.action_from_key(key)
+
+    @overrides
+    def log_diagnostics(self, paths):
+        # we call here any logging related to the maze, strip the maze obs and call log_diag with the stripped paths
+        stripped_paths = []
+        for path in paths:
+            stripped_path = {}
+            for k, v in path.items():
+                stripped_path[k] = v
+            stripped_path['observations'] = \
+                stripped_path['observations'][:, :self.wrapped_env.observation_space.flat_dim]
+            #  this breaks if the obs of the robot are d>1 dimensional (not a vector)
+            stripped_paths.append(stripped_path)
+        self.wrapped_env.log_diagnostics(stripped_paths)  # see swimmer_env.py for a scketch of the maze plotting!
+

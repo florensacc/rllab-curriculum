@@ -23,7 +23,9 @@ class BatchPolopt(RLAlgorithm):
             n_itr=500,
             start_itr=0,
             batch_size=5000,
+            batch_size_schedule=None,
             max_path_length=500,
+            max_path_length_schedule=None,
             discount=0.99,
             gae_lambda=1,
             plot=False,
@@ -66,7 +68,9 @@ class BatchPolopt(RLAlgorithm):
         self.n_itr = n_itr
         self.start_itr = start_itr
         self.batch_size = batch_size
+        self.batch_size_schedule = batch_size_schedule
         self.max_path_length = max_path_length
+        self.max_path_length_schedule = max_path_length_schedule
         self.discount = discount
         self.gae_lambda = gae_lambda
         self.plot = plot
@@ -95,7 +99,19 @@ class BatchPolopt(RLAlgorithm):
         self.sampler.shutdown_worker()
 
     def obtain_samples(self, itr):
-        return self.sampler.obtain_samples(itr)
+        if self.max_path_length_schedule is not None:
+            max_path_length = self.max_path_length_schedule[itr]
+        else:
+            max_path_length = self.max_path_length
+        if self.batch_size_schedule is not None:
+            batch_size = self.batch_size_schedule[itr]
+        else:
+            batch_size = self.batch_size
+        return self.sampler.obtain_samples(
+            itr,
+            max_path_length=max_path_length,
+            batch_size=batch_size
+        )
 
     def process_samples(self, itr, paths):
         return self.sampler.process_samples(itr, paths)
@@ -106,24 +122,30 @@ class BatchPolopt(RLAlgorithm):
             self.start_worker()
             start_time = time.time()
             for itr in range(self.start_itr, self.n_itr):
+                itr_start_time = time.time()
                 with logger.prefix('itr #%d | ' % itr):
+                    logger.log("Obtaining samples...")
                     paths = self.obtain_samples(itr)
+                    logger.log("Processing samples...")
                     samples_data = self.process_samples(itr, paths)
+                    logger.log("Logging diagnostics...")
                     self.log_diagnostics(paths)
+                    logger.log("Optimizing policy...")
                     self.optimize_policy(itr, samples_data)
-                    logger.log("saving snapshot...")
+                    logger.log("Saving snapshot...")
                     params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
                     if self.store_paths:
                         params["paths"] = samples_data["paths"]
                     logger.save_itr_params(itr, params)
-                    logger.log("saved")
-                    logger.record_tabular('Time',time.time()-start_time)
+                    logger.log("Saved")
+                    logger.record_tabular('Time', time.time() - start_time)
+                    logger.record_tabular('ItrTime', time.time() - itr_start_time)
                     logger.dump_tabular(with_prefix=False)
                     if self.plot:
                         self.update_plot()
                         if self.pause_for_plot:
                             input("Plotting evaluation run: Press Enter to "
-                                      "continue...")
+                                  "continue...")
         self.shutdown_worker()
 
     def log_diagnostics(self, paths):

@@ -96,7 +96,7 @@ def analyze_modes(datadir):
 
         num_modes, num_good_modes = count_modes(last_data_unpickle)
         last_true_rew = exp.progress['TrueAverageReturn'][-1]
-        rew_coef = all_params['json_args']['algo']['reward_coef']
+        rew_coef = all_params['json_args']['algo']['reward_coef_mi']
         n_hallu = all_params['json_args']['algo']['hallucinator']['n_hallucinate_samples']
         latent_dim = policy.latent_dim
         if rew_coef not in rew_coefs:

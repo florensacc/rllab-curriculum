@@ -105,7 +105,7 @@ class PenaltyLbfgsOptimizer(Serializable):
 
         for penalty_itr in range(self._max_penalty_itr):
             logger.log('trying penalty=%.3f...' % try_penalty)
-            
+
             itr_opt_params, _, _ = scipy.optimize.fmin_l_bfgs_b(
                 func=gen_f_opt(try_penalty), x0=cur_params,
                 maxiter=self._max_opt_itr

@@ -58,6 +58,10 @@ class Box(Space):
         xs = np.asarray(xs)
         return xs.reshape((xs.shape[0],) + self.shape)
 
+    @property
+    def default_value(self):
+        return 0.5 * (self.low + self.high)
+
     def __repr__(self):
         return "Box" + str(self.shape)
 

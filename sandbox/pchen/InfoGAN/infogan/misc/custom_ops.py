@@ -76,6 +76,7 @@ class custom_conv2d(pt.VarStoreMethod):
     def __call__(self, input_layer, output_dim,
                  k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02, in_dim=None, padding='SAME', activation_fn=None,
                  name="conv2d", residual=False, custom_phase=CustomPhase.train):
+        print("obsolete NN blocks custom_conv2d!!")
         print(("ignoring data init : %s" % custom_phase))
         with tf.variable_scope(name):
             w = self.variable('w', [k_h, k_w, in_dim or input_layer.shape[-1], output_dim],
@@ -183,7 +184,7 @@ class custom_fully_connected(pt.VarStoreMethod):
                                        init=tf.random_normal_initializer(stddev=stddev))
                 bias = self.variable("bias", [output_size], init=tf.constant_initializer(bias_start))
                 return input_layer.with_tensor(tf.matmul(input_, matrix) + bias, parameters=self.vars)
-        except Exception:
+        except Exception as exception:
             import ipdb;
             ipdb.set_trace()
 
@@ -575,6 +576,7 @@ from prettytensor.pretty_tensor_image_methods import *
     assign_defaults=(
             'activation_fn', 'l2loss', 'stddev', 'batch_normalize',
             'custom_phase', 'wnorm', 'pixel_bias', 'var_scope',
+            'rate',
     )
 )
 class conv2d_mod(prettytensor.VarStoreMethod):
@@ -599,6 +601,7 @@ class conv2d_mod(prettytensor.VarStoreMethod):
                scale_init=0.1,
                var_scope=None,
                prefix="",
+               rate=1,
                name=PROVIDED
                ):
     """Adds a convolution to the stack of operations.
@@ -661,7 +664,11 @@ class conv2d_mod(prettytensor.VarStoreMethod):
     if custom_phase == CustomPhase.init:
         params = params.initialized_value()
     params_norm = tf.nn.l2_normalize(params, [0,1,2]) if wnorm else params
-    y = tf.nn.conv2d(input_layer, params_norm, stride, edges)
+    if rate == 1:
+        y = tf.nn.conv2d(input_layer, params_norm, stride, edges)
+    else:
+        assert np.allclose(stride, 1)
+        y = tf.nn.atrous_conv2d(input_layer, params_norm, rate, edges)
     layers.add_l2loss(books, params, l2loss)
 
     out_w = int(y.get_shape()[1])
@@ -721,10 +728,11 @@ def get_conv_ar_mask(h, w, n_in, n_out, ar_channels=False, zerodiagonal=False):
     mask = np.zeros([h, w, n_in, n_out], dtype=np.float32)
     mask[:l, :, :, :] = 1.
     mask[l, :m, :, :] = 1.
-    if not zerodiagonal:
-        mask[l, m, :, :] = 1.
     if ar_channels:
         mask[l, m, :, :] = get_linear_ar_mask(n_in, n_out, zerodiagonal)
+    else:
+        if not zerodiagonal:
+            mask[l, m, :, :] = 1.
     return mask
 
 @prettytensor.Register(
@@ -1144,11 +1152,20 @@ class AdamaxOptimizer(optimizer.Optimizer):
     @@__init__
     """
 
-    def __init__(self, learning_rate=0.001, beta1=0.9, beta2=0.999, use_locking=False, name="Adamax"):
+    def __init__(
+            self,
+            learning_rate=0.001,
+            beta1=0.9,
+            beta2=0.999,
+            use_locking=False,
+            name="Adamax",
+            beta2_sparse=False,
+    ):
         super(AdamaxOptimizer, self).__init__(use_locking, name)
         self._lr = learning_rate
         self._beta1 = beta1
         self._beta2 = beta2
+        self._beta2_sparse = beta2_sparse
 
         # Tensor versions of the constructor arguments, created in _prepare().
         self._lr_t = None
@@ -1178,7 +1195,16 @@ class AdamaxOptimizer(optimizer.Optimizer):
         v = self.get_slot(var, "v")
         v_t = v.assign(beta1_t * v + (1. - beta1_t) * grad)
         m = self.get_slot(var, "m")
-        m_t = m.assign(tf.maximum(beta2_t * m + eps, tf.abs(grad)))
+        if self._beta2_sparse:
+            m_t = m.assign(
+                tf.select(
+                    tf.abs(grad) > 1e-10,
+                    tf.maximum(beta2_t * m + eps, tf.abs(grad)),
+                    tf.maximum(m, eps),
+                )
+            )
+        else:
+            m_t = m.assign(tf.maximum(beta2_t * m + eps, tf.abs(grad)))
         g_t = v_t / m_t
 
         var_update = state_ops.assign_sub(var, lr_t * g_t)
@@ -1187,6 +1213,7 @@ class AdamaxOptimizer(optimizer.Optimizer):
     def _apply_sparse(self, grad, var):
         raise NotImplementedError("Sparse gradient updates are not supported.")
 
+
 def resize_nearest_neighbor(x, scale):
     input_shape = list(map(int, x.get_shape().as_list()))
     import math
@@ -1194,12 +1221,13 @@ def resize_nearest_neighbor(x, scale):
     x = tf.image.resize_nearest_neighbor(x, size)
     return x
 
-def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=False, context=None):
+def resconv_v1(l_in, kernel, nch, stride=1, add_coeff=0.1, keep_prob=1., nn=False, context=None, conv_args=None, nin=False, **kw):
     return resconv_v1_customconv(
         "conv2d_mod",
-        None,
+        conv_args,
         l_in=l_in, kernel=kernel, nch=nch, stride=stride, add_coeff=add_coeff,
-        keep_prob=keep_prob, nn=nn, context=context
+        keep_prob=keep_prob, nn=nn, context=context, nin=nin,
+        **kw
     )
     # seq = l_in.sequential()
     # with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
@@ -1228,21 +1256,41 @@ def resconv_v1_customconv(
         keep_prob=1.,
         nn=False,
         gating=False,
+        slow_gating=False,
         nin=False,
         context=None,
+        origin_conv=False,
 ):
     blk = origin = l_in
     if gating:
-        blk_conv = partial(blk, conv_method, conv_args)(
-            kernel=kernel,
-            depth=nch * 2,
-            stride=stride,
-            prefix="gated_pre",
-            activation_fn=None,
-        )
+        if slow_gating:
+            # it's just for simple impl of AR model
+            gate_conv = partial(blk, conv_method, conv_args)(
+                kernel=kernel,
+                depth=nch,
+                stride=stride,
+                prefix="gated_gate",
+                activation_fn=tf.nn.sigmoid,
+            )
+            pre_conv = partial(blk, conv_method, conv_args)(
+                kernel=kernel,
+                depth=nch,
+                stride=stride,
+                prefix="gated_main",
+                activation_fn=tf.nn.tanh,
+            )
+        else:
+            blk_conv = partial(blk, conv_method, conv_args)(
+                kernel=kernel,
+                depth=nch * 2,
+                stride=stride,
+                prefix="gated_pre",
+                activation_fn=None,
+            )
+            gate_conv = blk_conv[:, :, :, :nch].apply(tf.nn.sigmoid)
+            pre_conv = blk_conv[:, :, :, nch:].apply(tf.nn.tanh)
         blk = (
-            blk_conv[:, :, :, :nch].apply(tf.nn.sigmoid) *
-                blk_conv[:, :, :, nch:].apply(tf.nn.tanh)
+            gate_conv * pre_conv
         ).sequential()
     else:
         blk = blk.sequential()
@@ -1264,22 +1312,29 @@ def resconv_v1_customconv(
     )
     if nn:
         origin = origin.apply(resize_nearest_neighbor, 1./stride)
-        origin = origin.apply(lambda o: tf.tile(o, [1,1,1,nch//int(o.get_shape()[3])]))
+        origin = origin.apply(
+            lambda o: tf.tile(o, [1,1,1,nch//int(o.get_shape()[3])])
+        )
     else:
-        if stride != 1:
+        if stride != 1 or origin_conv:
             origin = partial(origin, conv_method, conv_args)(kernel, nch, stride=stride, activation_fn=None)
 
     mix = add_coeff * blk.as_layer() + origin
     return mix.nl()
 
-def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=False, context=None):
+def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=False, context=None, subpixel=False, nin=False):
     seq = l_in.sequential()
     with seq.subdivide_with(2, tf.add_n) as [blk, origin]:
         if context is not None:
             blk.join([context], lambda lst: tf.concat(3, lst))
-        blk.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, prefix="de_pre")
+        if subpixel:
+            # assume 2x upsampling
+            blk.conv2d_mod(kernel // 2, nch*4, prefix="de_pre")
+            blk.depool2d_split()
+        else:
+            blk.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, prefix="de_pre")
         blk.custom_dropout(keep_prob)
-        blk.conv2d_mod(kernel, nch, activation_fn=None, prefix="post")
+        blk.conv2d_mod(1 if nin else kernel, nch, activation_fn=None, prefix="post")
         blk.apply(lambda x: x*add_coeff)
         if nn:
             origin.apply(tf.image.resize_nearest_neighbor, out_wh)
@@ -1287,7 +1342,16 @@ def resdeconv_v1(l_in, kernel, nch, out_wh, add_coeff=0.1, keep_prob=1., nn=Fals
             # origin.reshape([-1,]+out_wh+[nch, 2])
             origin.apply(tf.reduce_mean, [4],)
         else:
-            origin.custom_deconv2d([0]+out_wh+[nch], k_h=kernel, k_w=kernel, activation_fn=None, prefix="de_pre")
+            if subpixel:
+                # assume 2x upsampling
+                origin.conv2d_mod(kernel // 2, nch*4, activation_fn=None, prefix="de_straight")
+                origin.depool2d_split()
+            else:
+                origin.custom_deconv2d(
+                    [0]+out_wh+[nch],
+                    k_h=kernel, k_w=kernel,
+                    activation_fn=None, prefix="de_straight"
+                )
     return seq.as_layer().nl()
 
 def gruconv_v1(l_in, kernel, nch, inp=None):
@@ -1361,7 +1425,12 @@ class CustomBookkeeper(Bookkeeper):
 
     def add_histogram_summary(self, tensor, tag=None):
         """Add a summary operation to visualize any tensor."""
-        print("passing histogram %s"%tag)
+        pass
+        # print("passing histogram %s"%tag)
+
+    def add_scalar_summary(self, x, tag=None):
+        pass
+        # print("passing scalar summary %s"%tag)
 
 prettytensor.bookkeeper.BOOKKEEPER_FACTORY = CustomBookkeeper
 
@@ -1436,6 +1505,21 @@ def left_shift(
     )
     return input_layer.with_tensor(y)
 
+@pt.Register(
+    assign_defaults=('custom_phase', )
+)
+def mul_init_ensured(
+        input_layer,
+        w,
+        custom_phase=CustomPhase.train,
+        name=PROVIDED
+):
+    x = input_layer.tensor
+    if custom_phase == CustomPhase.init:
+        w = w.initialized_value()
+
+    return input_layer.with_tensor(x*w)
+
 @prettytensor.Register
 def right_shift(
         input_layer,
@@ -1469,4 +1553,130 @@ def down_shift(
         ]
     )
     return input_layer.with_tensor(y)
+
+# from https://github.com/openai/iaf/blob/master/graphy/nodes/conv.py#L28
+@prettytensor.Register
+def depool2d_split(x, factor=2):
+    assert factor >= 1
+    if factor == 1: return x
+    xs = int_shape(x)
+    # x.reshape((x.shape[0], x.shape[1] / factor ** 2, factor, factor, x.shape[2], x.shape[3]))
+    new_chns = xs[3] // factor**2
+    x = tf.reshape(
+        x,
+        (xs[0], xs[1], xs[2], new_chns, factor, factor, )
+    )
+    # x = x.dimshuffle(0, 1, 4, 2, 5, 3)
+    x = tf.transpose(
+        x,
+        [0, 3, 1, 4, 2, 5]
+    )
+    # x = x.reshape((x.shape[0], x.shape[1], x.shape[2]*x.shape[3], x.shape[4]*x.shape[5]))
+    x = tf.reshape(
+        x,
+        [xs[0], new_chns, xs[1]*factor, xs[2]*factor]
+    )
+    return tf.transpose(
+        x,
+        [0, 2, 3, 1]
+    )
+
+def assign_to_gpu(
+        gpu=0,
+        ps_dev="/device:CPU:0",
+        # ps_dev="/device:GPU:0",
+        # ps_dev="/gpu:0",
+):
+    def _assign(op):
+        node_def = op if isinstance(op, tf.NodeDef) else op.node_def
+        if node_def.op == "Variable":
+            return ps_dev
+        else:
+            return "/gpu:%d" % gpu
+    return _assign
+
+
+def average_grads(tower_grads):
+    def average_dense(grad_and_vars):
+        if len(grad_and_vars) == 1:
+            return grad_and_vars[0][0]
+
+        grad = grad_and_vars[0][0]
+        for g, _ in grad_and_vars[1:]:
+            grad += g
+        return grad / len(grad_and_vars)
+
+    def average_sparse(grad_and_vars):
+        if len(grad_and_vars) == 1:
+            return grad_and_vars[0][0]
+
+        indices = []
+        values = []
+        for g, _ in grad_and_vars:
+            indices += [g.indices]
+            values += [g.values]
+        indices = tf.concat(0, indices)
+        values = tf.concat(0, values)
+        return tf.IndexedSlices(values, indices, grad_and_vars[0][0].dense_shape)
+
+    average_grads = []
+    for grad_and_vars in zip(*tower_grads):
+        if grad_and_vars[0][0] is None:
+            grad = None
+        elif isinstance(grad_and_vars[0][0], tf.IndexedSlices):
+            grad = average_sparse(grad_and_vars)
+        else:
+            grad = average_dense(grad_and_vars)
+        # Keep in mind that the Variables are redundant because they are shared
+        # across towers. So .. we will just return the first tower's pointer to
+        # the Variable.
+        v = grad_and_vars[0][1]
+        grad_and_var = (grad, v)
+        average_grads.append(grad_and_var)
+    return average_grads
+
+var_assignments = {}
+def cached_assign(var):
+    if var not in var_assignments:
+        # print("first", var.name)
+        holder = tf.placeholder(var.dtype, shape=int_shape(var))
+        op = var.assign(holder)
+        var_assignments[var] = (holder, op)
+    else:
+        # print("second", var.name)
+        pass
+    return var_assignments[var]
+
+@contextmanager
+def temp_restore(sess, ema):
+    if ema is None:
+        yield
+    else:
+        ema_keys = list(ema._averages.keys())
+        ema_avgs = [ema._averages[k] for k in ema_keys]
+        old_vals = sess.run(ema_keys)
+        avg_vals = sess.run(ema_avgs)
+        ops = []
+        feed = {}
+        for var, avg in zip(ema_keys, avg_vals):
+            holder, op = cached_assign(var)
+            ops.append(op)
+            feed[holder] = avg
+        sess.run(ops, feed)
+        yield
+        ops = []
+        feed = {}
+        for var, avg in zip(ema_keys, old_vals):
+            holder, op = cached_assign(var)
+            ops.append(op)
+            feed[holder] = avg
+        sess.run(ops, feed)
+
+        # _ = sess.run(
+        #     [tf.assign(var, avg) for var, avg in ema._averages.items()]
+        # )
+        # yield
+        # _ = sess.run(
+        #     [tf.assign(var, avg) for var, avg in zip(ema_keys, old_vals)]
+        # )
 

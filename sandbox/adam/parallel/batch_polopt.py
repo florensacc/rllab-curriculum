@@ -40,6 +40,7 @@ class ParallelBatchPolopt(RLAlgorithm):
             n_parallel=1,
             set_cpu_affinity=False,
             cpu_assignments=None,
+            serial_compile=True,
             **kwargs
     ):
         """
@@ -81,11 +82,13 @@ class ParallelBatchPolopt(RLAlgorithm):
         self.n_parallel = n_parallel
         self.set_cpu_affinity = set_cpu_affinity
         self.cpu_assignments = cpu_assignments
+        self.serial_compile = serial_compile
         self.worker_batch_size = batch_size // n_parallel
+        self.n_steps_collected = 0  # (set by sampler)
         self.sampler = WorkerBatchSampler(self)
 
     def __getstate__(self):
-        #  (multiprocessing does not allow pickling of manager objects)
+        """ Do not pickle parallel objects. """
         return {k: v for k, v in iter(self.__dict__.items()) if k != "_par_objs"}
 
     #
@@ -100,7 +103,7 @@ class ParallelBatchPolopt(RLAlgorithm):
         and, following that, may append() the SimpleContainer objects as needed.
         """
         n = self.n_parallel
-        par_data = SimpleContainer(rank=None, avg_fac=1.0 / n)
+        self.rank = None
         shareds = SimpleContainer(
             sum_discounted_return=mp.RawArray('d', n),
             sum_return=mp.RawArray('d', n),
@@ -110,14 +113,12 @@ class ParallelBatchPolopt(RLAlgorithm):
             num_steps=mp.RawArray('i', n),
             num_valids=mp.RawArray('d', n),
             sum_ent=mp.RawArray('d', n),
-            n_steps_collected=mp.RawArray('i', n),
         )
-        mgr_objs = SimpleContainer(
-            barrier_dgnstc=mp.Barrier(self.n_parallel),
-            barrier_avgfac=mp.Barrier(self.n_parallel),
+        barriers = SimpleContainer(
+            dgnstc=mp.Barrier(n),
         )
-        self._par_objs = (par_data, shareds, mgr_objs)
-        self.baseline.init_par_objs(n_parallel=self.n_parallel)
+        self._par_objs = (shareds, barriers)
+        self.baseline.init_par_objs(n_parallel=n)
 
     def init_par_objs(self):
         """
@@ -143,12 +144,32 @@ class ParallelBatchPolopt(RLAlgorithm):
         if self.plot:
             plotter.update_plot(self.policy, self.max_path_length)
 
+    def prep_samples(self):
+        """
+        Used to prepare output from sampler.process_samples() for input to
+        optimizer.optimize(), and used in force_compile().
+        """
+        raise NotImplementedError
+
+    def force_compile(self, n_samples=100):
+        """
+        Serial - compile Theano (e.g. before spawning subprocesses, if desired)
+        """
+        logger.log("forcing Theano compilations...")
+        paths = self.sampler.obtain_samples(n_samples)
+        samples_data, _ = self.sampler.process_samples(paths)
+        input_values = self.prep_samples(samples_data)
+        self.optimizer.force_compile(input_values)
+        logger.log("all compiling complete")
+
     #
     # Main external method and its target for parallel subprocesses.
     #
 
     def train(self):
         self.init_opt()
+        if self.serial_compile:
+            self.force_compile()
         self.init_par_objs()
         processes = [mp.Process(target=self._train, args=(rank,))
             for rank in range(self.n_parallel)]
@@ -158,12 +179,11 @@ class ParallelBatchPolopt(RLAlgorithm):
             p.join()
 
     def _train(self, rank):
-        self.set_rank(rank)
+        self.init_rank(rank)
         for itr in range(self.current_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
-                paths, n_steps_collected = self.sampler.obtain_samples(itr)
-                self.set_avg_fac(n_steps_collected)  # (parallel)
-                samples_data, dgnstc_data = self.sampler.process_samples(itr, paths)
+                paths = self.sampler.obtain_samples()
+                samples_data, dgnstc_data = self.sampler.process_samples(paths)
                 self.log_diagnostics(itr, samples_data, dgnstc_data)  # (parallel)
                 self.optimize_policy(itr, samples_data)  # (parallel)
                 if rank == 0:
@@ -188,18 +208,19 @@ class ParallelBatchPolopt(RLAlgorithm):
                 self.current_itr = itr + 1
 
     #
-    # Parallelized methods.
+    # Parallelized methods and related.
     #
 
     def log_diagnostics(self, itr, samples_data, dgnstc_data):
-            par_data, shareds, mgr_objs = self._par_objs
+            shareds, barriers = self._par_objs
 
-            i = par_data.rank
+            i = self.rank
             shareds.sum_discounted_return[i] = \
                 np.sum([path["returns"][0] for path in samples_data["paths"]])
             undiscounted_returns = [sum(path["rewards"]) for path in samples_data["paths"]]
             shareds.num_traj[i] = len(undiscounted_returns)
-            shareds.num_steps[i] = sum([len(path["rewards"]) for path in samples_data["paths"]])
+            shareds.num_steps[i] = self.n_steps_collected
+            # shareds.num_steps[i] = sum([len(path["rewards"]) for path in samples_data["paths"]])
             shareds.sum_return[i] = np.sum(undiscounted_returns)
             shareds.min_return[i] = np.min(undiscounted_returns)
             shareds.max_return[i] = np.max(undiscounted_returns)
@@ -218,9 +239,9 @@ class ParallelBatchPolopt(RLAlgorithm):
             #     np.concatenate(dgnstc_data["returns"])
             # )
 
-            mgr_objs.barrer_dgnstc.wait()
+            barriers.dgnstc.wait()
 
-            if par_data.rank == 0:
+            if self.rank == 0:
                 num_traj = sum(shareds.num_traj)
                 average_discounted_return = \
                     sum(shareds.sum_discounted_return) / num_traj
@@ -253,31 +274,27 @@ class ParallelBatchPolopt(RLAlgorithm):
         # self.policy.log_diagnostics(paths)
         # self.baseline.log_diagnostics(paths)
 
-    def set_rank(self, rank):
-        par_data, _, _ = self._par_objs
-        par_data.rank = rank
+    def init_rank(self, rank):
+        self.rank = rank
         if self.set_cpu_affinity:
             self._set_affinity(rank)
-        self.baseline.set_rank(rank)
-        self.optimizer.set_rank(rank)
+        self.baseline.init_rank(rank)
+        self.optimizer.init_rank(rank)
         seed = ext.get_seed()
         if seed is None:
             # NOTE: Not sure if this is a good source for seed?
             seed = int(1e6 * np.random.rand())
         ext.set_seed(seed + rank)
 
-    def set_avg_fac(self, n_steps_collected):
-        par_data, shareds, mgr_objs = self._par_objs
-        shareds.n_steps_collected[par_data.rank] = n_steps_collected
-        mgr_objs.barrier_avgfac.wait()
-        avg_fac = 1.0 * n_steps_collected / sum(shareds.n_steps_collected)
-        par_data.avg_fac = avg_fac
-        self.optimizer.set_avg_fac(avg_fac)
-
     def optimize_policy(self, itr, samples_data):
         raise NotImplementedError
 
     def _set_affinity(self, rank, verbose=False):
+        """
+        Check your logical cpu vs physical core configuration, use
+        cpu_assignments list to put one worker per physical core.  Default
+        behavior is to use logical cpus 0,1,2,...
+        """
         import psutil
         if self.cpu_assignments is not None:
             n_assignments = len(self.cpu_assignments)

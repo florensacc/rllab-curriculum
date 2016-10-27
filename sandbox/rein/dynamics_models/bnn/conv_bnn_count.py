@@ -3,7 +3,6 @@ import theano.tensor as T
 import lasagne
 from lasagne.layers.noise import dropout
 from lasagne.layers.normalization import batch_norm, BatchNormLayer
-from lasagne.layers.special import NonlinearityLayer
 
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.serializable import Serializable
@@ -14,7 +13,8 @@ from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 
 from rllab.misc.special import to_onehot_sym
 from sandbox.rein.dynamics_models.utils import enum
-from sandbox.rein.dynamics_models.bnn.conv_bnn import BayesianConvLayer, BayesianDeConvLayer, BayesianDenseLayer, \
+from sandbox.rein.dynamics_models.bnn.conv_bnn import BayesianConvLayer, BayesianDeConvLayer, \
+    BayesianDenseLayer, \
     BayesianLayer
 
 
@@ -24,16 +24,21 @@ class DiscreteEmbeddingNonlinearityLayer(lasagne.layers.Layer):
     This has to be put after the batch norm layer.
     """
 
-    def __init__(self, incoming,
+    def __init__(self, incoming, n_units, batch_size,
                  **kwargs):
         super(DiscreteEmbeddingNonlinearityLayer, self).__init__(incoming, **kwargs)
         self._srng = RandomStreams()
+        self._n_units = n_units
+        self._batch_size = batch_size
 
     def nonlinearity(self, x, noise_mask=1):
         # Force outputs to be binary through noise.
-        return lasagne.nonlinearities.sigmoid(x) + noise_mask * self._srng.uniform(size=x.shape, low=-0.2, high=0.2)
+        print('noise mask: {}'.format(noise_mask))
+        return lasagne.nonlinearities.sigmoid(x) + noise_mask * self._srng.uniform(
+            size=x.shape, low=-0.3,
+            high=0.3)
 
-    def get_output_for(self, input, noise_mask=0, **kwargs):
+    def get_output_for(self, input, noise_mask=1, **kwargs):
         return self.nonlinearity(input, noise_mask)
 
 
@@ -73,7 +78,8 @@ class DiscreteEmbeddingLinearLayer(lasagne.layers.Layer):
 
 
 class IndependentSoftmaxLayer(lasagne.layers.Layer):
-    def __init__(self, incoming, num_bins, W=lasagne.init.GlorotUniform(), b=lasagne.init.Constant(0), **kwargs):
+    def __init__(self, incoming, num_bins, W=lasagne.init.GlorotUniform(), b=lasagne.init.Constant(0),
+                 **kwargs):
         super(IndependentSoftmaxLayer, self).__init__(incoming, **kwargs)
 
         self._num_bins = num_bins
@@ -176,7 +182,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
     """
 
     # Enums
-    OutputType = enum(REGRESSION='regression', CLASSIFICATION='classfication')
+    OutputType = enum(REGRESSION='regression', CLASSIFICATION='classification')
     SurpriseType = enum(
         INFGAIN='information gain', COMPR='compression gain', BALD='BALD', VAR='variance', L1='l1')
 
@@ -208,7 +214,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                  num_seq_inputs=1,
                  label_smoothing=0,
                  logit_weights=False,
-                 logit_output=False
+                 logit_output=False,
+                 binary_penalty=True,
                  ):
 
         Serializable.quick_init(self, locals())
@@ -242,6 +249,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         self.label_smoothing = label_smoothing
         self._logit_weights = logit_weights
         self._logit_output = logit_output
+        self._binary_penalty = binary_penalty
 
         assert not (self._logit_output and self._ind_softmax)
 
@@ -406,8 +414,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         log_normal = - T.log(sigma) - T.log(T.sqrt(2 * np.pi)) - T.square(input - mu) / (2 * T.square(sigma))
         return T.sum(log_normal, axis=1)
 
-    def pred_sym(self, input):
-        return lasagne.layers.get_output(self.network, input, deterministic=False)
+    def pred_sym(self, input, deterministic=False):
+        return lasagne.layers.get_output(self.network, input, deterministic=deterministic)
 
     def likelihood_regression(self, target, prediction, likelihood_sd):
         return self._log_prob_normal(target, prediction, likelihood_sd)
@@ -429,7 +437,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         # Cross-entropy; target vector selecting correct prediction
         # entries.
         ll = T.sum((
-            target * T.log(prediction)
+            target * T.log(T.clip(prediction, 1e-15, 1.))
         ), axis=1)
         return ll
 
@@ -494,7 +502,12 @@ class ConvBNNVIME(LasagnePowered, Serializable):
             log_p_D_given_w += lh
 
         cont_emb = lasagne.layers.get_output(self.discrete_emb_sym, input, noise_mask=0, deterministic=False)
-        binary_penalty = T.mean(T.minimum(T.square(cont_emb - 0), T.square(cont_emb - 1)))
+        if self._binary_penalty > 0:
+            print('Using binary penalty.')
+            binary_penalty = self._binary_penalty * T.mean(
+                T.minimum(T.square(cont_emb - 0), T.square(cont_emb - 1)))
+        else:
+            binary_penalty = 0.
 
         if disable_kl:
             return (- log_p_D_given_w / self.num_train_samples) / np.prod(self.state_dim) + binary_penalty
@@ -598,15 +611,15 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                 if layer_disc['batch_norm'] is True:
                     s_net = batch_norm(s_net)
             elif layer_disc['name'] == 'discrete_embedding':
-                if 'nonlinearity' not in layer_disc.keys():
-                    layer_disc['nonlinearity'] = lasagne.nonlinearities.rectify
                 s_net = DiscreteEmbeddingLinearLayer(
                     s_net,
                     num_units=layer_disc['n_units'])
-                s_net = BatchNormLayer(s_net)
-                s_net = DiscreteEmbeddingNonlinearityLayer(s_net)
+                if layer_disc['batch_norm'] is True:
+                    s_net = BatchNormLayer(s_net)
+                s_net = DiscreteEmbeddingNonlinearityLayer(s_net, layer_disc['n_units'], self.batch_size)
                 # Pull out discrete embedding layer.
                 self.discrete_emb_sym = s_net
+                self.discrete_emb_size = layer_disc['n_units']
             elif layer_disc['name'] == 'deterministic':
                 s_net = lasagne.layers.DenseLayer(
                     s_net,
@@ -724,8 +737,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         input_var = T.matrix('inputs',
                              dtype=theano.config.floatX)
 
-        target_var = T.matrix('targets',
-                              dtype=theano.config.floatX)
+        target_var = T.imatrix('targets')
 
         # Make the likelihood standard deviation a trainable parameter.
         self.likelihood_sd = theano.shared(
@@ -755,7 +767,7 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
         # Train/val fn.
         self.pred_fn = ext.compile_function(
-            [input_var], self.pred_sym(input_var), log_name='fn_pred')
+            [input_var], self.pred_sym(input_var, deterministic=True), log_name='fn_pred')
 
         updates = lasagne.updates.adam(
             loss, params, learning_rate=self.learning_rate)
@@ -764,6 +776,21 @@ class ConvBNNVIME(LasagnePowered, Serializable):
         # you will fit to the specific noise.
         self.train_fn = ext.compile_function(
             [input_var, target_var, kl_factor], loss, updates=updates, log_name='fn_train')
+
+        # index = T.lscalar()
+        # self.shared_x = theano.shared(np.asarray(np.zeros((2, 2)),
+        #                                          dtype=theano.config.floatX),
+        #                               borrow=True)
+        # self.shared_y = theano.shared(np.asarray(np.zeros((2, 2)),
+        #                                          dtype='int32'),
+        #                               borrow=True)
+        # self.train_fn = ext.compile_function(
+        #     [index, kl_factor], loss, updates=updates, log_name='fn_train',
+        #     givens={
+        #         input_var: self.shared_x[index * self.batch_size: (index + 1) * self.batch_size],
+        #         target_var: self.shared_y[index * self.batch_size: (index + 1) * self.batch_size]
+        #     }
+        # )
 
         # self.fn_loss = ext.compile_function(
         #     [input_var, target_var, kl_factor], loss, log_name='fn_loss')
@@ -836,7 +863,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                 # sel_layers = filter(lambda l: isinstance(l, BayesianLayer) and not l.disable_variance,
                 #                     lasagne.layers.get_all_layers(self.network))
                 # params_bayesian.extend(sel_layers[-1].get_params(trainable=True, bayesian=True))
-                params_bayesian.extend(lasagne.layers.get_all_params(self.network, trainable=True, bayesian=True))
+                params_bayesian.extend(
+                    lasagne.layers.get_all_params(self.network, trainable=True, bayesian=True))
                 if self.output_type == 'regression' and self.update_likelihood_sd:
                     params_bayesian.append(self.likelihood_sd)
                 compute_fast_kl_div = fast_kl_div(
@@ -921,7 +949,8 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                 step_size = T.scalar('step_size',
                                      dtype=theano.config.floatX)
                 params_bayesian = []
-                params_bayesian.extend(lasagne.layers.get_all_params(self.network, trainable=True, bayesian=True))
+                params_bayesian.extend(
+                    lasagne.layers.get_all_params(self.network, trainable=True, bayesian=True))
 
                 updates_bayesian = second_order_update(
                     loss_only_last_sample, params_bayesian, oldparams, step_size)
@@ -932,8 +961,16 @@ class ConvBNNVIME(LasagnePowered, Serializable):
 
         # Discrete embedding layer for counting.
         self.discrete_emb = ext.compile_function(
-            [input_var], lasagne.layers.get_output(self.discrete_emb_sym, input_var, noise_mask=0, deterministic=False),
+            [input_var],
+            lasagne.layers.get_output(self.discrete_emb_sym, input_var, noise_mask=0, deterministic=True),
             log_name='fn_discrete_emb')
+
+        z_in = T.vector()
+        y_gen = lasagne.layers.get_output(self.network, {self.discrete_emb_sym: z_in}, deterministic=True)
+        self.y_gen = ext.compile_function(
+            [z_in],
+            y_gen,
+            log_name='fn_y_gen')
 
 
 if __name__ == '__main__':

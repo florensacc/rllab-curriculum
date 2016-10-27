@@ -5,7 +5,8 @@ from rllab.envs.base import Env, Step
 import numpy as np
 import contextlib
 import random
-from .maze.dfs_maze_generator import DFSMazeGenerator
+
+from sandbox.rocky.neural_learner.envs.maze.dfs_grid_maze_generator import DFSGridMazeGenerator
 
 
 @contextlib.contextmanager
@@ -39,7 +40,7 @@ class RandomMazeEnv(Env):
         self.state = None
         self.viewer = None
         if maze_gen is None:
-            maze_gen = DFSMazeGenerator()
+            maze_gen = DFSGridMazeGenerator()
         self.maze_gen = maze_gen
         self.seed_pool = seed_pool
         self.reset_trial()
@@ -115,10 +116,10 @@ class RandomMazeEnv(Env):
         success = 0
         if next_state_type in ['F', 'S']:
             done = False
-            reward = -1  # 0
+            reward = -0.01  # 0
         elif next_state_type == 'G':
             done = True
-            reward = 0  # 100
+            reward = 1#000#0  # 100
             success = 1
         else:
             raise NotImplementedError

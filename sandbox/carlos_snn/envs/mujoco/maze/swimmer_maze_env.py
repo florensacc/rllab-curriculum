@@ -1,5 +1,5 @@
 from sandbox.carlos_snn.envs.mujoco.maze.maze_env import MazeEnv
-from rllab.envs.mujoco.swimmer_env import SwimmerEnv
+from sandbox.carlos_snn.envs.mujoco.swimmer_env import SwimmerEnv
 from rllab.envs.normalized_env import normalize
 from rllab.core.serializable import Serializable
 
@@ -11,7 +11,7 @@ class SwimmerMazeEnv(MazeEnv, Serializable):
     ORI_IND = 2
 
     MAZE_HEIGHT = 0.5
-    MAZE_SIZE_SCALING = 4
+    MAZE_SIZE_SCALING = 3
     MAZE_MAKE_CONTACTS = True
 
     # # this is not needed, but on without the stub method I can't run a SwimmerMazeEnv anymore!
