@@ -1,18 +1,3 @@
-# try removing iaf and af to see if it reduces overfitting
-
-# iaf creates overfitting more. af alone with ard6 -> 79.26
-# interestingly, 8 overfits more than 6!
-
-# try tying arconv param & fewer conv ar channels
-
-# verdict: tying arconv param reduces overfitting
-# fewer conv were not implemented correctly
-
-# retry arconv & larger learning rate + mean_only ar
-
-# larger lr mysteriously overfits more
-# fewer arconv was worse
-
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -20,7 +5,7 @@ from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorica
 
 import os
 from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
-    ResamplingBinarizedMnistDataset, ResamplingBinarizedOmniglotDataset, load_caltech, Caltech101Dataset
+    ResamplingBinarizedMnistDataset, ResamplingBinarizedOmniglotDataset
 from sandbox.pchen.InfoGAN.infogan.models.regularized_helmholtz_machine import RegularizedHelmholtzMachine
 from sandbox.pchen.InfoGAN.infogan.algos.vae import VAE
 from sandbox.pchen.InfoGAN.infogan.misc.utils import mkdir_p, set_seed, skip_if_exception
@@ -38,7 +23,6 @@ batch_size = 128
 # updates_per_epoch = 100
 
 stub(globals())
-from rllab import config
 
 from rllab.misc.instrument import VariantGenerator, variant
 
@@ -49,11 +33,11 @@ class VG(VariantGenerator):
         # yield
         # return np.arange(1, 11) * 1e-4
         # return [0.0001, 0.0005, 0.001]
-        return [0.002*5, 0.002] #0.001]
+        return [0.002, ] #0.001]
 
     @variant
     def seed(self):
-        return [42, ]
+        return [42, 2222]
         # return [123124234]
 
     @variant
@@ -107,18 +91,15 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self):
-        return [4,]
+        return [4, ]
 
     @variant(hide=False)
     def nr(self):
         return [5,]
 
     @variant(hide=False)
-    def i_nar(self, nar):
-        if nar == 0:
-            return [4, ]
-        else:
-            return [0]
+    def i_nar(self):
+        return [4, ]
 
     @variant(hide=False)
     def i_nr(self):
@@ -139,7 +120,7 @@ class VG(VariantGenerator):
         ]
     @variant(hide=False)
     def exp_avg(self):
-        return [0.99, ]
+        return [0.999, ]
 
     @variant(hide=False)
     def tiear(self):
@@ -150,20 +131,23 @@ class VG(VariantGenerator):
     def dec_context(self):
         return [True, ]
 
-    # @variant(hide=False)
-    # def ds(self):
-    #     return [
-    #         "mnist",
-    #         "omni"
-    #     ]
+    @variant(hide=False)
+    def ds(self):
+        return [
+            "mnist",
+            # "omni"
+        ]
 
     @variant(hide=True)
-    def max_epoch(self, ):
-        yield 600
+    def max_epoch(self, ds):
+        if ds == "omni":
+            yield 2200
+        else:
+            yield 600
 
     @variant(hide=True)
     def anneal_after(self, max_epoch):
-        return [int(max_epoch * 0.7)]
+        return [None]
 
     @variant(hide=False)
     def context_dim(self, ):
@@ -175,19 +159,15 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_depth(self):
-        return [6, ]
+        return [3, 12, 28]
 
     @variant(hide=False)
-    def ar_nin(self, ar_depth):
-        return [2, ]
+    def uncond(self):
+        return [True, False]
 
     @variant(hide=False)
     def ar_tie(self):
-        return [True, ]
-
-    @variant(hide=False)
-    def ar_chns(self):
-        return [12, 6]
+        return [False]
 
 
 
@@ -209,10 +189,11 @@ for v in variants[:]:
 
         print("Exp name: %s" % exp_name)
 
-        # load_caltech()
-        # dataset = Caltech101Dataset()
-        # dataset = Caltech101Dataset()
-        dataset = BinarizedMnistDataset()
+
+        if v["ds"] == "omni":
+            dataset = ResamplingBinarizedOmniglotDataset()
+        else:
+            dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
 
         # init_size = v["dec_init_size"]
         # ch_size = zdim // init_size // init_size
@@ -236,7 +217,6 @@ for v in variants[:]:
                 neuron_ratio=v["nr"],
                 data_init_wnorm=v["ar_wnorm"],
                 var_scope="AR_scope" if v["tiear"] else None,
-                mean_only=True,
             )
 
         latent_spec = [
@@ -265,13 +245,13 @@ for v in variants[:]:
             shape=(28, 28, 1),
             filter_size=3,
             depth=v["ar_depth"],
-            nr_channels=v["ar_chns"],
+            nr_channels=12,
             pixel_bias=True,
-            # block="plstm",
+            block="plstm",
             context_dim=v["context_dim"],
             tieweight=v["ar_tie"],
-            block="gated_resnet",
-            extra_nins=v["ar_nin"],
+            sanity2=v["uncond"],
+            # block="resnet",
         )
         model = RegularizedHelmholtzMachine(
             output_dist=ar_conv_dist,
@@ -297,7 +277,7 @@ for v in variants[:]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=6000//128*5,
+            vali_eval_interval=1500*3,
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
@@ -305,6 +285,7 @@ for v in variants[:]:
         )
 
         # sys stuff
+        from rllab import config
         config.USE_GPU = True
         config.DOCKER_IMAGE = "neocxi/rllab_exp_gpu_tf:py3"
         # config.DOCKER_IMAGE = "dementrock/rllab3-shared-gpu"
@@ -315,32 +296,18 @@ for v in variants[:]:
         config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[config.AWS_REGION_NAME]
         config.AWS_IMAGE_ID = "ami-1c5a090b" #config.ALL_REGION_AWS_IMAGE_IDS[config.AWS_REGION_NAME]
         config.AWS_SECURITY_GROUP_IDS = config.ALL_REGION_AWS_SECURITY_GROUP_IDS[config.AWS_REGION_NAME]
-
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1020_llr_reg_smnist_cc_af_gres",
+            exp_prefix="1026_%s_cc_sanity" % v["ds"],
             seed=v["seed"],
             variant=v,
             mode="ec2",
             terminate_machine=True,
             use_gpu=True,
-
             # mode="local",
             # mode="lab_kube",
             # n_parallel=0,
             # use_gpu=True,
-            # node_selector={
-            #     "aws/type": "p2.xlarge",
-            #     "openai/computing": "true",
-            # },
-            # resources=dict(
-            #     requests=dict(
-            #         cpu=1.6,
-            #     ),
-            #     limits=dict(
-            #         cpu=1.6,
-            #     )
-            # )
         )
 
 
