@@ -437,7 +437,7 @@ class DQNAgent(Agent,Shareable,Picklable):
                 self.past_actions[self.t] = cur_a
                 self.past_qvalues[self.t] = cur_qs # beware to record the variable (not just its data) to allow gradient computation
                 self.past_extra_infos[self.t] = extra_infos
-                self.epoch_misc_stats["q_val"].append(float(cur_qs[a].data))
+                self.epoch_misc_stats["q_val"].append(float(cur_qs[cur_a].data))
                 self.cur_path_len += 1
                 self.cur_path_effective_return += reward
                 self.t += 1

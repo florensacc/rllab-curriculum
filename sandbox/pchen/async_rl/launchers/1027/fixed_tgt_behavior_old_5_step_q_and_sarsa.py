@@ -69,8 +69,8 @@ class VG(VariantGenerator):
         # return ["pong", "breakout",  ]
         # return ["space_invaders"]
         # return ["breakout"]
-        return ["seaquest", "pong", "space_invaders"]
-        # return ["beamrider", "breakout", "qbert"]
+        # return ["seaquest", "pong", "space_invaders"]
+        return ["beam_rider", "breakout", "qbert"]
 
     @variant
     def n_step(self, ):

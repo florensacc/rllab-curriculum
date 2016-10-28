@@ -228,7 +228,7 @@ for v in variants[:]:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="1027_varfix_DEBUG_q_new_old",# use the batch after 1am
+        exp_prefix="1027_primevarfix_DEBUG_q_new_old",# use the batch after 1am
         seed=v["seed"],
         variant=v,
         # mode="local",
