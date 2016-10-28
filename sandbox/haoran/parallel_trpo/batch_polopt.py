@@ -46,6 +46,7 @@ class ParallelBatchPolopt(RLAlgorithm):
             bonus_evaluator=None,
             extra_bonus_evaluator=None,
             bonus_coeff=0,
+            path_length_scheduler=None,
             **kwargs
     ):
         """
@@ -96,6 +97,9 @@ class ParallelBatchPolopt(RLAlgorithm):
         if extra_bonus_evaluator is not None:
             raise NotImplementedError
         self.bonus_coeff = bonus_coeff
+        self.path_length_scheduler = path_length_scheduler
+        if path_length_scheduler is not None:
+            self.path_length_scheduler.set_algo(self)
 
     def __getstate__(self):
         """ Do not pickle parallel objects. """
@@ -229,6 +233,7 @@ class ParallelBatchPolopt(RLAlgorithm):
             start_time = time.time()
         for itr in range(self.current_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
+                self.update_algo_params(itr)
                 if rank == 0:
                     logger.log("Collecting samples ...")
                 paths = self.sampler.obtain_samples()
@@ -262,6 +267,10 @@ class ParallelBatchPolopt(RLAlgorithm):
                             input("Plotting evaluation run: Press Enter to "
                                       "continue...")
                 self.current_itr = itr + 1
+
+    def update_algo_params(self,itr):
+        if self.path_length_scheduler is not None:
+            self.path_length_scheduler.update(itr)
 
     #
     # Parallelized methods and related.
