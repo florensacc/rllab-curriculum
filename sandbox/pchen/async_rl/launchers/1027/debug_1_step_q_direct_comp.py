@@ -88,7 +88,7 @@ class VG(VariantGenerator):
     @variant
     def lr(self, ):
         yield 7e-4
-        # yield 1e-4
+        yield 1e-4
         yield 2e-3
         # yield 5e-3
         # yield 5e-3
@@ -228,11 +228,14 @@ for v in variants[:]:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="1027_DEBUG_q_new_old",# use the batch after 1am
+        exp_prefix="1027_varfix_DEBUG_q_new_old",# use the batch after 1am
         seed=v["seed"],
         variant=v,
         # mode="local",
         mode="ec2",
+        aws_config=dict(
+            placement=dict(AvailabilityZone="us-east-2b"),
+        )
         # terminate_machine=False,
         # mode="local_docker",
         #

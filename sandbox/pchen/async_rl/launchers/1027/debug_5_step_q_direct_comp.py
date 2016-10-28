@@ -5,6 +5,8 @@
 # debug
 # try 5-step and same learning time to make sure lr anneal doesnt get in its way
 
+# with new lr 5-step seems to be doing good for new impl
+
 
 import logging
 import os,sys

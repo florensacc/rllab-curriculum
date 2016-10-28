@@ -326,15 +326,15 @@ class DQNAgent(Agent,Shareable,Picklable):
 
                 self.temp = np.clip(self.temp, 1e-3, 1e3)
                 pms = softmax(q_vals / self.temp)
-                a = np.random.choice(al, p=pms)
+                cur_a = np.random.choice(al, p=pms)
                 entropy = np.sum(-pms*np.log(pms + 1e-8))
                 self.epoch_misc_stats["entropy"].append(entropy)
                 self.epoch_misc_stats["_tgt_entropy"].append(tgt_entropy)
             else:
                 if np.random.uniform() < eps:
-                    a = np.random.randint(low=0, high=len(cur_qs.data))
+                    cur_a = np.random.randint(low=0, high=len(cur_qs.data))
                 else:
-                    a = np.argmax(cur_qs.data)
+                    cur_a = np.argmax(cur_qs.data)
 
         # start computing gradient and synchronize model params
         # avoid updating model params during testing
@@ -350,7 +350,7 @@ class DQNAgent(Agent,Shareable,Picklable):
                     if self.bellman == Bellman.q:
                         R = float(np.amax(tgt_qs.data))
                     elif self.bellman == Bellman.sarsa:
-                        R = float(tgt_qs.data[a])
+                        R = float(tgt_qs.data[cur_a])
                     else:
                         raise NotImplementedError
 
@@ -372,7 +372,7 @@ class DQNAgent(Agent,Shareable,Picklable):
                     if self.bellman == Bellman.q:
                         R = float(np.amax(tgt_qs.data))
                     elif self.bellman == Bellman.sarsa:
-                        R = float(tgt_qs.data[a])
+                        R = float(tgt_qs.data[cur_a])
                     else:
                         raise NotImplementedError
 
@@ -434,14 +434,14 @@ class DQNAgent(Agent,Shareable,Picklable):
             if self.phase == "Train":
                 # record the state to allow bonus computation
                 self.past_states[self.t] = statevar
-                self.past_actions[self.t] = a
+                self.past_actions[self.t] = cur_a
                 self.past_qvalues[self.t] = cur_qs # beware to record the variable (not just its data) to allow gradient computation
                 self.past_extra_infos[self.t] = extra_infos
                 self.epoch_misc_stats["q_val"].append(float(cur_qs[a].data))
                 self.cur_path_len += 1
                 self.cur_path_effective_return += reward
                 self.t += 1
-            return a
+            return cur_a
         else:
             self.epoch_misc_stats["path_len"].append(self.cur_path_len)
             self.epoch_misc_stats["effective_return"].append(self.cur_path_effective_return)
