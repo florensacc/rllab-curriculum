@@ -2,7 +2,8 @@
 
 # opt share didnt really seem to result in better performance
 
-# entropy formulation
+# try gradient equivalent
+# sweep more lr params for just pong
 
 import logging
 import os,sys
@@ -15,8 +16,7 @@ from sandbox.pchen.dqn.envs.atari import AtariEnvCX
 sys.path.append('.')
 
 from sandbox.pchen.async_rl.async_rl.agents.a3c_agent import A3CAgent
-from sandbox.pchen.async_rl.async_rl.agents.dqn_agent import DQNAgent, Bellman, OldFixedDQNAgent, \
-    EntropyOldFixedDQNAgent
+from sandbox.pchen.async_rl.async_rl.agents.dqn_agent import DQNAgent, Bellman, OldFixedDQNAgent
 from sandbox.pchen.async_rl.async_rl.algos.a3c_ale import A3CALE
 from sandbox.pchen.async_rl.async_rl.algos.dqn_ale import DQNALE
 from sandbox.pchen.async_rl.async_rl.utils.get_time_stamp import get_time_stamp
@@ -69,9 +69,10 @@ class VG(VariantGenerator):
         # return ["pong", "breakout",  ]
         # return ["space_invaders"]
         # return ["breakout"]
-        return ["seaquest", "pong", "space_invaders"]
+        # return ["seaquest", "pong", "space_invaders"]
         # return ["beamrider", "breakout", "qbert"]
         # return ["beam_rider"]
+        return ["pong"]
 
     @variant
     def n_step(self, ):
@@ -92,6 +93,9 @@ class VG(VariantGenerator):
 
     @variant
     def lr(self, ):
+        yield 1e-5
+        yield 4e-5
+        yield 1e-4
         yield 7e-4
         # yield 1e-4
         yield 2e-3
@@ -119,8 +123,8 @@ class VG(VariantGenerator):
         return [False]
 
     @variant
-    def arch(self, ):
-        return ["entropy"]
+    def on_policy(self, ):
+        return [True]
 
 vg = VG()
 variants = vg.variants(randomized=False)
@@ -160,7 +164,7 @@ for v in variants[:]:
     ))
 
     # agent = DQNAgent(
-    agent = EntropyOldFixedDQNAgent(
+    agent = OldFixedDQNAgent(
         # n_actions=env.number_of_actions,
         env=env,
         target_update_frequency=target_update_frequency,
@@ -177,6 +181,7 @@ for v in variants[:]:
         boltzmann=boltzmann,
         sample_eps=True,
         share_optimizer_states=opt_share,
+        on_policy=on_policy,
     )
     algo = DQNALE(
         total_steps=total_t,
@@ -224,7 +229,7 @@ for v in variants[:]:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="1026_old5_q_and_sarsa",# use the batch after 1am
+        exp_prefix="1028_onpi_sweep_pong_sarsa",# use the batch after 1am
         seed=v["seed"],
         variant=v,
         # mode="local",

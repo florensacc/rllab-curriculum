@@ -2,7 +2,9 @@
 
 # opt share didnt really seem to result in better performance
 
-# entropy formulation
+# debug
+# try 5-step and same learning time to make sure lr anneal doesnt get in its way
+
 
 import logging
 import os,sys
@@ -15,8 +17,7 @@ from sandbox.pchen.dqn.envs.atari import AtariEnvCX
 sys.path.append('.')
 
 from sandbox.pchen.async_rl.async_rl.agents.a3c_agent import A3CAgent
-from sandbox.pchen.async_rl.async_rl.agents.dqn_agent import DQNAgent, Bellman, OldFixedDQNAgent, \
-    EntropyOldFixedDQNAgent
+from sandbox.pchen.async_rl.async_rl.agents.dqn_agent import DQNAgent, Bellman, OldFixedDQNAgent
 from sandbox.pchen.async_rl.async_rl.algos.a3c_ale import A3CALE
 from sandbox.pchen.async_rl.async_rl.algos.dqn_ale import DQNALE
 from sandbox.pchen.async_rl.async_rl.utils.get_time_stamp import get_time_stamp
@@ -35,13 +36,13 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [42, 888, 99999, ]
+        return [42, 888, 999, ]
 
     @variant
     def total_t(self):
         # return [2*7 * 3*10**6]
         # half time, short trial
-        return [35*10**6]
+        return [45*10**6]
 
     @variant
     def n_processes(self):
@@ -69,31 +70,25 @@ class VG(VariantGenerator):
         # return ["pong", "breakout",  ]
         # return ["space_invaders"]
         # return ["breakout"]
-        return ["seaquest", "pong", "space_invaders"]
-        # return ["beamrider", "breakout", "qbert"]
-        # return ["beam_rider"]
+        # return ["space_invaders", "seaquest", "pong",]
+        return ["pong"]
 
     @variant
     def n_step(self, ):
-        return [5,]
+        return [1]
 
     @variant
     def bellman(self, ):
         # return ["q"]
         return [
-            Bellman.sarsa,
-            # Bellman.q,
+            Bellman.q,
+            # Bellman.sarsa,
         ]
-
-    @variant
-    def boltzmann(self, bellman):
-        return [True]
-
 
     @variant
     def lr(self, ):
         yield 7e-4
-        # yield 1e-4
+        yield 1e-4
         yield 2e-3
         # yield 5e-3
         # yield 5e-3
@@ -111,6 +106,10 @@ class VG(VariantGenerator):
         return [True, ]
 
     @variant
+    def boltzmann(self, ):
+        return [False]
+
+    @variant
     def temp_init(self, ):
         return [1e-2, ]
 
@@ -119,8 +118,8 @@ class VG(VariantGenerator):
         return [False]
 
     @variant
-    def arch(self, ):
-        return ["entropy"]
+    def new(self, ):
+        return [True, ]
 
 vg = VG()
 variants = vg.variants(randomized=False)
@@ -159,25 +158,46 @@ for v in variants[:]:
         initial_manual_activation=manual_start,
     ))
 
-    # agent = DQNAgent(
-    agent = EntropyOldFixedDQNAgent(
-        # n_actions=env.number_of_actions,
-        env=env,
-        target_update_frequency=target_update_frequency,
-        eps_test=eps_test,
-        t_max=5,
-        optimizer_args=dict(
-            lr=lr,
-            eps=1e-1,
-            alpha=0.99,
-        ),
-        bellman=bellman,
-        adaptive_entropy=adaptive_entropy,
-        temp_init=temp_init,
-        boltzmann=boltzmann,
-        sample_eps=True,
-        share_optimizer_states=opt_share,
-    )
+    if new:
+        agent = DQNAgent(
+            # n_actions=env.number_of_actions,
+            env=env,
+            target_update_frequency=target_update_frequency,
+            eps_test=eps_test,
+            t_max=5,
+            n_step=n_step,
+            optimizer_args=dict(
+                lr=lr,
+                eps=1e-1,
+                alpha=0.99,
+            ),
+            bellman=bellman,
+            adaptive_entropy=adaptive_entropy,
+            temp_init=temp_init,
+            boltzmann=boltzmann,
+            sample_eps=True,
+            share_optimizer_states=opt_share,
+        )
+    else:
+        agent = OldFixedDQNAgent(
+            # n_actions=env.number_of_actions,
+            env=env,
+            target_update_frequency=target_update_frequency,
+            eps_test=eps_test,
+            t_max=5,
+            # n_step=n_step,
+            optimizer_args=dict(
+                lr=lr,
+                eps=1e-1,
+                alpha=0.99,
+            ),
+            bellman=bellman,
+            adaptive_entropy=adaptive_entropy,
+            temp_init=temp_init,
+            boltzmann=boltzmann,
+            sample_eps=True,
+            share_optimizer_states=opt_share,
+        )
     algo = DQNALE(
         total_steps=total_t,
         n_processes=n_processes,
@@ -189,22 +209,6 @@ for v in variants[:]:
     )
 
     # sys stuff
-    # comp_cores = max(int(20 / n_processes), 1)
-    # config.ENV = dict(
-    #     MKL_NUM_THREADS=comp_cores,
-    #     NUMEXPR_NUM_THREADS=comp_cores,
-    #     OMP_NUM_THREADS=comp_cores,
-    # )
-    # config.AWS_INSTANCE_TYPE = "c3.8xlarge"
-    # config.EBS_OPTIMIZED = False
-    # config.AWS_SPOT = True
-    # config.AWS_SPOT_PRICE = '1.66'
-    # config.AWS_REGION_NAME = 'us-west-1'
-    # # config.AWS_REGION_NAME = 'us-east-2'
-    # config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[config.AWS_REGION_NAME]
-    # config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[config.AWS_REGION_NAME]
-    # config.AWS_SECURITY_GROUP_IDS = config.ALL_REGION_AWS_SECURITY_GROUP_IDS[config.AWS_REGION_NAME]
-
     comp_cores = max(int(20 / n_processes), 1)
     config.ENV = dict(
         MKL_NUM_THREADS=comp_cores,
@@ -224,13 +228,13 @@ for v in variants[:]:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix="1026_old5_q_and_sarsa",# use the batch after 1am
+        exp_prefix="1028_DEBUG_1_step_q_new_old",# use the batch after 1am
         seed=v["seed"],
         variant=v,
         # mode="local",
         mode="ec2",
         aws_config=dict(
-            placement=dict(AvailabilityZone="us-east-2c"),
+            placement=dict(AvailabilityZone="us-east-2b"),
         )
         # terminate_machine=False,
         # mode="local_docker",

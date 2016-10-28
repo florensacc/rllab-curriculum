@@ -408,8 +408,8 @@ class DQNAgent(Agent,Shareable,Picklable):
                     a = self.past_actions[i]
                     cur_loss = 0.5 * (qs[a] - R) ** 2
                     loss += cur_loss
-                    # reset R to be boostraped value
-                    q_vals = qs.data
+                    # reset R to be boostraped value from tgt, unless we are doing on-policy step
+                    q_vals = self.shared_target_model.compute_qs(self.past_states[i]).data
                     if self.bellman == Bellman.q:
                         R = float(np.amax(q_vals))
                     elif self.bellman == Bellman.sarsa:
