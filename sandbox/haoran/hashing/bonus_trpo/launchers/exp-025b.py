@@ -1,9 +1,11 @@
 """
 Tune BassHash on image obs + RAM count
-I expect this to work similarly to HackyHash
+Continue exp-025; accelerate Bass computation
 
-- tune cell_size and n_bin
-- use shorter horizon
++ use accelerated version of bass hash
++ tune cell_size in conjunction with bonus_coeff (see hacky hash exps)
+? use adaptive horizon
+? find bucket sizes s.t. no collisions occur
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -51,7 +53,7 @@ ec2_instance = "c4.8xlarge"
 subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
-n_parallel = 2 # only for local exp
+n_parallel = 1 # only for local exp
 snapshot_mode = "gap"
 snapshot_gap = 100
 plot = False
@@ -76,7 +78,7 @@ class VG(VariantGenerator):
 
     @variant
     def bonus_coeff(self):
-        return [0.01]
+        return [0.05,0.1]
 
     @variant
     def game(self):
@@ -92,7 +94,11 @@ class VG(VariantGenerator):
 
     @variant
     def n_bin(self):
-        return [10,20]
+        return [20]
+
+    @variant
+    def scale(self):
+        return [0.25]
 
     @variant
     def max_path_length(self):
@@ -158,10 +164,11 @@ for v in variants:
     bonus_coeff=v["bonus_coeff"]
     bonus_form="1/sqrt(n)"
     count_target=v["count_target"]
-    retrieve_sample_size=100000 # compute keys for all paths at once
+    retrieve_sample_size=1000 # reduces memory requirement if the count targets are images
     decay_within_path = False
 
-    cell_size=v["cell_size"]
+    scale = v["scale"]
+    cell_size=int(v["cell_size"] * v["scale"])
     n_bin = v["n_bin"]
 
     # other exp setup --------------------------------------
@@ -263,12 +270,15 @@ for v in variants:
     )
 
     # bonus
-    bass = BassFeatureExtractor(cell_size=cell_size,n_bin=n_bin)
+    bass = BassFeatureExtractor(
+        image_shape=(210,160,3),
+        cell_size=cell_size,
+        n_bin=n_bin,
+        batch_method="vectorized_v2",
+        scale=scale,
+    )
     h = BassHash(
         bass=bass,
-        n_channel=3,
-        img_width=160,
-        img_height=210,
         parallel=use_parallel,
     )
     bonus_evaluator = ALEHashingBonusEvaluator(
