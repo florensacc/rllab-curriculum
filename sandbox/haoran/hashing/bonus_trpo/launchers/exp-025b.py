@@ -1,5 +1,5 @@
 """
-Tune BassHash on image obs + RAM count
+Tune BassHash on ram obs + RAM count
 Continue exp-025; accelerate Bass computation
 
 + use accelerated version of bass hash

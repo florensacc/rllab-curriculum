@@ -33,6 +33,12 @@ class GaussianConvBaseline(Baseline, Parameterized, Serializable):
         returns = np.concatenate([p["returns"] for p in paths])
         self._regressor.fit(observations, returns.reshape((-1, 1)))
 
+    def fit_by_samples_data(self, samples_data):
+        observations = samples_data["observations"]
+        returns = samples_data["returns"]
+        self._regressor.fit(observations, returns.reshape((-1, 1)))
+
+
     @overrides
     def predict(self, path):
         return self._regressor.predict(path["observations"]).flatten()

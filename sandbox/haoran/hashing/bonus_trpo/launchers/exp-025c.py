@@ -1,5 +1,5 @@
 """
-Tune BassHash on image obs + RAM count
+Tune BassHash on ram obs + RAM count
 Continue exp-025b; accelerate Bass computation
 
 Reuse the best params from exp-025. If it works, we can keep using this fast version. Otherwise, we need to try other lossless acceleration.

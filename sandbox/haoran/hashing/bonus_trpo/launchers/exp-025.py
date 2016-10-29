@@ -1,5 +1,5 @@
 """
-Tune BassHash on image obs + RAM count
+Tune BassHash on ram obs + RAM count
 I expect this to work similarly to HackyHash
 
 - tune cell_size and n_bin
