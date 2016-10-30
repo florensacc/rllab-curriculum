@@ -1,7 +1,7 @@
 """
 Image obs, image hash (bass)
 
-Diagnose problems in exp-026d,e
+Finally fixed memory issues; run on multiple games
 """
 # imports -----------------------------------------------------
 """ baseline """

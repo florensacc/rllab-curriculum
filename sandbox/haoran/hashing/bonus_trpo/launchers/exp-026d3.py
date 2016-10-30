@@ -1,4 +1,5 @@
 """
+(experiment aborted due to memory issues)
 Image obs, image hash (bass)
 
 Quickly re-run frostbite with 6M buckets

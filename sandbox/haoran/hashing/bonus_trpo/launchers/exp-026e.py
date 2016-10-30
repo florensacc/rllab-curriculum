@@ -1,4 +1,5 @@
 """
+(experiment aborted due to memory issues)
 Image obs, image hash (bass)
 
 Fix memory issue; try a bunch of games
