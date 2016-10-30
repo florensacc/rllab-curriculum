@@ -222,7 +222,7 @@ class ParallelBatchPolopt(RLAlgorithm):
         self.shared_dict = self.manager.dict()
 
         if self.n_parallel == 1:
-            self._train(rank=0)
+            self._train(0,self.shared_dict)
         else:
             processes = [mp.Process(target=self._train, args=(rank,self.shared_dict))
                 for rank in range(self.n_parallel)]
@@ -270,7 +270,8 @@ class ParallelBatchPolopt(RLAlgorithm):
                 self.optimize_policy(itr, samples_data)  # (parallel)
                 if rank == 0:
                     logger.log("fitting baseline...")
-                self.baseline.fit_by_samples_data(samples_data)  # (parallel)
+                # self.baseline.fit_by_samples_data(samples_data)  # (parallel)
+                self.baseline.fit(samples_data["paths"])
                 if rank == 0:
                     logger.log("fitted")
                     logger.log("saving snapshot...")

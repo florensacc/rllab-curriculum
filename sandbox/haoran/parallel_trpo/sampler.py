@@ -1,5 +1,6 @@
 
 import numpy as np
+import copy
 
 from rllab.misc import special, tensor_utils
 from rllab.algos import util
@@ -78,35 +79,42 @@ class WorkerBatchSampler(object):
 
         if not self.algo.policy.recurrent:
             if self.avoid_duplicate_paths:
-                tensor_list = ["observations","actions","raw_rewards","advantages","returns"]
-                dict_list = ["env_infos", "agent_infos"]
-                retain_list = ["returns","rewards","raw_rewards","bonus_rewards"]
-                samples_data = dict()
-                samples_data["paths"] = []
-
-                # reversely load path data into samples_data and delete the loaded path
-                for i in range(len(paths)-1, -1, -1):
-                    path = paths[i]
-                    if i == len(paths) - 1:
-                        for data in tensor_list + dict_list:
-                            samples_data[data] = path[data]
-                    else:
-                        for data in tensor_list:
-                            samples_data[data] = tensor_utils.concat_tensor_list([
-                                samples_data[data],
-                                path[data]
-                            ])
-                        for data in dict_list:
-                            samples_data[data] = tensor_utils.concat_tensor_dict_list([
-                                samples_data[data],
-                                path[data]
-                            ])
-                    new_path = {
-                        data: np.copy(path[data])
-                        for data in retain_list
-                    }
-                    samples_data["paths"].append(new_path)
-                    del paths[i]
+                raise NotImplementedError
+                # tensor_list = ["observations","actions","raw_rewards","advantages","returns"]
+                # dict_list = ["env_infos", "agent_infos"]
+                # retain_list = ["returns","rewards","raw_rewards","bonus_rewards"]
+                # samples_data = dict()
+                # samples_data["paths"] = []
+                #
+                # # reversely load path data into samples_data and delete the loaded path
+                # for i in range(len(paths)-1, -1, -1):
+                #     path = paths[i]
+                #     if i == len(paths) - 1:
+                #         for data in tensor_list + dict_list:
+                #             samples_data[data] = copy.deepcopy(path[data])
+                #     else:
+                #         for data in tensor_list:
+                #             samples_data[data] = tensor_utils.concat_tensor_list([
+                #                 copy.deepcopy(path[data]),
+                #                 samples_data[data],
+                #             ])
+                #         for data in dict_list:
+                #             samples_data[data] = tensor_utils.concat_tensor_dict_list([
+                #                 copy.deepcopy(path[data]),
+                #                 samples_data[data],
+                #             ])
+                #     new_path = {
+                #         data: copy.deepcopy(path[data])
+                #         for data in retain_list
+                #     }
+                #     samples_data["paths"] = [new_path] + samples_data["paths"]
+                #
+                #     # del paths[i]
+                # if self.algo.center_adv:
+                #     samples_data["advantages"] = util.center_advantages(samples_data["advantages"])
+                #
+                # if self.algo.positive_adv:
+                #     samples_data["advantages"] = util.shift_advantages_to_positive(samples_data["advantages"])
             else:
                 observations = tensor_utils.concat_tensor_list([path["observations"] for path in paths])
                 actions = tensor_utils.concat_tensor_list([path["actions"] for path in paths])

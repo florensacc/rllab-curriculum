@@ -882,10 +882,11 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
     )
 
     if len(instance_args["NetworkInterfaces"]) > 0:
-        disable_security_group = query_yes_no(
-            "Cannot provide both network interfaces and security groups info. Do you want to disable security group settings?",
-            default="yes",
-        )
+        # disable_security_group = query_yes_no(
+        #     "Cannot provide both network interfaces and security groups info. Do you want to disable security group settings?",
+        #     default="yes",
+        # )
+        disable_security_group = True
         if disable_security_group:
             instance_args.pop("SecurityGroups")
             instance_args.pop("SecurityGroupIds")
