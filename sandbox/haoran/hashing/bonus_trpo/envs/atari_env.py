@@ -34,7 +34,7 @@ class AtariEnv(Env,Serializable):
             terminator=None,
             legal_actions=[],
             rom_filename="",
-            correct_luminance=False,
+            correct_luminance=True,
             recorded_rgb_image_scale=1.0,
         ):
         """

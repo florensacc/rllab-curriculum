@@ -50,7 +50,7 @@ class ParallelBatchPolopt(RLAlgorithm):
             bonus_coeff=0,
             path_length_scheduler=None,
             log_memory_usage=True,
-            avoid_duplicate_paths=True,
+            avoid_duplicate_paths=False,
             **kwargs
     ):
         """

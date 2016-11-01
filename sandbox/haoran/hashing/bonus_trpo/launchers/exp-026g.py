@@ -3,6 +3,7 @@ Image obs, image hash (bass)
 
 Continue Frostbite in exp-026 for 200M frames.
 Retrain takes place in a separate folder, so as to not screw up original data.
+(exps failed to save snapshots due to ParallelTRPO not havig attribute "unpicklable_list")
 """
 # imports -----------------------------------------------------
 from sandbox.haoran.myscripts.retrainer import Retrainer
