@@ -79,7 +79,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         vec_to_goal = self.get_vec_to_goal()
         dim = self.model.data.qpos.shape[0]
 
-        if self.use_depth:
+        if not self.use_depth:
             idxpos = list(range(7)) + list(range(14, dim))  # TODO: Hacky
             idxvel = list(range(7)) + list(range(14, dim - 3 - 1))
             return  np.concatenate([
@@ -93,10 +93,10 @@ class Pr2EnvLego(MujocoEnv, Serializable):
                 # self.viewer_bot.get_depth_map(),
             ]).reshape(-1)
         else:
-            # depth = self.viewer_bot.get_depth_map()
-            # depth = depth.astype(np.uint8)
-            # depth = imresize(depth, (227, 227))
-            # depth = depth.astype(np.float32).transpose([2, 0, 1])
+            depth = self.viewer_bot.get_depth_map()
+            depth = depth.astype(np.uint8)
+            depth = imresize(depth, (227, 227))
+            depth = depth.astype(np.float32).transpose([2, 0, 1])
             idxpos = list(range(7)) + list(range(dim - 3, dim))  # TODO: Hacky
             idxvel = list(range(7))
             return np.concatenate([
@@ -211,14 +211,14 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             self.viewer.loop_once()
         if self.use_depth:
             self.viewer_bot.loop_once()
-
-        img = self.viewer_bot.get_depth_map()
-        img = img.astype(np.ubyte)
-        imsave('data/local/imgs/depth' + str(time.clock()) + '.png', img)
-        (img, h, w) = self.viewer.get_image()
-        rect = self.viewer_bot.get_rect()
-        img = np.fromstring(img, dtype='uint8').reshape(h, w, 3)[::-1, :, :]
-        imsave('data/local/imgs/lego' + str(time.clock()) + '.png', img)
+        #
+        # img = self.viewer_bot.get_depth_map()
+        # img = img.astype(np.ubyte)
+        # imsave('data/local/imgs/depth' + str(time.clock()) + '.png', img)
+        # (img, h, w) = self.viewer.get_image()
+        # rect = self.viewer_bot.get_rect()
+        # img = np.fromstring(img, dtype='uint8').reshape(h, w, 3)[::-1, :, :]
+        # imsave('data/local/imgs/lego' + str(time.clock()) + '.png', img)
         # if self.use_depth:
 
         return Step(ob, float(reward), done, #not self.do_rand,

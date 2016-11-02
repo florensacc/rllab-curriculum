@@ -20,7 +20,7 @@ def _glfw_error_callback(e, d):
 
 class MjViewer(object):
 
-    def __init__(self, visible=True, init_width=500, init_height=500, go_fast=False, is_bot=False):
+    def __init__(self, visible=True, init_width=500, init_height=500, go_fast=True, is_bot=False):
         """
         Set go_fast=True to run at full speed instead of waiting for the 60 Hz monitor refresh
         init_width and init_height set window size. On Mac Retina displays, they are in nominal

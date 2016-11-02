@@ -22,7 +22,7 @@ env = normalize(Pr2EnvLego(
     max_action=1,
     pos_normal_sample=False,
     qvel_init_std=0.01,
-    use_depth=True,
+    # use_depth=True,
     use_vision=True,
     ))
 
@@ -51,26 +51,26 @@ algo = TRPO(
     goal_generator=train_goal_generator,
     action_limiter=action_limiter,
     # Uncomment both lines (this and the plot parameter below) to enable plotting
-    # plot=True,
+    plot=True,
 )
 
 run_experiment_lite(
     algo.train(),
     # use_gpu=True,
     # Number of parallel workers for sampling
-    # n_parallel=multiprocessing.cpu_count(),
     n_parallel=32,
-    sync_s3_pkl=True,
+    # n_parallel=24,
+    # sync_s3_pkl=True,
     # sync_s3_png=True,
-    aws_config={"spot_price": '1.5', 'instance_type': 'm4.16xlarge'},
+    # aws_config={"spot_price": '1.5', 'instance_type': 'm4.16xlarge'},
     # Only keep the snapshot parameters for the last iteration
     # snapshot_mode="all",
     # Specifies the seed for the experiment. If this is not provided, a random seed
     # will be used
     seed=1,
-    mode="ec2",
+    mode="local",
     # log_dir="data/local/train-Lego/trial_pretraining",
     exp_prefix="train-Lego/state",
-    exp_name="random_goals_random_lego",
-    # plot=True,
+    exp_name="random_goals_random_lego_from_scratch_2",
+    plot=True,
 )
