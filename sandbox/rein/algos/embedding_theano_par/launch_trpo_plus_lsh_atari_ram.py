@@ -20,8 +20,8 @@ model_batch_size = 32
 exp_prefix = 'ptrpo-ae-spat-a'
 seeds = [3, 4, 5]
 etas = [0.1]
-mdps = [  # AtariEnv(game='freeway', obs_type="image", frame_skip=4)]
-    AtariEnv(game='frostbite', obs_type="image", frame_skip=4)]
+mdps = [   AtariEnv(game='freeway', obs_type="image", frame_skip=4)]
+    # AtariEnv(game='frostbite', obs_type="image", frame_skip=4)]
     # AtariEnv(game='gravitar', obs_type="image", frame_skip=4)]
     # AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4)]
     # AtariEnv(game='venture', obs_type="image", frame_skip=4)]
