@@ -665,8 +665,8 @@ def to_docker_command(params, docker_image, python_command="python", script='scr
     if env is not None:
         for k, v in env.items():
             command_prefix += " -e \"{k}={v}\"".format(k=k, v=v)
-    command_prefix += " -v {local_mujoco_key_dir}:{docker_mujoco_key_dir}".format(
-        local_mujoco_key_dir=config.MUJOCO_KEY_PATH, docker_mujoco_key_dir='/root/.mujoco')
+    # command_prefix += " -v {local_mujoco_key_dir}:{docker_mujoco_key_dir}".format(
+    #     local_mujoco_key_dir=config.MUJOCO_KEY_PATH, docker_mujoco_key_dir='/root/.mujoco')
     command_prefix += " -v {local_log_dir}:{docker_log_dir}".format(
         local_log_dir=log_dir,
         docker_log_dir=docker_log_dir
@@ -967,17 +967,17 @@ def s3_sync_code(config, dry=False):
 
         upload_cmd = ["aws", "s3", "cp", file_path, remote_path]
 
-        mujoco_key_cmd = [
-            "aws", "s3", "sync", config.MUJOCO_KEY_PATH, "{}/.mujoco/".format(base)]
+        # mujoco_key_cmd = [
+        #     "aws", "s3", "sync", config.MUJOCO_KEY_PATH, "{}/.mujoco/".format(base)]
 
         print(" ".join(tar_cmd))
         print(" ".join(upload_cmd))
-        print(" ".join(mujoco_key_cmd))
+        # print(" ".join(mujoco_key_cmd))
 
         if not dry:
             subprocess.check_call(tar_cmd)
             subprocess.check_call(upload_cmd)
-            subprocess.check_call(mujoco_key_cmd)
+            # subprocess.check_call(mujoco_key_cmd)
 
         S3_CODE_PATH = remote_path
         return remote_path

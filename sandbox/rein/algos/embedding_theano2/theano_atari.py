@@ -44,7 +44,9 @@ except ImportError:
     cv2 = NoCV2()
 
 IMG_WH = (52, 52)  # width, height of images
-
+from sandbox.rein.algos.embedding_theano_par.plotter import Plotter
+plotter = Plotter()
+count = 0
 
 def to_rgb(ale):
     (screen_width, screen_height) = ale.getScreenDims()
@@ -122,7 +124,16 @@ class AtariEnv(Env, Serializable):
             ram = ram * 2.0 - 1.0
             return ram
         elif self._obs_type == "image":
+            global count
             next_obs = self._get_image()[1:-1, :, :]
+            # next_obsx = np.zeros_like(next_obs, dtype=np.uint8)
+            # next_obsx[:,:,0] = next_obs[:, :, 2]  # (0, 1, 2) <- (2, 1, 0)
+            # next_obsx[:,:,1] = next_obs[:, :, 1]  # (0, 1, 2) <- (2, 1, 0)
+            # next_obsx[:,:,2] = next_obs[:, :, 0]  # (0, 1, 2) <- (2, 1, 0)
+            # plotter.plot_actual_imgs(
+            #     inputs=next_obsx[None,:],
+            #     itr=count, dir='tmp/actual')
+            # count += 1
             next_obs = scipy.misc.imresize(
                 next_obs, (IMG_WH[1], IMG_WH[0], 3), interp='bicubic', mode=None)
             next_obs = rgb2gray(next_obs)

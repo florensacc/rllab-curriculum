@@ -3,7 +3,6 @@ import os
 import lasagne
 
 from rllab.misc.instrument import stub, run_experiment_lite
-# from sandbox.rein.algos.embedding_theano_par.theano_atari import AtariEnv
 from sandbox.rein.algos.embedding_theano2.theano_atari import AtariEnv
 from rllab.policies.categorical_mlp_policy import CategoricalMLPPolicy
 from sandbox.rein.algos.embedding_theano_par.trpo_plus_lsh import ParallelTRPOPlusLSH
@@ -18,16 +17,16 @@ stub(globals())
 n_seq_frames = 4
 n_parallel = 9
 model_batch_size = 32
-exp_prefix = 'ptrpo-ae-mean-d'
-seeds = [0, 1, 2]
-etas = [0.01]
-mdps = [  # AtariEnv(game='freeway', obs_type="image", frame_skip=4),
-    AtariEnv(game='gravitar', obs_type="image", frame_skip=4)]
-    # AtariEnv(game='frostbite', obs_type="image", frame_skip=4)]
+exp_prefix = 'ptrpo-ae-spat-a'
+seeds = [3, 4, 5]
+etas = [0.1]
+mdps = [  # AtariEnv(game='freeway', obs_type="image", frame_skip=4)]
+    AtariEnv(game='frostbite', obs_type="image", frame_skip=4)]
+    # AtariEnv(game='gravitar', obs_type="image", frame_skip=4)]
     # AtariEnv(game='montezuma_revenge', obs_type="image", frame_skip=4)]
     # AtariEnv(game='venture', obs_type="image", frame_skip=4)]
 trpo_batch_size = 100000
-max_path_length = 3500
+max_path_length = 4500
 dropout = False
 batch_norm = True
 
@@ -83,9 +82,10 @@ for mdp, eta, seed in param_cart_product:
     )
     baseline = ParallelGaussianConvBaseline(
         env_spec=env_spec,
+        subsample_factor=0.1,
         regressor_args=dict(
             optimizer=ParallelConjugateGradientOptimizer(
-                subsample_factor=0.1,
+                subsample_factor=1.,
                 cg_iters=10,
                 name="vf_opt",
             ),
@@ -269,7 +269,7 @@ for mdp, eta, seed in param_cart_product:
                  dropout=False,
                  deterministic=True),
             dict(name='convolution',
-                 n_filters=96,
+                 n_filters=32,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(2, 2),
@@ -279,35 +279,35 @@ for mdp, eta, seed in param_cart_product:
                  deterministic=True),
             dict(name='reshape',
                  shape=([0], -1)),
-            dict(name='gaussian',
-                 n_units=1024,
-                 matrix_variate_gaussian=False,
-                 nonlinearity=lasagne.nonlinearities.rectify,
-                 batch_norm=batch_norm,
-                 dropout=dropout,
-                 deterministic=True),
+            # dict(name='gaussian',
+            #      n_units=1024,
+            #      matrix_variate_gaussian=False,
+            #      nonlinearity=lasagne.nonlinearities.rectify,
+            #      batch_norm=batch_norm,
+            #      dropout=dropout,
+            #      deterministic=True),
             dict(name='discrete_embedding',
-                 n_units=512,
+                 n_units=800,
                  batch_norm=batch_norm,
                  deterministic=True),
-            dict(name='gaussian',
-                 n_units=1024,
-                 matrix_variate_gaussian=False,
-                 nonlinearity=lasagne.nonlinearities.rectify,
-                 batch_norm=batch_norm,
-                 dropout=dropout,
-                 deterministic=True),
-            dict(name='gaussian',
-                 n_units=1600,
-                 matrix_variate_gaussian=False,
-                 nonlinearity=lasagne.nonlinearities.rectify,
-                 batch_norm=batch_norm,
-                 dropout=False,
-                 deterministic=True),
+            # dict(name='gaussian',
+            #      n_units=1024,
+            #      matrix_variate_gaussian=False,
+            #      nonlinearity=lasagne.nonlinearities.rectify,
+            #      batch_norm=batch_norm,
+            #      dropout=dropout,
+            #      deterministic=True),
+            # dict(name='gaussian',
+            #      n_units=2400,
+            #      matrix_variate_gaussian=False,
+            #      nonlinearity=lasagne.nonlinearities.rectify,
+            #      batch_norm=batch_norm,
+            #      dropout=False,
+            #      deterministic=True),
             dict(name='reshape',
-                 shape=([0], 64, 5, 5)),
+                 shape=([0], 32, 5, 5)),
             dict(name='deconvolution',
-                 n_filters=96,
+                 n_filters=32,
                  filter_size=(6, 6),
                  stride=(2, 2),
                  pad=(2, 2),
@@ -395,6 +395,7 @@ for mdp, eta, seed in param_cart_product:
         ),
         clip_rewards=True,
         model_args=model_args,
+        serial_compile=False,
     )
 
     print("NOTICE: GPUs linked to seeds!")
