@@ -51,6 +51,8 @@
 # SRF actually has pretty big receptive field. give it enough processing power to see what an unconditional srf
 # can do. if it's plenty powerful already, we are iterating on the wrong thing
 
+# 3.067!! probably can be lower if more capacity, this is scary
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer

@@ -20,6 +20,7 @@ class ALEHashingBonusEvaluator(object):
             count_target="observations",
             parallel=False,
             retrieve_sample_size=np.inf,
+            decay_within_path=False,
         ):
         self.state_dim = state_dim
         if state_preprocessor is not None:
@@ -47,6 +48,9 @@ class ALEHashingBonusEvaluator(object):
         self.parallel = parallel
         assert self.parallel == self.hash.parallel
         self.retrieve_sample_size = retrieve_sample_size
+        self.decay_within_path = decay_within_path
+        self.unpicklable_list = ["_par_objs","shared_dict"]
+        self.snapshot_list = [""]
 
         # logging stats ---------------------------------
         self.rank = None
@@ -54,11 +58,21 @@ class ALEHashingBonusEvaluator(object):
 
     def __getstate__(self):
         """ Do not pickle parallel objects. """
-        return {k: v for k, v in iter(self.__dict__.items()) if k != "_par_objs"}
+        state = dict()
+        for k,v in iter(self.__dict__.items()):
+            if k not in self.unpicklable_list:
+                state[k] = v
+            elif k in self.snapshot_list:
+                state[k] = copy.deepcopy(v)
+        return state
 
     def init_rank(self,rank):
         self.rank = rank
         self.hash.init_rank(rank)
+
+    def init_shared_dict(self, shared_dict):
+        self.shared_dict = shared_dict
+        self.hash.init_shared_dict(shared_dict)
 
     def init_par_objs(self,n_parallel):
         n = n_parallel
@@ -182,7 +196,29 @@ class ALEHashingBonusEvaluator(object):
 
     def predict(self, path):
         keys = self.retrieve_keys([path])
-        counts = np.maximum(self.hash.query_keys(keys),1)
+        counts = self.hash.query_keys(keys)
+        if self.decay_within_path:
+            # update counts of the same states within a path
+            count_dict = dict()
+            counts_updated = []
+            for key,count in zip(keys,counts):
+                # make the key hashable
+                if isinstance(key, np.ndarray) and len(key.shape) == 1:
+                    key = tuple(key)
+                elif isinstance(key, int) or isinstance(key, np.int64):
+                    pass
+                else:
+                    raise NotImplementedError
+
+                if key in count_dict:
+                    count_dict[key] += 1
+                else:
+                    count_dict[key] = count + 1
+
+                counts_updated.append(count_dict[key])
+            counts = np.asarray(counts_updated)
+        else:
+            counts = np.maximum(counts, 1)
 
         if self.bonus_form == "1/n":
             bonuses = 1./counts

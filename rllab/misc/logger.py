@@ -259,7 +259,7 @@ def save_itr_params(itr, params, use_cloudpickle=False):
             # override previous params
             file_name = osp.join(get_snapshot_dir(), 'params.pkl')
         elif _snapshot_mode == "gap":
-            if itr % _snapshot_gap == 0:
+            if itr == 0 or (itr+1) % _snapshot_gap == 0:
                 file_name = osp.join(get_snapshot_dir(), 'itr_%d.pkl' % itr)
             else:
                 return
@@ -390,4 +390,3 @@ def record_tabular_misc_stat(key, values, placement='back'):
         record_tabular(prefix + "Median" + suffix, np.nan)
         record_tabular(prefix + "Min" + suffix, np.nan)
         record_tabular(prefix + "Max" + suffix, np.nan)
-

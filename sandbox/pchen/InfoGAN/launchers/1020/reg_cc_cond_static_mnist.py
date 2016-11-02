@@ -10,6 +10,9 @@
 
 # retry arconv & larger learning rate + mean_only ar
 
+# larger lr mysteriously overfits more
+# fewer arconv was worse
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \

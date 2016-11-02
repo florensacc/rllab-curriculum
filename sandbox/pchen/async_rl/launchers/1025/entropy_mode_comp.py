@@ -123,7 +123,8 @@ class VG(VariantGenerator):
 
     @variant
     def adaptive_entropy_mode(self):
-        return ["naive", "first_order"]
+        return ["first_order_forward"]
+        # return ["naive", "first_order"]
 
 vg = VG()
 variants = vg.variants(randomized=False)
@@ -199,7 +200,8 @@ for v in variants[:]:
         NUMEXPR_NUM_THREADS=comp_cores,
         OMP_NUM_THREADS=comp_cores,
     )
-    config.AWS_INSTANCE_TYPE = "c4.8xlarge"
+    config.AWS_INSTANCE_TYPE = "c3.8xlarge"
+    config.EBS_OPTIMIZED = False
     config.AWS_SPOT = True
     config.AWS_SPOT_PRICE = '1.'
     config.AWS_REGION_NAME = 'us-west-1'

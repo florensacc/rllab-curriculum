@@ -176,7 +176,7 @@ for v in variants[:]:
         boltzmann=boltzmann,
         sample_eps=sample_eps,
         share_optimizer_states=opt_share,
-        adaptive_entropy_mode="first_order",
+        adaptive_entropy_mode="first_order_backtrack",
     )
     algo = DQNALE(
         total_steps=total_t,

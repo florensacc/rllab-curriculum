@@ -1,8 +1,6 @@
 """
 Image obs, ram hash
-Repeat exp-020 with more seeds
-- which bucket size? (let's wait for results of exp-019f)
--
+- Fine tune bonus on Frostbite, w/ inspiration from exp-019g,h
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -49,7 +47,7 @@ exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "bonus-trpo-atari/" + exp_index
 mode = "ec2"
 ec2_instance = "c4.8xlarge"
-subnet = "us-west-1a"
+subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
 n_parallel = 2 # only for local exp
@@ -73,15 +71,15 @@ else:
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [0,100,200,300,400]
+        return [0,100,200,300,400,500,600,700,800,900]
 
     @variant
     def bonus_coeff(self):
-        return [0,0.01]
+        return [0.1,0.5]
 
     @variant
     def game(self):
-        return ["freeway", "frostbite", "montezuma_revenge", "venture"]
+        return ["frostbite"]
 
     @variant
     def dim_key(self):
@@ -89,7 +87,7 @@ class VG(VariantGenerator):
 
     @variant
     def bucket_sizes(self):
-        return ["90M"]
+        return ["6M"]
 
     @variant
     def count_target(self):
@@ -231,6 +229,7 @@ for v in variants:
         record_internal_state=record_internal_state,
         frame_skip=frame_skip,
         max_start_nullops=max_start_nullops,
+        correct_luminance=True,
     )
     policy = CategoricalConvPolicy(
         env_spec=env.spec,

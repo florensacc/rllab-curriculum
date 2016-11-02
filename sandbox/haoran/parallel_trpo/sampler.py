@@ -14,6 +14,7 @@ class WorkerBatchSampler(object):
         """
         self.algo = algo
         self.worker_batch_size = algo.worker_batch_size
+        self.avoid_duplicate_paths = algo.avoid_duplicate_paths
 
     def obtain_samples(self, n_samples=None):
         if n_samples is None:
@@ -76,33 +77,69 @@ class WorkerBatchSampler(object):
         dgnstc_data = dict(baselines=baselines, returns=returns)
 
         if not self.algo.policy.recurrent:
-            observations = tensor_utils.concat_tensor_list([path["observations"] for path in paths])
-            actions = tensor_utils.concat_tensor_list([path["actions"] for path in paths])
-            rewards = tensor_utils.concat_tensor_list([path["rewards"] for path in paths])
-            raw_rewards = tensor_utils.concat_tensor_list([path["raw_rewards"] for path in paths])
-            advantages = tensor_utils.concat_tensor_list([path["advantages"] for path in paths])
-            env_infos = tensor_utils.concat_tensor_dict_list([path["env_infos"] for path in paths])
-            agent_infos = tensor_utils.concat_tensor_dict_list([path["agent_infos"] for path in paths])
+            if self.avoid_duplicate_paths:
+                tensor_list = ["observations","actions","raw_rewards","advantages","returns"]
+                dict_list = ["env_infos", "agent_infos"]
+                retain_list = ["returns","rewards","raw_rewards","bonus_rewards"]
+                samples_data = dict()
+                samples_data["paths"] = []
 
-            if self.algo.center_adv:
-                advantages = util.center_advantages(advantages)
+                # reversely load path data into samples_data and delete the loaded path
+                for i in range(len(paths)-1, -1, -1):
+                    path = paths[i]
+                    if i == len(paths) - 1:
+                        for data in tensor_list + dict_list:
+                            samples_data[data] = path[data]
+                    else:
+                        for data in tensor_list:
+                            samples_data[data] = tensor_utils.concat_tensor_list([
+                                samples_data[data],
+                                path[data]
+                            ])
+                        for data in dict_list:
+                            samples_data[data] = tensor_utils.concat_tensor_dict_list([
+                                samples_data[data],
+                                path[data]
+                            ])
+                    new_path = {
+                        data: np.copy(path[data])
+                        for data in retain_list
+                    }
+                    samples_data["paths"].append(new_path)
+                    del paths[i]
+            else:
+                observations = tensor_utils.concat_tensor_list([path["observations"] for path in paths])
+                actions = tensor_utils.concat_tensor_list([path["actions"] for path in paths])
+                rewards = tensor_utils.concat_tensor_list([path["rewards"] for path in paths])
+                raw_rewards = tensor_utils.concat_tensor_list([path["raw_rewards"] for path in paths])
+                returns = tensor_utils.concat_tensor_list([path["returns"] for path in paths])
+                advantages = tensor_utils.concat_tensor_list([path["advantages"] for path in paths])
+                env_infos = tensor_utils.concat_tensor_dict_list([path["env_infos"] for path in paths])
+                agent_infos = tensor_utils.concat_tensor_dict_list([path["agent_infos"] for path in paths])
 
-            if self.algo.positive_adv:
-                advantages = util.shift_advantages_to_positive(advantages)
+                if self.algo.center_adv:
+                    advantages = util.center_advantages(advantages)
 
-            # NOTE: Removed diagnostics calculation to batch_polopt.
+                if self.algo.positive_adv:
+                    advantages = util.shift_advantages_to_positive(advantages)
 
-            samples_data = dict(
-                observations=observations,
-                actions=actions,
-                rewards=rewards,
-                raw_rewards=raw_rewards,
-                advantages=advantages,
-                env_infos=env_infos,
-                agent_infos=agent_infos,
-                paths=paths,
-            )
+                # NOTE: Removed diagnostics calculation to batch_polopt.
+
+                samples_data = dict(
+                    observations=observations,
+                    actions=actions,
+                    rewards=rewards,
+                    raw_rewards=raw_rewards,
+                    returns=returns,
+                    advantages=advantages,
+                    env_infos=env_infos,
+                    agent_infos=agent_infos,
+                    paths=paths,
+                )
         else:
+            if self.avoid_duplicate_paths:
+                raise NotImplementedError
+
             max_path_length = max([len(path["advantages"]) for path in paths])
 
             # make all paths the same length (pad extra advantages with 0)

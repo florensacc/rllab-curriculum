@@ -1,11 +1,40 @@
 # import matplotlib.pyplot as plt
-# plt currently has consistency issue with docker 
+# plt currently has consistency issue with docker
 import numpy as np
 import joblib
 import time
 import sys
 import os
 import csv
+
+def form_rgb_img_array(imgs,n_col,row_gap=2,col_gap=2):
+    """ form an array of images with the same shape """
+    img_height,img_width,n_channel = imgs[0].shape
+    n_imgs = len(imgs)
+    total_row_pixels = img_width  * n_col + col_gap * (n_col-1)
+    col_separator = np.ones((img_height,col_gap,n_channel),dtype=np.uint8) * 255
+    row_separator = np.ones((row_gap,total_row_pixels,n_channel),dtype=np.uint8) * 255
+
+    II = []
+    for row_count in range(int(np.ceil(len(imgs) / n_col))):
+        I = None
+        for i in range(n_col):
+            index = row_count * n_col + i
+            if index < n_imgs:
+                img = imgs[index]
+            else:
+                img = np.zeros_like(imgs[0])
+            if I is None:
+                I = img
+            else:
+                I = np.concatenate([I, col_separator, img],axis=1)
+        II.append(np.copy(I))
+        II.append(row_separator)
+    if len(II) > 1:
+        final_I = np.concatenate(II,axis=0)
+    else:
+        final_I = II[0]
+    return final_I
 
 def get_time_stamp():
     import datetime
