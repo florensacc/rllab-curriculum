@@ -12,6 +12,8 @@
 
 # try more arconv
 
+# resuming best model to estimate logprob
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -33,7 +35,7 @@ timestamp = ""#now.strftime('%Y_%m_%d_%H_%M_%S')
 
 root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
-batch_size = 128
+batch_size = 256
 # updates_per_epoch = 100
 
 stub(globals())
@@ -52,7 +54,7 @@ class VG(VariantGenerator):
 
     @variant
     def seed(self):
-        return [42, ]
+        return [43, ]
         # return [123124234]
 
     @variant
@@ -102,7 +104,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def k(self):
-        return [128, ]
+        return [batch_size, ]
 
     @variant(hide=False)
     def nar(self):
@@ -178,7 +180,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_nin(self, ar_depth):
-        return [2, 4,]
+        return [2, ]
 
     @variant(hide=False)
     def ar_tie(self):
@@ -186,7 +188,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_chns(self):
-        return [12, 24, ]
+        return [12, ]
 
 
 
@@ -212,13 +214,6 @@ for v in variants[:]:
         # dataset = Caltech101Dataset()
         # dataset = Caltech101Dataset()
         dataset = BinarizedMnistDataset()
-
-        # if v["ds"] == "omni":
-        #     dataset = ResamplingBinarizedOmniglotDataset()
-        # elif v["ds"] == "mnist":
-        #     dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
-        # else:
-        #     dataset = Caltech101Dataset()
 
         # init_size = v["dec_init_size"]
         # ch_size = zdim // init_size // init_size
@@ -278,6 +273,7 @@ for v in variants[:]:
             tieweight=v["ar_tie"],
             block="gated_resnet",
             extra_nins=v["ar_nin"],
+            legacy=True,
         )
         model = RegularizedHelmholtzMachine(
             output_dist=ar_conv_dist,
@@ -308,28 +304,16 @@ for v in variants[:]:
             anneal_after=v["anneal_after"],
             img_on=False,
             vis_ar=False,
+            # resume_from="data/s3/1026-llr-reg-smnist-cc-af-gres/1026_llr_reg_smnist_cc_af_gres_2016_10_27_00_43_37_0001",
+            resume_from="data/s3/1026-llr-reg-smnist-cc-af-gres/1026_llr_reg_smnist_cc_af_gres_2016_10_27_00_43_37_0001/pa_mnist_ar_chns_12__130000.ckpt"
         )
 
-        # sys stuff
-        config.USE_GPU = True
-        config.DOCKER_IMAGE = "neocxi/rllab_exp_gpu_tf:py3"
-        # config.DOCKER_IMAGE = "dementrock/rllab3-shared-gpu"
-        config.AWS_INSTANCE_TYPE = "p2.xlarge"
-        config.AWS_SPOT = True
-        config.AWS_SPOT_PRICE = '1.'
-        config.AWS_REGION_NAME = 'us-east-1'
-        config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[config.AWS_REGION_NAME]
-        config.AWS_IMAGE_ID = "ami-1c5a090b" #config.ALL_REGION_AWS_IMAGE_IDS[config.AWS_REGION_NAME]
-        config.AWS_SECURITY_GROUP_IDS = config.ALL_REGION_AWS_SECURITY_GROUP_IDS[config.AWS_REGION_NAME]
-
         run_experiment_lite(
-            algo.train(),
+            algo.eval(k=128*8000),
             exp_prefix="1026_llr_reg_smnist_cc_af_gres",
             seed=v["seed"],
             variant=v,
-            mode="ec2",
-            terminate_machine=True,
-            use_gpu=True,
+            mode="local",
 
             # mode="local",
             # mode="lab_kube",
@@ -347,6 +331,46 @@ for v in variants[:]:
             #         cpu=1.6,
             #     )
             # )
-        )
+    )
+
+
+        # # sys stuff
+        # config.USE_GPU = True
+        # config.DOCKER_IMAGE = "neocxi/rllab_exp_gpu_tf:py3"
+        # # config.DOCKER_IMAGE = "dementrock/rllab3-shared-gpu"
+        # config.AWS_INSTANCE_TYPE = "p2.xlarge"
+        # config.AWS_SPOT = True
+        # config.AWS_SPOT_PRICE = '1.'
+        # config.AWS_REGION_NAME = 'us-east-1'
+        # config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[config.AWS_REGION_NAME]
+        # config.AWS_IMAGE_ID = "ami-1c5a090b" #config.ALL_REGION_AWS_IMAGE_IDS[config.AWS_REGION_NAME]
+        # config.AWS_SECURITY_GROUP_IDS = config.ALL_REGION_AWS_SECURITY_GROUP_IDS[config.AWS_REGION_NAME]
+        #
+        # run_experiment_lite(
+        #     algo.train(),
+        #     exp_prefix="1026_llr_reg_smnist_cc_af_gres",
+        #     seed=v["seed"],
+        #     variant=v,
+        #     mode="ec2",
+        #     terminate_machine=True,
+        #     use_gpu=True,
+        #
+        #     # mode="local",
+        #     # mode="lab_kube",
+        #     # n_parallel=0,
+        #     # use_gpu=True,
+        #     # node_selector={
+        #     #     "aws/type": "p2.xlarge",
+        #     #     "openai/computing": "true",
+        #     # },
+        #     # resources=dict(
+        #     #     requests=dict(
+        #     #         cpu=1.6,
+        #     #     ),
+        #     #     limits=dict(
+        #     #         cpu=1.6,
+        #     #     )
+        #     # )
+        # )
 
 

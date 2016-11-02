@@ -453,7 +453,11 @@ def run_experiment_lite(
             del task["remote_log_dir"]
             env = task.pop("env", None)
             command = to_local_command(
-                task, python_command=python_command, script=osp.join(config.PROJECT_PATH, script), use_gpu=use_gpu)
+                task,
+                python_command=python_command,
+                script=osp.join(config.PROJECT_PATH, script),
+                use_gpu=use_gpu
+            )
             print(command)
             if dry:
                 return

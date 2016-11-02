@@ -12,6 +12,10 @@
 
 # try more arconv
 
+# this is to test the best static mnist model's performance on other datasets
+# mean-only AF (nar=4, nr=5), pixelcnn (depth=6, nin=2, tied, gated_resnet)
+# probably need different stopping point
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
@@ -28,6 +32,9 @@ import dateutil.tz
 import datetime
 import numpy as np
 
+# from sandbox.rocky.cirrascale.launch_job import local_launch_cirrascale
+# mode = local_launch_cirrascale()
+
 now = datetime.datetime.now(dateutil.tz.tzlocal())
 timestamp = ""#now.strftime('%Y_%m_%d_%H_%M_%S')
 
@@ -35,6 +42,7 @@ root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 batch_size = 128
 # updates_per_epoch = 100
+
 
 stub(globals())
 from rllab import config
@@ -52,7 +60,7 @@ class VG(VariantGenerator):
 
     @variant
     def seed(self):
-        return [42, ]
+        return [43, ]
         # return [123124234]
 
     @variant
@@ -149,20 +157,21 @@ class VG(VariantGenerator):
     def dec_context(self):
         return [True, ]
 
-    # @variant(hide=False)
-    # def ds(self):
-    #     return [
-    #         "mnist",
-    #         "omni"
-    #     ]
+    @variant(hide=False)
+    def ds(self):
+        return [
+            "mnist",
+            "omni",
+            "caltech",
+        ]
 
     @variant(hide=True)
     def max_epoch(self, ):
-        yield 350
+        yield 450
 
     @variant(hide=True)
     def anneal_after(self, max_epoch):
-        return [int(max_epoch * 0.7)]
+        return [None]
 
     @variant(hide=False)
     def context_dim(self, ):
@@ -178,7 +187,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_nin(self, ar_depth):
-        return [2, 4,]
+        return [2, ]
 
     @variant(hide=False)
     def ar_tie(self):
@@ -186,7 +195,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def ar_chns(self):
-        return [12, 24, ]
+        return [12, ]
 
 
 
@@ -196,7 +205,8 @@ variants = vg.variants(randomized=False)
 
 print(len(variants))
 
-for v in variants[:]:
+i = 2
+for v in variants[i:i+1]:
 
     # with skip_if_exception():
         max_epoch = v["max_epoch"]
@@ -211,14 +221,17 @@ for v in variants[:]:
         # load_caltech()
         # dataset = Caltech101Dataset()
         # dataset = Caltech101Dataset()
-        dataset = BinarizedMnistDataset()
+        # dataset = BinarizedMnistDataset()
 
-        # if v["ds"] == "omni":
-        #     dataset = ResamplingBinarizedOmniglotDataset()
-        # elif v["ds"] == "mnist":
-        #     dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
-        # else:
-        #     dataset = Caltech101Dataset()
+        if v["ds"] == "omni":
+            dataset = ResamplingBinarizedOmniglotDataset()
+            ds = 24345
+        elif v["ds"] == "mnist":
+            dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
+            ds = 50000
+        else:
+            dataset = Caltech101Dataset()
+            ds = 6364
 
         # init_size = v["dec_init_size"]
         # ch_size = zdim // init_size // init_size
@@ -264,6 +277,7 @@ for v in variants[:]:
                 gating_context="gating" in v["i_context"],
                 share_context=True,
                 var_scope="IAR_scope" if v["tiear"] else None,
+                mean_only=True,
             )
 
         ar_conv_dist = ConvAR(
@@ -292,6 +306,10 @@ for v in variants[:]:
             ),
         )
 
+
+        ep_len = ds // batch_size
+        vali_interval = 8 * ep_len
+        save_interval = 3 * vali_interval
         algo = VAE(
             model=model,
             dataset=dataset,
@@ -303,7 +321,10 @@ for v in variants[:]:
             monte_carlo_kl=v["monte_carlo_kl"],
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=6000//128*5,
+            # vali_eval_interval=6000//128*5,
+            summary_interval=vali_interval,
+            vali_eval_interval=vali_interval,
+            snapshot_interval=save_interval,
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
@@ -324,12 +345,16 @@ for v in variants[:]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1026_llr_reg_smnist_cc_af_gres",
+            exp_prefix="1102_vlae_final_run_initial",
             seed=v["seed"],
             variant=v,
-            mode="ec2",
-            terminate_machine=True,
+            # mode=mode,
             use_gpu=True,
+            mode="local",
+            # dry=True,
+            # mode="ec2",
+            # terminate_machine=True,
+            # use_gpu=True,
 
             # mode="local",
             # mode="lab_kube",

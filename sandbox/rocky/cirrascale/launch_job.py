@@ -179,3 +179,95 @@ def launch_cirrascale(type_filter="pascal"):
         subprocess.check_call(ssh_command)
 
     return _launch
+
+def local_launch_cirrascale(type_filter="pascal"):
+    def _launch(params, exp_prefix, docker_image=None, use_gpu=False, \
+                python_command="python",
+                script='scripts/run_experiment_lite.py', periodic_sync=True, sync_s3_pkl=False,
+                sync_log_on_termination=True,
+                periodic_sync_interval=15):
+        assert use_gpu, "What a waste!"
+        gpu = get_first_available_gpu(type_filter)
+
+        job_id = params["exp_name"]
+
+        # assert "env" not in params
+        print(params.pop("env", None), "env ignored")
+        params.pop("remote_log_dir")
+        # env = params.pop("env", None)
+        # if env is None:
+        #     env = dict()
+        #
+        # env = dict(env, CUDA_VISIBLE_DEVICES=str(gpu.index))
+        gpu_id = str(gpu.index)
+
+        sio = StringIO()
+        sio.write("#!/bin/bash\n")
+        sio.write("""
+            cd ~/rllab-private && source activate rllab3p && CUDA_VISIBLE_DEVICES={gpu_id} {command}
+        """.format(
+            # command=instrument.to_docker_command(
+            #     params,
+            #     docker_image,
+            #     use_gpu=use_gpu,
+            #     env=env,
+            #     local_code_dir=local_code_path,
+            #     python_command=python_command,
+            #     script=script,
+            #     post_commands=[],
+            # ),
+            command=instrument.to_local_command(
+                params,
+                use_gpu=use_gpu,
+                script=script,
+            ),
+            gpu_id=gpu_id,
+        ))
+
+        # scp to /tmp and then execute directly
+        full_script = instrument.dedent(sio.getvalue())
+        s3_path = instrument.upload_file_to_s3(full_script)
+        script_path = "~/jobs/%s.sh" % job_id
+        attempt = 'tmux new-window -n:%s "bash -c -li %s ;bash"' % (job_id, script_path)
+
+        ssh_command = [
+            "ssh",
+            # "-t",
+            # "-f",
+            "-oStrictHostKeyChecking=no",
+            "peter@" + gpu.host,
+            "sh -c \'" +
+            " && ".join(
+                [
+                    "mkdir -p ~/jobs",
+                    "export AWS_ACCESS_KEY_ID=%s" % config.AWS_ACCESS_KEY,
+                    "export AWS_SECRET_ACCESS_KEY=%s" % config.AWS_ACCESS_SECRET,
+                    "aws s3 cp %s %s --region %s" % (s3_path, script_path, config.AWS_REGION_NAME),
+                    "echo downloaded",
+                    "chmod +x %s" % script_path,
+                    # "bash %s" % script_path,
+                    # "echo stuff >> %s" % (script_path),
+                    # "echo \'%s\' >> %s" % (full_script, script_path),
+                    "%s || (tmux new -d && %s)" % (attempt, attempt),
+                    "echo executed",
+                ]
+            ) + " \'",
+            ]
+        print(gpu)
+        print(ssh_command)
+        print("Job id: %s" % job_id)
+        import subprocess
+
+        # first submit the job to redis
+        # print("Submitting job to redis")
+        # redis_cli = redis.StrictRedis(host=cirra_config.REDIS_HOST)
+        # redis_cli.set("job/%s" % job_id, json.dumps(dict(
+        #     job_id=job_id,
+        #     gpu_host=gpu.host,
+        #     gpu_index=gpu.index,
+        #     created_at=instrument.timestamp,
+        # )))
+        subprocess.check_call(ssh_command)
+
+    return _launch
+
