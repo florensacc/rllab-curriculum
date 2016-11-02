@@ -70,9 +70,9 @@ def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1, n_seq
         path_length += 1
 
         oo = encode_obs(env.observation_space.flatten(o)[-np.prod(model.state_dim):][None, :])
-        # plotter.plot_pred_imgs(
-        #     model=model, inputs=decode_obs(oo), targets=oo,
-        #     itr=count, dir='tmp/pred')
+        plotter.plot_pred_imgs(
+            model=model, inputs=decode_obs(oo), targets=oo,
+            itr=count, dir='tmp/pred')
         # plotter.plot_actual_imgs(
         #     inputs=o[-np.prod(model.state_dim):],
         #     itr=count, dir='tmp/actual')

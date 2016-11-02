@@ -42,7 +42,8 @@ if "ec2_cpu" in mode:
 elif "ec2_gpu" in mode:
     config.AWS_INSTANCE_TYPE = "g2.2xlarge"
     config.AWS_SPOT_PRICE = '0.65'
-    config.DOCKER_IMAGE = "tsukuyomi2044/rllab_gpu"
+    # config.DOCKER_IMAGE = "tsukuyomi2044/rllab_gpu"
+    config.DOCKER_IMAGE = "rein/rllab-exp-gpu"
     plot = False
 
 # different training params ------------------------------------------
@@ -52,7 +53,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [1, 101, 201, 301, 401]
+        return [1, 101, 201]
 
     @variant
     def dim_key(self):
@@ -64,7 +65,7 @@ class VG(VariantGenerator):
 
     @variant
     def bonus_coeff(self):
-        return [0.01, 0.05, 0.1, 0]
+        return [0.01, 0.1, 0]
 
     @variant
     def game(self):
@@ -106,7 +107,7 @@ for v in variants:
     # ----------------------
     # ale parameters
     # ----------------------
-    base_rom_path = "sandbox/haoran/deep_q_rl/roms/"  # $
+    base_rom_path = "sandbox/haoran/ale_python_interface/roms/"  # $
     rom = '%s.bin' % (v["game"])  # $
     frame_skip = 4  # !
     repeat_action_probability = 0  # $
@@ -176,13 +177,13 @@ for v in variants:
         rom_path=full_rom_path,
     )
 
-    # # load game specific information -----------------------------------
-    # game_info_path = os.path.join(base_rom_path, v["game"] + "_info.json")
-    # with open(game_info_path) as game_info_file:
-    #     game_info = json.load(game_info_file)
-    # min_action_set_length = game_info["min_action_set_length"]
-    ms = dict(montezuma_revenge=18, freeway=3, frostbite=18)
-    min_action_set_length = ms[v['game']]
+    # load game specific information -----------------------------------
+    game_info_path = os.path.join(base_rom_path, v["game"] + "_info.json")
+    with open(game_info_path) as game_info_file:
+        game_info = json.load(game_info_file)
+    min_action_set_length = game_info["min_action_set_length"]
+    # ms = dict(montezuma_revenge=18, freeway=3, frostbite=18)
+    # min_action_set_length = ms[v['game']]
 
     state_preprocessor = ImageVectorizePreprocessor(
         n_chanllel=phi_length,
@@ -288,6 +289,7 @@ for v in variants:
         observation_type=observation_type,
         record_image=record_image,
         record_ram=record_ram,
+        game=v['game']
     )
 
     # run --------------------------------------------------
@@ -303,8 +305,8 @@ for v in variants:
 
     run_experiment_lite(
         stub_method_call=experiment.run(),
-        exp_prefix=exp_prefix,
-        exp_name=exp_name,
+        exp_prefix=exp_prefix.replace('/','-').replace('_','-'),
+        # exp_name=exp_name,
         seed=v["seed"],
         n_parallel=1,  # we actually don't use parallel_sampler here
         snapshot_mode=snapshot_mode,
