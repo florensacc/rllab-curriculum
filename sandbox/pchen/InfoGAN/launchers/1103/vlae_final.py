@@ -63,7 +63,7 @@ class VG(VariantGenerator):
 
     @variant
     def seed(self):
-        return [42, 888, 9999]
+        return [42, ]
         # return [123124234]
 
     @variant
@@ -76,7 +76,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.005, ] #0.05, 0.1]
+        return [0.01, 0.005] #0.05, 0.1]
     #
     @variant(hide=False)
     def network(self):
