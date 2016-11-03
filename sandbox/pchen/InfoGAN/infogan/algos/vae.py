@@ -454,6 +454,8 @@ class VAE(object):
         if init:
             sess = tf.Session()
             self.sess = sess
+        else:
+            sess = self.sess
         with self.sess.as_default():
             if init:
                 self.init_opt(init=True)
