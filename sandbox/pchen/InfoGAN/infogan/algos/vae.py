@@ -743,7 +743,7 @@ class VAE(object):
 
                 # if epoch == 0:
                 #     tf.get_default_graph().finalize()
-            self.eval(self.k*24, init=False)
+            self.eval(self.k*36, init=False)
 
 
     def restore(self):
