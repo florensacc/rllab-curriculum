@@ -1,16 +1,18 @@
 from __future__ import print_function
 from __future__ import absolute_import
 
-info = """Trying ppo with large batch on half cheetah."""
+info = """Trying different dim_keys to encourage more hashing collisions."""
 
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+from sandbox.rocky.hashing.algos.bonus_trpo import BonusTRPO
+from sandbox.rocky.hashing.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator
+from rllab.envs.mujoco.gather.swimmer_gather_env import SwimmerGatherEnv
 from rllab.envs.normalized_env import normalize
-from sandbox.davis.hashing.algos.bonus_ppo import BonusPPO
-from sandbox.davis.hashing.bonus_evaluators.hashing_bonus_evaluator import HashingBonusEvaluator
-from sandbox.davis.envs.half_cheetah_env_x import HalfCheetahEnvX
 from sandbox.rocky.tf.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
+
+from sandbox.haoran.ec2_info import subnet_info
 from rllab import config
 
 import sys
@@ -23,17 +25,31 @@ from rllab.misc.instrument import VariantGenerator
 N_ITR = 1000
 N_ITR_DEBUG = 5
 
-config.AWS_INSTANCE_TYPE = "c4.xlarge"
+subnet = "us-west-1a"
+config.AWS_INSTANCE_TYPE = "c4.2xlarge"
+config.AWS_SPOT_PRICE = "0.75"
+config.AWS_NETWORK_INTERFACES = [
+    dict(
+        SubnetId=subnet_info[subnet]["SubnetID"],
+        Groups=subnet_info[subnet]["Groups"],
+        DeviceIndex=0,
+        AssociatePublicIpAddress=True,
+    )
+]
+
+envs = [normalize(SwimmerGatherEnv())]
 
 
 def experiment_variant_generator():
     vg = VariantGenerator()
-    vg.add("min_reward_dist", [5.0])
-    vg.add("discount", [0.995], hide=True)
-    vg.add("seed", range(5), hide=True)
-    vg.add("bonus_coeff", [0, 0.00001, 0.0001, 0.001, 0.01])
-    vg.add("dim_key", [32, 64, 128])
+    vg.add("env", map(TfEnv, envs), hide=True)
     vg.add("batch_size", [50000], hide=True)
+    vg.add("step_size", [0.01], hide=True)
+    vg.add("max_path_length", [500], hide=True)
+    vg.add("discount", [0.99], hide=True)
+    vg.add("seed", range(3), hide=True)
+    vg.add("bonus_coeff", [0.001, 0.01, 0.1])
+    vg.add("dim_key", [32, 128, 256])
     return vg
 
 
@@ -74,28 +90,33 @@ if __name__ == '__main__':
         if exp_name == '':
             exp_name = None
 
-        env = TfEnv(normalize(HalfCheetahEnvX(variant["min_reward_dist"])))
-        baseline = LinearFeatureBaseline(env.spec)
-        bonus_evaluator = HashingBonusEvaluator(env.spec, dim_key=variant["dim_key"])
-
         policy = GaussianMLPPolicy(
             name="policy",
-            env_spec=env.spec,
+            env_spec=variant["env"].spec,
+            hidden_sizes=(64, 32),
         )
 
-        algo = BonusPPO(
+        baseline = LinearFeatureBaseline(variant["env"].spec)
+
+        bonus_evaluator = HashingBonusEvaluator(
+            variant["env"].spec,
+            variant["dim_key"],
+        )
+
+        algo = BonusTRPO(
             bonus_evaluator=bonus_evaluator,
             bonus_coeff=variant["bonus_coeff"],
-            env=env,
+            env=variant["env"],
             policy=policy,
             baseline=baseline,
             batch_size=variant["batch_size"],
             whole_paths=True,
-            max_path_length=500,
+            max_path_length=variant["max_path_length"],
             n_itr=N_ITR,
             discount=variant["discount"],
-            step_size=0.01,
+            step_size=variant["step_size"],
             plot=args.visualize and args.local,
+            force_batch_sampler=True,
         )
 
         run_experiment_lite(
