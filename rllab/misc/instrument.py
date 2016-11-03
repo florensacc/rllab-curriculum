@@ -536,7 +536,8 @@ def run_experiment_lite(
             pod_dict = to_lab_kube_pod(
                 task, code_full_path=s3_code_path, docker_image=docker_image, script=script, is_gpu=use_gpu,
                 python_command=python_command,
-                sync_s3_pkl=sync_s3_pkl, periodic_sync=periodic_sync, periodic_sync_interval=periodic_sync_interval,
+                sync_s3_pkl=sync_s3_pkl, periodic_sync=periodic_sync,
+                periodic_sync_interval=periodic_sync_interval,
                 sync_all_data_node_to_s3=sync_all_data_node_to_s3,
                 terminate_machine=terminate_machine,
             )
@@ -708,7 +709,8 @@ def dedent(s):
 def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
                python_command="python",
                script='scripts/run_experiment.py',
-               aws_config=None, dry=False, terminate_machine=True, use_gpu=False, sync_s3_pkl=False, sync_s3_png=False,
+               aws_config=None, dry=False, terminate_machine=True, use_gpu=False, sync_s3_pkl=False,
+               sync_s3_png=False,
                sync_log_on_termination=True,
                periodic_sync=True, periodic_sync_interval=15):
     if len(params_list) == 0:
@@ -981,7 +983,10 @@ def s3_sync_code(config, dry=False):
         if not dry:
             subprocess.check_call(tar_cmd)
             subprocess.check_call(upload_cmd)
-            subprocess.check_call(mujoco_key_cmd)
+            try:
+                subprocess.check_call(mujoco_key_cmd)
+            except Exception as e:
+                print(e)
 
         S3_CODE_PATH = remote_path
         return remote_path

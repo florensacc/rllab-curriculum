@@ -179,9 +179,11 @@ class ParallelBatchPolopt(RLAlgorithm):
         """
         logger.log("forcing Theano compilations...")
         paths = self.sampler.obtain_samples(n_samples)
-        # self.process_paths(paths)
         for path in paths:
             path["raw_rewards"] = np.copy(path["rewards"])
+            path['S'] = np.copy(path['rewards'])
+        self.preprocess(paths)
+        self.process_paths(paths)
         samples_data, _ = self.sampler.process_samples(paths)
         input_values = self.prep_samples(samples_data)
         self.optimizer.force_compile(input_values)
@@ -194,8 +196,8 @@ class ParallelBatchPolopt(RLAlgorithm):
 
     def train(self):
         self.init_opt()
-        # if self.serial_compile:
-        #     self.force_compile()
+        if self.serial_compile:
+            self.force_compile()
         self.init_gpu()
         self.init_par_objs()
 
@@ -294,7 +296,8 @@ class ParallelBatchPolopt(RLAlgorithm):
                         _y = batch['observations']
                         self._plotter.plot_pred_imgs(model=self._model, inputs=_x, targets=_y, itr=0,
                                                      dir=RANDOM_SAMPLES_DIR)
-                        self._plotter.print_embs(model=self._model, projection_matrix=self._projection_matrix, inputs=_x,
+                        self._plotter.print_embs(model=self._model, projection_matrix=self._projection_matrix,
+                                                 inputs=_x,
                                                  dir=RANDOM_SAMPLES_DIR, hamming_distance=0)
 
                     # Get consistency images in first iteration.
@@ -311,7 +314,7 @@ class ParallelBatchPolopt(RLAlgorithm):
                             paths[0]['observations'][rnd, -np.prod(self._model.state_dim):])
                     obs = self.encode_obs(paths[0]['observations'][-32:, -np.prod(self._model.state_dim):])
 
-                    if self._model_embedding and self._train_model and itr % 20 == 0:
+                    if self._model_embedding and itr % 20 == 0:
                         logger.log('Plotting consistency images ...')
                         self._plotter.plot_pred_imgs(
                             model=self._model, inputs=self.decode_obs(self._test_obs), targets=self._test_obs,
@@ -324,10 +327,12 @@ class ParallelBatchPolopt(RLAlgorithm):
                     if self._model_embedding:
                         logger.log('Printing embeddings ...')
                         self._plotter.print_consistency_embs(
-                            model=self._model, projection_matrix=self._projection_matrix, inputs=self.decode_obs(self._test_obs),
+                            model=self._model, projection_matrix=self._projection_matrix,
+                            inputs=self.decode_obs(self._test_obs),
                             dir=CONSISTENCY_CHECK_DIR, hamming_distance=0)
                         self._plotter.print_embs(
-                            model=self._model, projection_matrix=self._projection_matrix, inputs=self.decode_obs(obs),
+                            model=self._model, projection_matrix=self._projection_matrix,
+                            inputs=self.decode_obs(obs),
                             dir=UNIQUENESS_CHECK_DIR, hamming_distance=0)
 
                 self.process_paths(paths)

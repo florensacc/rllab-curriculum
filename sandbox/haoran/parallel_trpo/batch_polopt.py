@@ -1,7 +1,9 @@
-
+import sys
 import multiprocessing as mp
 import numpy as np
 import time
+import psutil
+import os
 
 from rllab.algos.base import RLAlgorithm
 import rllab.misc.logger as logger
@@ -46,6 +48,9 @@ class ParallelBatchPolopt(RLAlgorithm):
             bonus_evaluator=None,
             extra_bonus_evaluator=None,
             bonus_coeff=0,
+            path_length_scheduler=None,
+            log_memory_usage=True,
+            avoid_duplicate_paths=True,
             **kwargs
     ):
         """
@@ -90,16 +95,26 @@ class ParallelBatchPolopt(RLAlgorithm):
         self.serial_compile = serial_compile
         self.worker_batch_size = batch_size // n_parallel
         self.n_steps_collected = 0  # (set by sampler)
+        self.avoid_duplicate_paths = avoid_duplicate_paths
         self.sampler = WorkerBatchSampler(self)
         self.clip_reward = clip_reward
         self.bonus_evaluator = bonus_evaluator
         if extra_bonus_evaluator is not None:
             raise NotImplementedError
         self.bonus_coeff = bonus_coeff
+        self.path_length_scheduler = path_length_scheduler
+        if path_length_scheduler is not None:
+            self.path_length_scheduler.set_algo(self)
+        self.log_memory_usage = log_memory_usage
+
+        self.unpicklable_list = ["_par_objs","manager","shared_dict"]
 
     def __getstate__(self):
         """ Do not pickle parallel objects. """
-        return {k: v for k, v in iter(self.__dict__.items()) if k != "_par_objs"}
+        return {
+            k: v for k, v in iter(self.__dict__.items())
+            if k not in self.unpicklable_list
+        }
 
     #
     # Serial methods.
@@ -203,11 +218,13 @@ class ParallelBatchPolopt(RLAlgorithm):
         if self.serial_compile:
             self.force_compile()
         self.init_par_objs()
+        self.manager = mp.Manager()
+        self.shared_dict = self.manager.dict()
 
         if self.n_parallel == 1:
             self._train(rank=0)
         else:
-            processes = [mp.Process(target=self._train, args=(rank,))
+            processes = [mp.Process(target=self._train, args=(rank,self.shared_dict))
                 for rank in range(self.n_parallel)]
             for p in processes:
                 p.start()
@@ -223,26 +240,37 @@ class ParallelBatchPolopt(RLAlgorithm):
                 path["bonus_rewards"] = self.bonus_coeff * self.bonus_evaluator.predict(path)
                 path["rewards"] = path["rewards"] + path["bonus_rewards"]
 
-    def _train(self, rank):
+    def init_shared_dict(self,shared_dict):
+        self.shared_dict = shared_dict
+        if self.bonus_evaluator is not None:
+            self.bonus_evaluator.init_shared_dict(shared_dict)
+
+    def _train(self, rank, shared_dict):
         self.init_rank(rank)
+        self.init_shared_dict(shared_dict)
         if self.rank == 0:
             start_time = time.time()
         for itr in range(self.current_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
+                self.update_algo_params(itr)
                 if rank == 0:
                     logger.log("Collecting samples ...")
                 paths = self.sampler.obtain_samples()
                 self.process_paths(paths) # temporary change for debugging in exp-018f (could be a permanent change, as this tends to give higher bonuses)
                 if self.bonus_evaluator is not None:
                     if rank == 0:
-                        logger.log("fitting bonus evaluator")
+                        logger.log("fitting bonus evaluator...")
                     self.bonus_evaluator.fit_before_process_samples(paths)
+                if rank == 0:
+                    logger.log("processing samples...")
                 samples_data, dgnstc_data = self.sampler.process_samples(paths)
                 self.log_diagnostics(itr, samples_data, dgnstc_data)  # (parallel)
+                if rank == 0:
+                    logger.log("optimizing policy...")
                 self.optimize_policy(itr, samples_data)  # (parallel)
                 if rank == 0:
                     logger.log("fitting baseline...")
-                self.baseline.fit(samples_data["paths"])  # (parallel)
+                self.baseline.fit_by_samples_data(samples_data)  # (parallel)
                 if rank == 0:
                     logger.log("fitted")
                     logger.log("saving snapshot...")
@@ -261,7 +289,18 @@ class ParallelBatchPolopt(RLAlgorithm):
                         if self.pause_for_plot:
                             input("Plotting evaluation run: Press Enter to "
                                       "continue...")
+                if self.log_memory_usage:
+                    process = psutil.Process(os.getpid())
+                    print("Process %d memory usage: %.4f GB"%(rank,process.memory_info().rss / (1024**3)))
+                    if self.rank == 0 and sys.platform == "linux":
+                        print("Shared memory usage: %.4f GB"%(
+                            process.memory_info().shared / (1024**3)
+                        ))
                 self.current_itr = itr + 1
+
+    def update_algo_params(self,itr):
+        if self.path_length_scheduler is not None:
+            self.path_length_scheduler.update(itr)
 
     #
     # Parallelized methods and related.

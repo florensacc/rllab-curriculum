@@ -358,3 +358,8 @@ class Box2DEnv(Env):
     def action_from_keys(self, keys):
         raise NotImplementedError
 
+    def get_param_values(self):
+        return {}
+
+    def set_param_values(self, values):
+        pass

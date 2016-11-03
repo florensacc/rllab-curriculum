@@ -1,6 +1,10 @@
 import sys
 sys.path.append(".")
 
+import theano.sandbox.cuda
+theano.sandbox.cuda.use(
+    "gpu")
+
 from rllab.misc.ext import is_iterable, set_seed
 from rllab.misc.instrument import concretize
 from rllab import config

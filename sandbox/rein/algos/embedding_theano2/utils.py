@@ -35,6 +35,7 @@ def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1, n_seq
         agent_infos.append(agent_info)
         env_infos.append(env_info)
         path_length += 1
+
         if d:
             break
         o = next_o

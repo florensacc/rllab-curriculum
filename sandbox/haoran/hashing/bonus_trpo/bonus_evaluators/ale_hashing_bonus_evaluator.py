@@ -49,6 +49,8 @@ class ALEHashingBonusEvaluator(object):
         assert self.parallel == self.hash.parallel
         self.retrieve_sample_size = retrieve_sample_size
         self.decay_within_path = decay_within_path
+        self.unpicklable_list = ["_par_objs","shared_dict"]
+        self.snapshot_list = [""]
 
         # logging stats ---------------------------------
         self.rank = None
@@ -56,11 +58,21 @@ class ALEHashingBonusEvaluator(object):
 
     def __getstate__(self):
         """ Do not pickle parallel objects. """
-        return {k: v for k, v in iter(self.__dict__.items()) if k != "_par_objs"}
+        state = dict()
+        for k,v in iter(self.__dict__.items()):
+            if k not in self.unpicklable_list:
+                state[k] = v
+            elif k in self.snapshot_list:
+                state[k] = copy.deepcopy(v)
+        return state
 
     def init_rank(self,rank):
         self.rank = rank
         self.hash.init_rank(rank)
+
+    def init_shared_dict(self, shared_dict):
+        self.shared_dict = shared_dict
+        self.hash.init_shared_dict(shared_dict)
 
     def init_par_objs(self,n_parallel):
         n = n_parallel

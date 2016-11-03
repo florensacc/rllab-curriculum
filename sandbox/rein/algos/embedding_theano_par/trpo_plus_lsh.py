@@ -279,15 +279,15 @@ class ParallelTRPOPlusLSH(ParallelBatchPolopt):
                 # Get continuous embedding.
                 cont_emb = self._model.discrete_emb(obs_ed)
                 if self._continuous_embedding:
-                    return cont_emb
+                    return np.sign(np.asarray(cont_emb).dot(self._projection_matrix))
                 else:
                     # Cast continuous embedding into binary one.
                     # return np.cast['int'](np.round(cont_emb))
                     bin_emb = np.cast['int'](np.round(cont_emb))
-                    bin_emb_downsampled = bin_emb.reshape(-1, 8).mean(axis=1).reshape((bin_emb.shape[0], -1))
+                    bin_emb_downsampled = bin_emb.reshape(-1, 1).mean(axis=1).reshape((bin_emb.shape[0], -1))
                     obs_key = np.cast['int'](np.round(bin_emb_downsampled))
                     obs_key[obs_key == 0] = -1
-                    # obs_key = np.sign(np.asarray(obs_key).dot(self._projection_matrix))
+                    obs_key = np.sign(np.asarray(obs_key).dot(self._projection_matrix))
                     return obs_key
             else:
                 return path['observations']

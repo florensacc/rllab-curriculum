@@ -312,6 +312,7 @@ class ConvNetwork(object):
                 name="%sconv_hidden_%d" % (prefix, idx),
                 convolution=wrapped_conv,
             )
+        conv_out = l_hid
         for idx, hidden_size in enumerate(hidden_sizes):
             l_hid = L.DenseLayer(
                 l_hid,
@@ -332,6 +333,7 @@ class ConvNetwork(object):
         self._l_in = l_in
         self._l_out = l_out
         self._input_var = l_in.input_var
+        self._conv_out = conv_out
 
     @property
     def input_layer(self):
@@ -344,3 +346,7 @@ class ConvNetwork(object):
     @property
     def input_var(self):
         return self._l_in.input_var
+
+    @property
+    def conv_output_layer(self):
+        return self._conv_out
