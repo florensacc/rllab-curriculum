@@ -1184,10 +1184,12 @@ class MnistDataset(object):
         return self._image_shape
 
 class BinarizedMnistDataset(object):
-    def __init__(self):
+    def __init__(self, incl_true_vali=False):
         train, valid, test = load_mnist_binarized()
+        if incl_true_vali:
+            train = np.concatenate([train, valid])
         self.train = Dataset(train)
-        self.test = Dataset(valid)
+        # self.test = Dataset(valid)
         self.validation = Dataset(test)
         self._image_dim = 28 * 28
         self._image_shape = (28, 28, 1)

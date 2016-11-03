@@ -1676,10 +1676,7 @@ class ConvAR(Distribution):
                                 ),
                             )
                             if nin:
-                                with pt.defaults_scope(
-                                        var_scope=None,
-                                ):
-                                    cur = cur + 0.1 * cur.conv2d_mod(
+                                cur = cur + 0.1 * cur.conv2d_mod(
                                         1,
                                         nr_channels,
                                         prefix="nin",
@@ -1687,10 +1684,7 @@ class ConvAR(Distribution):
                         else:
                             raise Exception("what")
                     for ninidx in range(extra_nins):
-                        with pt.defaults_scope(
-                                var_scope=None,
-                        ):
-                            cur = cur + 0.1 * cur.conv2d_mod(
+                        cur = cur + 0.1 * cur.conv2d_mod(
                                 1,
                                 nr_channels,
                                 prefix="nin_ex_%s"%ninidx,
