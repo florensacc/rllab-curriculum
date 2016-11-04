@@ -1,11 +1,10 @@
-import theano
-from lasagne.layers import InputLayer, Conv2DLayer
-from lasagne.layers import MaxPool2DLayer, LocalResponseNormalization2DLayer
+# from lasagne.layers.dnn import Conv2DDNNLayer as Conv2DLayer
+from lasagne.layers import MaxPool2DLayer, LocalResponseNormalization2DLayer, Conv2DLayer
 from lasagne.layers import SliceLayer, concat, DenseLayer
 import lasagne.nonlinearities
 import lasagne
-import numpy as np
-from lasagne.utils import floatX
+import lasagne.init as LI
+import theano
 
 # Caffe reference model lasagne implementation
 # http://caffe.berkeleyvision.org/
@@ -13,16 +12,14 @@ from lasagne.utils import floatX
 
 # Pretrained weights (233M) can be downloaded from:
 # https://s3.amazonaws.com/lasagne/recipes/pretrained/imagenet/caffe_reference.pkl
-
 def wrapped_conv(*args, **kwargs):
     copy = dict(kwargs)
     copy.pop("image_shape", None)
     copy.pop("filter_shape", None)
     assert copy.pop("filter_flip", False)
-
     input, W, input_shape, get_W_shape = args
     if theano.config.device == 'cpu':
-        return theano.tensor.nnet.conv2d(*args, **kwargs)
+        return theano.tensor.nnet.conv2d(*args, **copy)
     try:
         return theano.sandbox.cuda.dnn.dnn_conv(
             input.astype('float32'),
@@ -33,7 +30,6 @@ def wrapped_conv(*args, **kwargs):
         print("falling back to default conv2d")
         return theano.tensor.nnet.conv2d(*args, **kwargs)
 
-
 class AlexNet(object):
     def __init__(self, input_layer=None):
         net = {}
@@ -42,8 +38,6 @@ class AlexNet(object):
         # else:
             # net['data'] = input_layer
 
-        self._l_in = net['data']
-
         # conv1
         net['conv1'] = Conv2DLayer(
             net['data'],
@@ -51,6 +45,7 @@ class AlexNet(object):
             filter_size=(11, 11),
             stride=4,
             name='conv1',
+            convolution=wrapped_conv,
         )
 
         # pool1
@@ -88,12 +83,14 @@ class AlexNet(object):
                                          filter_size=(5, 5),
                                          pad=2,
                                          name='conv2_part1',
+                                         convolution=wrapped_conv,
                                          )
         net['conv2_part2'] = Conv2DLayer(net['conv2_data2'],
                                          num_filters=128,
                                          filter_size=(5, 5),
                                          pad=2,
                                          name='conv2_part2',
+                                         convolution=wrapped_conv,
                                          )
 
         # now combine
@@ -117,7 +114,9 @@ class AlexNet(object):
                                    num_filters=384,
                                    filter_size=(3, 3),
                                    pad=1,
-                                   name='conv3')
+                                   name='conv3',
+                                   convolution=wrapped_conv,
+                                   )
 
         # conv4
         # group = 2
@@ -127,13 +126,15 @@ class AlexNet(object):
                                          num_filters=192,
                                          filter_size=(3, 3),
                                          pad=1,
-                                         name='conv4_part1'
+                                         name='conv4_part1',
+                                         convolution=wrapped_conv,
                                          )
         net['conv4_part2'] = Conv2DLayer(net['conv4_data2'],
                                          num_filters=192,
                                          filter_size=(3, 3),
                                          pad=1,
                                          name='conv4_part2',
+                                         convolution=wrapped_conv,
                                          )
         net['conv4'] = concat((net['conv4_part1'], net['conv4_part2']), axis=1, name='conv4')
 
@@ -145,13 +146,15 @@ class AlexNet(object):
                                          num_filters=128,
                                          filter_size=(3, 3),
                                          pad=1,
-                                         name='conv5_part1'
+                                         name='conv5_part1',
+                                         convolution=wrapped_conv,
                                          )
         net['conv5_part2'] = Conv2DLayer(net['conv5_data2'],
                                          num_filters=128,
                                          filter_size=(3, 3),
                                          pad=1,
                                          name='conv5_part2',
+                                         convolution=wrapped_conv,
                                          )
         net['conv5'] = concat((net['conv5_part1'], net['conv5_part2']), axis=1, name='conv5')
 
@@ -162,24 +165,32 @@ class AlexNet(object):
         net['fc6'] = DenseLayer(
             net['pool5'], num_units=4096,
             nonlinearity=lasagne.nonlinearities.rectify,
-            name='fc6')
+            name='fc6',
+            W=LI.GlorotUniform(),
+            b=LI.Constant(0.))
 
         # fc7
         net['fc7'] = DenseLayer(
             net['fc6'],
             num_units=4096,
             nonlinearity=lasagne.nonlinearities.rectify,
-            name='fc7')
+            name='fc7',
+            W=LI.GlorotUniform(),
+            b=LI.Constant(0.))
 
         # fc8
         net['fc8'] = DenseLayer(
             net['fc7'],
             num_units=1000,
             nonlinearity=lasagne.nonlinearities.softmax,
-            name='fc8')
+            name='fc8',
+            W=LI.GlorotUniform(),
+            b=LI.Constant(0.))
 
-        self.layers = net
+        self._l_in = net['data']
+        self._layers = net
         self._l_out = net['fc8']
+        self._conv_out = net['pool5']
 
     @property
     def input_layer(self):
@@ -192,3 +203,57 @@ class AlexNet(object):
     @property
     def input_var(self):
         return self._l_in.input_var
+
+    @property
+    def conv_output_layer(self):
+        return self._conv_out
+
+    @property
+    def layers(self):
+        return self._layers
+
+
+class VanillaConvNet(object):
+    def __init__(self, input_layer=None):
+        net = {}
+        net['data'] = input_layer
+        net['conv1'] = Conv2DLayer(
+                net['data'],
+                num_filters=20,
+                filter_size=(4, 4),
+                stride=2,
+                name='conv1',
+                convolution=wrapped_conv,
+            )
+        net['fc8'] = DenseLayer(
+            net['conv1'],
+            num_units=100,
+            nonlinearity=lasagne.nonlinearities.softmax,
+            name='fc8',
+            W=LI.GlorotUniform(),
+            b=LI.Constant(0.))
+
+        self._l_in = net['data']
+        self._layers = net
+        self._l_out = net['fc8']
+        self._conv_out = net['conv1']
+
+    @property
+    def input_layer(self):
+        return self._l_in
+
+    @property
+    def output_layer(self):
+        return self._l_out
+
+    @property
+    def input_var(self):
+        return self._l_in.input_var
+
+    @property
+    def conv_output_layer(self):
+        return self._conv_out
+
+    @property
+    def layers(self):
+        return self._layers
