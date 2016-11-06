@@ -21,7 +21,7 @@ def get_directory():
 
 CACHED_GPUS = None
 
-FORBIDDEN = [5, 6, 7, 8, 9, 30, 54, 56]
+FORBIDDEN = [5, 6, 7, 8, 9, 30, 49, 54, 56]
 
 
 def get_first_available_gpu(type_filter=None):
@@ -46,6 +46,7 @@ def launch_cirrascale(type_filter="pascal"):
                 python_command="python",
                 script='scripts/run_experiment_lite.py', periodic_sync=True, sync_s3_pkl=False,
                 sync_log_on_termination=True,
+                sync_all_data_node_to_s3=True,
                 periodic_sync_interval=15):
         assert use_gpu, "What a waste!"
         gpu = get_first_available_gpu(type_filter)
@@ -94,23 +95,35 @@ def launch_cirrascale(type_filter="pascal"):
             tar -zxvf /tmp/{code_file_name} -C {local_code_path}
         """.format(job_id=job_id, code_full_path=code_full_path, local_code_path=local_code_path,
                    aws_region=config.AWS_REGION_NAME, code_file_name=code_file_name))
-        if periodic_sync:
-            if sync_s3_pkl:
+
+        if sync_all_data_node_to_s3:
+            print('Syncing all data from node to s3.')
+            if periodic_sync:
                 sio.write("""
-                    while /bin/true; do
-                        aws s3 sync --exclude '*' --include '*.csv' --include '*.json' --include '*.pkl' {log_dir} {remote_log_dir} --region {aws_region}
-                        sleep {periodic_sync_interval}
-                    done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
-                                                         aws_region=config.AWS_REGION_NAME,
-                                                         periodic_sync_interval=periodic_sync_interval))
-            else:
-                sio.write("""
-                    while /bin/true; do
-                        aws s3 sync --exclude '*' --include '*.csv' --include '*.json' {log_dir} {remote_log_dir} --region {aws_region}
-                        sleep {periodic_sync_interval}
-                    done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
-                                                         aws_region=config.AWS_REGION_NAME,
-                                                         periodic_sync_interval=periodic_sync_interval))
+                            while /bin/true; do
+                                aws s3 sync {log_dir} {remote_log_dir} --region {aws_region} --quiet
+                                sleep {periodic_sync_interval}
+                            done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
+                                                                 aws_region=config.AWS_REGION_NAME,
+                                                                 periodic_sync_interval=periodic_sync_interval))
+        else:
+            if periodic_sync:
+                if sync_s3_pkl:
+                    sio.write("""
+                        while /bin/true; do
+                            aws s3 sync --exclude '*' --include '*.csv' --include '*.json' --include '*.pkl' {log_dir} {remote_log_dir} --region {aws_region}
+                            sleep {periodic_sync_interval}
+                        done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
+                                                             aws_region=config.AWS_REGION_NAME,
+                                                             periodic_sync_interval=periodic_sync_interval))
+                else:
+                    sio.write("""
+                        while /bin/true; do
+                            aws s3 sync --exclude '*' --include '*.csv' --include '*.json' {log_dir} {remote_log_dir} --region {aws_region}
+                            sleep {periodic_sync_interval}
+                        done & echo sync initiated""".format(log_dir=log_dir, remote_log_dir=remote_log_dir,
+                                                             aws_region=config.AWS_REGION_NAME,
+                                                             periodic_sync_interval=periodic_sync_interval))
         sio.write("""
             {command}
         """.format(

@@ -15,6 +15,7 @@ from vizdoom import Mode
 
 from rllab.misc import logger
 from sandbox.rocky.neural_learner.doom_utils.wad import WAD
+from sandbox.rocky.neural_learner.envs.doom_default_wad_env import DoomDefaultWadEnv
 from sandbox.rocky.neural_learner.envs.doom_env import DoomEnv
 from sandbox.rocky.s3.resource_manager import resource_manager
 import io
@@ -64,11 +65,11 @@ def create_map(maze_sizes=None, *args, **kwargs):
     # some candidate things:
     # 5 - blue keycard (kind of too small)
 
-    bluecard = Thing(x=0, y=0, z=20, type=5, id=2)
+    # bluecard = Thing(x=0, y=0, z=20, type=5, id=2)
 
     textmap = Textmap(namespace="zdoom", items=[])
 
-    things = [player, bluecard]
+    things = [player]#, bluecard]
 
     maze_gen = DFSGridMazeGenerator()
 
@@ -78,8 +79,17 @@ def create_map(maze_sizes=None, *args, **kwargs):
     maze_size = np.random.choice(maze_sizes)
     maze = maze_gen.gen_maze(n_row=maze_size, n_col=maze_size)
 
+    xs, ys = np.where(maze)
+    x, y = int(xs[0]), int(ys[0])
+
+    print("\n".join([" ".join(map(str, row)) for row in maze]))
+
+    print(x, y)
+
     linedefs = []
-    sidedefs = [Sidedef(sector=0, texturemiddle="BRICK9")]
+    sidedefs = [Sidedef(sector=0, texturemiddle="BRICK9"),
+                Sidedef(sector=0, texturemiddle="FLOOR1_7", texturetop="FLOOR1_7", clipmidtex=True,
+                        scalex_mid=3.0, scaley_mid=0.3)]
     sectors = []
     vertices = []
 
@@ -114,9 +124,27 @@ def create_map(maze_sizes=None, *args, **kwargs):
 
     linedefs = [l for l in linedefs if (l[1], l[0]) not in linedefs]
 
+    vs = [
+        (96 * x + 10, 96 * (y + 1) - 10),
+        (96 * (x + 1) - 10, 96 * (y + 1) - 10),
+        (96 * (x + 1) - 10, 96 * y + 10),
+        (96 * x + 10, 96 * y + 10)
+    ]
+    for v in vs:
+        if v not in vertices:
+            vertices.append(v)
     textmap.items.extend(things)
     textmap.items.extend([Vertex(x=v[0], y=v[1]) for v in vertices])
     textmap.items.extend([Linedef(v1=l[0], v2=l[1], blocking=True, sidefront=0) for l in linedefs])
+
+    linedefs = []
+    for vid in range(4):
+        vid_next = (vid + 1) % 4
+        linedefs.append((vertices.index(vs[vid_next]), vertices.index(vs[vid])))
+    textmap.items.extend([Vertex(x=v[0], y=v[1]) for v in vertices])
+    textmap.items.extend([Linedef(
+        v1=l[0], v2=l[1], blocking=False, blockplayers=False, sidefront=1, sideback=1) for l in linedefs])
+
     textmap.items.extend(sidedefs)
     textmap.items.extend(sectors)
 
@@ -221,7 +249,7 @@ class DoomGoalFindingMazeEnv(DoomEnv, Serializable):
         success_rate = np.mean([path["rewards"][-1] > 0 for path in paths])
         success_traj_len = np.asarray([len(path["rewards"]) for path in paths if path["rewards"][-1] > 0])
         logger.record_tabular('SuccessRate', success_rate)
-        logger.record_tabular_misc_stat('SuccessTrajLen', success_traj_len)   #
+        logger.record_tabular_misc_stat('SuccessTrajLen', success_traj_len)  #
 
     def log_diagnostics_multi(self, multi_env, paths):
         episode_success = [[] for _ in range(multi_env.n_episodes)]
@@ -240,7 +268,6 @@ class DoomGoalFindingMazeEnv(DoomEnv, Serializable):
             logger.record_tabular('Delta%s(Last-First)' % name, avg_data[-1] - avg_data[0])
 
         log_stat('SuccessRate', episode_success)
-
 
     def render(self, close=False):
         level = [x for x in self.wad.levels if x.name == self.level_name][0]
@@ -283,7 +310,6 @@ def plot_textmap(content, agent_x, agent_y, out_width, out_height):
     min_x, min_y = np.min(vertices, axis=0) - 50
     max_x, max_y = np.max(vertices, axis=0) + 50
 
-
     height = max_x - min_x
     width = max_y - min_y
     # import ipdb; ipdb.set_trace()
@@ -295,7 +321,7 @@ def plot_textmap(content, agent_x, agent_y, out_width, out_height):
     def rescale_point(x, y):
         tx = int((int(x) - min_x) / (max_x - min_x) * height)
         ty = int((int(y) - min_y) / (max_y - min_y) * width)
-        return (ty, tx)#tx, ty)
+        return (ty, tx)  # tx, ty)
 
     # cx = width / 2
     # cy = height / 2
@@ -327,6 +353,55 @@ def plot_textmap(content, agent_x, agent_y, out_width, out_height):
     img = cv2.resize(img, (out_width, out_height))
     return img
 
-    # cv2.imshow("Map", img)
-    # cv2.waitKey(15)
 
+if __name__ == "__main__":
+    wad_file = resource_manager.get_file(*mkwad(
+        # size=200,  # 500,
+        # rand_start=False,
+        n_trajs=2,
+        # light_level=80,#255,#80,  # 255,
+        version="v2",
+        # forced_visible_range=400,#150,
+        # scale=1,
+        # margin=20,
+        # landmarks=True,
+        # verbose=True,
+        # rand_angle=False,#True,
+        seed=np.random.randint(100000)
+    ), compress=True)
+
+
+    class DoomEnv(DoomDefaultWadEnv):
+
+        def get_doom_config(self):
+            cfg = DoomDefaultWadEnv.get_doom_config(self)
+            cfg.render_weapon = False
+            cfg.render_hud = False
+            cfg.render_crosshair = False
+            cfg.render_decals = False
+            cfg.render_particles = False
+            return cfg
+
+
+    env = DoomEnv(full_wad_name=wad_file)
+    # env.start_interactive()
+    from vizdoom import Mode, GameVariable
+
+    # env.mode = Mode.PLAYER  # SPECTATOR
+    env.mode = Mode.SPECTATOR
+    env.executor.init_games()
+    points = []
+    import cv2
+
+    # cv2.namedWindow("plot")
+    while True:
+        if env.executor.par_games.is_episode_finished(0):
+            env.executor.par_games.close_all()
+            env.executor.init_games()
+            env.executor.par_games.new_episode_all()
+        env.executor.par_games.set_action(0, env.action_map[np.random.choice([0, 1, 2, 3])])
+        env.executor.par_games.advance_action_all(4, update_state=True, render_only=True)
+
+
+        # cv2.imshow("Map", img)
+        # cv2.waitKey(15)

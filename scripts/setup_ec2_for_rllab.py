@@ -124,9 +124,9 @@ def setup_iam():
         existing_role.load()
         # if role exists, delete and recreate
         response = query_yes_no(
-                "There is an existing role named %s. Proceed to delete everything rllab-related and recreate?" %
-                INSTANCE_ROLE_NAME,
-                default="no", allow_skip=True)
+            "There is an existing role named %s. Proceed to delete everything rllab-related and recreate?" %
+            INSTANCE_ROLE_NAME,
+            default="no", allow_skip=True)
         if response == "skip":
             return
         elif not response:
@@ -238,7 +238,6 @@ def setup_s3():
 
 
 def setup_ec2():
-    # for region in ["us-east-1", "us-west-1", "us-west-2"]:
     for region in ["ap-northeast-2", "us-east-2", "ap-south-1", "us-east-1", "us-west-1", "us-west-2"]:
         print("Setting up region %s" % region)
 

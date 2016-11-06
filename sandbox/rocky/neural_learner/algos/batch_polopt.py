@@ -40,6 +40,7 @@ class BatchPolopt(RLAlgorithm):
             sample_processor=None,
             post_evals=None,
             n_vectorized_envs=None,
+            use_cloudpickle=False,
             **kwargs
     ):
         """
@@ -81,6 +82,7 @@ class BatchPolopt(RLAlgorithm):
         self.positive_adv = positive_adv
         self.store_paths = store_paths
         self.whole_paths = whole_paths
+        self.use_cloudpickle = use_cloudpickle
 
         if sampler is None:
             assert self.policy.vectorized
@@ -186,15 +188,15 @@ class BatchPolopt(RLAlgorithm):
                     paths = self.obtain_samples(itr)
                     logger.log("Processing samples...")
                     samples_data = self.process_samples(itr, paths)
-                    logger.log("Logging diagnostics...")
-                    self.log_diagnostics(paths)
                     logger.log("Optimizing policy...")
                     self.optimize_policy(itr, samples_data)
+                    logger.log("Logging diagnostics...")
+                    self.log_diagnostics(paths)
                     logger.log("Saving snapshot...")
                     params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
                     if self.store_paths:
                         params["paths"] = samples_data["paths"]
-                    logger.save_itr_params(itr, params)
+                    logger.save_itr_params(itr, params, use_cloudpickle=self.use_cloudpickle)
                     logger.log("Saved")
                     logger.log("Evaluating on additional environments")
                     self.post_eval_policy(itr)

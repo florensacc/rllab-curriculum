@@ -4,6 +4,7 @@ import numpy as np
 import cv2
 
 from rllab.misc import logger
+from rllab.misc.ext import using_seed
 from rllab.spaces.box import Box
 from rllab.core.serializable import Serializable
 from rllab.spaces.discrete import Discrete
@@ -89,6 +90,7 @@ class DoomConfig(object):
         if self.available_buttons is not None:
             for button in self.available_buttons:
                 par_games.add_available_button(i, button)
+                par_games.set_button_max_value(i, button, 200)
         if self.mode is not None:
             par_games.set_mode(i, self.mode)
 
@@ -107,7 +109,7 @@ class DoomEnv(Env, Serializable):
     ):
         Serializable.quick_init(self, locals())
         self._vectorized = vectorized
-        self._verbose_debug = verbose_debug
+        self.verbose_debug = verbose_debug
         self.mode = Mode.PLAYER
         self.restart_game = restart_game
         self.reset_map = reset_map
@@ -160,10 +162,10 @@ class DoomEnv(Env, Serializable):
         return self.executor.reset(dones=[True], restart_game=restart_game, reset_map=reset_map)[0]
 
     def step(self, action):
-        if self._verbose_debug:
+        if self.verbose_debug:
             logger.log("start stepping")
         next_obses, rewards, dones, infos = self.executor.step([action], max_path_length=None)
-        if self._verbose_debug:
+        if self.verbose_debug:
             logger.log("finished stepping")
         return Step(next_obses[0], rewards[0], dones[0], **{k: v[0] for k, v in infos.items()})
 
@@ -236,14 +238,10 @@ class VecDoomEnv(object):
         atexit.unregister(self.terminate)
         self.par_games.close_all()
 
-    @property
-    def num_envs(self):
-        return self.n_envs
+    def reset_trial(self, dones, seeds=None):
+        return self.reset(dones=dones, restart_game=self.env.restart_game_on_reset_trial, reset_map=True, seeds=seeds)
 
-    def reset_trial(self, dones):
-        return self.reset(dones=dones, restart_game=self.env.restart_game_on_reset_trial, reset_map=True)
-
-    def reset(self, dones, restart_game=None, reset_map=None, return_obs=True):
+    def reset(self, dones, restart_game=None, reset_map=None, return_obs=True, seeds=None):
         if restart_game is None:
             restart_game = self.env.restart_game
         if reset_map is None:
@@ -252,13 +250,13 @@ class VecDoomEnv(object):
         int_dones = np.cast['int32'](dones)
         if np.any(dones):
             if restart_game:
-                if self.env._verbose_debug:
+                if self.env.verbose_debug:
                     logger.log("closing games")
                 self.par_games.close_all(int_dones)
-                self.init_games(int_dones)
+                self.init_games(int_dones, seeds=seeds)
             elif reset_map:
-                self.reconfigure_games(int_dones)
-            if self.env._verbose_debug:
+                self.reconfigure_games(int_dones, seeds=seeds)
+            if self.env.verbose_debug:
                 logger.log("start new episodes")
             self.par_games.new_episode_all(int_dones)
             self.rewards_so_far[dones] = 0
@@ -285,19 +283,25 @@ class VecDoomEnv(object):
             images = np.array(images)
         return images
 
-    def step(self, action_n, max_path_length):
-        if self.env._verbose_debug:
+    def set_action(self, action_n):
+        if self.env.verbose_debug:
             logger.log("setting action")
         for i in range(self.n_envs):
             self.par_games.set_action(i, self.env.action_map[action_n[i]])
+
+    def advance_action(self):
         # advance in parallel
-        if self.env._verbose_debug:
+        if self.env.verbose_debug:
             logger.log("advancing action")
         if self.env.stochastic_frame_skips is not None:
             self.par_games.advance_action_all_frame_skips(self.frame_skips, True, True)
         else:
             self.par_games.advance_action_all(self.env.frame_skip, True, True)
-        if self.env._verbose_debug:
+
+    def step(self, action_n, max_path_length):
+        self.set_action(action_n)
+        self.advance_action()
+        if self.env.verbose_debug:
             logger.log("checking if episode finished")
         dones = np.asarray(
             [self.par_games.is_episode_finished(i) for i in range(self.n_envs)],
@@ -318,7 +322,7 @@ class VecDoomEnv(object):
         self.rewards_so_far = total_rewards
 
         if np.any(dones):
-            if self.env._verbose_debug:
+            if self.env.verbose_debug:
                 logger.log("resetting")
             self.reset(dones)
 
@@ -330,20 +334,32 @@ class VecDoomEnv(object):
 
         return next_obs, delta_rewards, np.cast['bool'](dones), env_infos
 
-    def init_games(self, dones=None):
+    def init_games(self, dones=None, seeds=None):
         self.par_games.create_all(dones)
+        done_idx = 0
         for i in range(self.n_envs):
             if dones is None or dones[i]:
-                doom_config = self.env.get_doom_config()
+                if seeds is not None:
+                    with using_seed(seeds[done_idx]):
+                        doom_config = self.env.get_doom_config()
+                else:
+                    doom_config = self.env.get_doom_config()
                 doom_config.configure(self.par_games, i)
-        if self.env._verbose_debug:
+                done_idx += 1
+        if self.env.verbose_debug:
             logger.log("initing games")
         self.par_games.init_all(dones)
-        if self.env._verbose_debug:
+        if self.env.verbose_debug:
             logger.log("init finished")
 
-    def reconfigure_games(self, dones=None):
+    def reconfigure_games(self, dones=None, seeds=None):
+        done_idx = 0
         for i in range(self.n_envs):
             if dones is None or dones[i]:
-                doom_config = self.env.get_doom_config()
+                if seeds is not None:
+                    with using_seed(seeds[done_idx]):
+                        doom_config = self.env.get_doom_config()
+                else:
+                    doom_config = self.env.get_doom_config()
                 doom_config.configure(self.par_games, i)
+                done_idx += 1

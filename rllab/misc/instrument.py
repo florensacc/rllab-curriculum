@@ -447,6 +447,11 @@ def run_experiment_lite(
             exp_prefix=exp_prefix,
             script=script,
             python_command=python_command,
+            sync_s3_pkl=sync_s3_pkl,
+            sync_log_on_termination=sync_log_on_termination,
+            periodic_sync=periodic_sync,
+            periodic_sync_interval=periodic_sync_interval,
+            sync_all_data_node_to_s3=sync_all_data_node_to_s3,
         )
     elif mode == "local":
         for task in batch_tasks:

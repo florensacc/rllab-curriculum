@@ -36,7 +36,8 @@ def cli(ctx, verbose):
     logging.getLogger().setLevel(DEBUG_LOGGING_MAP.get(verbose, logging.DEBUG))
 
 
-REGIONS = ['us-east-1', 'us-west-1', 'us-west-2']
+REGIONS = ["ap-northeast-2", "us-east-2", "ap-south-1", "us-east-1", "us-west-1", "us-west-2"]#['us-east-1',
+# 'us-west-1', 'us-west-2']
 
 
 def get_clients():
@@ -67,7 +68,7 @@ def _collect_instances(region):
             {
                 'Name': 'instance.group-name',
                 'Values': [
-                    'rllab-sg-rocky'
+                    'rocky-rllab-sg'
                 ]
             },
             {

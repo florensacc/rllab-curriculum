@@ -93,7 +93,7 @@ def lookup(d, keys):
     return d
 
 
-def load_exps_data(exp_folder_paths,disable_variant=False):
+def load_exps_data(exp_folder_paths, disable_variant=False, ignore_missing_keys=False):
     exps = []
     for exp_folder_path in exp_folder_paths:
         exps += [x[0] for x in os.walk(exp_folder_path)]
@@ -126,23 +126,24 @@ def load_exps_data(exp_folder_paths,disable_variant=False):
                 all_keys[key] = type(data.flat_params[key])
 
     # if any data does not have some key, specify the value of it
-    default_values = dict()
-    for data in exps_data:
-        for key in sorted(all_keys.keys()):
-            if key not in data.flat_params:
-                if key not in default_values:
-                    default = input("Please specify the default value of \033[93m %s \033[0m: "%(key))
-                    try:
-                        if all_keys[key].__name__ == 'NoneType':
-                            default = None
-                        elif all_keys[key].__name__ == 'bool':
-                            default = eval(default)
-                        else:
-                            default = all_keys[key](default)
-                    except ValueError:
-                        print("Warning: cannot cast %s to %s"%(default,all_keys[key]))
-                    default_values[key] = default
-                data.flat_params[key] = default_values[key]
+    if not ignore_missing_keys:
+        default_values = dict()
+        for data in exps_data:
+            for key in sorted(all_keys.keys()):
+                if key not in data.flat_params:
+                    if key not in default_values:
+                        default = input("Please specify the default value of \033[93m %s \033[0m: " % (key))
+                        try:
+                            if all_keys[key].__name__ == 'NoneType':
+                                default = None
+                            elif all_keys[key].__name__ == 'bool':
+                                default = eval(default)
+                            else:
+                                default = all_keys[key](default)
+                        except ValueError:
+                            print("Warning: cannot cast %s to %s" % (default, all_keys[key]))
+                        default_values[key] = default
+                    data.flat_params[key] = default_values[key]
 
     return exps_data
 
@@ -188,7 +189,7 @@ def extract_distinct_params(exps_data, excluded_params=('exp_name', 'seed', 'log
                                 )
                             )
                             for d in exps_data
-                        ]
+                            ]
                     )
                 )
             ),
@@ -198,7 +199,8 @@ def extract_distinct_params(exps_data, excluded_params=('exp_name', 'seed', 'log
         )
     except Exception as e:
         print(e)
-        import ipdb; ipdb.set_trace()
+        import ipdb;
+        ipdb.set_trace()
     proposals = [(k, [x[1] for x in v])
                  for k, v in itertools.groupby(stringified_pairs, lambda x: x[0])]
     filtered = [(k, v) for (k, v) in proposals if len(v) > l and all(
