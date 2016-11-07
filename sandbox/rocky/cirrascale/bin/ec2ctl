@@ -1,4 +1,5 @@
 #!/Users/dementrock/anaconda/envs/rllab3/bin/python
+import datetime
 import json
 import logging
 import multiprocessing
@@ -9,10 +10,10 @@ import sys
 import click
 import subprocess
 
-import redis
 import boto3
 from rllab import config
 from rllab.misc.instrument import query_yes_no
+import numpy as np
 
 DEBUG_LOGGING_MAP = {
     0: logging.CRITICAL,
@@ -36,8 +37,20 @@ def cli(ctx, verbose):
     logging.getLogger().setLevel(DEBUG_LOGGING_MAP.get(verbose, logging.DEBUG))
 
 
-REGIONS = ["ap-northeast-2", "us-east-2", "ap-south-1", "us-east-1", "us-west-1", "us-west-2"]#['us-east-1',
-# 'us-west-1', 'us-west-2']
+REGIONS = [
+    "ap-northeast-1",
+    "ap-northeast-2",
+    "ap-south-1",
+    "ap-southeast-1",
+    "ap-southeast-2",
+    "eu-central-1",
+    "eu-west-1",
+    "sa-east-1",
+    "us-east-1",
+    "us-east-2",
+    "us-west-1",
+    "us-west-2",
+]
 
 
 def get_clients():
@@ -68,7 +81,7 @@ def _collect_instances(region):
             {
                 'Name': 'instance.group-name',
                 'Values': [
-                    'rocky-rllab-sg'
+                    config.AWS_SECURITY_GROUPS[0],
                 ]
             },
             {
@@ -85,37 +98,8 @@ def _collect_instances(region):
 
 
 def get_all_instances():
-    # clients = get_clients()
-
-    # all_instances = []
-
     with multiprocessing.Pool(10) as pool:
         all_instances = sum(pool.map(_collect_instances, REGIONS), [])
-    #
-    #
-    #
-    # for client in clients:
-    #     print("Collecting instances in region", client.region)
-    #     instances = [x['Instances'][0] for x in client.describe_instances(
-    #         Filters=[
-    #             {
-    #                 'Name': 'instance.group-name',
-    #                 'Values': [
-    #                     'rllab-sg-rocky'
-    #                 ]
-    #             },
-    #             {
-    #                 'Name': 'instance-state-name',
-    #                 'Values': [
-    #                     'running'
-    #                 ]
-    #             }
-    #         ]
-    #     )['Reservations']]
-    #     for instance in instances:
-    #         instance['Region'] = client.region
-    #     all_instances.extend(instances)
-
     return all_instances
 
 
@@ -161,15 +145,18 @@ def ssh(job):
         if name == job:
             ip_addr = instance['PublicIpAddress']
             exp_prefix = get_exp_prefix_tag(instance)
-
+            key_name = config.ALL_REGION_AWS_KEY_NAMES[instance['Region']]
+            key_path = os.path.join(config.PROJECT_PATH, "private/key_pairs", key_name + ".pem")
             command = " ".join([
                 "ssh",
                 "-oStrictHostKeyChecking=no",
                 "-oConnectTimeout=10",
+                "-i",
+                key_path,
                 "-t",
                 "ubuntu@" + ip_addr,
-                "'cd %s && exec bash -l'" % (os.path.join(config.PROJECT_PATH, "data/local/{exp_prefix}/{job}".format(
-                    exp_prefix=exp_prefix,
+                "'cd %s; exec bash -l'" % (os.path.join(config.PROJECT_PATH, "data/local/{folder}/{job}".format(
+                    folder=exp_prefix.replace("_", "-"),
                     job=job
                 )))
             ])
@@ -251,6 +238,7 @@ def kill_f(pattern):
                     InstanceIds=to_kill_ids.get(client.region, [])
                 )
 
+
 @cli.command()
 @click.argument('job')
 def kill(job):
@@ -278,35 +266,109 @@ def kill(job):
                 )
 
 
-@cli.command()
-def check_price():
-    import ipdb;
-    ipdb.set_trace()
+def fetch_zone_prices(instance_type, zone, duration):
+    clients = get_clients()
+    for client in clients:
+        if zone.startswith(client.region):
+
+            all_prices = []
+            all_ts = []
+            for response in client.get_paginator('describe_spot_price_history').paginate(
+                    InstanceTypes=[instance_type],
+                    ProductDescriptions=['Linux/UNIX'],
+                    AvailabilityZone=zone,
+            ):
+                history = response['SpotPriceHistory']
+                prices = [float(x['SpotPrice']) for x in history]
+                timestamps = [x['Timestamp'] for x in history]
+
+                all_prices.extend(prices)
+                all_ts.extend(timestamps)
+
+                if len(all_ts) > 0:
+
+                    delta = max(all_ts) - min(all_ts)
+                    if delta.total_seconds() >= duration:
+                        break
+
+            return zone, all_prices, all_ts
+
+
+def fetch_zones(region):
+    clients = get_clients()
+    for client in clients:
+        if client.region == region:
+            zones = [x['ZoneName'] for x in client.describe_availability_zones()['AvailabilityZones']]
+            return zones
 
 
 @cli.command()
-def stats():
-    instances = get_all_instances()
+@click.argument('instance_type')
+@click.option('--duration', '-d', help="Specify the duration to measure the maximum price. Defaults to 1 day. "
+                                       "Examples: 100s, 1h, 2d, 1w", type=str, default='1d')
+def spot_history(instance_type, duration):
+    num_duration = int(duration[:-1])
+    if re.match(r"^(\d+)d$", duration):
+        duration = int(duration[:-1]) * 86400
+        print("Querying maximum spot price in each zone within the past {duration} day(s)...".format(
+            duration=num_duration))
+    elif re.match(r"^(\d+)h$", duration):
+        duration = int(duration[:-1]) * 3600
+        print("Querying maximum spot price in each zone within the past {duration} hour(s)...".format(
+            duration=num_duration))
+    elif re.match(r"^(\d+)w$", duration):
+        duration = int(duration[:-1]) * 86400 * 7
+        print("Querying maximum spot price in each zone within the past {duration} week(s)...".format(
+            duration=num_duration))
+    elif re.match(r"^(\d+)m$", duration):
+        duration = int(duration[:-1]) * 86400 * 30
+        print("Querying maximum spot price in each zone within the past {duration} month(s)...".format(
+            duration=num_duration))
+    elif re.match(r"^(\d+)s$", duration):
+        duration = int(duration[:-1])
+        print("Querying maximum spot price in each zone within the past {duration} second(s)...".format(
+            duration=num_duration))
+    else:
+        raise ValueError("Unrecognized duration: {duration}".format(duration))
 
-    # for instance in get_all_instances():
-    #     name = get_name_tag(instance)
-    #     if name is not None and pattern in name:
-    #         region = instance['Region']
-    #         if region not in to_kill_ids:
-    #             to_kill_ids[region] = []
-    #         to_kill_ids[region].append(instance['InstanceId'])
-    #         to_kill.append(name)
-    #
-    # print("This will kill the following jobs:")
-    # print(", ".join(sorted(to_kill)))
-    # if query_yes_no(question="Proceed?", default="no"):
-    #     for client in get_clients():
-    #         print("Terminating instances in region", client.region)
-    #         ids = to_kill_ids.get(client.region, [])
-    #         if len(ids) > 0:
-    #             client.terminate_instances(
-    #                 InstanceIds=to_kill_ids.get(client.region, [])
-    #             )
+    with multiprocessing.Pool(100) as pool:
+        print('Fetching the list of all availability zones...')
+        zones = sum(pool.starmap(fetch_zones, [(x,) for x in REGIONS]), [])
+        print('Querying spot price in each zone...')
+        results = pool.starmap(fetch_zone_prices, [(instance_type, zone, duration) for zone in zones])
+
+        price_list = []
+
+        for zone, prices, timestamps in results:
+            if len(prices) > 0:
+                sorted_prices_ts = sorted(zip(prices, timestamps), key=lambda x: x[1])
+                cur_time = datetime.datetime.now(tz=sorted_prices_ts[0][1].tzinfo)
+                sorted_prices, sorted_ts = [np.asarray(x) for x in zip(*sorted_prices_ts)]
+                cutoff = cur_time - datetime.timedelta(seconds=duration)
+
+                valid_ids = np.where(np.asarray(sorted_ts) > cutoff)[0]
+                if len(valid_ids) == 0:
+                    first_idx = 0
+                else:
+                    first_idx = max(0, valid_ids[0] - 1)
+
+                max_price = max(sorted_prices[first_idx:])
+
+                price_list.append((zone, max_price))
+
+        print("Spot pricing information for instance type {type}".format(type=instance_type))
+
+        for zone, price in sorted(price_list, key=lambda x: x[1]):
+            print("Zone: {zone}, Max Price: {price}".format(zone=zone, price=price))
+
+
+@cli.command()
+def ami():
+    clients = get_clients()
+    for client in clients:
+        images = client.describe_images(Owners=['self'])['Images']
+        for img in images:
+            print('{name} in {region}'.format(name=img['Name'], region=client.region))
 
 
 if __name__ == '__main__':
