@@ -5,6 +5,7 @@ import math
 from functools import reduce
 
 import matplotlib as mpl
+
 mpl.use('Agg')
 from matplotlib import patches
 from matplotlib import pyplot as plt
@@ -25,7 +26,6 @@ from rllab.envs.env_spec import EnvSpec
 
 from rllab.misc.overrides import overrides
 from rllab.misc import logger
-
 
 
 class MazeEnv(ProxyEnv, Serializable):
@@ -59,6 +59,7 @@ class MazeEnv(ProxyEnv, Serializable):
             *args,
             **kwargs):
 
+        Serializable.quick_init(self, locals())
         self._n_bins = n_bins
         self._sensor_range = sensor_range
         self._sensor_span = sensor_span
@@ -117,7 +118,7 @@ class MazeEnv(ProxyEnv, Serializable):
             self.__class__.MAZE_STRUCTURE = structure
             print(structure)
 
-        elif self._maze_id == 4:  # cross corridor
+        elif 4 <= self._maze_id <= 7:  # cross corridor, goal in
             c = 2 * length + 5
             M = np.ones((c, c))
             M = M - np.diag(np.ones(c))
@@ -131,10 +132,51 @@ class MazeEnv(ProxyEnv, Serializable):
             M[:, np.array([0, c - 1])] = 1
             M = M.astype(int).tolist()
             M[c // 2][c // 2] = 'r'
-            for i in [1, c - 2]:
-                for j in [1, c - 2]:
-                    M[i][j] = 'g'
+            # for i in [1, c - 2]:
+            #     for j in [1, c - 2]:
+            #         M[i][j] = 'g'
+            if self._maze_id == 4:
+                M[1][1] = 'g'
+            if self._maze_id == 5:
+                M[1][c - 2] = 'g'
+            if self._maze_id == 6:
+                M[c - 2][1] = 'g'
+            if self._maze_id == 7:
+                M[c - 2][c - 2] = 'g'
             structure = M
+            self.__class__.MAZE_STRUCTURE = structure
+            print(structure)
+
+        elif self._maze_id == 8:  # reflexion of benchmark maze
+            structure = [
+                [1, 1, 1, 1, 1],
+                [1, 'g', 0, 0, 1],
+                [1, 1, 1, 0, 1],
+                [1, 'r', 0, 0, 1],
+                [1, 1, 1, 1, 1],
+            ]
+            self.__class__.MAZE_STRUCTURE = structure
+            print(structure)
+
+        elif self._maze_id == 9:  # sym benchmark maze
+            structure = [
+                [1, 1, 1, 1, 1],
+                [1, 0, 0, 'r', 1],
+                [1, 0, 1, 1, 1],
+                [1, 0, 0, 'g', 1],
+                [1, 1, 1, 1, 1],
+            ]
+            self.__class__.MAZE_STRUCTURE = structure
+            print(structure)
+
+        elif self._maze_id == 10:  # reflexion of sym of benchmark maze
+            structure = [
+                [1, 1, 1, 1, 1],
+                [1, 0, 0, 'g', 1],
+                [1, 0, 1, 1, 1],
+                [1, 0, 0, 'r', 1],
+                [1, 1, 1, 1, 1],
+            ]
             self.__class__.MAZE_STRUCTURE = structure
             print(structure)
 
@@ -191,7 +233,36 @@ class MazeEnv(ProxyEnv, Serializable):
 
         inner_env = model_cls(*args, file_path=file_path, **kwargs)  # file to the robot specifications
         ProxyEnv.__init__(self, inner_env)  # here is where the robot env will be initialized
-        Serializable.quick_init(self, locals())
+
+    def reset(self):
+        self.wrapped_env.reset()
+        return self.get_current_obs()
+
+    def step(self, action):
+        if self.MANUAL_COLLISION:
+            old_pos = self.wrapped_env.get_xy()
+            inner_next_obs, inner_rew, done, info = self.wrapped_env.step(action)
+            new_pos = self.wrapped_env.get_xy()
+            if self._is_in_collision(new_pos):
+                self.wrapped_env.set_xy(old_pos)
+                done = False
+        else:
+            inner_next_obs, inner_rew, done, info = self.wrapped_env.step(action)
+        next_obs = self.get_current_obs()
+        x, y = self.wrapped_env.get_body_com("torso")[:2]
+        # ref_x = x + self._init_torso_x
+        # ref_y = y + self._init_torso_y
+        info['maze_rewards'] = 0
+        info['inner_rew'] = inner_rew
+        reward = self.coef_inner_rew * inner_rew
+        minx, maxx, miny, maxy = self._goal_range
+        # print("goal range: x [%s,%s], y [%s,%s], now [%s,%s]" % (str(minx), str(maxx), str(miny), str(maxy),
+        #                                                          str(x), str(y)))
+        if minx <= x <= maxx and miny <= y <= maxy:
+            done = True
+            reward += self.goal_rew
+            info['maze_rewards'] = 1  # we keep here the original one, so that the AvgReturn is directly the freq of success
+        return Step(next_obs, reward, done, **info)
 
     def get_current_maze_obs(self):
         # The observation would include both information about the robot itself as well as the sensors around its
@@ -262,95 +333,15 @@ class MazeEnv(ProxyEnv, Serializable):
             wall_readings,
             goal_readings
         ])
-        # print "wall readings:", wall_readings
-        # print "goal readings:", goal_readings
         return obs
 
     def get_current_robot_obs(self):
         return self.wrapped_env.get_current_obs()
 
     def get_current_obs(self):
-        # The observation would include both information about the robot itself as well as the sensors around its
-        # environment
-        robot_x, robot_y = self.wrapped_env.get_body_com("torso")[:2]
-        ori = self.wrapped_env.model.data.qpos[self.__class__.ORI_IND]
-
-        # print ori
-
-        structure = self.__class__.MAZE_STRUCTURE
-        size_scaling = self.__class__.MAZE_SIZE_SCALING
-
-        segments = []
-        # compute the distance of all segments
-
-        # Get all line segments of the goal and the obstacles
-        for i in range(len(structure)):
-            for j in range(len(structure[0])):
-                if structure[i][j] == 1 or structure[i][j] == 'g':
-                    cx = j * size_scaling - self._init_torso_x
-                    cy = i * size_scaling - self._init_torso_y
-                    x1 = cx - 0.5 * size_scaling
-                    x2 = cx + 0.5 * size_scaling
-                    y1 = cy - 0.5 * size_scaling
-                    y2 = cy + 0.5 * size_scaling
-                    struct_segments = [
-                        ((x1, y1), (x2, y1)),
-                        ((x2, y1), (x2, y2)),
-                        ((x2, y2), (x1, y2)),
-                        ((x1, y2), (x1, y1)),
-                    ]
-                    for seg in struct_segments:
-                        segments.append(dict(
-                            segment=seg,
-                            type=structure[i][j],
-                        ))
-
-        wall_readings = np.zeros(self._n_bins)
-        goal_readings = np.zeros(self._n_bins)
-
-        for ray_idx in range(self._n_bins):
-            ray_ori = ori - self._sensor_span * 0.5 + 1.0 * (2 * ray_idx + 1) / (2 * self._n_bins) * self._sensor_span
-            ray_segments = []
-            for seg in segments:
-                p = ray_segment_intersect(ray=((robot_x, robot_y), ray_ori), segment=seg["segment"])
-                if p is not None:
-                    ray_segments.append(dict(
-                        segment=seg["segment"],
-                        type=seg["type"],
-                        ray_ori=ray_ori,
-                        distance=point_distance(p, (robot_x, robot_y)),
-                    ))
-            if len(ray_segments) > 0:
-                first_seg = sorted(ray_segments, key=lambda x: x["distance"])[0]
-                # print first_seg
-                if first_seg["type"] == 1:
-                    # Wall -> add to wall readings
-                    if first_seg["distance"] <= self._sensor_range:
-                        wall_readings[ray_idx] = (self._sensor_range - first_seg["distance"]) / self._sensor_range
-                elif first_seg["type"] == 'g':
-                    # Goal -> add to goal readings
-                    if first_seg["distance"] <= self._sensor_range:
-                        goal_readings[ray_idx] = (self._sensor_range - first_seg["distance"]) / self._sensor_range
-                else:
-                    assert False
-
-        obs = np.concatenate([
-            self.wrapped_env.get_current_obs(),
-            wall_readings,
-            goal_readings
-        ])
-        # print "wall readings:", wall_readings
-        # print "goal readings:", goal_readings
-
-        return obs
-
-    def reset(self):
-        self.wrapped_env.reset()
-        return self.get_current_obs()
-
-    @property
-    def viewer(self):
-        return self.wrapped_env.viewer
+        return np.concatenate([self.wrapped_env.get_current_obs(),
+                               self.get_current_maze_obs()
+                               ])
 
     @property
     @overrides
@@ -381,6 +372,13 @@ class MazeEnv(ProxyEnv, Serializable):
             # robot_observation_space=self.robot_observation_space,
             action_space=self.action_space,
         )
+
+    def action_from_key(self, key):
+        return self.wrapped_env.action_from_key(key)
+
+    @property
+    def viewer(self):
+        return self.wrapped_env.viewer
 
     def _find_robot(self):
         structure = self.__class__.MAZE_STRUCTURE
@@ -418,35 +416,13 @@ class MazeEnv(ProxyEnv, Serializable):
                         return True
         return False
 
-    def step(self, action):
-        if self.MANUAL_COLLISION:
-            old_pos = self.wrapped_env.get_xy()
-            inner_next_obs, inner_rew, done, info = self.wrapped_env.step(action)
-            new_pos = self.wrapped_env.get_xy()
-            if self._is_in_collision(new_pos):
-                self.wrapped_env.set_xy(old_pos)
-                done = False
-        else:
-            inner_next_obs, inner_rew, done, info = self.wrapped_env.step(action)
-        next_obs = self.get_current_obs()
-        x, y = self.wrapped_env.get_body_com("torso")[:2]
-        # ref_x = x + self._init_torso_x
-        # ref_y = y + self._init_torso_y
-        reward = self.coef_inner_rew * inner_rew
-        minx, maxx, miny, maxy = self._goal_range
-        # print("goal range: x [%s,%s], y [%s,%s], now [%s,%s]" % (str(minx), str(maxx), str(miny), str(maxy),
-        #                                                          str(x), str(y)))
-        if minx <= x <= maxx and miny <= y <= maxy:
-            done = True
-            reward += self.goal_rew
-        return Step(next_obs, reward, done, **info)
-
-    def action_from_key(self, key):
-        return self.wrapped_env.action_from_key(key)
-
     @overrides
-    def log_diagnostics(self, paths):
+    def log_diagnostics(self, paths, *args, **kwargs):
         # we call here any logging related to the maze, strip the maze obs and call log_diag with the stripped paths
+        # we need to log the purely gather reward!!
+        with logger.tabular_prefix('Maze_'):
+            gather_undiscounted_returns = [sum(path['env_infos']['maze_rewards']) for path in paths]
+            logger.record_tabular_misc_stat('Return', gather_undiscounted_returns, placement='front')
         stripped_paths = []
         for path in paths:
             stripped_path = {}
@@ -456,5 +432,8 @@ class MazeEnv(ProxyEnv, Serializable):
                 stripped_path['observations'][:, :self.wrapped_env.observation_space.flat_dim]
             #  this breaks if the obs of the robot are d>1 dimensional (not a vector)
             stripped_paths.append(stripped_path)
-        self.wrapped_env.log_diagnostics(stripped_paths)  # see swimmer_env.py for a scketch of the maze plotting!
-
+        with logger.tabular_prefix('wrapped_'):
+            if 'env_infos' in paths[0].keys() and 'inner_reward' in paths[0]['env_infos'].keys():
+                wrapped_undiscounted_return = np.mean([np.sum(path['env_infos']['inner_reward']) for path in paths])
+                logger.record_tabular('AverageReturn', wrapped_undiscounted_return)
+            self.wrapped_env.log_diagnostics(stripped_paths)  # see swimmer_env.py for a scketch of the maze plotting!
