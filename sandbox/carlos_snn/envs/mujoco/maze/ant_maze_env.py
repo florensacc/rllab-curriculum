@@ -9,6 +9,7 @@ class AntMazeEnv(MazeEnv, Serializable):
     MODEL_CLASS = AntEnv
     ORI_IND = 6
 
-    MAZE_HEIGHT = 2
+    MAZE_HEIGHT = 3
     MAZE_SIZE_SCALING = 3.0
+    # MAZE_MAKE_CONTACTS = True
 

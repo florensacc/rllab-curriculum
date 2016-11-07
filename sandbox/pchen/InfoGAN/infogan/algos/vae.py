@@ -11,7 +11,7 @@ from sandbox.pchen.InfoGAN.infogan.misc.distributions import Bernoulli, Gaussian
 import rllab.misc.logger as logger
 import sys
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp, flatten, assign_to_gpu, \
-    average_grads, temp_restore
+    average_grads, temp_restore, np_logsumexp
 
 
 class VAE(object):
@@ -449,6 +449,62 @@ class VAE(object):
             self.eval_input_tensor: x,
         }
 
+    def eval(self, k=128*80, init=True):
+        # logprob evaluation
+        if init:
+            sess = tf.Session()
+            self.sess = sess
+        else:
+            sess = self.sess
+        with self.sess.as_default():
+            if init:
+                self.init_opt(init=True)
+                self.init_opt(init=False, eval=True)
+                saver = tf.train.Saver()
+                if self.resume_from is not None:
+                    # print("not resuming")
+                    print("resuming from %s" % self.resume_from)
+                    # fn = tf.train.latest_checkpoint(self.resume_from)
+                    # print("latest ckpt: %s" % fn)
+                    saver.restore(sess, self.resume_from)
+                    print("resumed")
+            # import IPython; IPython.embed()
+
+            # true_vlb = tf.reduce_mean(
+            #     logsumexp(tf.reshape(
+            #         log_p_x_given_z - (kls if self.kl_coeff != 0. else 0.),
+            #         [-1, self.k])),
+            # ) - np.log(self.k)
+            logpxz, kls = self.sym_vars['eval']["log_p_x_given_z"], self.sym_vars['eval']["kls"]
+            logli = logpxz - kls
+            eval_input = self.eval_input_tensor
+            imgs = self.dataset.validation.images
+            total_bs = imgs.shape[0]
+            loglis_buffer = np.zeros([total_bs, k], dtype="float32")
+            with temp_restore(sess, self.ema):
+                for ki in range(k // self.k):
+                    start, end = (ki*self.k), ((ki+1)*self.k)
+                    progress = ProgressBar()
+                    for bi in progress(range(total_bs)):
+                        loglis_buffer[bi, start:end] = sess.run(
+                            logli,
+                            feed_dict={
+                                eval_input: imgs[bi:bi+1, :]
+                            }
+                        )
+                    logger.log("k=%s, logli=%s" % (
+                        end,
+                        np.mean(
+                            np_logsumexp(
+                                loglis_buffer[:, :end]
+                            ) - np.log(end)
+                        )
+                    ))
+                    # if ki == 0:
+                    #     import IPython; IPython.embed()
+
+
+
     def train(self):
         sess = tf.Session()
         self.sess = sess
@@ -687,6 +743,7 @@ class VAE(object):
 
                 # if epoch == 0:
                 #     tf.get_default_graph().finalize()
+            self.eval(self.k*36, init=False)
 
 
     def restore(self):

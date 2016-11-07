@@ -70,6 +70,21 @@ class types:
         def serialize(self, val):
             return str(int(val))
 
+    class UnsignedByte(Type):
+
+        def validate(self, val):
+            if isinstance(val, int):
+                assert 0 <= val <= 2 ** 8 - 1
+                return val
+            elif isinstance(val, float):
+                assert abs(val - int(val)) < 1e-8
+                return self.validate(int(val))
+            else:
+                raise ValueError()
+
+        def serialize(self, val):
+            return str(int(val))
+
     class String8(Type):
         def validate(self, val):
             if isinstance(val, str):
@@ -152,6 +167,8 @@ class Thing(Entry):
     scalex = types.Float()
     scaley = types.Float()
 
+    angle = types.UnsignedShort()
+
 
 class Vertex(Entry):
     x = types.SignedShort()
@@ -159,16 +176,35 @@ class Vertex(Entry):
 
 
 class Linedef(Entry):
+    id = types.UnsignedShort()
     v1 = types.UnsignedShort()
     v2 = types.UnsignedShort()
     sidefront = types.UnsignedShort()
     sideback = types.UnsignedShort()
     blocking = types.Bool()
+    dontpegtop = types.Bool()
+    dontpegbottom = types.Bool()
+    blockplayers = types.Bool()
+    special = types.UnsignedByte()
+    arg0 = types.UnsignedByte()
+    arg1 = types.UnsignedByte()
+    arg2 = types.UnsignedByte()
+    arg3 = types.UnsignedByte()
+    arg4 = types.UnsignedByte()
+    repeatspecial = types.Bool()
+    playerpush = types.Bool()
+    playercross = types.Bool()
+    firstsideonly = types.Bool()
 
 
 class Sidedef(Entry):
     sector = types.UnsignedShort()
     texturemiddle = types.String8()
+    texturetop = types.String8()
+    texturebottom = types.String8()
+    clipmidtex = types.Bool()
+    scalex_mid = types.Float()
+    scaley_mid = types.Float()
 
 
 class Sector(Entry):

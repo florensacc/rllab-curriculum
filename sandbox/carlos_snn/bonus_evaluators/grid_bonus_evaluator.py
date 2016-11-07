@@ -11,13 +11,15 @@ import matplotlib.pyplot as plt
 
 
 class GridBonusEvaluator(object):
-    def __init__(self, obs='com', env_spec=None, mesh_density=50):  #it's not great to have policy info here.. but handy for latent
+    def __init__(self, obs='com', env_spec=None, mesh_density=50, visitation_bonus=1.0, snn_H_bonus=0):  #it's not great to have policy info here.. but handy for latent
         self.mesh_density = mesh_density
         self.furthest = 0
         self.visitation_all = np.zeros((1, 1), dtype=int)
         self.num_latents = 0  # this will simply not be used if there are no latents (the same for the following 2)
         self.dict_visit = collections.OrderedDict()  # keys: latents (int), values: np.array with number of visitations
         self.visitation_by_lat = np.zeros((1, 1), dtype=int)  # used to plot: matrix with a number for each lat/rep
+        self.visitation_bonus = visitation_bonus
+        self.snn_H_bonus = snn_H_bonus
         # in case I'm gridding all the obs_dim (not just the com) --> for this I should use hashing, ow too high dim
         if env_spec:
             obs_dim = env_spec.observation_space.flat_dim
@@ -34,8 +36,10 @@ class GridBonusEvaluator(object):
             y_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -3] for path in paths]))))
         self.furthest = max(x_max, y_max)
         print('THE FUTHEST IT WENT COMPONENT-WISE IS: x_max={}, y_max={}'.format(x_max, y_max))
-        if 'agent_infos' in list(paths[0].keys()) and ('latents' in list(paths[0]['agent_infos'].keys()) or
-                                                               'selectors' in list(paths[0]['agent_infos'].keys())):
+        if 'agent_infos' in list(paths[0].keys()) and (('latents' in list(paths[0]['agent_infos'].keys())
+                                                        and np.size(paths[0]['agent_infos']['latents'])) or
+                                                           ('selectors' in list(paths[0]['agent_infos'].keys())
+                                                            and np.size(paths[0]['agent_infos']['selectors']))):
             selectors_name = 'latents' if 'latents' in list(paths[0]['agent_infos'].keys()) else 'selectors'
             self.num_latents = np.size(paths[0]["agent_infos"][selectors_name][0])
             # set all the labels for the latents and initialize the entries of dict_visit
@@ -68,12 +72,7 @@ class GridBonusEvaluator(object):
                 for com in coms:
                     self.visitation_all[com] += 1
 
-    def predict(self, path):
-        """
-        NEEDED: Gives the bonus!
-        :param path: reward computed path by path
-        :return: a 1d array
-        """
+    def predict_count(self, path):
         counts = []
         if 'env_infos' in list(path.keys()) and 'com' in list(path['env_infos'].keys()):
             com_x = np.ceil(((np.array(path['env_infos']['com'][:, 0]) + self.furthest) * self.mesh_density)).astype(int)
@@ -85,6 +84,31 @@ class GridBonusEvaluator(object):
         for com in coms:
             counts.append(self.visitation_all[com])
         return 1. / np.maximum(1., np.sqrt(counts))
+
+    def predict_entropy(self, path):
+        if 'env_infos' in list(path.keys()) and 'com' in list(path['env_infos'].keys()):
+            com_x = np.ceil(((np.array(path['env_infos']['com'][:, 0]) + self.furthest) * self.mesh_density)).astype(int)
+            com_y = np.ceil(((np.array(path['env_infos']['com'][:, 1]) + self.furthest) * self.mesh_density)).astype(int)
+        else:
+            com_x = np.ceil(((np.array(path['observations'][:, -2]) + self.furthest) * self.mesh_density)).astype(int)
+            com_y = np.ceil(((np.array(path['observations'][:, -3]) + self.furthest) * self.mesh_density)).astype(int)
+        coms = list(zip(com_x, com_y))
+        freqs = []
+        lats = [np.nonzero(lat)[0][0] for lat in path['agent_infos']['latents']]
+        for i, com in enumerate(coms):
+            freqs.append(self.dict_visit[lats[i]][com] / self.visitation_all[com])
+        return np.log(freqs)
+
+    def predict(self, path):
+        """
+        NEEDED: Gives the bonus!
+        :param path: reward computed path by path
+        :return: a 1d array
+        """
+        if self.snn_H_bonus:  # I need the if because the snn bonus is only available when there are latents
+            return self.snn_H_bonus * self.predict_entropy(path) + self.visitation_bonus * self.predict_count(path)
+        else:
+            return self.visitation_bonus * self.predict_count(path)
 
     def fit_after_process_samples(self, samples_data):
         """
@@ -100,8 +124,10 @@ class GridBonusEvaluator(object):
         overlap = 0  # keep track of the overlap
         delta = 1./self.mesh_density
         y, x = np.mgrid[-self.furthest:self.furthest+delta:delta, -self.furthest:self.furthest+delta:delta]
-        if 'agent_infos' in list(paths[0].keys()) and ('latents' in list(paths[0]['agent_infos'].keys()) or
-                                                               'selectors' in list(paths[0]['agent_infos'].keys())):
+        if 'agent_infos' in list(paths[0].keys()) and (('latents' in list(paths[0]['agent_infos'].keys())
+                                                        and np.size(paths[0]['agent_infos']['latents'])) or
+                                                           ('selectors' in list(paths[0]['agent_infos'].keys())
+                                                            and np.size(paths[0]['agent_infos']['selectors']))):
             # fix the colors for each latent
             num_colors = self.num_latents + 2  # +2 for the 0 and Repetitions NOT COUNTING THE WALLS
             # create a matrix with entries corresponding to the latent that was there (or other if several/wall/nothing)
@@ -129,10 +155,16 @@ class GridBonusEvaluator(object):
 
         log_dir = logger.get_snapshot_dir()
         exp_name = log_dir.split('/')[-1] if log_dir else '?'
-        ax.set_title('visitation: ' + exp_name)
+        ax.set_title('visitation_Bonus: ' + exp_name)
 
-        plt.savefig(osp.join(log_dir, 'visitation.png'))  # this saves the current figure, here f
+        plt.savefig(osp.join(log_dir, 'visitation_Gbonus.png'))  # this saves the current figure, here f
         plt.close()
+
+        plt.cla()
+        plt.clf()
+        plt.close('all')
+        # del fig, ax, cmap, cbar, map_plot
+        gc.collect()
 
         visitation_different = np.count_nonzero(self.visitation_all)
         logger.record_tabular('VisitationDifferents', visitation_different)
@@ -140,8 +172,19 @@ class GridBonusEvaluator(object):
         logger.record_tabular('VisitationMin', np.min(self.visitation_all))
         logger.record_tabular('VisitationMax', np.max(self.visitation_all))
 
-        plt.cla()
-        plt.clf()
-        plt.close('all')
-        # del fig, ax, cmap, cbar, map_plot
-        gc.collect()
+        if self.snn_H_bonus:
+            total_grid_entropy_bonus = np.sum([np.sum(self.predict_entropy(path)) for path in paths])
+            avg_grid_entropy_bonus = np.mean([np.sum(self.predict_entropy(path)) for path in paths])
+            logger.record_tabular('Total_Grid_EntropyBonus', total_grid_entropy_bonus)
+            logger.record_tabular('AvgPath_Grid_EntropyBonus', avg_grid_entropy_bonus)
+
+        # if self.visitation_bonus:
+        total_grid_count_bonus = np.sum([np.sum(self.predict_count(path)) for path in paths])
+        avg_grid_count_bonus = np.mean([np.sum(self.predict_count(path)) for path in paths])
+        logger.record_tabular('Total_Grid_CountBonus', total_grid_count_bonus)
+        logger.record_tabular('AvgPath_Grid_CountBonus', avg_grid_count_bonus)
+
+        total_grid_bonus = np.sum([np.sum(self.predict(path)) for path in paths])
+        avg_grid_bonus = np.mean([np.sum(self.predict(path)) for path in paths])
+        logger.record_tabular('TotalGridBonus', total_grid_bonus)
+        logger.record_tabular('AvgPathGridBonus', avg_grid_bonus)

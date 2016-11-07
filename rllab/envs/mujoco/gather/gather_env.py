@@ -356,3 +356,9 @@ class GatherEnv(Env, Serializable):
     def render(self):
         self.get_viewer()
         self.inner_env.render()
+
+    def get_param_values(self):
+        return {}
+
+    def set_param_values(self, value):
+        pass

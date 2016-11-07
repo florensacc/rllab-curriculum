@@ -15,8 +15,8 @@ def get_gpu_type(host):
             "rocky@" + host,
             " && ".join([
                 "sudo usermod -aG docker rocky",
-                # "sudo dpkg --configure -a",
-                # "sudo apt-get install -y awscli",
+                "sudo dpkg --configure -a",
+                "sudo apt-get install -y awscli",
                 # "sudo sed -i '/rocky/s!\(.*:\).*:\(.*\)!\\1/local_home/rocky:\\2!' /etc/passwd",
                 # "sudo mkdir -p /local_home/rocky",
                 # "sudo chown -R rocky:rocky /local_home/rocky"

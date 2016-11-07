@@ -248,6 +248,3 @@ def plot_textmap(content, agent_x, agent_y, out_width, out_height):
 
     img = cv2.resize(img, (out_width, out_height))
     return img
-
-    # cv2.imshow("Map", img)
-    # cv2.waitKey(15)

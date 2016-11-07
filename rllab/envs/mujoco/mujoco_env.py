@@ -242,3 +242,9 @@ class MujocoEnv(Env):
             self.model.data.ctrl = prev_ctrl
             self.model.data.act = prev_act
             self.model.forward()
+
+    def get_param_values(self):
+        return {}
+
+    def set_param_values(self, values):
+        pass

@@ -447,14 +447,22 @@ def run_experiment_lite(
             exp_prefix=exp_prefix,
             script=script,
             python_command=python_command,
+            sync_s3_pkl=sync_s3_pkl,
+            sync_log_on_termination=sync_log_on_termination,
+            periodic_sync=periodic_sync,
+            periodic_sync_interval=periodic_sync_interval,
+            sync_all_data_node_to_s3=sync_all_data_node_to_s3,
         )
     elif mode == "local":
         for task in batch_tasks:
             del task["remote_log_dir"]
             env = task.pop("env", None)
             command = to_local_command(
-                task, python_command=python_command, script=osp.join(config.PROJECT_PATH, script),
-                use_gpu=use_gpu)
+                task,
+                python_command=python_command,
+                script=osp.join(config.PROJECT_PATH, script),
+                use_gpu=use_gpu
+            )
             print(command)
             if dry:
                 return
