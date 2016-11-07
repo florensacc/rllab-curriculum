@@ -10,7 +10,7 @@ mpl.use('Agg')
 import matplotlib.pyplot as plt
 
 
-class GridBonusEvaluator(object):
+class snnH_GridBonusEvaluator(object):
     def __init__(self, obs='com', env_spec=None, mesh_density=50):  #it's not great to have policy info here.. but handy for latent
         self.mesh_density = mesh_density
         self.furthest = 0
@@ -70,6 +70,7 @@ class GridBonusEvaluator(object):
                 for com in coms:
                     self.visitation_all[com] += 1
 
+
     def predict(self, path):
         """
         NEEDED: Gives the bonus!
@@ -86,7 +87,7 @@ class GridBonusEvaluator(object):
         coms = list(zip(com_x, com_y))
         lats = [np.nonzero(lat)[0][0] for lat in path['agent_infos']['latents']]
         for i, com in enumerate(coms):
-            freqs.append(self.visitation_by_lat[lats[i]][com] / self.visitation_all[com])
+            freqs.append(self.dict_visit[lats[i]][com] / self.visitation_all[com])
         return np.log(freqs)
 
     def fit_after_process_samples(self, samples_data):
@@ -144,8 +145,8 @@ class GridBonusEvaluator(object):
         logger.record_tabular('VisitationMax', np.max(self.visitation_all))
         total_grid_bonus = np.sum([np.sum(self.predict(path)) for path in paths])
         avg_grid_bonus = np.mean([np.sum(self.predict(path)) for path in paths])
-        logger.record_tabular('TotalGridEntropyBonus', total_grid_bonus)
-        logger.record_tabular('AvgPathGridEntropyBonus', avg_grid_bonus)
+        logger.record_tabular('TotalGridBonus', total_grid_bonus)
+        logger.record_tabular('AvgPathGridBonus', avg_grid_bonus)
         plt.cla()
         plt.clf()
         plt.close('all')
