@@ -1,4 +1,4 @@
-#!/Users/dementrock/anaconda/envs/rllab3/bin/python
+#!/usr/bin/env python
 import datetime
 import json
 import logging
