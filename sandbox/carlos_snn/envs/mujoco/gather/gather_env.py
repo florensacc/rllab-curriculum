@@ -169,6 +169,7 @@ class GatherEnv(ProxyEnv, Serializable):
             coef_inner_rew=0.,
             *args, **kwargs
     ):
+        Serializable.quick_init(self, locals())
         self.n_apples = n_apples
         self.n_bombs = n_bombs
         self.activity_range = activity_range
@@ -219,8 +220,8 @@ class GatherEnv(ProxyEnv, Serializable):
         # pylint: disable=not-callable
         inner_env = model_cls(*args, file_path=file_path, **kwargs)
         # pylint: enable=not-callable
+        # import pdb; pdb.set_trace()
         ProxyEnv.__init__(self, inner_env)
-        Serializable.quick_init(self, locals())
 
     def reset(self):
         # super(GatherMDP, self).reset()
