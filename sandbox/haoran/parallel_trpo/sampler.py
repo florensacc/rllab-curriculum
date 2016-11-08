@@ -64,13 +64,27 @@ class WorkerBatchSampler(object):
     def process_samples(self, paths):
         baselines = []
         returns = []
+        discount = self.algo.discount
+        tmax = self.algo.tmax
         for path in paths:
             path_baselines = np.append(self.algo.baseline.predict(path), 0)
-            deltas = path["rewards"] + \
-                     self.algo.discount * path_baselines[1:] - \
-                     path_baselines[:-1]
-            path["advantages"] = special.discount_cumsum(
-                deltas, self.algo.discount * self.algo.gae_lambda)
+            path_len = len(path["rewards"])
+            if tmax < 0:
+                deltas = path["rewards"] + \
+                         self.algo.discount * path_baselines[1:] - \
+                         path_baselines[:-1]
+                path["advantages"] = special.discount_cumsum(
+                    deltas, discount * self.algo.gae_lambda)
+            else:
+                assert self.algo.gae_lambda == 1.0
+                path["advantages"] = np.zeros(path_len)
+                for t1 in range(path_len):
+                    t2 = t1 + tmax
+                    if t2 < path_len:
+                        path["advantages"][t1] = np.sum(path["rewards"][t1:t2+1] * (discount ** np.asarray(range(tmax+1)))) - path_baselines[t1] + path_baselines[t2] * (discount ** tmax)
+                    else:
+                        path["advantages"][t1] = np.sum(path["rewards"][t1:] * (discount ** np.asarray(range(path_len-t1)))) - path_baselines[t1]
+
             path["returns"] = special.discount_cumsum(path["rewards"], self.algo.discount)
             baselines.append(path_baselines[:-1])
             returns.append(path["returns"])
@@ -201,3 +215,21 @@ class WorkerBatchSampler(object):
 
         # NOTE: Removed baseline fitting to batch_polopt.
         return samples_data, dgnstc_data
+
+    def combine_samples(self, samples_data_list):
+        data_fields = samples_data_list[0].keys()
+
+        combined_data = dict()
+        for field in data_fields:
+            example = samples_data_list[0][field]
+            if isinstance(example, np.ndarray):
+                combined_data[field] = tensor_utils.concat_tensor_list([
+                    samples_data[field]
+                    for samples_data in samples_data_list
+                ])
+            elif isinstance(example, dict):
+                combined_data[field] = tensor_utils.concat_tensor_dict_list([
+                    samples_data[field]
+                    for samples_data in samples_data_list
+                ])
+        return combined_data
