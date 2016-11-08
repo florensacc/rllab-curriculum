@@ -41,5 +41,5 @@ class ProxyEnv(Env, Serializable):
     def get_param_values(self):
         return self._wrapped_env.get_param_values()
 
-    def set_param_values(self,params):
+    def set_param_values(self, params):
         self._wrapped_env.set_param_values(params)
