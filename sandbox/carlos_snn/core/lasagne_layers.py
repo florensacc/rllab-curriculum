@@ -71,15 +71,24 @@ class CropLayer(L.Layer):
 
 class ConstOutputLayer(L.Layer):
     def __init__(self, output_var=None, incoming=None, name=None, input_var=None, input_shape=None):
+        print('ConstOutputLayer is deprecated, use ParamLayer')
         super(ConstOutputLayer, self).__init__(incoming, name)
         self.output_var = output_var
 
     def get_output_shape_for(self, input_shape):
-        n_batch = input_shape[0]  # the batch size
+        # n_batch = input_shape[:-1]  # the batch size
         single_output_shape = self.output_var.get_value().shape
-        return (n_batch,) + single_output_shape  # this is supposed to create a tuple
+        # return (n_batch,) + single_output_shape  # this is supposed to create a tuple
+        return input_shape[:-1] + single_output_shape
 
     def get_output_for(self, all_obs_var, **kwargs):
-        n_batch = all_obs_var.shape[0]
-        out = TT.tile(self.output_var, (n_batch, 1))
-        return out
+        # n_batch = all_obs_var.shape[:-1]
+        # out = TT.tile(self.output_var, (n_batch, 1))
+        # out = TT.tile(self.output_var, TT.concatenate([n_batch, [1]]))
+        # return out
+        ndim = all_obs_var.ndim
+        reshaped_cnt = TT.reshape(self.output_var, (1,) * (ndim - 1) + self.output_var.get_value().shape)
+        tile_arg = TT.concatenate([all_obs_var.shape[:-1], [1]])
+        tiled = TT.tile(reshaped_cnt, tile_arg, ndim=ndim)
+        return tiled
+

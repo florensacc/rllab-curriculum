@@ -10,6 +10,7 @@ import cv2
 import time
 import sys, os
 from .ale_python_interface.ale_python_interface import ALEInterface
+import atari_py
 
 # Number of rows to crop off the bottom of the (downsampled) screen.
 # This is appropriate for breakout, but it may need to be modified
@@ -21,11 +22,11 @@ class ALEExperiment(object):
     def __init__(self, ale_args, agent, resized_width, resized_height,
                  resize_method, num_epochs, epoch_length, test_length,
                  frame_skip, death_ends_episode, max_start_nullops,
-                 length_in_episodes=False, max_episode_length=np.inf, observation_type="image", record_image=True, record_ram=False,
+                 length_in_episodes=False, max_episode_length=np.inf, game='', observation_type="image", record_image=True, record_ram=False,
                  ):
         self.ale_args = ale_args
         ale = ALEInterface()
-        ale.setInt('random_seed', ale_args["seed"])
+        ale.setInt(b'random_seed', ale_args["seed"])
 
         if ale_args["plot"]:
             if sys.platform == 'darwin':
@@ -33,14 +34,16 @@ class ALEExperiment(object):
                 pygame.init()
                 ale.setBool('sound', False) # Sound doesn't work on OSX
 
-        ale.setBool('display_screen', ale_args["plot"])
-        ale.setFloat('repeat_action_probability',
+        ale.setBool(b'display_screen', ale_args["plot"])
+        ale.setFloat(b'repeat_action_probability',
                      ale_args["repeat_action_probability"])
         rom = ale_args["rom_path"]
+        rom = atari_py.get_game_path(game)
         if not os.path.exists(rom):
             print("Rom file %s does not exist."%(rom))
             sys.exit(1)
-        ale.loadROM(rom)
+        # ale.loadROM(rom)
+        ale.loadROM(str.encode(rom))
         self.ale = ale
 
         self.agent = agent

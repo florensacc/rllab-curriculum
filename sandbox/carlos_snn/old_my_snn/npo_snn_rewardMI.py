@@ -35,7 +35,7 @@ class NPO_snn(BatchPolopt):
             hallucinator=None,
             latent_regressor=None,
             bonus_evaluator=None,
-            reward_coef_bonus=0,
+            reward_coef_bonus=None,
             reward_coef_mi=0,
             reward_coef_l2=0,
             L2_ub=1e6,
@@ -44,7 +44,7 @@ class NPO_snn(BatchPolopt):
             self_normalize=False,
             log_individual_latents=False,  # to log the progress of each individual latent
             log_deterministic=False,  # log the performance of the policy with std=0 (for each latent separate)
-            logged_MI=[],  # a list of tuples specifying the (obs,actions) that are regressed to find the latents
+            logged_MI=None,  # a list of tuples specifying the (obs,actions) that are regressed to find the latents
             n_samples=0,
             optimizer=None,
             optimizer_args=None,
@@ -57,19 +57,23 @@ class NPO_snn(BatchPolopt):
             optimizer = PenaltyLbfgsOptimizer(**optimizer_args)
         self.optimizer = optimizer
         self.step_size = step_size
-        self.log_individual_latents = log_individual_latents
         self.log_deterministic = log_deterministic
-        self.bonus_evaluator = bonus_evaluator
+
+        self.log_individual_latents = log_individual_latents
         self.hallucinator = hallucinator
+        self.n_samples = n_samples
+
         self.latent_regressor = latent_regressor
-        self.reward_coef_bonus = reward_coef_bonus
         self.reward_coef_mi = reward_coef_mi
         self.reward_coef_l2 = reward_coef_l2
         self.L2_ub = L2_ub
         self.reward_coef_kl = reward_coef_kl
         self.KL_ub = KL_ub
         self.self_normalize = self_normalize
-        self.n_samples = n_samples
+
+        self.bonus_evaluator = bonus_evaluator if bonus_evaluator else []
+        self.reward_coef_bonus = reward_coef_bonus if reward_coef_bonus else [0] * len(self.bonus_evaluator)
+
         # self.warm_pkl_path = warm_pkl_path
         super(NPO_snn, self).__init__(**kwargs)
 
@@ -90,7 +94,7 @@ class NPO_snn(BatchPolopt):
         #     warm_policy_params = old_policy.get_param_values()
         #     self.policy.set_param_values(warm_policy_params)
         # see what are the MI that want to be logged (it has to be done after initializing the super to have self.env)
-        self.logged_MI = logged_MI
+        self.logged_MI = logged_MI if logged_MI else []
         if self.logged_MI == 'all_individual':
             self.logged_MI = []
             for o in range(self.env.spec.observation_space.flat_dim):
@@ -123,9 +127,9 @@ class NPO_snn(BatchPolopt):
     # @overrides
     def process_samples(self, itr, paths):
         # count visitations or whatever the bonus wants to do. This should not modify the paths
-        if self.bonus_evaluator:
+        for eval in self.bonus_evaluator:
             logger.log("fitting bonus evaluator before processing...")
-            self.bonus_evaluator.fit_before_process_samples(paths)
+            eval.fit_before_process_samples(paths)
             logger.log("fitted")
         # save real undiscounted reward before changing them
         for i, path in enumerate(paths):
@@ -151,9 +155,13 @@ class NPO_snn(BatchPolopt):
                     path['true_rewards'] = list(path['rewards'])
                     path['rewards'] += self.reward_coef_mi * path[
                         'logli_latent_regressor']  # the logli of the latent is the variable of the mutual information
-                    if self.bonus_evaluator:
-                        bonuses = self.bonus_evaluator.predict(path)
-                        path['rewards'] += self.reward_coef_bonus * bonuses
+
+        # for the extra bonus
+        for b, eval in enumerate(self.bonus_evaluator):
+            for i, path in enumerate(paths):
+                bonuses = eval.predict(path)
+                path['rewards'] += self.reward_coef_bonus[b] * bonuses
+
         real_samples = ext.extract_dict(
             self.sampler.process_samples(itr, paths),
             # I don't need to process the hallucinated samples: the R, A,.. same!
@@ -391,8 +399,8 @@ class NPO_snn(BatchPolopt):
     @overrides
     def log_diagnostics(self, paths):
         BatchPolopt.log_diagnostics(self, paths)
-        if self.bonus_evaluator:
-            self.bonus_evaluator.log_diagnostics(paths)
+        for eval in self.bonus_evaluator:
+            eval.log_diagnostics(paths)
         if self.policy.latent_dim:
             if self.latent_regressor:
                 with logger.prefix(

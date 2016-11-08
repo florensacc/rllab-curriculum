@@ -225,6 +225,7 @@ class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
             weight_normalization=False,
             layer_normalization=False,
             action_param=None,
+            record_prev_states=False,
     ):
         Serializable.quick_init(self, locals())
         """
@@ -316,6 +317,7 @@ class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
             self.prev_actions = None
             self.prev_states = None
             self.dist = RecurrentCategorical(env_spec.action_space.n)
+            self.record_prev_states = record_prev_states
 
             out_layers = [prob_network.output_layer]
             if feature_network is not None:
@@ -407,11 +409,13 @@ class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
         probs, state_vec = self.f_step_prob(all_input, self.prev_states)
         actions = special.weighted_sample_n(probs, np.arange(self.action_space.n))
         prev_actions = self.prev_actions
-        self.prev_actions = self.action_space.flatten_n(actions)
-        self.prev_states = state_vec
         agent_info = dict(prob=probs)
         if self.state_include_action:
             agent_info["prev_action"] = np.copy(prev_actions)
+        if self.record_prev_states:
+            agent_info["prev_state"] = self.prev_states
+        self.prev_actions = self.action_space.flatten_n(actions)
+        self.prev_states = state_vec
         return actions, agent_info
 
     @property

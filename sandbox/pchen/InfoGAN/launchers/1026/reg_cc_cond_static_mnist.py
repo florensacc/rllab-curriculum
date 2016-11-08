@@ -213,6 +213,13 @@ for v in variants[:]:
         # dataset = Caltech101Dataset()
         dataset = BinarizedMnistDataset()
 
+        # if v["ds"] == "omni":
+        #     dataset = ResamplingBinarizedOmniglotDataset()
+        # elif v["ds"] == "mnist":
+        #     dataset = ResamplingBinarizedMnistDataset(disable_vali=True)
+        # else:
+        #     dataset = Caltech101Dataset()
+
         # init_size = v["dec_init_size"]
         # ch_size = zdim // init_size // init_size
         # tgt_dist = Mixture([

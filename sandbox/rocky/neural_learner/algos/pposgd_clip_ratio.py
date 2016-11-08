@@ -30,6 +30,9 @@ class PPOSGD(BatchPolopt):
             optimizer=None,
             step_size=0.01,
             min_n_epochs=2,
+            adaptive_learning_rate=False,
+            max_learning_rate=1e-3,
+            min_learning_rate=1e-5,
             **kwargs
     ):
         self.clip_lr = clip_lr
@@ -48,6 +51,9 @@ class PPOSGD(BatchPolopt):
         self.backtrack_ratio = backtrack_ratio
         self.step_size = step_size
         self.min_n_epochs = min_n_epochs
+        self.adaptive_learning_rate = adaptive_learning_rate
+        self.max_learning_rate = max_learning_rate
+        self.min_learning_rate = min_learning_rate
         policy = kwargs['policy']
         if optimizer is None:
             if policy.recurrent:
@@ -254,7 +260,7 @@ class PPOSGD(BatchPolopt):
                 if best_loss is None or surr_loss < best_loss:
                     best_loss = surr_loss
                     best_kl = mean_kl
-                    best_params = self.policy.get_param_values()
+                    best_params = self.policy.get_param_values(trainable=True)
             if mean_kl <= self.step_size and itr + 1 >= self.min_n_epochs:
                 penalty = self.f_decrease_penalty()
                 logger.log("Epoch %d; Loss %f; Mean KL: %f; decreasing penalty to %f and finish opt since KL and "
@@ -279,12 +285,18 @@ class PPOSGD(BatchPolopt):
         self.optimizer.optimize(all_inputs, callback=itr_callback)
 
         if best_params is not None:
-            self.policy.set_param_values(best_params)
+            self.policy.set_param_values(best_params, trainable=True)
 
-        if self.log_loss_kl_after or self.use_line_search:
+        if self.log_loss_kl_after or self.use_line_search or self.adaptive_learning_rate:
             logger.log("Computing loss / KL after training")
             surr_loss_after, kl_after = self.sliced_loss_kl(all_inputs)
             logger.log("Computed")
+
+            if self.adaptive_learning_rate:
+                if kl_after > self.step_size:
+                    self.optimizer.learning_rate = max(self.min_learning_rate, self.optimizer.learning_rate * 0.5)
+                else:
+                    self.optimizer.learning_rate = min(self.max_learning_rate, self.optimizer.learning_rate * 2)
 
             if self.use_line_search and kl_after > self.step_size:
                 logger.log("Performing line search to make sure KL is within range")
@@ -302,6 +314,11 @@ class PPOSGD(BatchPolopt):
                     logger.log("After shrinking step, loss = %f, Mean KL = %f" % (surr_loss_after, kl_after))
 
         # perform minibatch gradient descent on the surrogate loss, while monitoring the KL divergence
+
+        now_params = self.policy.get_param_values(trainable=True)
+
+        logger.record_tabular('dPolicyParamNorm', np.linalg.norm(now_params - prev_params))
+        logger.record_tabular('PolicyParamNorm', np.linalg.norm(now_params))
 
         if self.log_loss_kl_before:
             logger.record_tabular('SurrLossBefore', surr_loss_before)

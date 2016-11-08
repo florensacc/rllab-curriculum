@@ -14,6 +14,7 @@ from rllab.spaces import Box
 
 from rllab.envs.normalized_env import NormalizedEnv  # this is just to check if the env passed is a normalized maze
 from sandbox.carlos_snn.envs.mujoco.maze.maze_env import MazeEnv
+from sandbox.carlos_snn.envs.mujoco.gather.gather_env import GatherEnv
 
 from rllab.sampler.utils import \
     rollout  # I need this for logging the diagnostics: run the policy with all diff selectors
@@ -104,11 +105,11 @@ class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializabl
         print("Final attributes: ", self.selector_dim, self.old_hidden_sizes)
 
         # retrieve dimensions and check consistency
-        if isinstance(env, MazeEnv):
+        if isinstance(env, MazeEnv) or isinstance(env, GatherEnv):
             self.obs_robot_dim = env.robot_observation_space.flat_dim
             self.obs_maze_dim = env.maze_observation_space.flat_dim
         elif isinstance(env, NormalizedEnv):
-            if isinstance(env.wrapped_env, MazeEnv):
+            if isinstance(env.wrapped_env, MazeEnv) or isinstance(env.wrapped_env, GatherEnv):
                 self.obs_robot_dim = env.wrapped_env.robot_observation_space.flat_dim
                 self.obs_maze_dim = env.wrapped_env.maze_observation_space.flat_dim
             else:
@@ -126,7 +127,9 @@ class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializabl
         if self.external_selector:  # in case we want to fix the selector externally
             l_all_obs_var = L.InputLayer(shape=(None,) + (self.obs_robot_dim + self.obs_maze_dim,))
             all_obs_var = l_all_obs_var.input_var
-            l_selection = ConstOutputLayer(incoming=l_all_obs_var, output_var=self.shared_selector_var)
+            # l_selection = ConstOutputLayer(incoming=l_all_obs_var, output_var=self.shared_selector_var)
+            l_selection = ParamLayer(incoming=l_all_obs_var, num_units=self.selector_dim, param=self.shared_selector_var,
+                                     trainable=False)
             selection_var = L.get_output(l_selection)
         else:
             # create network with softmax output: it will be the selector!
@@ -157,7 +160,7 @@ class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializabl
         self.old_layers = []
         for i in range(self.selector_dim):
             mean_network = MLP(
-                input_layer=l_obs_robot,  # this is the layer that handles the integration of the selector
+                input_layer=l_obs_robot,
                 output_dim=self.action_dim,
                 hidden_sizes=self.old_hidden_sizes[i],
                 hidden_nonlinearity=hidden_nonlinearity,
@@ -197,13 +200,13 @@ class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializabl
         if self.json_paths and self.npz_paths:
             old_params_dict = {}
             for i, npz_path in enumerate(self.npz_paths):
-                params_dict = dict(np.load(os.path.join(config.PROJECT_PATH, npz_path[i])))
+                params_dict = dict(np.load(os.path.join(config.PROJECT_PATH, npz_path)))
                 renamed_warm_params_dict = {}
                 for key in params_dict.keys():
                     if key == 'output_log_std.param':
-                        old_params_dict['output_log_std{}.param'.format(i)] = params_dict.pop(key)
+                        old_params_dict['output_log_std{}.param'.format(i)] = params_dict[key]
                     else:
-                        old_params_dict['meanMLP{}_'.format(i)+key] = params_dict.pop(key)
+                        old_params_dict['meanMLP{}_'.format(i)+key] = params_dict[key]
             self.set_old_params(old_params_dict)
 
         elif self.pkl_paths:
@@ -251,7 +254,7 @@ class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializabl
         # if I want to monitor the selector output
         self._f_select = ext.compile_function(
             inputs=[all_obs_var],
-            outputs=[selection_var],
+            outputs=selection_var,
         )
 
     def get_old_params(self):

@@ -14,6 +14,7 @@ from rllab.spaces import Box
 
 from rllab.envs.normalized_env import NormalizedEnv  # this is just to check if the env passed is a normalized maze
 from sandbox.carlos_snn.envs.mujoco.maze.maze_env import MazeEnv
+from sandbox.carlos_snn.envs.mujoco.gather.gather_env import GatherEnv
 
 from rllab.sampler.utils import rollout  # I need this for logging the diagnostics: run the policy with all diff latents
 
@@ -100,7 +101,8 @@ class GaussianMLPPolicy_snn_hier(StochasticPolicy, LasagnePowered, Serializable)
 
         if self.json_path:  # there is another one after defining all the NN to warm-start the params of the SNN
             print("there is a json file so I will change the default args")
-            data = json.load(open(os.path.join(config.PROJECT_PATH, self.json_path), 'r'))  # I should do this with the json file
+            data = json.load(
+                open(os.path.join(config.PROJECT_PATH, self.json_path), 'r'))  # I should do this with the json file
             self.old_policy_json = data['json_args']["policy"]
             self.latent_dim = self.old_policy_json['latent_dim']
             self.latent_name = self.old_policy_json['latent_name']
@@ -140,11 +142,11 @@ class GaussianMLPPolicy_snn_hier(StochasticPolicy, LasagnePowered, Serializable)
         assert isinstance(env_spec.action_space, Box)
 
         # retrieve dimensions and check consistency
-        if isinstance(env, MazeEnv):
+        if isinstance(env, MazeEnv) or isinstance(env, GatherEnv):
             self.obs_robot_dim = env.robot_observation_space.flat_dim
             self.obs_maze_dim = env.maze_observation_space.flat_dim
         elif isinstance(env, NormalizedEnv):
-            if isinstance(env.wrapped_env, MazeEnv):
+            if isinstance(env.wrapped_env, MazeEnv) or isinstance(env.wrapped_env, GatherEnv):
                 self.obs_robot_dim = env.wrapped_env.robot_observation_space.flat_dim
                 self.obs_maze_dim = env.wrapped_env.maze_observation_space.flat_dim
             else:
@@ -160,7 +162,9 @@ class GaussianMLPPolicy_snn_hier(StochasticPolicy, LasagnePowered, Serializable)
         if self.external_latent:  # in case we want to fix the latent externally
             l_all_obs_var = L.InputLayer(shape=(None,) + (self.obs_robot_dim + self.obs_maze_dim,))
             all_obs_var = l_all_obs_var.input_var
-            l_selection = ConstOutputLayer(incoming=l_all_obs_var, output_var=self.shared_latent_var)
+            # l_selection = ConstOutputLayer(incoming=l_all_obs_var, output_var=self.shared_latent_var)
+            l_selection = ParamLayer(incoming=l_all_obs_var, num_units=self.latent_dim, param=self.shared_latent_var,
+                                     trainable=False)
             selection_var = L.get_output(l_selection)
 
         else:
@@ -192,12 +196,11 @@ class GaussianMLPPolicy_snn_hier(StochasticPolicy, LasagnePowered, Serializable)
         else:
             l_obs_snn = L.ConcatLayer([l_obs_robot, l_selection])
 
-
         action_dim = env_spec.action_space.flat_dim
 
         # create the action network
         mean_network = MLP(
-            input_layer=l_obs_snn,  # this is the layer that handles the integration of the selector
+            input_layer=l_obs_snn,  # input the layer that handles the integration of the selector
             output_dim=action_dim,
             hidden_sizes=self.hidden_sizes_snn,
             hidden_nonlinearity=hidden_nonlinearity,
@@ -259,6 +262,21 @@ class GaussianMLPPolicy_snn_hier(StochasticPolicy, LasagnePowered, Serializable)
         LasagnePowered.__init__(self, [l_mean, l_log_std])
         super(GaussianMLPPolicy_snn_hier, self).__init__(env_spec)
 
+        # debug
+        obs_snn_var = L.get_output(l_obs_snn)
+        self._l_obs_snn = ext.compile_function(
+            inputs=[all_obs_var],
+            outputs=obs_snn_var,
+        )
+        # self._log_std = ext.compile_function(
+        #     inputs=[all_obs_var],
+        #     outputs=log_std_var,
+        # )
+        self._mean = ext.compile_function(
+            inputs=[all_obs_var],
+            outputs=mean_var,
+        )
+
         self._f_dist = ext.compile_function(
             inputs=[all_obs_var],
             outputs=[mean_var, log_std_var],
@@ -266,7 +284,7 @@ class GaussianMLPPolicy_snn_hier(StochasticPolicy, LasagnePowered, Serializable)
         # if I want to monitor the selector output
         self._f_select = ext.compile_function(
             inputs=[all_obs_var],
-            outputs=[selection_var],
+            outputs=selection_var,
         )
 
     # # I shouldn't need the latent space anymore
@@ -282,7 +300,8 @@ class GaussianMLPPolicy_snn_hier(StochasticPolicy, LasagnePowered, Serializable)
 
     # another way will be to do as in parametrized.py and flatten_tensors (in numpy). But with this I check names
     def set_params_snn(self, snn_params):
-        if type(snn_params) is dict:  # if the snn_params are a dict with the param name as key and a numpy array as value
+        if type(
+                snn_params) is dict:  # if the snn_params are a dict with the param name as key and a numpy array as value
             params_value_by_name = snn_params
         elif type(snn_params) is list:  # if the snn_params are a list of theano variables  **NOT CHECKING THIS!!**
             params_value_by_name = {}
@@ -308,44 +327,12 @@ class GaussianMLPPolicy_snn_hier(StochasticPolicy, LasagnePowered, Serializable)
         return actions[0], {k: v[0] for k, v in outputs.items()}
 
     def get_actions(self, observations):
-        ##CF
-        # # how can I impose that I only reset for a whole rollout? before calling get_actions!!
-        # observations = np.array(observations)  # needed to do the outer product for the bilinear
-        # if self.latent_dim:
-        #     if self.resample:
-        #         latents = [self.latent_dist.sample(self.latent_dist_info) for _ in observations]
-        #         # print 'resampling the latents'
-        #     else:
-        #         if not np.size(self.latent_fix) == self.latent_dim:  # we decide to reset based on if smthing in the fix
-        #             # logger.log('Reset for latents: the latent_fix {} not match latent_dim{}'.format(self.latent_fix, self.latent_dim))
-        #             self.reset()
-        #         if len(self.pre_fix_latent) == self.latent_dim:  # If we have a pre_fix, reset will put the latent to it
-        #             # logger.log('Reset for latents: we have a pre_fix to fix!')
-        #             self.reset()  # this overwrites the latent sampled or in latent_fix
-        #         latents = np.tile(self.latent_fix, [len(observations), 1])  # maybe a broadcast operation better...
-        #         # print 'not resample, use latent_fix, obtaining: ', latents
-        #     if self.bilinear_integration:
-        #         # print 'the obs is: ' , observations, '\nwith time length: {}\n'.format(observations.shape[0])
-        #         # print 'the reshaped bilinear is:\n' , np.reshape(observations[:, np.newaxis, :] * latents[:, :, np.newaxis],
-        #         #                                    (observations.shape[0], -1) )
-        #         extended_obs = np.concatenate([observations, latents,
-        #                                        np.reshape(
-        #                                            observations[:, :, np.newaxis] * latents[:, np.newaxis, :],
-        #                                            (observations.shape[0], -1))],
-        #                                       axis=1)
-        #         # print 'Latents: {}, observations: {}'.format(latents, observations), \
-        #         #     'The extended obs are: ', extended_obs, \
-        #         #     '\ndone with the theano function it is', self._extended_obs_var(observations,latents)
-        #     else:
-        #         extended_obs = np.concatenate([observations, latents], axis=1)
-        # else:
-        #     latents = np.array([[]] * len(observations))
-        #     extended_obs = observations
-        # # print 'the extened_obs are:\n', extended_obs
-        # # make mean, log_std also depend on the latents (as observ.)
 
         selector_output = self._f_select(observations)
-        # print "the selector output is: ", selector_output
+        # # Debug
+        # print("the selector output is: ", selector_output)
+        # obs_snn = self._l_obs_snn(observations)
+        # print("the snn obs is: ", obs_snn)
 
         mean, log_std = self._f_dist(observations)
 
@@ -355,9 +342,6 @@ class GaussianMLPPolicy_snn_hier(StochasticPolicy, LasagnePowered, Serializable)
         else:
             rnd = np.random.normal(size=mean.shape)
             actions = rnd * np.exp(log_std) + mean
-        # print latents
-        # selector_output = self._f_select(observations)
-        # print(selector_output)
         return actions, dict(mean=mean, log_std=log_std, latents=selector_output)
 
     def set_pre_fix_latent(self, latent):

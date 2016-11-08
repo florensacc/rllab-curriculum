@@ -73,7 +73,7 @@ class SwimmerEnv(MujocoEnv, Serializable):
         reward = forward_reward - ctrl_cost
         done = False
         if self.sparse_rew:
-            if abs(self.get_body_com("torso")[0]) > 2.0:
+            if abs(self.get_body_com("torso")[0]) > 100.0:
                 reward = 1.0
                 done = True
             else:
@@ -106,6 +106,7 @@ class SwimmerEnv(MujocoEnv, Serializable):
             x_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -3] for path in paths]))))
             y_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -2] for path in paths]))))
         furthest = max(x_max, y_max)
+        furthest = 35
         print('THE FUTHEST IT WENT COMPONENT-WISE IS: x_max={}, y_max={}'.format(x_max, y_max))
         # if maze:
         #     x_max = max(scaling * len(
@@ -115,8 +116,10 @@ class SwimmerEnv(MujocoEnv, Serializable):
         delta = 1./mesh_density
         y, x = np.mgrid[-furthest:furthest+delta:delta, -furthest:furthest+delta:delta]
 
-        if 'agent_infos' in list(paths[0].keys()) and ('latents' in list(paths[0]['agent_infos'].keys()) or
-                                                       'selectors' in list(paths[0]['agent_infos'].keys())):
+        if 'agent_infos' in list(paths[0].keys()) and (('latents' in list(paths[0]['agent_infos'].keys())
+                                                        and np.size(paths[0]['agent_infos']['latents'])) or
+                                                           ('selectors' in list(paths[0]['agent_infos'].keys())
+                                                            and np.size(paths[0]['agent_infos']['selectors']))):
             selectors_name = 'latents' if 'latents' in list(paths[0]['agent_infos'].keys()) else 'selectors'
             dict_visit = collections.OrderedDict()  # keys: latents, values: np.array with number of visitations
             num_latents = np.size(paths[0]["agent_infos"][selectors_name][0])
@@ -128,7 +131,6 @@ class SwimmerEnv(MujocoEnv, Serializable):
             overlap = 0
             # now plot all the paths
             for path in paths:
-                # before this was [1][0] !! Idk why not it changed, but [0][0] should be the correct one!
                 lats = [np.nonzero(lat)[0][0] for lat in path['agent_infos'][selectors_name]]  # list of all lats by idx
                 # if self.ego_obs:
                 com_x = np.ceil(((np.array(path['env_infos']['com'][:, 0]) + furthest) * mesh_density)).astype(int)
@@ -142,7 +144,7 @@ class SwimmerEnv(MujocoEnv, Serializable):
 
             # fix the colors for each latent
             num_colors = num_latents + 2  # +2 for the 0 and Repetitions NOT COUNTING THE WALLS
-            cmap = plt.get_cmap('nipy_spectral', num_colors + 1)  # add one color for the walls
+            cmap = plt.get_cmap('nipy_spectral', num_colors)  # add one color for the walls
             # create a matrix with entries corresponding to the latent that was there (or other if several/wall/nothing)
             visitation_by_lat = np.zeros((2 * furthest * mesh_density + 1, 2 * furthest * mesh_density + 1))
             for i, visit in dict_visit.items():
@@ -172,7 +174,7 @@ class SwimmerEnv(MujocoEnv, Serializable):
             #     ))
             #     ax.annotate('G', xy=(0.5*(gx_min+gfurthest), 0.5*(gy_min+gfurthest)), color='g', fontsize=20)
             map_plot = ax.pcolormesh(x, y, visitation_by_lat, cmap=cmap, vmin=0.1,
-                                     vmax=num_latents + 2)  # before 1 (will it affect when no walls?)
+                                     vmax=num_latents + 1)  # before 1 (will it affect when no walls?)
             color_len = (num_colors - 1.) / num_colors
             ticks = np.arange(color_len / 2., num_colors - 1, color_len)
             cbar = fig.colorbar(map_plot, ticks=ticks)
@@ -192,6 +194,7 @@ class SwimmerEnv(MujocoEnv, Serializable):
 
             plt.pcolormesh(x, y, visitation_all, vmax=mesh_density)
             overlap = np.sum(np.where(visitation_all > 1, visitation_all, 0))  # sum of all visitations larger than 1
+
         ax.set_xlim([x[0][0], x[0][-1]])
         ax.set_ylim([y[0][0], y[-1][0]])
 
@@ -202,31 +205,47 @@ class SwimmerEnv(MujocoEnv, Serializable):
         plt.savefig(osp.join(log_dir, 'visitation.png'))  # this saves the current figure, here f
         plt.close()
 
+        radius_furthest075 = {True: 1e-6, False: 1}
+        radius_furthest05 = {True: 1e-6, False: 1}
+        radius_5 = {True: 1e-6, False: 1}
+
+        for i, row in enumerate(visitation_all):
+            for j, cell in enumerate(row):
+                dist_to_origin = np.sqrt((i * delta - furthest) ** 2 + (j * delta - furthest) ** 2)
+                if 0.75 * furthest - delta < dist_to_origin < 0.75 * furthest + delta:
+                    radius_furthest075[bool(visitation_all[i, j])] += 1
+                if 0.5 * furthest - delta < dist_to_origin < 0.5 * furthest + delta:
+                    radius_furthest05[bool(visitation_all[i, j])] += 1
+                if 5. - delta < dist_to_origin < 5. + delta:
+                    radius_5[bool(visitation_all[i, j])] += 1
+        logger.record_tabular('r_furthest075', radius_furthest075[True]/radius_furthest075[False])
+        logger.record_tabular('r_furthest05', radius_furthest05[True]/radius_furthest05[False])
+        logger.record_tabular('r_5', radius_5[True]/radius_5[False])
         total_visitation = np.count_nonzero(visitation_all)
         logger.record_tabular('VisitationTotal', total_visitation)
         logger.record_tabular('VisitationOverlap', overlap)
 
         # now downsample the visitation
-        for down in [5, 10, 20]:
-            visitation_down = np.zeros(tuple((i//down for i in visitation_all.shape)))
-            delta_down = delta * down
-            y_down, x_down = np.mgrid[-furthest:furthest+delta_down:delta_down, -furthest:furthest+delta_down:delta_down]
-            for i, row in enumerate(visitation_down):
-                for j, v in enumerate(row):
-                    visitation_down[i, j] = np.sum(visitation_all[down*i:down*(1+i), down*j:down*(j+1)])
-            plt.figure()
-            plt.pcolormesh(x_down, y_down, visitation_down, vmax=mesh_density)
-            plt.title('Visitation_down')
-            plt.xlim([x_down[0][0], x_down[0][-1]])
-            plt.ylim([y_down[0][0], y_down[-1][0]])
-            plt.title('visitation_down{}: {}'.format(down, exp_name))
-            plt.savefig(osp.join(log_dir, 'visitation_down{}.png'.format(down)))
-            plt.close()
-
-            total_visitation_down = np.count_nonzero(visitation_down)
-            overlap_down = np.sum(np.where(visitation_down > 1, 1, 0))  # sum of all visitations larger than 1
-            logger.record_tabular('VisitationTotal_down{}'.format(down), total_visitation_down)
-            logger.record_tabular('VisitationOverlap_down{}'.format(down), overlap_down)
+        # for down in [5, 10, 20]:
+        #     visitation_down = np.zeros(tuple((i//down for i in visitation_all.shape)))
+        #     delta_down = delta * down
+        #     y_down, x_down = np.mgrid[-furthest:furthest+delta_down:delta_down, -furthest:furthest+delta_down:delta_down]
+        #     for i, row in enumerate(visitation_down):
+        #         for j, v in enumerate(row):
+        #             visitation_down[i, j] = np.sum(visitation_all[down*i:down*(1+i), down*j:down*(j+1)])
+        #     plt.figure()
+        #     plt.pcolormesh(x_down, y_down, visitation_down, vmax=mesh_density)
+        #     plt.title('Visitation_down')
+        #     plt.xlim([x_down[0][0], x_down[0][-1]])
+        #     plt.ylim([y_down[0][0], y_down[-1][0]])
+        #     plt.title('visitation_down{}: {}'.format(down, exp_name))
+        #     plt.savefig(osp.join(log_dir, 'visitation_down{}.png'.format(down)))
+        #     plt.close()
+        #
+        #     total_visitation_down = np.count_nonzero(visitation_down)
+        #     overlap_down = np.sum(np.where(visitation_down > 1, 1, 0))  # sum of all visitations larger than 1
+        #     logger.record_tabular('VisitationTotal_down{}'.format(down), total_visitation_down)
+        #     logger.record_tabular('VisitationOverlap_down{}'.format(down), overlap_down)
 
         plt.cla()
         plt.clf()

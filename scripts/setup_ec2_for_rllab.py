@@ -20,6 +20,21 @@ INSTANCE_ROLE_NAME = PREFIX + "rllab"
 ALL_REGION_AWS_SECURITY_GROUP_IDS = {}
 ALL_REGION_AWS_KEY_NAMES = {}
 
+REGIONS = [
+    "ap-northeast-1",
+    "ap-northeast-2",
+    "ap-south-1",
+    "ap-southeast-1",
+    "ap-southeast-2",
+    "eu-central-1",
+    "eu-west-1",
+    "sa-east-1",
+    "us-east-1",
+    "us-east-2",
+    "us-west-1",
+    "us-west-2",
+]
+
 CONFIG_TEMPLATE = Template("""
 import os.path as osp
 import os
@@ -31,7 +46,7 @@ USE_TF = True
 AWS_REGION_NAME = "us-west-1"
 
 if USE_GPU:
-    DOCKER_IMAGE = "dementrock/rllab3-shared-gpu"
+    DOCKER_IMAGE = "dementrock/rllab3-shared-gpu-cuda80"
 else:
     DOCKER_IMAGE = "dementrock/rllab3-shared"
 
@@ -41,18 +56,19 @@ AWS_S3_PATH = "s3://$s3_bucket_name/rllab/experiments"
 
 AWS_CODE_SYNC_S3_PATH = "s3://$s3_bucket_name/rllab/code"
 
-# ALL_REGION_AWS_IMAGE_IDS = {
-#     "us-west-1": "ami-ad81c8cd",
-#     "us-west-2": "ami-7ea27a1e",
-#     "us-east-1": "ami-6b99d57c",
-# }
 ALL_REGION_AWS_IMAGE_IDS = {
-    "us-west-1": "ami-931a51f3", # rllab_cuda7.5_nvidia_docker
-    "us-west-2": "ami-9af95dfa",
-    "us-east-1": "ami-1c5a090b",
-    'us-east-2': 'ami-1b366c7e', # rllab_cuda7.5_nvidia_docker_aws_updated
-    'ap-northeast-2': 'ami-c933e7a7',
-    'ap-south-1': 'ami-aeb4c0c1',
+    "ap-northeast-1": "ami-c42689a5",
+    "ap-northeast-2": "ami-865b8fe8",
+    "ap-south-1": "ami-ea9feb85",
+    "ap-southeast-1": "ami-c74aeaa4",
+    "ap-southeast-2": "ami-0792ae64",
+    "eu-central-1": "ami-f652a999",
+    "eu-west-1": "ami-8c0a5dff",
+    "sa-east-1": "ami-3f2cb053",
+    "us-east-1": "ami-de5171c9",
+    "us-east-2": "ami-e0481285",
+    "us-west-1": "ami-efb5ff8f",
+    "us-west-2": "ami-53903033",
 }
 
 AWS_IMAGE_ID = ALL_REGION_AWS_IMAGE_IDS[AWS_REGION_NAME]
@@ -84,9 +100,7 @@ AWS_SECURITY_GROUP_IDS = ALL_REGION_AWS_SECURITY_GROUP_IDS[AWS_REGION_NAME]
 
 FAST_CODE_SYNC_IGNORES = [
     ".git",
-    "data/local",
-    "data/s3",
-    "data/video",
+    "data",
     "src",
     ".idea",
     ".pods",
@@ -124,9 +138,9 @@ def setup_iam():
         existing_role.load()
         # if role exists, delete and recreate
         response = query_yes_no(
-                "There is an existing role named %s. Proceed to delete everything rllab-related and recreate?" %
-                INSTANCE_ROLE_NAME,
-                default="no", allow_skip=True)
+            "There is an existing role named %s. Proceed to delete everything rllab-related and recreate?" %
+            INSTANCE_ROLE_NAME,
+            default="no", allow_skip=True)
         if response == "skip":
             return
         elif not response:
@@ -238,8 +252,7 @@ def setup_s3():
 
 
 def setup_ec2():
-    # for region in ["us-east-1", "us-west-1", "us-west-2"]:
-    for region in ["ap-northeast-2", "us-east-2", "ap-south-1", "us-east-1", "us-west-1", "us-west-2"]:
+    for region in REGIONS:
         print("Setting up region %s" % region)
 
         ec2 = boto3.resource(
@@ -305,7 +318,7 @@ def setup_ec2():
             handle.write(key_pair['KeyMaterial'] + '\n')
 
         # adding pem file to ssh
-        os.system("ssh-add %s" % file_name)
+        # os.system("ssh-add %s" % file_name)
 
         ALL_REGION_AWS_KEY_NAMES[region] = key_name
         print(ALL_REGION_AWS_KEY_NAMES)

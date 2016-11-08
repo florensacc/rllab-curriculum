@@ -64,7 +64,7 @@ class HierarchizedMultiPoliEnv(ProxyEnv, Serializable):
     def step(self, action):
         action = self.action_space.flatten(action)
         with self.low_policy.fix_selector(action):
-            print("The hier action is prefixed selector: {}".format(self.low_policy.pre_fix_selector))
+            # print("The hier action is prefixed selector: {}".format(self.low_policy.pre_fix_selector))
             frac_path = rollout(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg,
                                 animated=self.animate, speedup=1000)
             next_obs = frac_path['observations'][-1]
@@ -74,11 +74,11 @@ class HierarchizedMultiPoliEnv(ProxyEnv, Serializable):
             # it would be better to add an extra flagg to this rollout to check if it was done in the last step
             last_agent_info = dict((k, val[-1]) for k, val in frac_path['agent_infos'].items())
             last_env_info = dict((k, val[-1]) for k, val in frac_path['env_infos'].items())
-        print("finished step of {}, with cummulated reward of: {}".format(len(frac_path['observations']), reward))
-        print("Next obs: XX, rew: {}, last_env_info: {}, last_agent_info: {}".format(reward, last_env_info,
-                                                                                     last_agent_info))
+        # print("finished step of {}, with cummulated reward of: {}".format(len(frac_path['observations']), reward))
+        # print("Next obs: XX, rew: {}, last_env_info: {}, last_agent_info: {}".format(reward, last_env_info,
+        #                                                                              last_agent_info))
         if done:
-            print("\n ########## \n ***** done!! *****")
+            # print("\n ########## \n ***** done!! *****")
             # if done I need to PAD the tensor so there is no mismatch! Pad with what? with the last elem!
             full_path = tensor_utils.pad_tensor_dict(frac_path, self.time_steps_agg, mode='last')
         else:
@@ -89,11 +89,11 @@ class HierarchizedMultiPoliEnv(ProxyEnv, Serializable):
         # the last kwargs will all go to env_info, so path['env_info']['full_path'] gives a dict with the full path!
 
     @overrides
-    def log_diagnostics(self, paths):
+    def log_diagnostics(self, paths, *args, **kwargs):
         ## to use the visualization I need to append all paths!
         ## and also I need the paths to have the "agent_infos" key including the latent!!
         expanded_paths = [tensor_utils.flatten_first_axis_tensor_dict(path['env_infos']['full_path']) for path in paths]
-        self.wrapped_env.log_diagnostics(expanded_paths)
+        self.wrapped_env.log_diagnostics(expanded_paths, *args, **kwargs)
 
     def __str__(self):
         return "Hierarchized: %s" % self._wrapped_env

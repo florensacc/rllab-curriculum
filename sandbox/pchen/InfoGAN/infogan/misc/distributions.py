@@ -1574,6 +1574,7 @@ class ConvAR(Distribution):
             extra_nins=0,
             inp_keepprob=1.,
             legacy=False,
+            concat_elu=False,
     ):
         Serializable.quick_init(self, locals())
 
@@ -1618,8 +1619,9 @@ class ConvAR(Distribution):
         self._custom_phase = CustomPhase.init
 
         from prettytensor import UnboundVariable
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
         with pt.defaults_scope(
-            activation_fn=tf.nn.elu,
+            activation_fn=nn.concat_elu if concat_elu else tf.nn.elu,
             wnorm=True,
             custom_phase=UnboundVariable('custom_phase'),
             init_scale=0.1,
@@ -1675,18 +1677,18 @@ class ConvAR(Distribution):
                             )
                             if nin:
                                 cur = cur + 0.1 * cur.conv2d_mod(
-                                    1,
-                                    nr_channels,
-                                    prefix="nin",
-                                )
+                                        1,
+                                        nr_channels,
+                                        prefix="nin",
+                                    )
                         else:
                             raise Exception("what")
                     for ninidx in range(extra_nins):
                         cur = cur + 0.1 * cur.conv2d_mod(
-                            1,
-                            nr_channels,
-                            prefix="nin_ex_%s"%ninidx,
-                        )
+                                1,
+                                nr_channels,
+                                prefix="nin_ex_%s"%ninidx,
+                            )
 
 
                 self._iaf_template = \

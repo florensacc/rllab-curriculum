@@ -15,10 +15,15 @@ class DefaultSampleProcessor(object):
         baselines = []
         returns = []
 
-        if hasattr(self.algo.baseline, "predict_n"):
-            all_path_baselines = self.algo.baseline.predict_n(paths)
+        if len(paths) > 0 and "vf" in paths[0]["agent_infos"]:
+            all_path_baselines = [
+                p["agent_infos"]["vf"].flatten() for p in paths
+            ]
         else:
-            all_path_baselines = [self.algo.baseline.predict(path) for path in paths]
+            if hasattr(self.algo.baseline, "predict_n"):
+                all_path_baselines = self.algo.baseline.predict_n(paths)
+            else:
+                all_path_baselines = [self.algo.baseline.predict(path) for path in paths]
 
         for idx, path in enumerate(paths):
             path_baselines = np.append(all_path_baselines[idx], 0)
