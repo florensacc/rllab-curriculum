@@ -82,7 +82,7 @@ class SwimmerEnv(MujocoEnv, Serializable):
         return Step(next_obs, reward, done, com=com)
 
     @overrides
-    def log_diagnostics(self, paths):
+    def log_diagnostics(self, paths, prefix=''):
         # instead of just path["obs"][-1][-3] we will look at the distance to origin
         progs = [
             # np.linalg.norm(path["observations"][-1][-3:-1] - path["observations"][0][-3:-1])
@@ -90,13 +90,15 @@ class SwimmerEnv(MujocoEnv, Serializable):
             # gives (x,y) coord -not last z
             for path in paths
             ]
-        logger.record_tabular('AverageForwardProgress', np.mean(progs))
-        logger.record_tabular('MaxForwardProgress', np.max(progs))
-        logger.record_tabular('MinForwardProgress', np.min(progs))
-        logger.record_tabular('StdForwardProgress', np.std(progs))
-        self.plot_visitation(paths)
+        with logger.tabular_prefix(prefix):
+            logger.record_tabular('AverageForwardProgress', np.mean(progs))
+            logger.record_tabular('MaxForwardProgress', np.max(progs))
+            logger.record_tabular('MinForwardProgress', np.min(progs))
+            logger.record_tabular('StdForwardProgress', np.std(progs))
 
-    def plot_visitation(self, paths, mesh_density=50, maze=None, scaling=2):
+        self.plot_visitation(paths, prefix=prefix)
+
+    def plot_visitation(self, paths, mesh_density=50, maze=None, scaling=2, prefix=''):
         fig, ax = plt.subplots()
         # now we will grid the space and check how much of it the policy is covering
         if self.ego_obs:
@@ -106,7 +108,6 @@ class SwimmerEnv(MujocoEnv, Serializable):
             x_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -3] for path in paths]))))
             y_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -2] for path in paths]))))
         furthest = max(x_max, y_max)
-        furthest = 35
         print('THE FUTHEST IT WENT COMPONENT-WISE IS: x_max={}, y_max={}'.format(x_max, y_max))
         # if maze:
         #     x_max = max(scaling * len(
@@ -200,9 +201,9 @@ class SwimmerEnv(MujocoEnv, Serializable):
 
         log_dir = logger.get_snapshot_dir()
         exp_name = log_dir.split('/')[-1] if log_dir else '?'
-        ax.set_title('visitation: ' + exp_name)
+        ax.set_title(prefix + 'visitation: ' + exp_name)
 
-        plt.savefig(osp.join(log_dir, 'visitation.png'))  # this saves the current figure, here f
+        plt.savefig(osp.join(log_dir, prefix + 'visitation.png'))  # this saves the current figure, here f
         plt.close()
 
         radius_furthest075 = {True: 1e-6, False: 1}
@@ -218,12 +219,13 @@ class SwimmerEnv(MujocoEnv, Serializable):
                     radius_furthest05[bool(visitation_all[i, j])] += 1
                 if 5. - delta < dist_to_origin < 5. + delta:
                     radius_5[bool(visitation_all[i, j])] += 1
-        logger.record_tabular('r_furthest075', radius_furthest075[True]/radius_furthest075[False])
-        logger.record_tabular('r_furthest05', radius_furthest05[True]/radius_furthest05[False])
-        logger.record_tabular('r_5', radius_5[True]/radius_5[False])
-        total_visitation = np.count_nonzero(visitation_all)
-        logger.record_tabular('VisitationTotal', total_visitation)
-        logger.record_tabular('VisitationOverlap', overlap)
+        with logger.tabular_prefix(prefix):
+            logger.record_tabular('r_furthest075', radius_furthest075[True]/radius_furthest075[False])
+            logger.record_tabular('r_furthest05', radius_furthest05[True]/radius_furthest05[False])
+            logger.record_tabular('r_5', radius_5[True]/radius_5[False])
+            total_visitation = np.count_nonzero(visitation_all)
+            logger.record_tabular('VisitationTotal', total_visitation)
+            logger.record_tabular('VisitationOverlap', overlap)
 
         # now downsample the visitation
         # for down in [5, 10, 20]:
