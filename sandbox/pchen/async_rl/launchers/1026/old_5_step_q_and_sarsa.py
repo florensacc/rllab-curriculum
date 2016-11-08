@@ -67,7 +67,8 @@ class VG(VariantGenerator):
         # return ["space_invaders"]
         # return ["breakout"]
         # return ["seaquest", "pong", "space_invaders"]
-        return ["beamrider", "breakout", "qbert"]
+        # return ["beamrider", "breakout", "qbert"]
+        return ["beam_rider"]
 
     @variant
     def n_step(self, ):
@@ -184,18 +185,34 @@ for v in variants[:]:
     )
 
     # sys stuff
+    # comp_cores = max(int(20 / n_processes), 1)
+    # config.ENV = dict(
+    #     MKL_NUM_THREADS=comp_cores,
+    #     NUMEXPR_NUM_THREADS=comp_cores,
+    #     OMP_NUM_THREADS=comp_cores,
+    # )
+    # config.AWS_INSTANCE_TYPE = "c3.8xlarge"
+    # config.EBS_OPTIMIZED = False
+    # config.AWS_SPOT = True
+    # config.AWS_SPOT_PRICE = '1.66'
+    # config.AWS_REGION_NAME = 'us-west-1'
+    # # config.AWS_REGION_NAME = 'us-east-2'
+    # config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[config.AWS_REGION_NAME]
+    # config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[config.AWS_REGION_NAME]
+    # config.AWS_SECURITY_GROUP_IDS = config.ALL_REGION_AWS_SECURITY_GROUP_IDS[config.AWS_REGION_NAME]
+
     comp_cores = max(int(20 / n_processes), 1)
     config.ENV = dict(
         MKL_NUM_THREADS=comp_cores,
         NUMEXPR_NUM_THREADS=comp_cores,
         OMP_NUM_THREADS=comp_cores,
     )
-    config.AWS_INSTANCE_TYPE = "c3.8xlarge"
-    config.EBS_OPTIMIZED = False
+    config.AWS_INSTANCE_TYPE = "c4.8xlarge"
+    config.EBS_OPTIMIZED = True
     config.AWS_SPOT = True
     config.AWS_SPOT_PRICE = '1.66'
-    config.AWS_REGION_NAME = 'us-west-1'
-    # config.AWS_REGION_NAME = 'us-east-2'
+    # config.AWS_REGION_NAME = 'us-west-1'
+    config.AWS_REGION_NAME = 'us-east-2'
     config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[config.AWS_REGION_NAME]
     config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[config.AWS_REGION_NAME]
     config.AWS_SECURITY_GROUP_IDS = config.ALL_REGION_AWS_SECURITY_GROUP_IDS[config.AWS_REGION_NAME]
@@ -208,6 +225,9 @@ for v in variants[:]:
         variant=v,
         # mode="local",
         mode="ec2",
+        aws_config=dict(
+            placement=dict(AvailabilityZone="us-east-2c"),
+        )
         # terminate_machine=False,
         # mode="local_docker",
         #

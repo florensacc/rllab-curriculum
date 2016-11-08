@@ -113,7 +113,7 @@ class TBPTTOptimizer(Serializable):
         )
         self.diagnostic_vars = diagnostic_vars
 
-    def loss_diagnostics(self, inputs, extra_inputs=None):
+    def loss_diagnostics(self, inputs, extra_inputs=None, prev_states=None):
         N, T, _ = inputs[0].shape
         if self.n_steps is None:
             n_steps = T
@@ -131,10 +131,13 @@ class TBPTTOptimizer(Serializable):
 
         for batch_idx in range(0, N, batch_size):
             batch_sliced_inputs = [x[batch_idx:batch_idx + self.batch_size] for x in inputs]
-            states = np.tile(
-                self.rnn_init_state.eval().reshape((1, -1)),
-                (batch_sliced_inputs[0].shape[0], 1)
-            )
+            if prev_states is None:
+                states = np.tile(
+                    self.rnn_init_state.eval().reshape((1, -1)),
+                    (batch_sliced_inputs[0].shape[0], 1)
+                )
+            else:
+                states = prev_states[batch_idx:batch_idx + self.batch_size]
             for t in range(0, T, n_steps):
                 time_sliced_inputs = [x[:, t:t + n_steps] for x in batch_sliced_inputs]
                 loss, states, *diagnostics = self.f_loss_diagnostics(*(time_sliced_inputs + extra_inputs + [
@@ -144,7 +147,7 @@ class TBPTTOptimizer(Serializable):
                     diags[k].append(diag_val)
         return np.mean(losses), {k: np.mean(vals) for k, vals in diags.items()}
 
-    def optimize(self, inputs, extra_inputs=None, callback=None):
+    def optimize(self, inputs, extra_inputs=None, callback=None, prev_states=None):
 
         N, T, *_ = inputs[0].shape
         if self.n_steps is None:
@@ -174,10 +177,13 @@ class TBPTTOptimizer(Serializable):
             diags = OrderedDict([(k, []) for k in self.diagnostic_vars.keys()])
             for batch_idx in range(0, N, batch_size):
                 batch_sliced_inputs = [x[batch_idx:batch_idx + self.batch_size] for x in inputs]
-                states = np.tile(
-                    self.rnn_init_state.eval().reshape((1, -1)),
-                    (batch_sliced_inputs[0].shape[0], 1)
-                )
+                if prev_states is None:
+                    states = np.tile(
+                        self.rnn_init_state.eval().reshape((1, -1)),
+                        (batch_sliced_inputs[0].shape[0], 1)
+                    )
+                else:
+                    states = prev_states[batch_idx:batch_idx + self.batch_size]
                 for t in range(0, T, n_steps):
                     time_sliced_inputs = [x[:, t:t + n_steps] for x in batch_sliced_inputs]
                     # The last input is the valid mask. Only bother computing if at least one entry is valid

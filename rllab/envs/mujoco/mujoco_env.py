@@ -224,3 +224,27 @@ class MujocoEnv(Env):
 
     def action_from_key(self, key):
         raise NotImplementedError
+
+    def set_state_tmp(self, state, restore=True):
+        if restore:
+            prev_pos = self.model.data.qpos
+            prev_qvel = self.model.data.qvel
+            prev_ctrl = self.model.data.ctrl
+            prev_act = self.model.data.act
+        qpos, qvel = self.decode_state(state)
+        self.model.data.qpos = qpos
+        self.model.data.qvel = qvel
+        self.model.forward()
+        yield
+        if restore:
+            self.model.data.qpos = prev_pos
+            self.model.data.qvel = prev_qvel
+            self.model.data.ctrl = prev_ctrl
+            self.model.data.act = prev_act
+            self.model.forward()
+
+    def get_param_values(self):
+        return {}
+
+    def set_param_values(self, values):
+        pass

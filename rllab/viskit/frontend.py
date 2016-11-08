@@ -1,5 +1,5 @@
-
 import sys
+
 sys.path.append('.')
 import matplotlib
 import os
@@ -23,7 +23,7 @@ def sliding_mean(data_array, window=5):
     new_list = []
     for i in range(len(data_array)):
         indices = list(range(max(i - window + 1, 0),
-                        min(i + window + 1, len(data_array))))
+                             min(i + window + 1, len(data_array))))
         avg = 0
         for j in indices:
             avg += data_array[j]
@@ -52,10 +52,11 @@ def send_css(path):
     return flask.send_from_directory('css', path)
 
 
-def make_plot(plot_list, use_median=False, use_five_numbers=False, plot_width=None, plot_height=None, title=None,xlim=None,ylim=None):
+def make_plot(plot_list, use_median=False, use_five_numbers=False, plot_width=None, plot_height=None, title=None,
+              xlim=None, ylim=None):
     data = []
     p25, p50, p75 = [], [], []
-    p0, p100 = [],[]
+    p0, p100 = [], []
     for idx, plt in enumerate(plot_list):
         color = core.color_defaults[idx % len(core.color_defaults)]
         if use_median:
@@ -71,6 +72,7 @@ def make_plot(plot_list, use_median=False, use_five_numbers=False, plot_width=No
             p0.append(np.mean(plt.percentile0))
             p25.append(np.mean(plt.percentile25))
             p50.append(np.mean(plt.percentile50))
+            print('>>> mean: {}'.format(plt.mean))
             p75.append(np.mean(plt.percentile75))
             p100.append(np.mean(plt.percentile100))
             x = list(range(len(plt.percentile50)))
@@ -80,7 +82,7 @@ def make_plot(plot_list, use_median=False, use_five_numbers=False, plot_width=No
             y_extras = [
                 list(ys)
                 for ys in [plt.percentile0, plt.percentile100]
-            ]
+                ]
 
         else:
             x = list(range(len(plt.means)))
@@ -113,7 +115,7 @@ def make_plot(plot_list, use_median=False, use_five_numbers=False, plot_width=No
                 y=y_extra,
                 showlegend=False,
                 legendgroup=plt.legend,
-                line=dict(color=core.hex_to_rgb(color),dash='dot')
+                line=dict(color=core.hex_to_rgb(color), dash='dot')
                 # choices: solid, dot, dash, longdash, dashdot, longdashdot
             ))
 
@@ -123,6 +125,7 @@ def make_plot(plot_list, use_median=False, use_five_numbers=False, plot_width=No
             s += (str(num) + ',')
         s += ']'
         return s
+
     print(numeric_list_to_string(p25))
     print(numeric_list_to_string(p50))
     print(numeric_list_to_string(p75))
@@ -144,9 +147,9 @@ def make_plot(plot_list, use_median=False, use_five_numbers=False, plot_width=No
     fig_div = po.plot(fig, output_type='div', include_plotlyjs=False)
     if "footnote" in plot_list[0]:
         footnote = "<br />".join([
-            r"<span><b>%s</b></span>: <span>%s</span>" % (plt.legend, plt.footnote)
-            for plt in plot_list
-        ])
+                                     r"<span><b>%s</b></span>: <span>%s</span>" % (plt.legend, plt.footnote)
+                                     for plt in plot_list
+                                     ])
         return r"%s<div>%s</div>" % (fig_div, footnote)
     else:
         return fig_div
@@ -154,6 +157,8 @@ def make_plot(plot_list, use_median=False, use_five_numbers=False, plot_width=No
 
 def make_plot_eps(plot_list, use_median=False, counter=0):
     import matplotlib.pyplot as _plt
+    matplotlib.rcParams['pdf.fonttype'] = 42
+    matplotlib.rcParams['ps.fonttype'] = 42
     f, ax = _plt.subplots(figsize=(8, 5))
     for idx, plt in enumerate(plot_list):
         color = core.color_defaults[idx % len(core.color_defaults)]
@@ -167,62 +172,60 @@ def make_plot_eps(plot_list, use_median=False, counter=0):
             y = list(plt.means)
             y_upper = list(plt.means + plt.stds)
             y_lower = list(plt.means - plt.stds)
-        plt.legend = plt.legend.replace('rllab.algos.trpo.TRPO', 'TRPO')
-        plt.legend = plt.legend.replace('rllab.algos.vpg.VPG', 'REINFORCE')
-        plt.legend = plt.legend.replace('rllab.algos.erwr.ERWR', 'ERWR')
-        plt.legend = plt.legend.replace('sandbox.rein.algos.trpo_vime.TRPO', 'TRPO+VIME')
-        plt.legend = plt.legend.replace('sandbox.rein.algos.vpg_vime.VPG', 'REINFORCE+VIME')
-        plt.legend = plt.legend.replace('sandbox.rein.algos.erwr_vime.ERWR', 'ERWR+VIME')
-        plt.legend = plt.legend.replace('0.0001', '1e-4')
-        #         plt.legend = plt.legend.replace('0.001', 'TRPO+VIME')
-        #         plt.legend = plt.legend.replace('0', 'TRPO')
-        #         plt.legend = plt.legend.replace('0.005', 'TRPO+L2')
-
-        if idx == 0:
-            plt.legend = 'TRPO (0.0)'
-        if idx == 1:
-            plt.legend = 'TRPO+VIME (103.7)'
-        if idx == 2:
-            plt.legend = 'TRPO+L2 (0.0)'
+        axes = _plt.gca()
+        axes.set_xlim([0, 500])
+        if counter == 3:
+            axes.set_ylim([100, 1000])
+        if counter == 2:
+            axes.set_ylim([-1000, 10000])
+        if counter == 4:
+            axes.set_ylim([-50, 500])
+        if counter == 6:
+            axes.set_ylim([-1000, 7000])
 
         ax.fill_between(
             x, y_lower, y_upper, interpolate=True, facecolor=color, linewidth=0.0, alpha=0.3)
-        if idx == 2:
-            ax.plot(x, y, color=color, label=plt.legend, linewidth=2.0, linestyle="--")
-        else:
-            ax.plot(x, y, color=color, label=plt.legend, linewidth=2.0)
+        # if idx == 2:
+        #     ax.plot(x, y, color=color, label=plt.legend, linewidth=2.0, linestyle="--")
+        # if idx == 3:
+        #     ax.plot(x, y, color=color, label=plt.legend, linewidth=2.0, linestyle="-.")
+        # else:
+        ax.plot(x, y, color=color, label=plt.legend, linewidth=2.0)
         ax.grid(True)
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
-        if counter == 1:
-            #             ax.set_xlim([0, 120])
-            ax.set_ylim([-3, 60])
-            #             ax.set_xlim([0, 80])
+        # if counter == 1:
+        #     #             ax.set_xlim([0, 120])
+        #     ax.set_ylim([-3, 60])
+        #     #             ax.set_xlim([0, 80])
+        #
+        #     loc = 'upper left'
+        # elif counter == 2:
+        #     ax.set_ylim([-0.04, 0.4])
+        #
+        #     #             ax.set_ylim([-0.1, 0.4])
+        #     ax.set_xlim([0, 2000])
+        #     loc = 'upper left'
+        # elif counter == 3:
+        #     #             ax.set_xlim([0, 1000])
+        #     loc = 'lower right'
+        # elif counter == 4:
+        #     #             ax.set_xlim([0, 800])
+        #     #             ax.set_ylim([0, 2]
+        #     loc = 'lower right'
 
-            loc = 'upper left'
-        elif counter == 2:
-            ax.set_ylim([-0.04, 0.4])
-
-            #             ax.set_ylim([-0.1, 0.4])
-            ax.set_xlim([0, 2000])
-            loc = 'upper left'
-        elif counter == 3:
-            #             ax.set_xlim([0, 1000])
-            loc = 'lower right'
-        elif counter == 4:
-            #             ax.set_xlim([0, 800])
-            #             ax.set_ylim([0, 2])
-            loc = 'lower right'
-        leg = ax.legend(loc=loc, prop={'size': 12}, ncol=1)
-        for legobj in leg.legendHandles:
-            legobj.set_linewidth(5.0)
 
         def y_fmt(x, y):
             return str(int(np.round(x / 1000.0))) + 'K'
 
         import matplotlib.ticker as tick
         #         ax.xaxis.set_major_formatter(tick.FuncFormatter(y_fmt))
-        _plt.savefig('tmp' + str(counter) + '.pdf', bbox_inches='tight')
+    if counter == 3:
+        loc = 'upper left'
+        leg = ax.legend(loc=loc, prop={'size': 14}, ncol=1, labels=['AE', 'baseline', 'bass', 'SimHash'])
+        for legobj in leg.legendHandles:
+            legobj.set_linewidth(5.0)
+    _plt.savefig('/Users/rein/Desktop/plots/' + str(counter) + '.pdf', bbox_inches='tight')
 
 
 def summary_name(exp, selector=None):
@@ -244,27 +247,27 @@ def check_nan(exp):
 
 
 def get_plot_instruction(
-    plot_key,
-    split_key=None,
-    group_key=None,
-    filters=None,
-    use_median=False,
-    use_five_numbers=False,
-    only_show_best=False,
-    only_show_best_final=False,
-    gen_eps=False,
-    only_show_best_sofar=False,
-    clip_plot_value=None,
-    plot_width=None,
-    plot_height=None,
-    filter_nan=False,
-    smooth_curve=False,
-    custom_filter=None,
-    legend_post_processor=None,
-    legend_sort_processor=None,
-    normalize_error=False,
-    custom_series_splitter=None,
-    xlim=None,ylim=None,
+        plot_key,
+        split_key=None,
+        group_key=None,
+        filters=None,
+        use_median=False,
+        use_five_numbers=False,
+        only_show_best=False,
+        only_show_best_final=False,
+        gen_eps=False,
+        only_show_best_sofar=False,
+        clip_plot_value=None,
+        plot_width=None,
+        plot_height=None,
+        filter_nan=False,
+        smooth_curve=False,
+        custom_filter=None,
+        legend_post_processor=None,
+        legend_sort_processor=None,
+        normalize_error=False,
+        custom_series_splitter=None,
+        xlim=None, ylim=None,
 ):
     print(plot_key, split_key, group_key, filters)
     if filter_nan:
@@ -349,7 +352,7 @@ def get_plot_instruction(
                         if len(data) > 0:
                             progresses = [
                                 exp.progress.get(plot_key, np.array([np.nan])) for exp in data
-                            ]
+                                ]
                             #                             progresses = [progress[:500] for progress in progresses ]
                             sizes = list(map(len, progresses))
                             max_size = max(sizes)
@@ -359,7 +362,7 @@ def get_plot_instruction(
                             if only_show_best_final:
                                 progresses = np.asarray(progresses)[:, -1]
                             if only_show_best_sofar:
-                                progresses =np.max(np.asarray(progresses), axis=1)
+                                progresses = np.max(np.asarray(progresses), axis=1)
                             if use_median or use_five_numbers:
                                 medians = np.nanmedian(progresses, axis=0)
                                 regret = np.mean(medians)
@@ -432,7 +435,7 @@ def get_plot_instruction(
                                 progresses, q=100, axis=0)
                             if smooth_curve:
                                 percentile0 = sliding_mean(percentile0,
-                                                            window=window_size)
+                                                           window=window_size)
                                 percentile25 = sliding_mean(percentile25,
                                                             window=window_size)
                                 percentile50 = sliding_mean(percentile50,
@@ -440,7 +443,7 @@ def get_plot_instruction(
                                 percentile75 = sliding_mean(percentile75,
                                                             window=window_size)
                                 percentile100 = sliding_mean(percentile100,
-                                                            window=window_size)
+                                                             window=window_size)
                             if clip_plot_value is not None:
                                 percentile0 = np.clip(percentile0, -clip_plot_value, clip_plot_value)
                                 percentile25 = np.clip(percentile25, -clip_plot_value, clip_plot_value)
@@ -460,7 +463,7 @@ def get_plot_instruction(
                         else:
                             means = np.nanmean(progresses, axis=0)
                             stds = np.nanstd(progresses, axis=0)
-                            if normalize_error:# and len(progresses) > 0:
+                            if normalize_error:  # and len(progresses) > 0:
                                 stds /= np.sqrt(np.sum((1. - np.isnan(progresses)), axis=0))
                             if smooth_curve:
                                 means = sliding_mean(means,
@@ -473,7 +476,8 @@ def get_plot_instruction(
                             to_plot.append(
                                 ext.AttrDict(means=means, stds=stds, legend=legend_post_processor(legend)))
                         if len(to_plot) > 0 and len(data) > 0:
-                            to_plot[-1]["footnote"] = "%s; e.g. %s" % (kv_string_best_regret, data[0].params.get("exp_name", "NA"))
+                            to_plot[-1]["footnote"] = "%s; e.g. %s" % (
+                            kv_string_best_regret, data[0].params.get("exp_name", "NA"))
                         else:
                             to_plot[-1]["footnote"] = ""
                 else:
@@ -515,25 +519,30 @@ def get_plot_instruction(
                             progresses, q=25, axis=0)
                         percentile50 = np.nanpercentile(
                             progresses, q=50, axis=0)
+                        mean = np.nanmean(
+                            progresses
+                        )
                         percentile75 = np.nanpercentile(
                             progresses, q=75, axis=0)
                         percentile100 = np.nanpercentile(
                             progresses, q=100, axis=0)
                         if smooth_curve:
                             percentile0 = sliding_mean(percentile0,
-                                                        window=window_size)
+                                                       window=window_size)
                             percentile25 = sliding_mean(percentile25,
                                                         window=window_size)
                             percentile50 = sliding_mean(percentile50,
                                                         window=window_size)
+                            mean = sliding_mean(mean, window=window_size)
                             percentile75 = sliding_mean(percentile75,
                                                         window=window_size)
                             percentile100 = sliding_mean(percentile100,
-                                                        window=window_size)
+                                                         window=window_size)
                         if clip_plot_value is not None:
                             percentile0 = np.clip(percentile0, -clip_plot_value, clip_plot_value)
                             percentile25 = np.clip(percentile25, -clip_plot_value, clip_plot_value)
                             percentile50 = np.clip(percentile50, -clip_plot_value, clip_plot_value)
+                            mean = np.clip(mean, -clip_plot_value, clip_plot_value)
                             percentile75 = np.clip(percentile75, -clip_plot_value, clip_plot_value)
                             percentile100 = np.clip(percentile100, -clip_plot_value, clip_plot_value)
                         to_plot.append(
@@ -541,6 +550,7 @@ def get_plot_instruction(
                                 percentile0=percentile0,
                                 percentile25=percentile25,
                                 percentile50=percentile50,
+                                mean=mean,
                                 percentile75=percentile75,
                                 percentile100=percentile100,
                                 legend=legend_post_processor(group_legend)
@@ -568,7 +578,7 @@ def get_plot_instruction(
                 use_median=use_median, use_five_numbers=use_five_numbers,
                 title=fig_title,
                 plot_width=plot_width, plot_height=plot_height,
-                xlim=xlim,ylim=ylim,
+                xlim=xlim, ylim=ylim,
             ))
 
         if gen_eps:
@@ -634,10 +644,10 @@ def plot_div():
     else:
         custom_series_splitter = None
 
-    xub = parse_float_arg(args,"xub")
-    xlb = parse_float_arg(args,"xlb")
-    yub = parse_float_arg(args,"yub")
-    ylb = parse_float_arg(args,"ylb")
+    xub = parse_float_arg(args, "xub")
+    xlb = parse_float_arg(args, "xlb")
+    yub = parse_float_arg(args, "yub")
+    ylb = parse_float_arg(args, "ylb")
 
     plot_div = get_plot_instruction(
         plot_key=plot_key,
@@ -660,7 +670,7 @@ def plot_div():
         legend_sort_processor=legend_sort_processor,
         normalize_error=normalize_error,
         custom_series_splitter=custom_series_splitter,
-        xlim=[xlb,xub],ylim=[ylb,yub],
+        xlim=[xlb, xub], ylim=[ylb, yub],
     )
     # print plot_div
     return plot_div
@@ -694,11 +704,12 @@ def index():
                               for k, v in distinct_params]),
     )
 
+
 def reload_data():
     global exps_data
     global plottable_keys
     global distinct_params
-    exps_data = core.load_exps_data(args.data_paths,args.disable_variant)
+    exps_data = core.load_exps_data(args.data_paths, args.disable_variant)
     plottable_keys = sorted(list(
         set(flatten(list(exp.progress.keys()) for exp in exps_data))))
     distinct_params = sorted(core.extract_distinct_params(exps_data))
@@ -707,10 +718,10 @@ def reload_data():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("data_paths", type=str, nargs='*')
-    parser.add_argument("--prefix",type=str,nargs='?',default="???")
+    parser.add_argument("--prefix", type=str, nargs='?', default="???")
     parser.add_argument("--debug", action="store_true", default=False)
     parser.add_argument("--port", type=int, default=5000)
-    parser.add_argument("--disable-variant",default=False,action='store_true')
+    parser.add_argument("--disable-variant", default=False, action='store_true')
     args = parser.parse_args(sys.argv[1:])
 
     # load all folders following a prefix
@@ -719,7 +730,7 @@ if __name__ == "__main__":
         dirname = os.path.dirname(args.prefix)
         subdirprefix = os.path.basename(args.prefix)
         for subdirname in os.listdir(dirname):
-            path = os.path.join(dirname,subdirname)
+            path = os.path.join(dirname, subdirname)
             if os.path.isdir(path) and (subdirprefix in subdirname):
                 args.data_paths.append(path)
     print("Importing data from {path}...".format(path=args.data_paths))

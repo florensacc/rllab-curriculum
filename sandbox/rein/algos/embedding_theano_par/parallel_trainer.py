@@ -16,7 +16,7 @@ class ParallelTrainer(object):
         self._parallel_pool = mp.Pool(
             1
         )
-        self._n_parallel = 3#sandbox.rein.algos.embedding_theano_par.n_parallel.n_parallel_
+        self._n_parallel = sandbox.rein.algos.embedding_theano_par.n_parallel.n_parallel_
         self._model = None
         self._model_pool_args = None
         self._pool = None
@@ -208,7 +208,7 @@ class ParallelTrainer(object):
             done = 0
             old_running_avg = np.inf
             # first_run = True
-            while done < 7:
+            while done < 5:
                 # Load first batch of data outside of thread.
                 # load_data()
                 running_avg = 0.

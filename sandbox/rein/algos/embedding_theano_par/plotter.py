@@ -2,6 +2,9 @@ import numpy as np
 import os
 from rllab.misc import logger
 
+print("FIXME")
+logger._snapshot_dir = '/Users/rein/Desktop/'
+
 
 class Plotter:
     def __init__(self):
@@ -28,7 +31,7 @@ class Plotter:
             for idx in range(inputs.shape[0]):
                 cont_emb = arr_cont_emb[idx]
                 key = np.cast['int'](np.round(cont_emb))
-                key = key.reshape(-1, 8).mean(axis=1)
+                key = key.reshape(-1, 1).mean(axis=1)
                 key = np.cast['int'](np.round(key))
                 key[key == 0] = -1
                 # key = np.cast['int'](np.sign(np.asarray(key).dot(projection_matrix)))
@@ -72,7 +75,7 @@ class Plotter:
                                               'a') as counts_file:
                 cont_emb = arr_cont_emb[idx]
                 key = np.cast['int'](np.round(cont_emb))
-                key = key.reshape(-1, 8).mean(axis=1)
+                key = key.reshape(-1, 1).mean(axis=1)
                 key = np.cast['int'](np.round(key))
                 key[key == 0] = -1
                 # key = np.cast['int'](np.sign(np.asarray(key).dot(projection_matrix)))
@@ -155,6 +158,33 @@ class Plotter:
 
             plt.savefig(
                 logger._snapshot_dir + dir + '/model_{}_{}.png'.format(itr, idx), bbox_inches='tight')
+
+    def plot_actual_imgs(self, inputs, itr, dir='/imgs'):
+        import matplotlib.pyplot as plt
+        if not hasattr(self, '_figx'):
+            self._figx = plt.figure()
+            self._fig_2x = self._figx.add_subplot(111)
+            plt.tick_params(axis='both', which='both', bottom='off', top='off',
+                            labelbottom='off', right='off', left='off', labelleft='off')
+            self._im1x, self._im2x = None, None
+
+        if not os.path.exists(logger._snapshot_dir + dir):
+            os.makedirs(logger._snapshot_dir + dir)
+
+        # Plotting all images
+        for idx in range(inputs.shape[0]):
+
+            # input_im = (inputs[idx] + 1.) * 128
+            input_im = inputs[idx]
+            if self._im1x is None or self._im2x is None:
+                self._im2x = self._fig_2x.imshow(
+                    input_im, interpolation='none', vmin=0, vmax=255)
+
+            else:
+                self._im2x.set_data(input_im)
+
+            plt.savefig(
+                logger._snapshot_dir + dir + '/actual_{}_{}.png'.format(itr, idx), bbox_inches='tight')
 
     def plot_gen_imgs(self, model, inputs, targets, itr, dir='/imgs'):
         import matplotlib.pyplot as plt

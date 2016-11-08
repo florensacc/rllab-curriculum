@@ -37,6 +37,10 @@ class DoomPoEnv(DoomEnv, Serializable):
             version="v1",
             allow_backwards=True,
             living_reward=-0.01,
+            forced_visible_range=None,
+            margin=0,
+            rand_angle=False,
+            landmarks=False,
             *args,
             **kwargs):
         Serializable.quick_init(self, locals())
@@ -45,7 +49,8 @@ class DoomPoEnv(DoomEnv, Serializable):
         self.doom_scenario_path = resource_manager.get_file(
             *mkwad(
                 size=size, rand_start=rand_start, min_dist=min_dist, scale=scale, light_level=light_level,
-                seed=map_seed, n_trajs=n_trajs, version=version,
+                forced_visible_range=forced_visible_range, seed=map_seed, n_trajs=n_trajs, version=version,
+                margin=margin, rand_angle=rand_angle, landmarks=landmarks
             ),
             compress=True
         )

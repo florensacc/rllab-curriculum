@@ -33,7 +33,7 @@ def experiment_variant_generator():
     vg.add("seed", range(5), hide=True)
     vg.add("bonus_coeff", [0, 0.00001, 0.0001, 0.001, 0.01])
     vg.add("dim_key", [32, 64, 128])
-    vg.add("batch_size", [5000], hide=True)
+    vg.add("batch_size", [50000], hide=True)
     return vg
 
 

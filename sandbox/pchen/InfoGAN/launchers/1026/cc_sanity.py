@@ -134,8 +134,8 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ds(self):
         return [
-            "mnist",
-            # "omni"
+            # "mnist",
+            "omni"
         ]
 
     @variant(hide=True)

@@ -1416,6 +1416,10 @@ def logsumexp(x):
     x_max = tf.reduce_max(x, [1], keep_dims=True)
     return tf.reshape(x_max, [-1]) + tf.log(tf.reduce_sum(tf.exp(x - x_max), [1]))
 
+def np_logsumexp(x):
+    x_max = np.max(x, 1, keepdims=True)
+    return (x_max + np.log(np.sum(np.exp(x - x_max), 1, keepdims=True))).reshape([-1])
+
 from prettytensor.bookkeeper import Bookkeeper
 from collections import defaultdict
 class CustomBookkeeper(Bookkeeper):

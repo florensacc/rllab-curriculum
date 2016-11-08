@@ -3,12 +3,12 @@ import contextlib
 from path import Path
 import sys
 import pickle as pickle
-import random
 from rllab.misc.console import colorize, Message
 from collections import OrderedDict
 import numpy as np
 import operator
 from functools import reduce
+import random
 
 sys.setrecursionlimit(50000)
 
@@ -176,6 +176,8 @@ def path_len(p):
 
 def shuffled(sequence):
     deck = list(sequence)
+
+    # import random
     while len(deck):
         i = random.randint(0, len(deck) - 1)  # choose random card
         card = deck[i]  # take the card
@@ -192,6 +194,7 @@ def set_seed(seed):
     global seed_
     seed_ = seed
     import lasagne
+    # import random
     random.seed(seed)
     np.random.seed(seed)
     lasagne.random.set_rng(np.random.RandomState(seed))
@@ -210,6 +213,7 @@ def set_seed(seed):
 
 @contextlib.contextmanager
 def using_seed(seed):
+    # import random
     rand_state = random.getstate()
     np_rand_state = np.random.get_state()
     random.seed(seed)
