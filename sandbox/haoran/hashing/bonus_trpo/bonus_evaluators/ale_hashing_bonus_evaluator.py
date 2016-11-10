@@ -132,7 +132,12 @@ class ALEHashingBonusEvaluator(object):
                 if keys is None:
                     keys = new_keys
                 else:
-                    keys = np.concatenate([keys,new_keys])
+                    if isinstance(keys, np.ndarray):
+                        keys = np.concatenate([keys,new_keys])
+                    elif isinstance(keys, list):
+                        keys = keys + new_keys
+                    else:
+                        raise NotImplementedError
         return keys
 
     def fit_before_process_samples(self, paths):
