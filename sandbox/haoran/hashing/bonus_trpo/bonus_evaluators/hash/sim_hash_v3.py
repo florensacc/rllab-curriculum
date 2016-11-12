@@ -4,14 +4,16 @@ import numpy as np
 
 class SimHashV3(NaryHash):
     """
-    Same as SimHash, but defined as a subclass of BinaryHash
+    Same as SimHash, but defined as a subclass of NaryHash
     """
     def __init__(self,
             item_dim,
             dim_key=128,
             bucket_sizes=None,
             parallel=False,
+            standard_code=False,
         ):
+        self.standard_code = standard_code
         super().__init__(
             n=2,
             dim_key=dim_key,
@@ -30,4 +32,6 @@ class SimHashV3(NaryHash):
 
     def compute_nary_keys(self, items):
         binaries = np.sign(np.asarray(items).dot(self.projection_matrix))
+        if self.standard_code:
+            binaries = (0.5*(binaries+1)).astype(int)
         return binaries

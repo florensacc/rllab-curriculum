@@ -260,6 +260,8 @@ class ParallelBatchPolopt(RLAlgorithm):
                 if rank == 0:
                     logger.log("Collecting samples ...")
                 paths = self.sampler.obtain_samples()
+                if rank == 0:
+                    logger.log("Processing paths...")
                 self.process_paths(paths)
                 if self.bonus_evaluator is not None:
                     if rank == 0:
