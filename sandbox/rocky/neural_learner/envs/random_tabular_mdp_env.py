@@ -6,6 +6,7 @@ import numpy as np
 
 from rllab.envs.base import Step, Env
 from rllab.misc import special
+from rllab.misc.ext import using_seed
 from rllab.spaces import Discrete
 
 
@@ -71,12 +72,24 @@ class VecRandomTabularMDPEnv(object):
     def num_envs(self):
         return self.n_envs
 
-    def reset_trial(self, dones):
+    def reset_trial(self, dones, seeds=None):
         dones = np.cast['bool'](dones)
         self.states[dones] = 0
         size = (int(np.sum(dones)), self.env.n_states, self.env.n_actions)
-        self.Rs[dones] = np.ones(size) * self.env.mu0 + np.random.normal(size=size) * 1. / np.sqrt(self.env.tau0)
-        self.Ps[dones] = np.random.dirichlet(self.env.alpha0 * np.ones(self.env.n_states, dtype=np.float32), size=size)
+        if seeds is None or True:
+            self.Rs[dones] = np.ones(size) * self.env.mu0 + np.random.normal(size=size) * 1. / np.sqrt(self.env.tau0)
+            self.Ps[dones] = np.random.dirichlet(self.env.alpha0 * np.ones(self.env.n_states, dtype=np.float32),
+                                                 size=size)
+        else:
+            for done_idx, seed in zip(np.where(dones)[0], seeds):
+                with using_seed(seed):
+                    single_size = (self.env.n_states, self.env.n_actions)
+                    self.Rs[done_idx] = np.ones(single_size) * self.env.mu0 + np.random.normal(size=single_size) * 1. \
+                                                                              / np.sqrt(self.env.tau0)
+                    self.Ps[done_idx] = np.random.dirichlet(
+                        self.env.alpha0 * np.ones(self.env.n_states, dtype=np.float32),
+                        size=single_size)
+
         return self.reset(dones)
 
     def reset(self, dones):
