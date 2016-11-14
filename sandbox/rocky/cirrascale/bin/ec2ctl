@@ -358,8 +358,12 @@ def spot_history(instance_type, duration):
 
         print("Spot pricing information for instance type {type}".format(type=instance_type))
 
+        list_string = ''
         for zone, price in sorted(price_list, key=lambda x: x[1]):
             print("Zone: {zone}, Max Price: {price}".format(zone=zone, price=price))
+            list_string += "'{}', ".format(zone)
+        print(list_string)
+
 
 
 @cli.command()
