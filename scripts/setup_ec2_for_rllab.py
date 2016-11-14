@@ -300,13 +300,7 @@ def setup_ec2():
             key_pair = ec2_client.create_key_pair(KeyName=key_name)
         except botocore.exceptions.ClientError as e:
             if e.response['Error']['Code'] == 'InvalidKeyPair.Duplicate':
-                response = query_yes_no("Key pair with name %s exists. Proceed to delete and recreate?" % key_name,
-                                        "no", allow_skip=True)
-                if response == 'skip':
-                    print("Keeping your old key...")
-                    pass
-                elif not response:
-                    print("Exiting...")
+                if not query_yes_no("Key pair with name %s exists. Proceed to delete and recreate?" % key_name, "no"):
                     sys.exit()
                 print("Deleting existing key pair with name %s" % key_name)
                 ec2_client.delete_key_pair(KeyName=key_name)
