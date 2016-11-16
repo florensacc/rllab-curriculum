@@ -28,8 +28,8 @@ class HierarchizedSnnEnv(ProxyEnv, Serializable):
             npz_path=None,
             animate=False,
     ):
-        ProxyEnv.__init__(self, env)
         Serializable.quick_init(self, locals())
+        ProxyEnv.__init__(self, env)
         self.time_steps_agg = time_steps_agg
         self.animate = animate
         if json_path:

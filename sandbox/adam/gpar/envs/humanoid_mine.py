@@ -73,7 +73,6 @@ class HumanoidEnv(MujocoEnv, Serializable):
         alloc.xipos = np.zeros(xipos.size)  # make it write to contiguous memory
         alloc.xipos_shaped = alloc.xipos.reshape(xipos.shape)  # different view to same memory
 
-        # alloc.qpos = np.zeros(data.qpos.size)
         alloc.ctrl = np.zeros(data.ctrl.size)
         alloc.ctrl_set = np.zeros(alloc.ctrl.size)
         alloc.ctrl_set_ptr = alloc.ctrl_set.ctypes.data_as(POINTER(c_double))
@@ -84,6 +83,19 @@ class HumanoidEnv(MujocoEnv, Serializable):
         self.obs_list = ["qpos", "qvel", "cinert", "cvel", "qfrc_actuator", "cfrc_ext"]
         for obs in self.obs_list:
             alloc[obs] = np.zeros(getattr(data, obs).size)
+            # print(obs, "size: ", getattr(data, obs).size)
+
+        # Values for reset.
+        alloc.init_qpos = data.qpos.squeeze()
+        alloc.init_qpos_rand = np.zeros(alloc.init_qpos.shape)
+        alloc.init_qpos_ptr = alloc.init_qpos_rand.ctypes.data_as(POINTER(c_double))
+        alloc.init_qvel = data.qvel.squeeze()
+        alloc.init_qvel_rand = np.zeros(alloc.init_qvel.shape)
+        alloc.init_qvel_ptr = alloc.init_qvel_rand.ctypes.data_as(POINTER(c_double))
+        alloc.init_qacc = data.qacc.squeeze()
+        alloc.init_qacc_ptr = alloc.init_qacc.ctypes.data_as(POINTER(c_double))
+        alloc.init_ctrl = data.ctrl.squeeze()
+        alloc.init_ctrl_ptr = alloc.init_ctrl.ctypes.data_as(POINTER(c_double))
 
         self.alloc = alloc
 
@@ -136,14 +148,23 @@ class HumanoidEnv(MujocoEnv, Serializable):
         This way, using concatenate, is faster than writing to a pre-allocated
         observations array and returning a copy of it.
         """
-        for obs in self.obs_list:
-            getattr(self.model.data, obs + "_pre")(self.alloc[obs])
-        return np.concatenate([self.alloc.qpos[2:],
-                                      self.alloc.qvel,
-                                      self.alloc.cinert,
-                                      self.alloc.cvel,
-                                      self.alloc.qfrc_actuator,
-                                      self.alloc.cfrc_ext])
+        data = self.model.data
+        alloc = self.alloc
+        # This for loop is nice for the code but it's faster when written out.
+        # for obs in self.obs_list:
+        #     getattr(data, obs + "_pre")(alloc[obs])
+        data.qpos_pre(alloc.qpos)
+        data.qvel_pre(alloc.qvel)
+        data.cinert_pre(alloc.cinert)
+        data.cvel_pre(alloc.cvel)
+        data.qfrc_actuator_pre(alloc.qfrc_actuator)
+        data.cfrc_ext_pre(alloc.cfrc_ext)
+        return np.concatenate([alloc.qpos[2:],
+                               alloc.qvel,
+                               alloc.cinert,
+                               alloc.cvel,
+                               alloc.qfrc_actuator,
+                               alloc.cfrc_ext])
 
     def step(self, action):
         # pos_before = self.mass_center()  # New
@@ -177,11 +198,40 @@ class HumanoidEnv(MujocoEnv, Serializable):
     @overrides
     def reset(self, init_state=None):
         self.reset_mujoco(init_state)
-        self.model.forward()
-        self.current_com = self.model.data.com_subtree[0]
-        self.dcom = np.zeros_like(self.current_com)
+        # self.model.forward()  # appears unused
+        # self.current_com = self.model.data.com_subtree[0]  # appears unused
+        # self.dcom = np.zeros_like(self.current_com)  # appears unused
         self.pos_before = self.mass_center()
         return self.get_current_obs_pre()
+
+    @overrides
+    def reset_mujoco(self, init_state=None):
+        data = self.model.data
+        alloc = self.alloc
+        if init_state is None:
+            alloc.init_qpos_rand[:] = alloc.init_qpos + \
+                np.random.normal(size=alloc.init_qpos.shape) * 0.01
+            alloc.init_qvel_rand[:] = alloc.init_qvel + \
+                np.random.normal(size=alloc.init_qvel.shape) * 0.1
+            # init_qacc and init_ctrl not modified.
+        else:
+            start = 0
+            num = alloc.init_qpos.size
+            alloc.init_qpos_rand[:] = init_state[start:start + num]
+            start += num
+            num = alloc.init_qvel.size
+            alloc.init_qvel_rand[:] = init_state[start:start + num]
+            start += num
+            num = alloc.init_qacc.size
+            alloc.init_qacc[:] = init_state[start:start + num]
+            start += num
+            num = alloc.init_ctrl.size
+            alloc.init_ctrl[:] = init_state[start:start + num]
+
+        data.qpos_set_ptr(alloc.init_qpos_ptr)
+        data.qvel_set_ptr(alloc.init_qvel_ptr)
+        data.qacc_set_ptr(alloc.init_qacc_ptr)
+        data.ctrl_set_ptr(alloc.init_ctrl_ptr)
 
     # @overrides
     # def log_diagnostics(self, paths):
