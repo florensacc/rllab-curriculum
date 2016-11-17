@@ -47,13 +47,14 @@ class FixedCropEnv(Env):
         return Box(low=-1 * self.max_action, high=self.max_action, shape=(2,))
 
     def reset(self):
-        self.img = np.zeros((self.y, self.x, 3))
+        self.img = np.zeros((self.y, self.x, 3)) # I think this is correct
         self.img[:] = (255, 255, 255)
 
         self.square_to_circle = 2
-        init_distance = self.radius + self.max_init_distance + self.square_to_circle
-        self.circle_center = randint(init_distance, self.x - init_distance), \
-                             randint(init_distance, self.y - init_distance)
+        self.circle_center = randint(self.radius + self.max_init_distance + self.square_to_circle,
+                                     self.x - self.radius - self.max_init_distance - self.square_to_circle), \
+                            randint(self.radius + self.max_init_distance + self.square_to_circle,
+                                    self.y - self.radius - self.max_init_distance - self.square_to_circle)
         cv2.circle(self.img, self.circle_center, self.radius, blue, thickness = -1)
 
         self.box_x = self.circle_center[0] + randint(self.max_init_distance * -1, self.max_init_distance) - self.half_side
