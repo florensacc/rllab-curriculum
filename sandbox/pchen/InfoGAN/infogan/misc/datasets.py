@@ -1147,7 +1147,7 @@ class ChairDataset(object):
     @property
     def train(self):
         if self._train is None:
-            self._train = Dataset(self.transform(self._data))
+            self._train = Dataset(self.transform(self.data))
         return self._train
 
     def transform(self, data):
