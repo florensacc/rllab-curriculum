@@ -1,5 +1,5 @@
 # encoding: utf-8
-
+import numpy as np
 import lasagne.layers as L
 import lasagne.nonlinearities as LN
 import lasagne.init as LI
@@ -61,3 +61,40 @@ class ElemwiseDiffLayer(L.MergeLayer):
             else:
                 output = input
         return output
+
+class FlattenLayer(L.Layer):
+    """
+    A layer that flattens its input. The leading ``outdim-1`` dimensions of
+    the output will have the same shape as the input. The remaining dimensions
+    are collapsed into the last dimension.
+    Parameters
+    ----------
+    incoming : a :class:`Layer` instance or a tuple
+        The layer feeding into this layer, or the expected input shape.
+    outdim : int
+        The number of dimensions in the output.
+    See Also
+    --------
+    flatten  : Shortcut
+    """
+    def __init__(self, incoming, outdim=2, **kwargs):
+        super(FlattenLayer, self).__init__(incoming, **kwargs)
+        self.outdim = outdim
+
+        if outdim < 1:
+            raise ValueError('Dim must be >0, was %i', outdim)
+
+    def get_output_shape_for(self, input_shape):
+        to_flatten = input_shape[self.outdim - 1:]
+
+        if any(s is None for s in to_flatten):
+            flattened = None
+        else:
+            flattened = int(np.prod(to_flatten))
+
+        return input_shape[:self.outdim - 1] + (flattened,)
+
+    def get_output_for(self, input, **kwargs):
+        return input.flatten(self.outdim)
+
+flatten = FlattenLayer  # shortcut
