@@ -60,6 +60,9 @@ class ALEHackyHashV5(Hash):
     def init_rank(self,rank):
         self.rank = rank
 
+    def init_shared_dict(self, shared_dict):
+        self.shared_dict = shared_dict
+
 
     def compute_keys(self, items):
         """

@@ -393,7 +393,10 @@ class ParallelConjugateGradientOptimizer(Serializable):
             for inputs_grouped in subsample_grouped_inputs:
                 n_samples = len(inputs_grouped[0])
                 inds = np.random.choice(
-                    n_samples, int(n_samples * self._subsample_factor), replace=False)
+                    n_samples,
+                    max(1,int(n_samples * self._subsample_factor)),
+                    replace=False
+                )
                 subsample_inputs += tuple([x[inds] for x in inputs_grouped])
         else:
             subsample_inputs = inputs

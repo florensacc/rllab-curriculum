@@ -7,11 +7,6 @@ from rllab.misc.console import colorize
 
 parser = argparse.ArgumentParser()
 parser.add_argument('prefix', type=str, default='??????',nargs='?')
-parser.add_argument('--param', type=str, default='', nargs='?')
-parser.add_argument('--type', type=str, default='str', nargs='?')
-parser.add_argument('--old', type=str, default='', nargs='?')
-parser.add_argument('--new', type=str, default='', nargs='?')
-parser.add_argument('--yes', default=False, action='store_true')
 args = parser.parse_args()
 
 csv_files = []
@@ -29,6 +24,8 @@ for csv_file in csv_files:
     with open(csv_file) as f:
         reader = csv.DictReader(f)
         fieldnames = reader.fieldnames
+        if fieldnames is None:
+            continue
         data = dict()
         for key in fieldnames:
             data[key] = []

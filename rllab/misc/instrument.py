@@ -352,6 +352,7 @@ def run_experiment_lite(
         use_gpu=False,
         sync_s3_pkl=False,
         sync_s3_png=False,
+        sync_s3_log=False,
         sync_log_on_termination=True,
         confirm_remote=True,
         terminate_machine=True,
@@ -378,6 +379,8 @@ def run_experiment_lite(
     :param sync_s3_pkl: Whether to sync pkl files during execution of the experiment (they will always be synced at
     the end of the experiment)
     :param sync_s3_png: Whether to sync png files during execution of the experiment (they will always be synced at
+    the end of the experiment)
+    :param sync_s3_log: Whether to sync log files during execution of the experiment (they will always be synced at
     the end of the experiment)
     :param confirm_remote: Whether to confirm before launching experiments remotely
     :param terminate_machine: Whether to terminate machine after experiment finishes. Only used when using
@@ -520,6 +523,7 @@ def run_experiment_lite(
                    code_full_path=s3_code_path,
                    sync_s3_pkl=sync_s3_pkl,
                    sync_s3_png=sync_s3_png,
+                   sync_s3_log=sync_s3_log,
                    sync_log_on_termination=sync_log_on_termination,
                    periodic_sync=periodic_sync,
                    periodic_sync_interval=periodic_sync_interval)
@@ -716,6 +720,7 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
                script='scripts/run_experiment.py',
                aws_config=None, dry=False, terminate_machine=True, use_gpu=False, sync_s3_pkl=False,
                sync_s3_png=False,
+               sync_s3_log=False,
                sync_log_on_termination=True,
                periodic_sync=True, periodic_sync_interval=15):
     if len(params_list) == 0:
@@ -802,11 +807,12 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
         if periodic_sync:
             include_png = " --include '*.png' " if sync_s3_png else " "
             include_pkl = " --include '*.pkl' " if sync_s3_pkl else " "
+            include_log = " --include '*.log' " if sync_s3_log else " "
             sio.write("""
                 while /bin/true; do
-                    aws s3 sync --exclude '*' {include_png} {include_pkl} --include '*.csv' --include '*.json' {log_dir} {remote_log_dir} --region {aws_region}
+                    aws s3 sync --exclude '*' {include_png} {include_pkl} {include_log}--include '*.csv' --include '*.json' {log_dir} {remote_log_dir} --region {aws_region}
                     sleep {periodic_sync_interval}
-                done & echo sync initiated""".format(include_png=include_png, include_pkl=include_pkl,
+                done & echo sync initiated""".format(include_png=include_png, include_pkl=include_pkl, include_log=include_log,
                                                      log_dir=log_dir, remote_log_dir=remote_log_dir,
                                                      aws_region=config.AWS_REGION_NAME,
                                                      periodic_sync_interval=periodic_sync_interval))
@@ -893,10 +899,11 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
     )
 
     if len(instance_args["NetworkInterfaces"]) > 0:
-        disable_security_group = query_yes_no(
-            "Cannot provide both network interfaces and security groups info. Do you want to disable security group settings?",
-            default="yes",
-        )
+        # disable_security_group = query_yes_no(
+        #     "Cannot provide both network interfaces and security groups info. Do you want to disable security group settings?",
+        #     default="yes",
+        # )
+        disable_security_group = True
         if disable_security_group:
             instance_args.pop("SecurityGroups")
             instance_args.pop("SecurityGroupIds")
