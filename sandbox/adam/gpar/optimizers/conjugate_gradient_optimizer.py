@@ -4,10 +4,10 @@ from rllab.misc import logger
 from rllab.core.serializable import Serializable
 import theano.tensor as TT
 import theano
-import itertools
+# import itertools
 import numpy as np
 from rllab.misc.ext import sliced_fun
-from _ast import Num
+# from _ast import Num
 
 
 class PerlmutterHvp(Serializable):
@@ -298,6 +298,7 @@ class ConjugateGradientOptimizer(Serializable):
                 logger.log(
                     "Violated because constraint %s is violated" % self._constraint_name)
             self._target.set_param_values(prev_param, trainable=True)
+
         logger.log("backtrack iters: %d" % n_iter)
         logger.log("computing loss after")
         logger.log("optimization finished")
@@ -306,3 +307,13 @@ class ConjugateGradientOptimizer(Serializable):
         logger.record_tabular('MeanKLBefore', mean_kl_before)  # zero!
         logger.record_tabular('MeanKL', constraint_val)
         logger.record_tabular('dLoss', loss_before - loss)
+
+    def force_compile(self, inputs, extra_inputs=None):
+        inputs = tuple(inputs)
+        if extra_inputs is None:
+            extra_inputs = tuple()
+        # No longer sure how to call these outside of sliced_fun()
+        sliced_fun(self._opt_fun["f_loss_constraint"], 1)(inputs, extra_inputs)
+        flat_g = sliced_fun(self._opt_fun["f_grad"], 1)(inputs, extra_inputs)
+        Hx = self._hvp_approach.build_eval(inputs + extra_inputs)
+        Hx(flat_g)

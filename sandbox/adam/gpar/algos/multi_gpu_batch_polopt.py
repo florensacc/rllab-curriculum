@@ -4,6 +4,9 @@ from rllab.sampler.base import BaseSampler
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
 from rllab.policies.base import Policy
+import time
+# import theano.sandbox.cuda
+import multiprocessing as mp
 
 import gtimer as gt
 
@@ -36,7 +39,7 @@ class BatchSampler(BaseSampler):
             return paths_truncated
 
 
-class BatchPolopt(RLAlgorithm):
+class MultiGpuBatchPolopt(RLAlgorithm):
     """
     Base class for batch sampling-based policy optimization methods.
     This includes various policy gradient methods like vpg, npg, ppo, trpo, etc.
@@ -45,7 +48,8 @@ class BatchPolopt(RLAlgorithm):
     def __init__(
             self,
             env,
-            policy,
+            policy_cls,
+            policy_args,
             baseline,
             scope=None,
             n_itr=500,
@@ -62,6 +66,7 @@ class BatchPolopt(RLAlgorithm):
             whole_paths=True,
             sampler_cls=None,
             sampler_args=None,
+            n_gpu=1,
             **kwargs
     ):
         """
@@ -85,7 +90,8 @@ class BatchPolopt(RLAlgorithm):
         :param store_paths: Whether to save all paths data to the snapshot.
         """
         self.env = env
-        self.policy = policy
+        self.policy_cls = policy_cls
+        self.policy_args = policy_args
         self.baseline = baseline
         self.scope = scope
         self.n_itr = n_itr
@@ -100,19 +106,83 @@ class BatchPolopt(RLAlgorithm):
         self.positive_adv = positive_adv
         self.store_paths = store_paths
         self.whole_paths = whole_paths
+        self.n_gpu = n_gpu
         if sampler_cls is None:
             sampler_cls = BatchSampler
         if sampler_args is None:
             sampler_args = dict()
         self.sampler = sampler_cls(self, **sampler_args)
+        # self.policy = policy_cls(**policy_args)  # DON'T IMPORT LASAGNE YET
+
+    def __getstate__(self):
+        """ Do not pickle parallel objects """
+        return {k: v for k, v in iter(self.__dict__.items()) if k != "par_objs"}
+
+    def initialize_par_objs(self):
+        """
+        This method should provide, in self.par_objs, at a minimum:
+        1. a shutdown signal in 'shutdown',
+        2. an iteration barrier at 'barrier',
+        3. the multiprocessing processes targeting self.optimizing_worker, in
+           'workers'.
+        Workers must inherit (1) and (2).
+        """
+
+    def initialize_worker(self, rank, **kwargs):
+        """ Any set up for an individual optimization worker once it is spawned """
+        # import sys
+        # print("\n\n Rank: ", rank, "imported: ", sys.modules.keys())
+        gpu_str = 'gpu' + str(rank)
+        print("\n\n Rank: ", rank, "TRYING to get: ", gpu_str)
+        import theano.sandbox.cuda
+        theano.sandbox.cuda.use(gpu_str)
+        # print("\n\n Rank: ", rank, "Theano device: ", theano.config.device)
+        self.policy = self.policy_cls(**self.policy_args)
+        # self.policy.set_param_values(old_params, trainable=True)
+        self.optimizer.initialize_rank(rank)
+
+    def get_size_grad(self):
+        size_grad = mp.RawValue('i')
+        barrier = mp.Barrier(2)
+        worker = mp.Process(target=self.size_grad_worker,
+                            args=(size_grad, barrier))
+        worker.start()
+        barrier.wait()
+        worker.join()
+        print("\n\n", size_grad.value, "\n\n")
+        return int(size_grad.value)
+
+    def size_grad_worker(self, shared_var, barrier):
+        self.policy = self.policy_cls(**self.policy_args)
+        shared_var.value = len(self.policy.get_param_values(trainable=True))
+        barrier.wait()
 
     def start_worker(self):
         self.sampler.start_worker()
+        size_grad = self.get_size_grad()
+        self.initialize_par_objs(size_grad)
+        for w in self.par_objs.workers:
+            w.start()
+        self.initialize_worker(rank=0)
         if self.plot:
             plotter.init_plot(self.env, self.policy)
 
     def shutdown_worker(self):
         self.sampler.shutdown_worker()
+        self.par_objs.shutdown.value = True
+        self.par_objs.barrier.wait()
+        for w in self.par_objs.workers:
+            w.join()
+
+    def optimizing_worker(self, rank, assigned_paths):
+        self.initialize_worker(rank)
+        self.init_opt()
+        while True:
+            self.par_objs.barrier.wait()
+            if not self.par_objs.shutdown.value:
+                self.optimize_policy_worker(rank, assigned_paths)
+            else:
+                break
 
     def train(self):
         gt.reset_root()
@@ -128,7 +198,8 @@ class BatchPolopt(RLAlgorithm):
                 samples_data = self.sampler.process_samples(itr, paths)
                 gt.stamp('samples')
                 self.log_diagnostics(paths)
-                self.optimize_policy(itr, samples_data)
+                # self.optimize_policy(itr, samples_data)
+                self.optimize_policy(itr, paths)
                 gt.stamp('optimize')
                 logger.log("saving snapshot...")
                 params = self.get_itr_snapshot(itr, samples_data)
@@ -169,6 +240,10 @@ class BatchPolopt(RLAlgorithm):
         raise NotImplementedError
 
     def optimize_policy(self, itr, samples_data):
+        raise NotImplementedError
+
+    def optimize_policy_worker(self, rank, **kwargs):
+        """ Worker processes execute this method synchrnously with master """
         raise NotImplementedError
 
     def update_plot(self):

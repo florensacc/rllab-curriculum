@@ -1,42 +1,26 @@
 from rllab.algos.base import RLAlgorithm
-from rllab.sampler import parallel_sampler
-from rllab.sampler.base import BaseSampler
+# from rllab.sampler import parallel_sampler
+# from rllab.sampler.base import BaseSampler
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
-from rllab.policies.base import Policy
 
+from rllab.misc import ext
+import multiprocessing as mp
+import numpy as np
+import psutil
+from sandbox.adam.gpar.sampler.parallel_gpu_sampler import ParallelGpuSampler
+from sandbox.adam.gpar.sampler.gpar_multisampler import GParMultiSampler
+from sandbox.adam.gpar.sampler.pairwise_gpu_sampler import PairwiseGpuSampler
+from sandbox.adam.gpar.sampler.pairwise_gpu_sampler_2 import PairwiseGpuSampler_2
+from sandbox.adam.gpar.sampler.pairwise_gpu_sampler_3 import PairwiseGpuSampler_3
+from sandbox.adam.gpar.sampler.pairwise_gpu_sampler_4 import PairwiseGpuSampler_4
+from rllab.misc import tensor_utils
 import gtimer as gt
+import time
+import copy
 
 
-class BatchSampler(BaseSampler):
-    def __init__(self, algo):
-        """
-        :type algo: BatchPolopt
-        """
-        self.algo = algo
-
-    def start_worker(self):
-        parallel_sampler.populate_task(self.algo.env, self.algo.policy, scope=self.algo.scope)
-
-    def shutdown_worker(self):
-        parallel_sampler.terminate_task(scope=self.algo.scope)
-
-    def obtain_samples(self, itr):
-        cur_params = self.algo.policy.get_param_values()
-        paths = parallel_sampler.sample_paths(
-            policy_params=cur_params,
-            max_samples=self.algo.batch_size,
-            max_path_length=self.algo.max_path_length,
-            scope=self.algo.scope,
-        )
-        if self.algo.whole_paths:
-            return paths
-        else:
-            paths_truncated = parallel_sampler.truncate_paths(paths, self.algo.batch_size)
-            return paths_truncated
-
-
-class BatchPolopt(RLAlgorithm):
+class SingleGpuBatchPolopt(RLAlgorithm):
     """
     Base class for batch sampling-based policy optimization methods.
     This includes various policy gradient methods like vpg, npg, ppo, trpo, etc.
@@ -62,6 +46,9 @@ class BatchPolopt(RLAlgorithm):
             whole_paths=True,
             sampler_cls=None,
             sampler_args=None,
+            n_parallel=2,
+            set_cpu_affinity=True,
+            cpu_assignments=None,
             **kwargs
     ):
         """
@@ -101,9 +88,12 @@ class BatchPolopt(RLAlgorithm):
         self.store_paths = store_paths
         self.whole_paths = whole_paths
         if sampler_cls is None:
-            sampler_cls = BatchSampler
+            sampler_cls = ParallelGpuSampler
         if sampler_args is None:
             sampler_args = dict()
+        self.n_parallel = n_parallel
+        self.set_cpu_affinity = set_cpu_affinity
+        self.cpu_assignments = cpu_assignments
         self.sampler = sampler_cls(self, **sampler_args)
 
     def start_worker(self):
@@ -114,22 +104,27 @@ class BatchPolopt(RLAlgorithm):
     def shutdown_worker(self):
         self.sampler.shutdown_worker()
 
+    def force_compile(self):
+        logger.log("forcing compilation of all Theano functions")
+        logger.log("..compiling policy action getter")
+        paths = self.sampler.obtain_samples_example()
+        # logger.log("..compiling baseline fit (if applicable)")
+        samples_data, _ = self.sampler.organize_paths(paths)
+        all_input_values = self.prepare_opt_inputs(samples_data)
+        logger.log("..compiling optimizer functions")
+        self.optimizer.force_compile(all_input_values)
+        logger.log("all compilation complete")
+
     def train(self):
-        gt.reset_root()
         self.start_worker()
         self.init_opt()
-        gt.stamp('init')
-        loop = gt.timed_loop('main')
+        self.force_compile()
         for itr in range(self.current_itr, self.n_itr):
-            next(loop)
             with logger.prefix('itr #%d | ' % itr):
                 paths = self.sampler.obtain_samples(itr)
-                gt.stamp('paths')
                 samples_data = self.sampler.process_samples(itr, paths)
-                gt.stamp('samples')
                 self.log_diagnostics(paths)
                 self.optimize_policy(itr, samples_data)
-                gt.stamp('optimize')
                 logger.log("saving snapshot...")
                 params = self.get_itr_snapshot(itr, samples_data)
                 self.current_itr = itr + 1
@@ -144,10 +139,8 @@ class BatchPolopt(RLAlgorithm):
                     if self.pause_for_plot:
                         input("Plotting evaluation run: Press Enter to "
                                   "continue...")
-        loop.exit()
+
         self.shutdown_worker()
-        gt.stop()
-        print(gt.report())
 
     def log_diagnostics(self, paths):
         self.env.log_diagnostics(paths)
