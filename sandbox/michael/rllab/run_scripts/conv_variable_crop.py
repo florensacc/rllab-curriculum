@@ -1,12 +1,17 @@
 # from examples.distract_crop_env import DistractCropEnv
 from sandbox.michael.variable_crop_env import VariableCropEnv
-from rllab.policies.gaussian_conv_policy import GaussianConvPolicy
+# from sandbox.michael.policies.gaussian_conv_policy import GaussianConvPolicy
+# from sandbox.michael.gaussian_conv_policy import GaussianConvPolicy
 
 from rllab.algos.trpo import TRPO
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
-from rllab.policies.two_gaussian_conv_policy import TwoGaussianConvPolicy
+from rllab.policies.gaussian_conv_policy import GaussianConvPolicy
+from sandbox.dave.rllab.policies.depth_gaussian_mlp_policy import DepthGaussianMLPPolicy
+
+
+# from rllab.policies.two_gaussian_conv_policy import TwoGaussianConvPolicy
 
 stub(globals())
 
@@ -19,6 +24,16 @@ policy = GaussianConvPolicy(
     hidden_sizes= (256,),
     env_spec=env.spec,
 )
+
+policy = DepthGaussianMLPPolicy(
+    env_spec=env.spec,
+    # The neural network policy should have n hidden layers, each with k hidden units.
+    hidden_sizes=(64, 64, 64),
+    init_std=1,
+    # npz_path="/home/ignasi/GitRepos/rllab-private/data/local/pkl_files/caffe_AlexNet/python3/params.npz",
+    # json_path="/home/ignasi/GitRepos/rllab-goals/data/local/train-Lego/rand_init_angle_reward_shaping_continuex2_2016_10_17_12_48_20_0001/params.json",
+    )
+
 baseline = GaussianMLPBaseline(env_spec=env.spec)
 algo = TRPO(
     env=env,
@@ -35,7 +50,7 @@ run_experiment_lite(
     algo.train(),
     n_parallel=1,
     snapshot_mode="last",
-    exp_prefix="convvariable10",
+    exp_prefix="convvariable11",
     use_gpu=True
     # plot = True
 )

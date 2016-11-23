@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from random import randint
+import pickle
 
 
 def see_image_annotations(image_folder, image_name, annotation_file_name):
@@ -55,39 +56,104 @@ def get_image_annotations(image_folder, image_name, annotation_file_name):
         coordinates = content[i].split()
         frame = coordinates[0].zfill(8)
         coordinates = [int(float(x)) for x in coordinates]
-        top_left = coordinates[3], coordinates[4]
-        bottom_right = coordinates[7], coordinates[8]
+        top_left = min(coordinates[1], coordinates[3], coordinates[5], coordinates[7]), \
+                    min(coordinates[2], coordinates[4], coordinates[6], coordinates[8])
+        bottom_right = max(coordinates[1], coordinates[3], coordinates[5], coordinates[7]), \
+                    max(coordinates[2], coordinates[4], coordinates[6], coordinates[8])
         img = cv2.imread(image_full_path + frame + ".jpg", flags=cv2.IMREAD_COLOR)
         all_annotations.append((img, top_left, bottom_right))
     return all_annotations
         
-def get_all_data():
+def get_directories():
     """
-    Returns list of all image annotations. Each list is list of tuples
+    Returns list of lists.
+    The outside list is the length of the number of folders
+    Inner list contains videos within that category
     """
-    pass
+    print("Getting directories..")
+    import os
+    directories = []
+    for image_folder in os.listdir(image_path):
+        image_folder_type = image_path + image_folder
+        image_folder = image_folder + "/"
+        inner_list = []
+        for image_name in os.listdir(image_folder_type):
+            annotation_file_name = image_name + ".ann"
+            # print(image_folder, image_name + "/", annotation_file_name)
+            inner_list.append((image_folder, image_name + "/", annotation_file_name))
+        directories.append(inner_list)
+    return directories
 
-image_path = "tracking_data/imagedata++/"
-annotation_path = "tracking_data/alov300++_rectangleAnnotation_full/"
-image_folder = "01-Light/"
-image_name = "01-Light_video00003/"
-annotation_file_name = "01-Light_video00003.ann"
-get_training_data(image_folder, image_name, annotation_file_name)
-data = []
+def split_data(directories, training_frac = 0.5, min_samples = 5):
+    """
+    Returns two lists of lists. 
+    The first is the training data and the second is the validation data.
+    """
+    print("Splitting data into training and validation..")
+    training = []
+    validation = []
+    for image_folder in directories:
+        num_files = len(image_folder)
+        num_samples = int(num_files * training_frac)
+        if num_samples < min_samples:
+            num_samples = min(num_files, min_samples)
+        training_indices = np.random.choice(num_files, num_samples, replace = False)
+        train_list = []
+        val_list = []
 
-import os
-for image_folder in os.listdir(image_path):
-    image_folder_type = image_path + image_folder
-    image_folder = image_folder + "/"
-    for image_name in os.listdir(image_folder_type):
-        annotation_file_name = image_name + ".ann"
-        print(image_path)
-        print(annotation_path)
-        print(image_folder)
-        print(image_name)
-        print(annotation_file_name)
-        data.extend(get_training_data(image_folder, image_name + "/", annotation_file_name))
+        # construct training set and validation set
+        for i in range(num_files):
+            if i in training_indices:
+                train_list.append(image_folder[i])
+            else:
+                val_list.append(image_folder[i])
+        training.append(train_list)
+        validation.append(val_list)
+    return training, validation
 
+
+prefix = "sandbox/michael/"
+image_path = prefix + "tracking_data/imagedata++/"
+annotation_path = prefix + "tracking_data/alov300++_rectangleAnnotation_full/"
+if __name__ == "__main__":
+    prefix = ""
+    image_path = prefix + "tracking_data/imagedata++/"
+    annotation_path = prefix + "tracking_data/alov300++_rectangleAnnotation_full/"
+    directories = get_directories()
+    train, val = split_data(directories, training_frac = 0.2, min_samples = 2)
+    data = []
+    for folder in train:
+        print(folder)
+        for image_folder, image_name, annotation_file_name in folder:
+            data.append(get_image_annotations(image_folder, image_name, annotation_file_name))
+
+
+
+# Sample inputs to function
+# image_folder = "01-Light/"
+# image_name = "01-Light_video00003/"
+# annotation_file_name = "01-Light_video00003.ann"
+# get_training_data(image_folder, image_name, annotation_file_name)
+
+
+        # data.append(get_image_annotations(image_folder, image_name + "/", annotation_file_name))
+        # data.extend(get_training_data(image_folder, image_name + "/", annotation_file_name))
+
+
+# pickle.dump(directories, open("directory_structure.p", "wb"))
+# pickle.load(open( "directory_structure.p", "rb"))
+
+# pickle.dump(data, open("light.pkl", "wb"))
+# pickle.load(open( "directory_structure.p", "rb"))
+
+# data = []
+# directory_structure = pickle.load(open("directory_structure.p", "rb"))
+# for image_path, image_name, image_folder in directory_structure:
+#     if image_folder == "01-Light/":
+#         print(image_path, image_name, image_folder)
+#         print(len(data))
+#         data.extend(get_training_data(image_folder, image_name + "/", annotation_file_name))
+# pickle.dump(data, open("light.pkl", "wb"))
 
 # for root, dirs, files in os.walk(image_path):
 #     for file in files:

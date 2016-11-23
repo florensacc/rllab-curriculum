@@ -1,12 +1,15 @@
+
 from rllab.envs.base import Env
 from rllab.spaces import Box
 from rllab.envs.base import Step
 import cv2
 from random import randint
 from random import uniform
-from examples.process_alov_data import ProcessALOV
+# from examples.process_alov_data import ProcessALOV
 import numpy as np
+from sandbox.michael.process_alov_data_dev import *
 from rllab.misc import logger
+import pickle
 
 blue = (255, 0, 0)
 green = (0, 255, 0)
@@ -15,6 +18,7 @@ red = (0, 0, 255)
 
 # Environment where agent must identify new bounding box
 #TODO: 1. max_action and correctness should be proprotional to the size of the image and/or existing bounding box
+#TODO: agent receives off image view while reward is based as if image is centered
 #2. constructor should take in everything in processs alov, individual functions just get outputs
 
 class SingleVideoEnv(Env):
@@ -27,10 +31,20 @@ class SingleVideoEnv(Env):
         :param max_scale maximum scale of the circle
         :param min_scale minimum scale of the circle
         """
-        processor = ProcessALOV()
-        self.examples = processor.get_training_data(image_folder, image_name, annotation_file_name)
-        self.training_examples = len(self.examples)
-        self.max_action = max_action
+        # processor = ProcessALOV()
+        # self.examples = processor.get_training_data(image_folder, image_name, annotation_file_name)
+        # self.examples = pickle.load(open("sandbox/michael/light.pkl", "rb"))
+        directories = get_directories()
+        train, val = split_data(directories, training_frac=0.05, min_samples=2)
+        self.data = []
+        for folder in train:
+            print(folder)
+            for image_folder, image_name, annotation_file_name in folder:
+                # TODO: change to get_immage_annotations and update reset
+                # self.data.extend(get_training_data(image_folder, image_name, annotation_file_name))
+                self.data.append(get_image_annotations(image_folder, image_name, annotation_file_name))
+        self.training_examples = len(self.data)
+        self.max_action = max_action  # updated below
         self.max_scale = max_scale
         self.min_scale = min_scale
         self.side = side
@@ -62,14 +76,19 @@ class SingleVideoEnv(Env):
         Box is initialized to fixed size.
         :return:
         """
-        i = randint(0, self.training_examples - 1)
+        video = randint(0, self.training_examples - 1)
         if self.fixed_sample:
-            sample = self.examples[0]  # fixed sample for easier training
+            sample = self.data[0]  # fixed sample for easier training
         else:
-            sample = self.examples[i]
+            sample = self.data[video]
+        # self.old_img, self.tl, self.br = sample[0]
+        # self.new_img, self.new_tl, self.new_br = sample[1]
+        # print("hi")
+        # print (self.tl, self.br, self.new_tl, self.new_br)
 
-        self.old_img, self.tl, self.br = sample[0]
-        self.new_img, self.new_tl, self.new_br = sample[1]
+        frame = randint(0, len(sample) - 2)
+        self.old_img, self.tl, self.br = sample[frame]
+        self.new_img, self.new_tl, self.new_br = sample[frame + 1]
         self.x_max, self.y_max, _ = self.old_img.shape
         self.old_crop = cv2.resize(self.old_img[self.tl[1]:self.br[1], self.tl[0]:self.br[0], :], (self.side, self.side))
         self.x_center = int((self.br[1] + self.tl[1]) / 2)
@@ -154,7 +173,7 @@ class SingleVideoEnv(Env):
         cv2.imshow('image', copy_img)
         cv2.waitKey(0)
 
-
+        print("all images")
         print("target x: %d" % self.target_x_center)
         print("target y: %d" % self.target_y_center)
         print("target x scale: %d" % self.target_half_width)
