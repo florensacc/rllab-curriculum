@@ -4,7 +4,8 @@ from rllab.algos.trpo import TRPO
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
-from rllab.policies.two_gaussian_conv_policy import TwoGaussianConvPolicy
+# from rllab.policies.two_gaussian_conv_policy import TwoGaussianConvPolicy
+from sandbox.michael.rllab.policies.two_gaussian_conv_policy import TwoGaussianConvPolicy
 
 stub(globals())
 
@@ -14,8 +15,8 @@ env = normalize(SingleVideoEnv(image_folder = "01-Light/",
                                side = 50, min_scale=0.66, max_scale=1.5, fixed_sample=False))
 
 policy = TwoGaussianConvPolicy(
-    conv_filters=(32, 32),
-    conv_filter_sizes=((5,5), (5,5)),
+    conv_filters=(32, 32, 32),
+    conv_filter_sizes=((5,5), (5,5), (5, 5)),
     conv_strides=((1, 1)),
     conv_pads=((0, 0)),
     hidden_sizes= (128,128),
@@ -35,9 +36,9 @@ baseline = GaussianMLPBaseline(env_spec=env.spec)
 algo = TRPO(
     env=env,
     policy=policy,
-    max_path_length=2,
+    max_path_length=1,
     n_itr=20000, # iterations
-    batch_size= 8000, # trajectories = batch size / max_path_length
+    batch_size= 5000, # trajectories = batch size / max_path_length
     baseline=baseline,
     optimizer_args={'num_slices': 20},
     # plot = True
@@ -48,7 +49,7 @@ run_experiment_lite(
     n_parallel=1,
     snapshot_mode="last",
     exp_prefix="video",
-    exp_name="practice22",
+    exp_name="practice24",
     use_gpu=True
     # plot = True
 )
