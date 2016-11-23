@@ -51,6 +51,8 @@ class MultiGpuBatchPolopt(RLAlgorithm):
             policy_cls,
             policy_args,
             baseline,
+            network_cls=None,
+            network_args=None,
             scope=None,
             n_itr=500,
             start_itr=0,
@@ -90,9 +92,12 @@ class MultiGpuBatchPolopt(RLAlgorithm):
         :param store_paths: Whether to save all paths data to the snapshot.
         """
         self.env = env
+        # self.policy = policy
         self.policy_cls = policy_cls
         self.policy_args = policy_args
         self.baseline = baseline
+        self.network_cls = network_cls
+        self.network_args = network_args
         self.scope = scope
         self.n_itr = n_itr
         self.current_itr = start_itr
@@ -133,10 +138,13 @@ class MultiGpuBatchPolopt(RLAlgorithm):
         # import sys
         # print("\n\n Rank: ", rank, "imported: ", sys.modules.keys())
         gpu_str = 'gpu' + str(rank)
-        print("\n\n Rank: ", rank, "TRYING to get: ", gpu_str)
+        print("\nRank: ", rank, "TRYING to get: ", gpu_str)
         import theano.sandbox.cuda
         theano.sandbox.cuda.use(gpu_str)
         # print("\n\n Rank: ", rank, "Theano device: ", theano.config.device)
+        if self.network_cls is not None:
+            network = self.network_cls(**self.network_args)
+            self.policy_args['prob_network'] = network
         self.policy = self.policy_cls(**self.policy_args)
         # self.policy.set_param_values(old_params, trainable=True)
         self.optimizer.initialize_rank(rank)
@@ -153,6 +161,9 @@ class MultiGpuBatchPolopt(RLAlgorithm):
         return int(size_grad.value)
 
     def size_grad_worker(self, shared_var, barrier):
+        if self.network_cls is not None:
+            network = self.network_cls(**self.network_args)
+            self.policy_args['prob_network'] = network
         self.policy = self.policy_cls(**self.policy_args)
         shared_var.value = len(self.policy.get_param_values(trainable=True))
         barrier.wait()

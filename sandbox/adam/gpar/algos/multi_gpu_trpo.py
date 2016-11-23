@@ -54,6 +54,8 @@ class MultiGpuTRPO(MultiGpuNPO):
             samples_data,
             "observations", "actions", "advantages"
         ))
+        print('copy test:\n')
+        print('are they the same object: ', all_input_values[0] is samples_data["observations"])
         agent_infos = samples_data["agent_infos"]
         state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
         dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
@@ -71,8 +73,8 @@ class MultiGpuTRPO(MultiGpuNPO):
         data_boundaries = [int(total_length / self.n_gpu) * i
             for i in range(1, self.n_gpu + 1)]
         gt.stamp('boundaries')
-        assigned_paths = [list()] * self.n_gpu
-        n_samples = [None] * self.n_gpu
+        assigned_paths = [list() for _ in range(self.n_gpu)]
+        n_samples = [None for _ in range(self.n_gpu)]
         prev_cum_length = 0
         i = 0
         for path, cum_length in zip(paths, cum_lengths[1:]):
@@ -117,7 +119,7 @@ class MultiGpuTRPO(MultiGpuNPO):
     def optimize_policy_worker(self, rank, assigned_paths):
         # master writes to assigned_paths
         p = psutil.Process()
-        p.cpu_affinity([1])
+        p.cpu_affinity([rank])
         my_samples_data, _ = self.sampler.organize_paths(assigned_paths)
         my_input_values = self.prepare_opt_inputs(my_samples_data)
         self.optimizer.optimize_worker(my_input_values,

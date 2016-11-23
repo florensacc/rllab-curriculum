@@ -133,7 +133,8 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
         )
 
     def dist_info_sym(self, obs_var, state_info_vars=None):
-        mean_var, log_std_var = self.L.get_output([self._l_mean, self._l_log_std], obs_var)
+        L = self.L
+        mean_var, log_std_var = L.get_output([self._l_mean, self._l_log_std], obs_var)
         if self.min_std is not None:
             log_std_var = TT.maximum(log_std_var, np.log(self.min_std))
         return dict(mean=mean_var, log_std=log_std_var)
