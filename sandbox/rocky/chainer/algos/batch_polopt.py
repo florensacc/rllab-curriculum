@@ -1,39 +1,14 @@
+import time
+
 from rllab.algos.base import RLAlgorithm
-from rllab.sampler import parallel_sampler
-from rllab.sampler.base import BaseSampler
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
-from rllab.policies.base import Policy
-
-import gtimer as gt
-
-
-class BatchSampler(BaseSampler):
-    def __init__(self, algo):
-        """
-        :type algo: BatchPolopt
-        """
-        self.algo = algo
-
-    def start_worker(self):
-        parallel_sampler.populate_task(self.algo.env, self.algo.policy, scope=self.algo.scope)
-
-    def shutdown_worker(self):
-        parallel_sampler.terminate_task(scope=self.algo.scope)
-
-    def obtain_samples(self, itr):
-        cur_params = self.algo.policy.get_param_values()
-        paths = parallel_sampler.sample_paths(
-            policy_params=cur_params,
-            max_samples=self.algo.batch_size,
-            max_path_length=self.algo.max_path_length,
-            scope=self.algo.scope,
-        )
-        if self.algo.whole_paths:
-            return paths
-        else:
-            paths_truncated = parallel_sampler.truncate_paths(paths, self.algo.batch_size)
-            return paths_truncated
+from sandbox.rocky.neural_learner.sample_processors.default_sample_processor import DefaultSampleProcessor
+from sandbox.rocky.chainer.misc import tensor_utils
+from sandbox.rocky.chainer.policies.base import Policy
+from sandbox.rocky.chainer.samplers.batch_sampler import BatchSampler
+from sandbox.rocky.chainer.samplers.vectorized_sampler import VectorizedSampler
+import numpy as np
 
 
 class BatchPolopt(RLAlgorithm):
@@ -51,7 +26,9 @@ class BatchPolopt(RLAlgorithm):
             n_itr=500,
             start_itr=0,
             batch_size=5000,
+            batch_size_schedule=None,
             max_path_length=500,
+            max_path_length_schedule=None,
             discount=0.99,
             gae_lambda=1,
             plot=False,
@@ -60,8 +37,13 @@ class BatchPolopt(RLAlgorithm):
             positive_adv=False,
             store_paths=False,
             whole_paths=True,
-            sampler_cls=None,
-            sampler_args=None,
+            fixed_horizon=False,
+            sampler=None,
+            sample_processor_cls=None,
+            sample_processor_args=None,
+            n_vectorized_envs=None,
+            parallel_vec_env=False,
+            use_cloudpickle=False,
             **kwargs
     ):
         """
@@ -83,15 +65,19 @@ class BatchPolopt(RLAlgorithm):
         :param positive_adv: Whether to shift the advantages so that they are always positive. When used in
         conjunction with center_adv the advantages will be standardized before shifting.
         :param store_paths: Whether to save all paths data to the snapshot.
+        :param parallel_vec_env: whether to use ParallelVecEnvExecutor, versus running environments sequentially
+        :return:
         """
         self.env = env
         self.policy = policy
         self.baseline = baseline
         self.scope = scope
         self.n_itr = n_itr
-        self.current_itr = start_itr
+        self.start_itr = start_itr
         self.batch_size = batch_size
+        self.batch_size_schedule = batch_size_schedule
         self.max_path_length = max_path_length
+        self.max_path_length_schedule = max_path_length_schedule
         self.discount = discount
         self.gae_lambda = gae_lambda
         self.plot = plot
@@ -100,11 +86,26 @@ class BatchPolopt(RLAlgorithm):
         self.positive_adv = positive_adv
         self.store_paths = store_paths
         self.whole_paths = whole_paths
-        if sampler_cls is None:
-            sampler_cls = BatchSampler
-        if sampler_args is None:
-            sampler_args = dict()
-        self.sampler = sampler_cls(self, **sampler_args)
+        self.fixed_horizon = fixed_horizon
+
+        if sampler is None:
+            if n_vectorized_envs is None:
+                n_vectorized_envs = min(100, max(1, int(np.ceil(batch_size / max_path_length))))
+            if self.policy.vectorized:
+                sampler = VectorizedSampler(env=env, policy=policy, n_envs=n_vectorized_envs, parallel=parallel_vec_env)
+            else:
+                sampler = BatchSampler(self)
+
+        self.sampler = sampler
+
+        if sample_processor_cls is None:
+            sample_processor_cls = DefaultSampleProcessor
+        if sample_processor_args is None:
+            sample_processor_args = dict(algo=self)
+        else:
+            sample_processor_args = dict(sample_processor_args, algo=self)
+
+        self.sample_processor = sample_processor_cls(**sample_processor_args)
 
     def start_worker(self):
         self.sampler.start_worker()
@@ -114,52 +115,58 @@ class BatchPolopt(RLAlgorithm):
     def shutdown_worker(self):
         self.sampler.shutdown_worker()
 
+    def obtain_samples(self, itr):
+        if self.max_path_length_schedule is not None:
+            max_path_length = self.max_path_length_schedule[itr]
+        else:
+            max_path_length = self.max_path_length
+        if self.batch_size_schedule is not None:
+            batch_size = self.batch_size_schedule[itr]
+        else:
+            batch_size = self.batch_size
+        return self.sampler.obtain_samples(
+            itr,
+            max_path_length=max_path_length,
+            batch_size=batch_size
+        )
+
+    def process_samples(self, itr, paths):
+        return self.sample_processor.process_samples(itr, paths)
+
     def train(self):
-        gt.reset_root()
         self.start_worker()
-        self.init_opt()
-        gt.stamp('init')
-        loop = gt.timed_loop('main')
-        for itr in range(self.current_itr, self.n_itr):
-            next(loop)
+        start_time = time.time()
+        for itr in range(self.start_itr, self.n_itr):
+            itr_start_time = time.time()
             with logger.prefix('itr #%d | ' % itr):
-                paths = self.sampler.obtain_samples(itr)
-                gt.stamp('paths')
-                samples_data = self.sampler.process_samples(itr, paths)
-                gt.stamp('samples')
+                logger.log("Obtaining samples...")
+                paths = self.obtain_samples(itr)
+                logger.log("Processing samples...")
+                samples_data = self.process_samples(itr, paths)
+                logger.log("Logging diagnostics...")
                 self.log_diagnostics(paths)
+                logger.log("Optimizing policy...")
                 self.optimize_policy(itr, samples_data)
-                gt.stamp('optimize')
-                logger.log("saving snapshot...")
+                logger.log("Saving snapshot...")
                 params = self.get_itr_snapshot(itr, samples_data)
-                self.current_itr = itr + 1
-                params["algo"] = self
                 if self.store_paths:
                     params["paths"] = samples_data["paths"]
                 logger.save_itr_params(itr, params)
-                logger.log("saved")
+                logger.log("Saved")
+                logger.record_tabular('Time', time.time() - start_time)
+                logger.record_tabular('ItrTime', time.time() - itr_start_time)
                 logger.dump_tabular(with_prefix=False)
                 if self.plot:
                     self.update_plot()
                     if self.pause_for_plot:
                         input("Plotting evaluation run: Press Enter to "
-                                  "continue...")
-        loop.exit()
+                              "continue...")
         self.shutdown_worker()
-        gt.stop()
-        print(gt.report())
 
     def log_diagnostics(self, paths):
         self.env.log_diagnostics(paths)
         self.policy.log_diagnostics(paths)
         self.baseline.log_diagnostics(paths)
-
-    def init_opt(self):
-        """
-        Initialize the optimization procedure. If using theano / cgt, this may
-        include declaring all the variables and compiling functions
-        """
-        raise NotImplementedError
 
     def get_itr_snapshot(self, itr, samples_data):
         """

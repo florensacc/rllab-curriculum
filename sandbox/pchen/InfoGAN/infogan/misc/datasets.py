@@ -440,6 +440,15 @@ def _download_cifar10(dataset):
     print('Downloading data from %s' % origin)
     urllib.request.urlretrieve(origin, dataset)
 
+def _download_image_net_32(dataset):
+    """
+    Download the Cifar10 dataset if it is not present.
+    """
+    origin = (
+        'http://s3-us-west-1.amazonaws.com/rllab-peter/imgnet_32x32.npz'
+    )
+    print('Downloading data from %s' % origin)
+    urllib.request.urlretrieve(origin, dataset)
 
 def load_cifar10(
         dataset=_get_datafolder_path()+'/cifar10/cifar-10-python.tar.gz',
@@ -493,6 +502,30 @@ def load_cifar10(
     test_x = test_x.reshape((10000, 3, 32, 32)).transpose(0, 2, 3, 1)
 
     return train_x.astype('float32'), train_y, test_x.astype('float32'), test_y
+
+def load_image_net_32(
+        dataset=_get_datafolder_path()+'/imgnet/imgnet_32x32.npz',
+        normalize=True,
+):
+    '''
+    :param dataset: path to dataset file
+    :param normalize: normalize the x data to the range [-0.5,0.5]
+    :return: train and test data
+    '''
+    datasetfolder = os.path.dirname(dataset)
+    if not os.path.isfile(dataset):
+        if not os.path.exists(datasetfolder):
+            os.makedirs(datasetfolder)
+        _download_image_net_32(dataset)
+
+    npz = np.load(dataset)
+    train_x, vali_x = npz["trainx"], npz["testx"]
+
+    if normalize:
+        train_x = train_x / 256. - 0.5
+        vali_x = vali_x / 256. - 0.5
+
+    return train_x.astype('float32'), vali_x.astype('float32')
 
 
 def load_frey_faces(
@@ -1114,7 +1147,7 @@ class ChairDataset(object):
     @property
     def train(self):
         if self._train is None:
-            self._train = Dataset(self.transform(self._data))
+            self._train = Dataset(self.transform(self.data))
         return self._train
 
     def transform(self, data):
@@ -1344,6 +1377,37 @@ class Cifar10Dataset(object):
         self._image_dim = np.prod(self._image_shape)
 
         train_x, train_y, test_x, test_y = load_cifar10(normalize=True)
+        self.train = Dataset(train_x * scale)
+        # self.test = Dataset(valid)
+        if scramble_vai:
+            test_x = test_x.reshape(
+                [-1, self._image_dim]
+            )[:, np.random.permutation(self._image_dim)].reshape(
+                [-1] + list(self._image_shape)
+            )
+        if scramble_vali_ch:
+            test_x = test_x[:, :, :, np.random.permutation(3)]
+        self.validation = Dataset(test_x * scale)
+
+    def transform(self, data):
+        return data
+
+    def inverse_transform(self, data):
+        return data
+
+    @property
+    def image_dim(self):
+        return self._image_dim
+    @property
+    def image_shape(self):
+        return self._image_shape
+
+class ImageNet32Dataset(object):
+    def __init__(self, scale=1., scramble_vai=False, scramble_vali_ch=False):
+        self._image_shape = (32, 32, 3)
+        self._image_dim = np.prod(self._image_shape)
+
+        train_x, test_x = load_image_net_32(normalize=True)
         self.train = Dataset(train_x * scale)
         # self.test = Dataset(valid)
         if scramble_vai:

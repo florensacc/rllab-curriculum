@@ -66,20 +66,21 @@ class RegularizedGAN(object):
                      custom_fully_connected(1024).
                      fc_batch_norm().
                      apply(tf.nn.relu).
-                     custom_fully_connected(256 * image_size / 8 * image_size / 8).
+                     custom_fully_connected(256 * image_size // 8 * image_size // 8).
                      fc_batch_norm().
                      apply(tf.nn.relu).
-                     reshape([-1, image_size / 8, image_size / 8, 256]).
-                     custom_deconv2d([0, image_size / 8, image_size / 8, 256], k_h=4, k_w=4, d_h=1, d_w=1).
+                     reshape([-1, image_size // 8, image_size // 8, 256]).
+                     custom_deconv2d(
+                        [0, image_size//8, image_size//8, 256], k_h=4, k_w=4, d_h=1, d_w=1).
                      conv_batch_norm().
                      apply(tf.nn.relu).
-                     custom_deconv2d([0, image_size / 8, image_size / 8, 256], k_h=4, k_w=4, d_h=1, d_w=1).
+                     custom_deconv2d([0, image_size//8, image_size//8, 256], k_h=4, k_w=4, d_h=1, d_w=1).
                      conv_batch_norm().
                      apply(tf.nn.relu).
-                     custom_deconv2d([0, image_size / 4, image_size / 4, 128], k_h=4, k_w=4).
+                     custom_deconv2d([0, image_size//4, image_size//4, 128], k_h=4, k_w=4).
                      conv_batch_norm().
                      apply(tf.nn.relu).
-                     custom_deconv2d([0, image_size / 2, image_size / 2, 64], k_h=4, k_w=4).
+                     custom_deconv2d([0, image_size//2, image_size//2, 64], k_h=4, k_w=4).
                      conv_batch_norm().
                      apply(tf.nn.relu).
                      custom_deconv2d([0] + list(image_shape), k_h=4, k_w=4).
@@ -116,17 +117,17 @@ class RegularizedGAN(object):
                      custom_fully_connected(1024).
                      fc_batch_norm().
                      apply(tf.nn.relu).
-                     custom_fully_connected(128 * image_size / 4 * image_size / 4).
+                     custom_fully_connected(128 * image_size//4 * image_size//4).
                      fc_batch_norm().
                      apply(tf.nn.relu).
-                     reshape([-1, image_size / 4, image_size / 4, 128]).
-                     custom_deconv2d([0, image_size / 4, image_size / 4, 128], k_h=4, k_w=4, d_h=1, d_w=1).
+                     reshape([-1, image_size//4, image_size//4, 128]).
+                     custom_deconv2d([0, image_size//4, image_size//4, 128], k_h=4, k_w=4, d_h=1, d_w=1).
                      conv_batch_norm().
                      apply(tf.nn.relu).
-                     custom_deconv2d([0, image_size / 4, image_size / 4, 128], k_h=4, k_w=4, d_h=1, d_w=1).
+                     custom_deconv2d([0, image_size//4, image_size//4, 128], k_h=4, k_w=4, d_h=1, d_w=1).
                      conv_batch_norm().
                      apply(tf.nn.relu).
-                     custom_deconv2d([0, image_size / 2, image_size / 2, 64], k_h=4, k_w=4).
+                     custom_deconv2d([0, image_size//2, image_size//2, 64], k_h=4, k_w=4).
                      conv_batch_norm().
                      apply(tf.nn.relu).
                      custom_deconv2d([0] + list(image_shape), k_h=4, k_w=4).
@@ -169,11 +170,11 @@ class RegularizedGAN(object):
                      #custom_fully_connected(96 * 8 * 8).
                      #fc_batch_norm().
                      #apply(tf.nn.relu).
-                     custom_fully_connected(96 * image_size / 4 * image_size / 4).
+                     custom_fully_connected(96 * image_size//4 * image_size//4).
                      fc_batch_norm().
                      apply(leaky_rectify).
-                     reshape([-1, image_size / 4, image_size / 4, 96]).
-                     custom_deconv2d([0, image_size / 2, image_size / 2, 64], k_h=5, k_w=5).
+                     reshape([-1, image_size//4, image_size//4, 96]).
+                     custom_deconv2d([0, image_size//2, image_size//2, 64], k_h=5, k_w=5).
                      conv_batch_norm().
                      apply(leaky_rectify).
                      custom_deconv2d([0, image_size, image_size, 64], k_h=5, k_w=5).
@@ -220,17 +221,17 @@ class RegularizedGAN(object):
                      custom_fully_connected(1024).
                      fc_batch_norm().
                      apply(tf.nn.relu).
-                     custom_fully_connected(256 * image_size / 8 * image_size / 8).
+                     custom_fully_connected(256 * image_size//8 * image_size//8).
                      fc_batch_norm().
                      apply(tf.nn.relu).
-                     reshape([-1, image_size / 8, image_size / 8, 256]).
-                     # custom_deconv2d([0, image_size / 8, image_size / 8, 256], k_h=4, k_w=4).
+                     reshape([-1, image_size//8, image_size//8, 256]).
+                     # custom_deconv2d([0, image_size//8, image_size//8, 256], k_h=4, k_w=4).
                      # conv_batch_norm().
                      # apply(tf.nn.relu).
-                     custom_deconv2d([0, image_size / 4, image_size / 4, 128], k_h=4, k_w=4).
+                     custom_deconv2d([0, image_size//4, image_size//4, 128], k_h=4, k_w=4).
                      conv_batch_norm().
                      apply(tf.nn.relu).
-                     custom_deconv2d([0, image_size / 2, image_size / 2, 64], k_h=4, k_w=4).
+                     custom_deconv2d([0, image_size//2, image_size//2, 64], k_h=4, k_w=4).
                      conv_batch_norm().
                      apply(tf.nn.relu).
                      custom_deconv2d([0] + list(image_shape), k_h=4, k_w=4).
@@ -267,11 +268,11 @@ class RegularizedGAN(object):
                      custom_fully_connected(1024).
                      fc_batch_norm().
                      apply(tf.nn.relu).
-                     custom_fully_connected(128 * image_size / 4 * image_size / 4).
+                     custom_fully_connected(128 * image_size//4 * image_size//4).
                      fc_batch_norm().
                      apply(tf.nn.relu).
-                     reshape([-1, image_size / 4, image_size / 4, 128]).
-                     custom_deconv2d([0, image_size / 2, image_size / 2, 64], k_h=4, k_w=4).
+                     reshape([-1, image_size//4, image_size//4, 128]).
+                     custom_deconv2d([0, image_size//2, image_size//2, 64], k_h=4, k_w=4).
                      conv_batch_norm().
                      apply(tf.nn.relu).
                      custom_deconv2d([0] + list(image_shape), k_h=4, k_w=4).

@@ -2,16 +2,16 @@ from rllab.misc import ext
 from rllab.misc.overrides import overrides
 # from rllab.algos.batch_polopt import BatchPolopt
 # from sandbox.adam.gpar.algos.batch_polopt import ParallelGpuBatchPolopt
-from sandbox.adam.gpar.algos.batch_polopt import BatchPolopt
+from sandbox.adam.gpar.algos.multi_gpu_batch_polopt import MultiGpuBatchPolopt
 # import rllab.misc.logger as logger
 import theano
 import theano.tensor as TT
-from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
+# from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 
 
-class NPO(BatchPolopt):
+class MultiGpuNPO(MultiGpuBatchPolopt):
     """
-    Natural Policy Optimization.
+    Natural Policy Optimization for multiple GPUs.
     ONLY CHANGES: Class inheritance, set device to GPU.
     """
 
@@ -23,14 +23,14 @@ class NPO(BatchPolopt):
             truncate_local_is_ratio=None,
             **kwargs
     ):
-        if optimizer is None:
-            if optimizer_args is None:
-                optimizer_args = dict()
-            optimizer = PenaltyLbfgsOptimizer(**optimizer_args)
+        # if optimizer is None:
+        #     if optimizer_args is None:
+        #         optimizer_args = dict()
+        #     optimizer = PenaltyLbfgsOptimizer(**optimizer_args)
         self.optimizer = optimizer
         self.step_size = step_size
         self.truncate_local_is_ratio = truncate_local_is_ratio
-        super(NPO, self).__init__(**kwargs)
+        super(MultiGpuNPO, self).__init__(**kwargs)
 
     @overrides
     def init_opt(self):

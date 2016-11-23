@@ -17,11 +17,11 @@ from sandbox.pchen.InfoGAN.infogan.models.regularized_gan import RegularizedGAN
 now = datetime.datetime.now(dateutil.tz.tzlocal())
 timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
 
-root_log_dir = "logs/chair_tmp"
-root_checkpoint_dir = "ckt/chair_tmp"
+root_log_dir = "logs/1117_chair_tmp"
+root_checkpoint_dir = "ckt/1117_chair_tmp"
 batch_size = 128
 updates_per_epoch = 10
-max_epoch = 2000#50#1000
+max_epoch = 1000
 
 
 dataset = ChairDataset()
@@ -165,7 +165,7 @@ class VG(VariantGenerator):
 vg = VG()
 
 variants = vg.variants(randomized=True)
-
+print(len(variants))
 
 for v in variants:
 
@@ -230,8 +230,9 @@ for v in variants:
             )
 
             algo.train()
-        except Exception:
+        except Exception as e:
+            print(e)
             print("Moving to failed experiments")
             os.system("mv %s failed/%s" % (log_dir, log_dir))
-            raise
+            # raise
 
