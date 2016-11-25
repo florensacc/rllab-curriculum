@@ -21,14 +21,14 @@ ALL_REGION_AWS_SECURITY_GROUP_IDS = {}
 ALL_REGION_AWS_KEY_NAMES = {}
 
 REGIONS = [
-    "ap-northeast-1",
-    "ap-northeast-2",
-    "ap-south-1",
-    "ap-southeast-1",
-    "ap-southeast-2",
-    "eu-central-1",
-    "eu-west-1",
-    "sa-east-1",
+   # "ap-northeast-1",
+   # "ap-northeast-2",
+   # "ap-south-1",
+   # "ap-southeast-1",
+   # "ap-southeast-2",
+   # "eu-central-1",
+   # "eu-west-1",
+   # "sa-east-1",
     "us-east-1",
     "us-east-2",
     "us-west-1",
@@ -345,8 +345,8 @@ def write_config():
 
 def setup():
     print("Using prefix: %s" % PREFIX)
-    setup_s3()
-    setup_iam()
+    #setup_s3()
+    #setup_iam()
     setup_ec2()
     write_config()
 
