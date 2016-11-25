@@ -6,6 +6,7 @@ import time
 
 import numpy as np
 import tensorflow as tf
+from collections import OrderedDict
 
 from sandbox.haoran.mddpg.misc.simple_replay_pool import SimpleReplayPool
 from rllab.algos.base import RLAlgorithm
@@ -36,6 +37,7 @@ class OnlineAlgorithm(RLAlgorithm):
             eval_samples=10000,
             scale_reward=1.,
             render=False,
+            eval_epoch_gap=10,
     ):
         """
         :param env: Environment
@@ -81,16 +83,16 @@ class OnlineAlgorithm(RLAlgorithm):
         self.pool = SimpleReplayPool(self.replay_pool_size,
                                      self.observation_dim,
                                      self.action_dim)
-        self.last_statistics = None
+        self.last_statistics = OrderedDict()
         self.sess = tf.get_default_session() or tf.Session()
         with self.sess.as_default():
             self._init_tensorflow_ops()
         self.es_path_returns = []
 
-        # new
         self.eval_sampler = BatchSampler(self)
         self.scope = None
         self.whole_paths = True
+        self.eval_epoch_gap = eval_epoch_gap
 
     def _start_worker(self):
         self.eval_sampler.start_worker()
@@ -106,10 +108,12 @@ class OnlineAlgorithm(RLAlgorithm):
             itr = 0
             path_length = 0
             path_return = 0
+            total_start_time = time.time()
+            #WARN: one eval per epoch; one train per itr
             for epoch in range(self.n_epochs):
                 logger.push_prefix('Epoch #%d | ' % epoch)
                 logger.log("Training started")
-                start_time = time.time()
+                train_start_time = time.time()
                 for _ in range(self.epoch_length):
                     action = self.exploration_strategy.get_action(itr,
                                                                   observation,
@@ -144,18 +148,25 @@ class OnlineAlgorithm(RLAlgorithm):
                         self._do_training()
                     itr += 1
 
-                train_time = time.time() - start_time
+                train_time = time.time() - train_start_time
                 logger.log("Training finished. Time: {0}".format(train_time))
-                if self.pool.size >= self.min_pool_size:
-                    test_start_time = time.time()
-                    if self.n_eval_samples > 0:
-                        self.evaluate(epoch, self.es_path_returns)
-                        self.es_path_returns = []
-                    params = self.get_epoch_snapshot(epoch)
-                    test_time = time.time() - test_start_time
-                    logger.log(
-                        "Eval time: {0}".format(test_time))
-                    logger.save_itr_params(epoch, params)
+
+                # testing ---------------------------------
+                eval_start_time = time.time()
+                if self.n_eval_samples > 0:
+                    self.evaluate(epoch, self.es_path_returns)
+                    self.es_path_returns = []
+                eval_time = time.time() - eval_start_time
+                logger.log(
+                    "Eval time: {0}".format(eval_time))
+
+                # logging --------------------------------
+                params = self.get_epoch_snapshot(epoch)
+                logger.save_itr_params(epoch, params)
+                logger.record_tabular("time: train",train_time)
+                logger.record_tabular("time: eval",eval_time)
+                total_time = time.time() - total_start_time
+                logger.record_tabular("time: total",total_time)
                 logger.dump_tabular(with_prefix=False)
                 logger.pop_prefix()
             self.env.terminate()

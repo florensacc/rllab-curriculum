@@ -28,7 +28,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/tests/" + exp_index
-mode = "ec2"
+mode = "ec2_test"
 ec2_instance = "c4.2xlarge"
 subnet = "us-west-1c"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
@@ -68,9 +68,12 @@ for v in variants:
             epoch_length = 100,
             min_pool_size = 100,
             eval_samples = 100,
+            eval_epoch_gap=10,
         )
     else:
-        ddpg_kwargs = dict()
+        ddpg_kwargs = dict(
+            eval_epoch_gap=25,
+        )
 
     # other exp setup --------------------------------------
     exp_name = "{exp_index}_{time}_{env_name}".format(
