@@ -1,7 +1,7 @@
 """
-Further acceleration + massively tune reward scaling
-+ parallel evaluation (although not used)
-+ reduced snapshot frequency
+Continue exp-001. Re-run double-pendulum.
+(I am not running this experiment. It seems that Box2D is not happy with
+tf.float32)
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
@@ -28,7 +28,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/tests/" + exp_index
-mode = "ec2"
+mode = "local_test"
 ec2_instance = "c4.large"
 subnet = "us-west-1c"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
@@ -48,9 +48,7 @@ class VG(VariantGenerator):
     @variant
     def env_name(self):
         return [
-            "halfcheetah",
-            "swimmer","hopper","ant","humanoid",
-            "cartpole","double_pendulum","inv_double_pendulum",
+            "double_pendulum"
         ]
     @variant
     def scale_reward(self):

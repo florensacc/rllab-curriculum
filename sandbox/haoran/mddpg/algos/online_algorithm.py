@@ -37,7 +37,6 @@ class OnlineAlgorithm(RLAlgorithm):
             eval_samples=10000,
             scale_reward=1.,
             render=False,
-            eval_epoch_gap=10,
     ):
         """
         :param env: Environment
@@ -92,7 +91,6 @@ class OnlineAlgorithm(RLAlgorithm):
         self.eval_sampler = BatchSampler(self)
         self.scope = None
         self.whole_paths = True
-        self.eval_epoch_gap = eval_epoch_gap
 
     def _start_worker(self):
         self.eval_sampler.start_worker()

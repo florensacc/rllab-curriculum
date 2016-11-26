@@ -1,7 +1,5 @@
 """
-Further acceleration + massively tune reward scaling
-+ parallel evaluation (although not used)
-+ reduced snapshot frequency
+Continue exp-001. Normalize envs.
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
@@ -10,6 +8,7 @@ from sandbox.haoran.mddpg.policies.nn_policy import FeedForwardPolicy
 from sandbox.haoran.mddpg.qfunctions.nn_qfunction import FeedForwardCritic
 from sandbox.haoran.myscripts.envs import EnvChooser
 from sandbox.rocky.tf.envs.base import TfEnv
+from rllab.envs.normalized_env import normalize
 from rllab.exploration_strategies.ou_strategy import OUStrategy
 from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 
@@ -49,12 +48,13 @@ class VG(VariantGenerator):
     def env_name(self):
         return [
             "halfcheetah",
-            "swimmer","hopper","ant","humanoid",
-            "cartpole","double_pendulum","inv_double_pendulum",
+            "ant",
+            # "swimmer","hopper","ant","humanoid",
+            # "cartpole","double_pendulum","inv_double_pendulum",
         ]
     @variant
     def scale_reward(self):
-        return [1., 0.1, 10]
+        return [1.]
 
 variants = VG().variants()
 
@@ -127,7 +127,7 @@ for v in variants:
 
     # construct objects ----------------------------------
     env_chooser = EnvChooser()
-    env = TfEnv(env_chooser.choose_env(env_name))
+    env = TfEnv(normalize(env_chooser.choose_env(env_name)))
 
     es = OUStrategy(env_spec=env.spec)
     qf = FeedForwardCritic(

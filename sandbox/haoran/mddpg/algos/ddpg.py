@@ -166,62 +166,62 @@ class DDPG(OnlineAlgorithm):
 
     @overrides
     def evaluate(self, epoch, es_path_returns):
-        if epoch % self.eval_epoch_gap == 0:
-            logger.log("Collecting samples for evaluation")
-            paths = self.eval_sampler.obtain_samples(
-                itr=epoch,
-                batch_size=self.n_eval_samples,
-                max_path_length=self.max_path_length,
-            )
-            rewards, terminals, obs, actions, next_obs = split_paths(paths)
-            feed_dict = self._update_feed_dict(rewards, terminals, obs, actions,
-                                               next_obs)
+        logger.log("Collecting samples for evaluation")
+        paths = self.eval_sampler.obtain_samples(
+            itr=epoch,
+            batch_size=self.n_eval_samples,
+            max_path_length=self.max_path_length,
+        )
+        rewards, terminals, obs, actions, next_obs = split_paths(paths)
+        feed_dict = self._update_feed_dict(rewards, terminals, obs, actions,
+                                           next_obs)
 
-            # Compute statistics
-            (
-                policy_loss,
-                qf_loss,
-                policy_outputs,
-                target_policy_outputs,
-                qf_outputs,
-                target_qf_outputs,
-                ys,
-            ) = self.sess.run(
-                [
-                    self.actor_surrogate_loss,
-                    self.critic_loss,
-                    self.policy.output,
-                    self.target_policy.output,
-                    self.qf.output,
-                    self.target_qf.output,
-                    self.ys,
-                ],
-                feed_dict=feed_dict)
-            average_discounted_return = np.mean(
-                [special.discount_return(path["rewards"], self.discount)
-                 for path in paths]
-            )
-            returns = [sum(path["rewards"]) for path in paths]
-            rewards = np.hstack([path["rewards"] for path in paths])
+        # Compute statistics
+        (
+            policy_loss,
+            qf_loss,
+            policy_outputs,
+            target_policy_outputs,
+            qf_outputs,
+            target_qf_outputs,
+            ys,
+        ) = self.sess.run(
+            [
+                self.actor_surrogate_loss,
+                self.critic_loss,
+                self.policy.output,
+                self.target_policy.output,
+                self.qf.output,
+                self.target_qf.output,
+                self.ys,
+            ],
+            feed_dict=feed_dict)
+        average_discounted_return = np.mean(
+            [special.discount_return(path["rewards"], self.discount)
+             for path in paths]
+        )
+        returns = [sum(path["rewards"]) for path in paths]
+        rewards = np.hstack([path["rewards"] for path in paths])
 
-            # Log statistics
-            self.last_statistics.update(OrderedDict([
-                ('Epoch', epoch),
-                ('PolicySurrogateLoss', policy_loss),
-                ('PolicyMeanOutput', np.mean(policy_outputs)),
-                ('PolicyStdOutput', np.std(policy_outputs)),
-                ('TargetPolicyMeanOutput', np.mean(target_policy_outputs)),
-                ('TargetPolicyStdOutput', np.std(target_policy_outputs)),
-                ('CriticLoss', qf_loss),
-                ('AverageDiscountedReturn', average_discounted_return),
-            ]))
-            self.last_statistics.update(create_stats_ordered_dict('Ys', ys))
-            self.last_statistics.update(create_stats_ordered_dict('QfOutput',
-                                                             qf_outputs))
-            self.last_statistics.update(create_stats_ordered_dict('TargetQfOutput',
-                                                             target_qf_outputs))
-            self.last_statistics.update(create_stats_ordered_dict('Rewards', rewards))
-            self.last_statistics.update(create_stats_ordered_dict('returns', returns))
+        # Log statistics
+        self.last_statistics.update(OrderedDict([
+            ('Epoch', epoch),
+            ('PolicySurrogateLoss', policy_loss),
+            #HT: why are the policy outputs info helpful?
+            ('PolicyMeanOutput', np.mean(policy_outputs)),
+            ('PolicyStdOutput', np.std(policy_outputs)),
+            ('TargetPolicyMeanOutput', np.mean(target_policy_outputs)),
+            ('TargetPolicyStdOutput', np.std(target_policy_outputs)),
+            ('CriticLoss', qf_loss),
+            ('AverageDiscountedReturn', average_discounted_return),
+        ]))
+        self.last_statistics.update(create_stats_ordered_dict('Ys', ys))
+        self.last_statistics.update(create_stats_ordered_dict('QfOutput',
+                                                         qf_outputs))
+        self.last_statistics.update(create_stats_ordered_dict('TargetQfOutput',
+                                                         target_qf_outputs))
+        self.last_statistics.update(create_stats_ordered_dict('Rewards', rewards))
+        self.last_statistics.update(create_stats_ordered_dict('returns', returns))
 
         if len(es_path_returns) == 0 and epoch == 0:
             es_path_returns = [0]

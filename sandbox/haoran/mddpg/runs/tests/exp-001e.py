@@ -1,7 +1,8 @@
 """
-Further acceleration + massively tune reward scaling
-+ parallel evaluation (although not used)
-+ reduced snapshot frequency
+Continue exp-001, exp-001c. Normalize envs.
+
+Also tune batch size.
+No need to worry about the price :)
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
@@ -10,6 +11,7 @@ from sandbox.haoran.mddpg.policies.nn_policy import FeedForwardPolicy
 from sandbox.haoran.mddpg.qfunctions.nn_qfunction import FeedForwardCritic
 from sandbox.haoran.myscripts.envs import EnvChooser
 from sandbox.rocky.tf.envs.base import TfEnv
+from rllab.envs.normalized_env import normalize
 from rllab.exploration_strategies.ou_strategy import OUStrategy
 from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 
@@ -28,7 +30,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/tests/" + exp_index
-mode = "ec2"
+mode = "local_test"
 ec2_instance = "c4.large"
 subnet = "us-west-1c"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
@@ -48,13 +50,20 @@ class VG(VariantGenerator):
     @variant
     def env_name(self):
         return [
+            "swimmer",
+            "hopper",
+            "walker",
+            "ant",
             "halfcheetah",
-            "swimmer","hopper","ant","humanoid",
-            "cartpole","double_pendulum","inv_double_pendulum",
+            "humanoid",
+            # "cartpole",
+            # "inv_double_pendulum",
         ]
     @variant
-    def scale_reward(self):
-        return [1., 0.1, 10]
+    def batch_size(self):
+        return [
+            32,64,128,
+        ]
 
 variants = VG().variants()
 
@@ -75,6 +84,7 @@ for v in variants:
     else:
         ddpg_kwargs = dict(
             epoch_length=20000,
+            batch_size=v["batch_size"]
         )
 
     # other exp setup --------------------------------------
@@ -127,7 +137,7 @@ for v in variants:
 
     # construct objects ----------------------------------
     env_chooser = EnvChooser()
-    env = TfEnv(env_chooser.choose_env(env_name))
+    env = TfEnv(normalize(env_chooser.choose_env(env_name)))
 
     es = OUStrategy(env_spec=env.spec)
     qf = FeedForwardCritic(
