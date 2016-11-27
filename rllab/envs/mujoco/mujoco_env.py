@@ -199,9 +199,11 @@ class MujocoEnv(Env):
             self.viewer.set_model(self.model)
         return self.viewer
 
-    def render(self):
+    def render(self,close=False):
         viewer = self.get_viewer()
         viewer.loop_once()
+        if close:
+            self.stop_viewer()
 
     def start_viewer(self):
         viewer = self.get_viewer()
