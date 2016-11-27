@@ -1,7 +1,7 @@
 """
 Continue exp-001, exp-001c. Normalize envs.
 
-Also tune batch size.
+Also tune reward scaling
 No need to worry about the price :)
 """
 # imports -----------------------------------------------------
@@ -30,9 +30,10 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/tests/" + exp_index
-mode = "local_test"
+mode = "ec2"
 ec2_instance = "c4.large"
-subnet = "us-west-1c"
+#WARN: if n_parallel=1, then evaluation will change training sampling process
+subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
 n_parallel = 2 # only for local exp
@@ -62,8 +63,11 @@ class VG(VariantGenerator):
     @variant
     def batch_size(self):
         return [
-            32,64,128,
+            64
         ]
+    @variant
+    def scale_reward(self):
+        return [0.1, 10]
 
 variants = VG().variants()
 
@@ -80,11 +84,13 @@ for v in variants:
             epoch_length = 100,
             min_pool_size = 100,
             eval_samples = 100,
+            scale_reward=v["scale_reward"],
         )
     else:
         ddpg_kwargs = dict(
             epoch_length=20000,
-            batch_size=v["batch_size"]
+            batch_size=v["batch_size"],
+            scale_reward=v["scale_reward"],
         )
 
     # other exp setup --------------------------------------

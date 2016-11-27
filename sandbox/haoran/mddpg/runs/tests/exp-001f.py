@@ -1,8 +1,7 @@
 """
-Further acceleration + massively tune reward scaling
-+ parallel evaluation (although not used)
-+ reduced snapshot frequency
-<_>: actually I forgot to make really tune reward scaling here
+Continue exp-001, exp-001d.
+
+Tune alive_coeff for Hopper
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
@@ -11,6 +10,7 @@ from sandbox.haoran.mddpg.policies.nn_policy import FeedForwardPolicy
 from sandbox.haoran.mddpg.qfunctions.nn_qfunction import FeedForwardCritic
 from sandbox.haoran.myscripts.envs import EnvChooser
 from sandbox.rocky.tf.envs.base import TfEnv
+from rllab.envs.normalized_env import normalize
 from rllab.exploration_strategies.ou_strategy import OUStrategy
 from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 
@@ -49,13 +49,23 @@ class VG(VariantGenerator):
     @variant
     def env_name(self):
         return [
-            "halfcheetah",
-            "swimmer","hopper","ant","humanoid",
-            "cartpole","double_pendulum","inv_double_pendulum",
+            # "swimmer",
+            "hopper",
+            # "walker",
+            # "ant",
+            # "halfcheetah",
+            # "humanoid",
+            # "cartpole",
+            # "inv_double_pendulum",
         ]
     @variant
-    def scale_reward(self):
-        return [1., 0.1, 10]
+    def batch_size(self):
+        return [
+            64
+        ]
+    @variant
+    def alive_coeff(self):
+        return [0.01, 0.1, 0.5]
 
 variants = VG().variants()
 
@@ -76,7 +86,11 @@ for v in variants:
     else:
         ddpg_kwargs = dict(
             epoch_length=20000,
+            batch_size=v["batch_size"]
         )
+    env_kwargs = {
+        "alive_coeff": v["alive_coeff"]
+    }
 
     # other exp setup --------------------------------------
     exp_name = "{exp_index}_{time}_{env_name}".format(
@@ -128,7 +142,7 @@ for v in variants:
 
     # construct objects ----------------------------------
     env_chooser = EnvChooser()
-    env = TfEnv(env_chooser.choose_env(env_name))
+    env = TfEnv(normalize(env_chooser.choose_env(env_name,**env_kwargs)))
 
     es = OUStrategy(env_spec=env.spec)
     qf = FeedForwardCritic(

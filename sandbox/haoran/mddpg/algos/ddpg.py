@@ -200,7 +200,7 @@ class DDPG(OnlineAlgorithm):
             [special.discount_return(path["rewards"], self.discount)
              for path in paths]
         )
-        returns = [sum(path["rewards"]) for path in paths]
+        returns = np.asarray([sum(path["rewards"]) for path in paths])
         rewards = np.hstack([path["rewards"] for path in paths])
 
         # Log statistics
@@ -228,8 +228,9 @@ class DDPG(OnlineAlgorithm):
         if len(es_path_returns) > 0:
             # if eval is too often, training may not even have collected a full
             # path
+            train_returns = np.asarray(es_path_returns) / self.scale_reward
             self.last_statistics.update(create_stats_ordered_dict(
-                'TrainingReturns', es_path_returns))
+                'TrainingReturns', train_returns))
 
         for key, value in self.last_statistics.items():
             logger.record_tabular(key, value)
