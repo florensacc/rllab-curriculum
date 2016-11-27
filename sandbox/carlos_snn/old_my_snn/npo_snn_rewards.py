@@ -9,6 +9,9 @@ from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 from sandbox.carlos_snn.regressors.latent_regressor import Latent_regressor
 from sandbox.carlos_snn.distributions.categorical import from_index, from_onehot
 
+# for logging hierarchy
+from sandbox.carlos_snn.envs.hierarchized_snn_env import hierarchize_snn
+
 # imports from batch_polopt I might need as not I use here process_samples and others
 import numpy as np
 from rllab.algos.base import RLAlgorithm
@@ -21,6 +24,7 @@ import os.path as osp
 import os
 import rllab.plotter as plotter
 from rllab.sampler.utils import rollout
+from sandbox.carlos_snn.sampler.utils import rollout as rollout_noEnvReset
 import itertools
 import collections
 import gc
@@ -44,6 +48,7 @@ class NPO_snn(BatchPolopt):
             self_normalize=False,
             log_individual_latents=False,  # to log the progress of each individual latent
             log_deterministic=False,  # log the performance of the policy with std=0 (for each latent separate)
+            log_hierarchy=False,
             logged_MI=None,  # a list of tuples specifying the (obs,actions) that are regressed to find the latents
             n_samples=0,
             optimizer=None,
@@ -58,6 +63,7 @@ class NPO_snn(BatchPolopt):
         self.optimizer = optimizer
         self.step_size = step_size
         self.log_deterministic = log_deterministic
+        self.log_hierarchy = log_hierarchy
 
         self.log_individual_latents = log_individual_latents
         self.hallucinator = hallucinator
@@ -135,8 +141,8 @@ class NPO_snn(BatchPolopt):
         for i, path in enumerate(paths):
             if np.isnan(path['observations']).any():
                 print('The RAW observation of path {} have a NaN: '.format(i), path['observations'][0])
-            if np.isnan(path['actions']).any() or np.isnan(path['agent_infos']['mean']).any():
-                print('The RAW actions of path {} have a Nan: '.format(i), path['actions'][0])
+            # if np.isnan(path['actions']).any() or np.isnan(path['agent_infos']['mean']).any():
+            #     print('The RAW actions of path {} have a Nan: '.format(i), path['actions'][0])
                 print('the params of the nn are: ', self.policy.get_param_values())
             if np.isnan(path['rewards']).any():
                 print('The RAW rewards of path {} have a Nan: '.format(i), path['rewards'][0])
@@ -247,100 +253,100 @@ class NPO_snn(BatchPolopt):
             k: ext.new_tensor(
                 'old_%s' % k,  ##define tensors old_mean and old_log_std
                 ndim=2 + is_recurrent,
-                dtype=theano.config.floatX
+                dtype=theano.config.floatx
             ) for k in dist.dist_info_keys
             }
         old_dist_info_vars_list = [old_dist_info_vars[k] for k in dist.dist_info_keys]  ##put 2 tensors above in a list
 
         if is_recurrent:
-            valid_var = TT.matrix('valid')
+            valid_var = tt.matrix('valid')
         else:
-            valid_var = None
+            valid_var = none
 
         ## this will have to change as now the pdist depends also on the particuar latents var h sampled!
         # dist_info_vars = self.policy.dist_info_sym(obs_var, action_var)  ##returns dict with mean and log_std_var for this obs_var (action useless here!)
-        ##CF
+        ##cf
         dist_info_vars = self.policy.dist_info_sym(obs_var, latent_var)
 
         kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
         lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, dist_info_vars)
         # if is_recurrent:
-        #     mean_kl = TT.sum(kl * valid_var) / TT.sum(valid_var)
-        #     surr_loss = - TT.sum(lr * advantage_var * valid_var) / TT.sum(valid_var)
+        #     mean_kl = tt.sum(kl * valid_var) / tt.sum(valid_var)
+        #     surr_loss = - tt.sum(lr * advantage_var * valid_var) / tt.sum(valid_var)
         # else:
-        mean_kl = TT.mean(kl * importance_weights)
-        surr_loss = - TT.mean(lr * advantage_var * importance_weights)
+        mean_kl = tt.mean(kl * importance_weights)
+        surr_loss = - tt.mean(lr * advantage_var * importance_weights)
 
-        # now we compute the kl with respect to all other possible latents:
-        list_all_latent_vars = []
-        for lat in range(self.policy.latent_dim):
-            lat_shared_var = theano.shared(np.expand_dims(special.to_onehot(lat, self.policy.latent_dim), axis=0),
-                                           name='latent_' + str(lat))
-            list_all_latent_vars.append(lat_shared_var)
+        # # now we compute the kl with respect to all other possible latents:
+        # list_all_latent_vars = []
+        # for lat in range(self.policy.latent_dim):
+        #     lat_shared_var = theano.shared(np.expand_dims(special.to_onehot(lat, self.policy.latent_dim), axis=0),
+        #                                    name='latent_' + str(lat))
+        #     list_all_latent_vars.append(lat_shared_var)
+        #
+        # list_dist_info_vars = []
+        # all_l2 = []
+        # list_l2 = []
+        # all_kls = []
+        # list_kls = []
+        # for lat_var in list_all_latent_vars:
+        #     expanded_lat_var = tt.tile(lat_var, [obs_var.shape[0], 1])
+        #     list_dist_info_vars.append(self.policy.dist_info_sym(obs_var, expanded_lat_var))
+        #
+        # for dist_info_vars1 in list_dist_info_vars:
+        #     list_l2_var1 = []
+        #     list_kls_var1 = []
+        #     for dist_info_vars2 in list_dist_info_vars:  # i'm doing the l2 without the sqrt!!
+        #         list_l2_var1.append(tt.mean(tt.sqrt(tt.sum((dist_info_vars1['mean'] - dist_info_vars2['mean']) ** 2, axis=-1))))
+        #         list_kls_var1.append(dist.kl_sym(dist_info_vars1, dist_info_vars2))
+        #     all_l2.append(tt.stack(list_l2_var1))  # this is all the kls --> debug where it blows up!
+        #     list_l2.append(tt.mean(tt.clip(list_l2_var1, 0, self.l2_ub)))
+        #     all_kls.append(tt.stack(list_kls_var1))  # this is all the kls --> debug where it blows up!
+        #     list_kls.append(tt.mean(tt.clip(list_kls_var1, 0, self.kl_ub)))
+        #
+        # if all_l2:  # if there was any latent:
+        #     all_l2_stack = tt.stack(all_l2, axis=0)
+        #     mean_clip_intra_l2 = tt.mean(list_l2)
+        #
+        #     self._mean_clip_intra_l2 = ext.compile_function(
+        #         inputs=[obs_var],  # if you want to clip with the loss, you need to add here all input_list!!!
+        #         outputs=[mean_clip_intra_l2]
+        #     )
+        #
+        #     self._all_l2 = ext.compile_function(
+        #         inputs=[obs_var],
+        #         outputs=[all_l2_stack],
+        #     )
+        #
+        # if all_kls:
+        #     all_kls_stack = tt.stack(all_kls, axis=0)
+        #     mean_clip_intra_kl = tt.mean(list_kls)
+        #
+        #     self._mean_clip_intra_kl = ext.compile_function(
+        #         inputs=[obs_var],  # if you want to clip with the loss, you need to add here all input_list!!!
+        #         outputs=[mean_clip_intra_kl]
+        #     )
+        #
+        #     self._all_kls = ext.compile_function(
+        #         inputs=[obs_var],
+        #         outputs=[all_kls_stack],
+        #     )
+        #
+        # if self.reward_coef_kl and self.reward_coef_l2:
+        #     loss = surr_loss - self.reward_coef_kl * mean_clip_intra_kl - self.reward_coef_l2 * mean_clip_intra_l2
+        # elif self.reward_coef_kl:
+        #     loss = surr_loss - self.reward_coef_kl * mean_clip_intra_kl
+        # elif self.reward_coef_l2:
+        #     loss = surr_loss - self.reward_coef_l2 * mean_clip_intra_l2
 
-        list_dist_info_vars = []
-        all_l2 = []
-        list_l2 = []
-        all_kls = []
-        list_kls = []
-        for lat_var in list_all_latent_vars:
-            expanded_lat_var = TT.tile(lat_var, [obs_var.shape[0], 1])
-            list_dist_info_vars.append(self.policy.dist_info_sym(obs_var, expanded_lat_var))
-
-        for dist_info_vars1 in list_dist_info_vars:
-            list_l2_var1 = []
-            list_kls_var1 = []
-            for dist_info_vars2 in list_dist_info_vars:  # I'm doing the L2 without the sqrt!!
-                list_l2_var1.append(TT.mean(TT.sqrt(TT.sum((dist_info_vars1['mean'] - dist_info_vars2['mean']) ** 2, axis=-1))))
-                list_kls_var1.append(dist.kl_sym(dist_info_vars1, dist_info_vars2))
-            all_l2.append(TT.stack(list_l2_var1))  # this is all the kls --> debug where it blows up!
-            list_l2.append(TT.mean(TT.clip(list_l2_var1, 0, self.L2_ub)))
-            all_kls.append(TT.stack(list_kls_var1))  # this is all the kls --> debug where it blows up!
-            list_kls.append(TT.mean(TT.clip(list_kls_var1, 0, self.KL_ub)))
-
-        if all_l2:  # if there was any latent:
-            all_l2_stack = TT.stack(all_l2, axis=0)
-            mean_clip_intra_l2 = TT.mean(list_l2)
-
-            self._mean_clip_intra_l2 = ext.compile_function(
-                inputs=[obs_var],  # If you want to clip with the loss, you need to add here all input_list!!!
-                outputs=[mean_clip_intra_l2]
-            )
-
-            self._all_l2 = ext.compile_function(
-                inputs=[obs_var],
-                outputs=[all_l2_stack],
-            )
-
-        if all_kls:
-            all_kls_stack = TT.stack(all_kls, axis=0)
-            mean_clip_intra_kl = TT.mean(list_kls)
-
-            self._mean_clip_intra_kl = ext.compile_function(
-                inputs=[obs_var],  # If you want to clip with the loss, you need to add here all input_list!!!
-                outputs=[mean_clip_intra_kl]
-            )
-
-            self._all_kls = ext.compile_function(
-                inputs=[obs_var],
-                outputs=[all_kls_stack],
-            )
-
-        if self.reward_coef_kl and self.reward_coef_l2:
-            loss = surr_loss - self.reward_coef_kl * mean_clip_intra_kl - self.reward_coef_l2 * mean_clip_intra_l2
-        elif self.reward_coef_kl:
-            loss = surr_loss - self.reward_coef_kl * mean_clip_intra_kl
-        elif self.reward_coef_l2:
-            loss = surr_loss - self.reward_coef_l2 * mean_clip_intra_l2
-        else:
-            loss = surr_loss
+        loss = surr_loss
 
         input_list = [  ##these are sym var. the inputs in optimize_policy have to be in same order!
                          obs_var,
                          action_var,
                          advantage_var,
                          importance_weights,
-                         ##CF
+                         ##cf
                          latent_var,
                      ] + old_dist_info_vars_list  ##provide old mean and var, for the new states as they were sampled from it!
         if is_recurrent:
@@ -363,7 +369,7 @@ class NPO_snn(BatchPolopt):
             "observations", "actions", "advantages", "importance_weights"
         ))
         agent_infos = samples_data["agent_infos"]
-        ##CF
+        ##cf
         all_input_values += (agent_infos[
                                  "latents"],)  # latents has already been processed and is the concat of all latents, but keeps key "latents"
         info_list = [agent_infos[k] for k in
@@ -373,18 +379,18 @@ class NPO_snn(BatchPolopt):
             all_input_values += (samples_data["valids"],)
 
         loss_before = self.optimizer.loss(all_input_values)
-        # this should always be 0. If it's not there is a problem.
+        # this should always be 0. if it's not there is a problem.
         mean_kl_before = self.optimizer.constraint_val(all_input_values)
-        logger.record_tabular('MeanKL_Before', mean_kl_before)
+        logger.record_tabular('meankl_before', mean_kl_before)
 
-        with logger.prefix(' PolicyOptimize | '):
+        with logger.prefix(' policyoptimize | '):
             self.optimizer.optimize(all_input_values)
 
         mean_kl = self.optimizer.constraint_val(all_input_values)
         loss_after = self.optimizer.loss(all_input_values)
-        logger.record_tabular('LossAfter', loss_after)
-        logger.record_tabular('MeanKL', mean_kl)
-        logger.record_tabular('dLoss', loss_before - loss_after)
+        logger.record_tabular('lossafter', loss_after)
+        logger.record_tabular('meankl', mean_kl)
+        logger.record_tabular('dloss', loss_before - loss_after)
         return dict()
 
     @overrides
@@ -398,35 +404,35 @@ class NPO_snn(BatchPolopt):
 
     @overrides
     def log_diagnostics(self, paths):
-        BatchPolopt.log_diagnostics(self, paths)
+        batchpolopt.log_diagnostics(self, paths)
         for eval in self.bonus_evaluator:
             eval.log_diagnostics(paths)
         if self.policy.latent_dim:
             if self.latent_regressor:
                 with logger.prefix(
-                        ' Latent regressor logging | '):  # this is mostly useless as log_diagnostics is only tabular
+                        ' latent regressor logging | '):  # this is mostly useless as log_diagnostics is only tabular
                     self.latent_regressor.log_diagnostics(paths)
-            # log the MI with other obs and action
+            # log the mi with other obs and action
             for i, lat_reg in enumerate(self.other_regressors):
-                with logger.prefix(' Extra latent regressor {} | '.format(i)):  # same as above
+                with logger.prefix(' extra latent regressor {} | '.format(i)):  # same as above
                     lat_reg.fit(paths)
                     lat_reg.log_diagnostics(paths)
 
-            # extra logging
-            mean_clip_intra_kl = np.mean([self._mean_clip_intra_kl(path['observations']) for path in paths])
-            logger.record_tabular('mean_clip_intra_kl', mean_clip_intra_kl)
+            # # extra logging
+            # mean_clip_intra_kl = np.mean([self._mean_clip_intra_kl(path['observations']) for path in paths])
+            # logger.record_tabular('mean_clip_intra_kl', mean_clip_intra_kl)
 
-            all_kls = [self._all_kls(path['observations']) for path in paths]
+            # all_kls = [self._all_kls(path['observations']) for path in paths]
 
-            mean_clip_intra_l2 = np.mean([self._mean_clip_intra_l2(path['observations']) for path in paths])
-            logger.record_tabular('mean_clip_intra_l2', mean_clip_intra_l2)
+            # mean_clip_intra_l2 = np.mean([self._mean_clip_intra_l2(path['observations']) for path in paths])
+            # logger.record_tabular('mean_clip_intra_l2', mean_clip_intra_l2)
 
-            all_l2 = [self._all_l2(path['observations']) for path in paths]
-            print('table of mean l2:\n', np.mean(all_l2, axis=0))
+            # all_l2 = [self._all_l2(path['observations']) for path in paths]
+            # print('table of mean l2:\n', np.mean(all_l2, axis=0))
 
             if self.log_individual_latents and not self.policy.resample:  # this is only valid for finite discrete latents!!
                 all_latent_avg_returns = []
-                clustered_by_latents = collections.OrderedDict()  # this could be done within the distribution to be more general, but ugly
+                clustered_by_latents = collections.ordereddict()  # this could be done within the distribution to be more general, but ugly
                 for lat_key in range(self.policy.latent_dim):
                     # lat = from_index(i, self.policy.latent_dim)
                     clustered_by_latents[lat_key] = []
@@ -442,9 +448,9 @@ class NPO_snn(BatchPolopt):
                         else:
                             undiscounted_rewards = [0]
                         all_latent_avg_returns.append(np.mean(undiscounted_rewards))
-                        logger.record_tabular('Avg_TrueReturn', np.mean(undiscounted_rewards))
-                        logger.record_tabular('Std_TrueReturn', np.std(undiscounted_rewards))
-                        logger.record_tabular('Max_TrueReturn', np.max(undiscounted_rewards))
+                        logger.record_tabular('avg_truereturn', np.mean(undiscounted_rewards))
+                        logger.record_tabular('std_truereturn', np.std(undiscounted_rewards))
+                        logger.record_tabular('max_truereturn', np.max(undiscounted_rewards))
                         if self.log_deterministic:
                             lat = from_index(latent_key, self.policy.latent_dim)
                             with self.policy.fix_latent(lat), self.policy.set_std_to_0():
@@ -455,6 +461,20 @@ class NPO_snn(BatchPolopt):
                     logger.record_tabular('MaxAvgReturn', np.max(all_latent_avg_returns))
                     logger.record_tabular('MinAvgReturn', np.min(all_latent_avg_returns))
                     logger.record_tabular('StdAvgReturn', np.std(all_latent_avg_returns))
+
+                if self.log_hierarchy:
+                    max_in_path_length = 10
+                    completed_in_paths = 0
+                    path = rollout(self.env, self.policy, max_path_length=max_in_path_length, animated=False)
+                    if len(path['rewards']) == max_in_path_length:
+                        completed_in_paths += 1
+                        for t in range(1, 50):
+                            path = rollout_noEnvReset(self.env, self.policy, max_path_length=10, animated=False)
+                            if len(path['rewards']) < 10:
+                                break
+                            completed_in_paths += 1
+                    logger.record_tabular('Hierarchy', completed_in_paths)
+
         else:
             if self.log_deterministic:
                 with self.policy.set_std_to_0():
