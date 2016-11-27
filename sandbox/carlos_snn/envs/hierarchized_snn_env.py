@@ -9,7 +9,7 @@ from rllab.misc.overrides import overrides
 from rllab.envs.base import Step
 from rllab.misc import tensor_utils
 
-from sandbox.carlos_snn.sampler.utils import rollout  # this is a different rollout! (not doing the same: no reset!)
+from sandbox.carlos_snn.sampler.utils import rollout as rollout_noEnvReset  # different rollout! (no reset!)
 from sandbox.carlos_snn.old_my_snn.hier_snn_mlp_policy import GaussianMLPPolicy_snn_hier
 
 import joblib
@@ -23,6 +23,7 @@ class HierarchizedSnnEnv(ProxyEnv, Serializable):
             self,
             env,
             time_steps_agg=1,
+            discrete_actions=True,
             pkl_path=None,
             json_path=None,
             npz_path=None,
@@ -31,6 +32,7 @@ class HierarchizedSnnEnv(ProxyEnv, Serializable):
         Serializable.quick_init(self, locals())
         ProxyEnv.__init__(self, env)
         self.time_steps_agg = time_steps_agg
+        self.discrete_actions = discrete_actions
         self.animate = animate
         if json_path:
             self.data = json.load(open(os.path.join(config.PROJECT_PATH, json_path), 'r'))
@@ -59,15 +61,19 @@ class HierarchizedSnnEnv(ProxyEnv, Serializable):
     @overrides
     def action_space(self):
         lat_dim = self.low_policy_latent_dim
-        return spaces.Discrete(lat_dim)  # the action is now just a selection
+        if self.discrete_actions:
+            return spaces.Discrete(lat_dim)  # the action is now just a selection
+        else:
+            ub = 1e6 * np.ones(lat_dim)
+            return spaces.Box(-1 * ub, ub)
 
     @overrides
     def step(self, action):
         action = self.action_space.flatten(action)
         with self.low_policy.fix_latent(action):
             # print("From hier_snn_env --> the hier action is prefixed latent: {}".format(self.low_policy.pre_fix_latent))
-            frac_path = rollout(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg,
-                                animated=self.animate, speedup=1000)
+            frac_path = rollout_noEnvReset(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg,
+                                           animated=self.animate, speedup=1000)
             next_obs = frac_path['observations'][-1]
             reward = np.sum(frac_path['rewards'])
             done = self.time_steps_agg > len(
@@ -81,7 +87,12 @@ class HierarchizedSnnEnv(ProxyEnv, Serializable):
         if done:
             # print("\n ########## \n ***** done!! *****")
             # if done I need to PAD the tensor so there is no mismatch! Pad with what? with the last elem!
+            # I need to pad first the env_infos!!
+            frac_path['env_infos'] = tensor_utils.pad_tensor_dict(frac_path['env_infos'], self.time_steps_agg)
             full_path = tensor_utils.pad_tensor_dict(frac_path, self.time_steps_agg, mode='last')
+            # you might be padding the rewards!!! Error!!!
+            actual_path_length = len(frac_path['rewards'])
+            full_path['rewards'][actual_path_length:] = 0.
         else:
             full_path = frac_path
 
