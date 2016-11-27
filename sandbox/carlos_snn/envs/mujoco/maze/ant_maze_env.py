@@ -1,5 +1,7 @@
-from sandbox.carlos_snn.envs.mujoco.maze.maze_env import MazeEnv
+# from sandbox.carlos_snn.envs.mujoco.maze.maze_env import MazeEnv
+from sandbox.carlos_snn.envs.mujoco.maze.fast_maze_env import MazeEnv  # %^&*&^%
 from sandbox.carlos_snn.envs.mujoco.ant_env import AntEnv
+from rllab.misc.overrides import overrides
 
 from rllab.envs.normalized_env import normalize
 from rllab.core.serializable import Serializable
@@ -17,6 +19,7 @@ class AntMazeEnv(MazeEnv, Serializable):
     MAZE_SIZE_SCALING = 3.0
     # MAZE_MAKE_CONTACTS = True
 
+    @overrides
     def get_ori(self):
         ori = [0, 1, 0, 0]
         rot = self.wrapped_env.model.data.qpos[self.__class__.ORI_IND:self.__class__.ORI_IND + 4]  # take the quaternion
