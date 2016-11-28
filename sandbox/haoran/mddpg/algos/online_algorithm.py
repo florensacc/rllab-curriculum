@@ -3,6 +3,7 @@
 """
 import abc
 import time
+import gtimer as gt
 
 import numpy as np
 import tensorflow as tf
@@ -13,6 +14,7 @@ from rllab.algos.base import RLAlgorithm
 from rllab.misc import logger
 from rllab.misc.overrides import overrides
 from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
+from sandbox.rocky.tf.samplers.vectorized_sampler import VectorizedSampler
 
 
 
@@ -88,7 +90,11 @@ class OnlineAlgorithm(RLAlgorithm):
             self._init_tensorflow_ops()
         self.es_path_returns = []
 
+        #HT: in general, VectorizedSampler can significantly reduce
+        # PolicyExecTime, but not EnvExecTime. The latter consumes more
+        # computation in Mujoco tasks, so we prefer BatchSampler
         self.eval_sampler = BatchSampler(self)
+        # self.eval_sampler = VectorizedSampler(self,n_envs=16)
         self.scope = None
         self.whole_paths = True
 
@@ -106,13 +112,16 @@ class OnlineAlgorithm(RLAlgorithm):
             itr = 0
             path_length = 0
             path_return = 0
-            total_start_time = time.time()
             #WARN: one eval per epoch; one train per itr
-            for epoch in range(self.n_epochs):
+            gt.rename_root('online algo')
+            gt.reset()
+            gt.set_def_unique(False)
+            for epoch in gt.timed_for(
+                range(self.n_epochs),save_itrs=True
+            ):
                 logger.push_prefix('Epoch #%d | ' % epoch)
-                logger.log("Training started")
-                train_start_time = time.time()
                 for _ in range(self.epoch_length):
+                    # sampling
                     action = self.exploration_strategy.get_action(itr,
                                                                   observation,
                                                                   self.policy)
@@ -122,7 +131,9 @@ class OnlineAlgorithm(RLAlgorithm):
                     reward = raw_reward * self.scale_reward
                     path_length += 1
                     path_return += reward
+                    gt.stamp('train: sampling')
 
+                    # add experience to replay pool
                     self.pool.add_sample(observation,
                                          action,
                                          reward,
@@ -141,32 +152,45 @@ class OnlineAlgorithm(RLAlgorithm):
                         path_return = 0
                     else:
                         observation = next_ob
+                    gt.stamp('train: fill replay pool')
 
+                    # train
                     if self.pool.size >= self.min_pool_size:
                         self._do_training()
                     itr += 1
-
-                train_time = time.time() - train_start_time
-                logger.log("Training finished. Time: {0}".format(train_time))
+                    gt.stamp('train: updates')
 
                 # testing ---------------------------------
-                eval_start_time = time.time()
                 if self.n_eval_samples > 0:
                     self.evaluate(epoch, self.es_path_returns)
                     self.es_path_returns = []
-                eval_time = time.time() - eval_start_time
-                logger.log(
-                    "Eval time: {0}".format(eval_time))
+                gt.stamp("test")
 
                 # logging --------------------------------
                 params = self.get_epoch_snapshot(epoch)
                 logger.save_itr_params(epoch, params)
+                times = gt.get_times()
+                times_itrs = gt.get_times().stamps.itrs
+                train_time = np.sum([
+                    times_itrs[stamp][-1]
+                    for stamp in ["train: sampling",
+                    "train: fill replay pool","train: updates"]
+                ])
+                eval_time = times_itrs["test"][-1]
+                total_time = gt.get_times().total
                 logger.record_tabular("time: train",train_time)
                 logger.record_tabular("time: eval",eval_time)
-                total_time = time.time() - total_start_time
                 logger.record_tabular("time: total",total_time)
                 logger.dump_tabular(with_prefix=False)
                 logger.pop_prefix()
+                gt.stamp("logging")
+
+                print(gt.report(
+                    include_itrs=False,
+                    format_options={
+                        'itr_name_width': 30
+                    },
+                ))
             self.env.terminate()
             return self.last_statistics
 

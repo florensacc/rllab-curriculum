@@ -27,6 +27,10 @@ class NNPolicy(NeuralNetwork, Policy):
         return self.sess.run(self.output,
                              {self.observations_placeholder: [observation]}), {}
 
+    def get_actions(self, observations):
+        return self.sess.run(self.output,
+                             {self.observations_placeholder: observations}), {}
+
     def create_network(self):
         """
         Use self.observations_placeholder to create an output. (To be

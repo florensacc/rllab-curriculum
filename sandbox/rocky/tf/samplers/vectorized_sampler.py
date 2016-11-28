@@ -32,16 +32,16 @@ class VectorizedSampler(BaseSampler):
             )
         self.env_spec = self.algo.env.spec
 
-    def shutdown_worker(self):
+    def shn_envswn_worker(self):
         self.vec_env.terminate()
 
     def obtain_samples(self, itr, max_path_length, batch_size):
         logger.log("Obtaining samples for iteration %d..." % itr)
         paths = []
         n_samples = 0
-        obses = self.vec_env.reset()
-        dones = np.asarray([True] * self.vec_env.num_envs)
-        running_paths = [None] * self.vec_env.num_envs
+        dones = np.asarray([True] * self.vec_env.n_envs)
+        obses = self.vec_env.reset(dones)
+        running_paths = [None] * self.vec_env.n_envs
 
         pbar = ProgBarCounter(batch_size)
         policy_time = 0
@@ -52,7 +52,11 @@ class VectorizedSampler(BaseSampler):
         import time
         while n_samples < batch_size:
             t = time.time()
-            policy.reset(dones)
+            try:
+                #HT: feeding "dones" only helps with recurrent policies?
+                policy.reset(dones)
+            except:
+                policy.reset()
             actions, agent_infos = policy.get_actions(obses)
 
             policy_time += time.time() - t
@@ -65,9 +69,9 @@ class VectorizedSampler(BaseSampler):
             agent_infos = tensor_utils.split_tensor_dict_list(agent_infos)
             env_infos = tensor_utils.split_tensor_dict_list(env_infos)
             if env_infos is None:
-                env_infos = [dict() for _ in range(self.vec_env.num_envs)]
+                env_infos = [dict() for _ in range(self.vec_env.n_envs)]
             if agent_infos is None:
-                agent_infos = [dict() for _ in range(self.vec_env.num_envs)]
+                agent_infos = [dict() for _ in range(self.vec_env.n_envs)]
             for idx, observation, action, reward, env_info, agent_info, done in zip(itertools.count(), obses, actions,
                                                                                     rewards, env_infos, agent_infos,
                                                                                     dones):
