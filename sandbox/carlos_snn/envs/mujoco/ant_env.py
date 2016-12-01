@@ -1,6 +1,7 @@
 from rllab.envs.base import Step
 from rllab.misc.overrides import overrides
-from rllab.envs.mujoco.mujoco_env import MujocoEnv
+# from rllab.envs.mujoco.mujoco_env import MujocoEnv
+from sandbox.carlos_snn.envs.mujoco.mujoco_env import MujocoEnv_ObsInit as MujocoEnv
 import numpy as np
 from rllab.core.serializable import Serializable
 from rllab.misc import logger
@@ -8,9 +9,6 @@ from rllab.misc import autoargs
 
 import matplotlib as mpl
 from functools import reduce
-
-# from matplotlib.figure import Figure
-# from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 mpl.use('Agg')
 import matplotlib.pyplot as plt
@@ -104,7 +102,7 @@ class AntEnv(MujocoEnv, Serializable):
                     contact_cost=contact_cost, survive_reward=survive_reward)
 
     @overrides
-    def log_diagnostics(self, paths):
+    def log_diagnostics(self, paths, prefix=''):
         progs = [
             np.linalg.norm(path["env_infos"]["com"][-1] - path["env_infos"]["com"][0])
             for path in paths
@@ -113,9 +111,9 @@ class AntEnv(MujocoEnv, Serializable):
         logger.record_tabular('MaxForwardProgress', np.max(progs))
         logger.record_tabular('MinForwardProgress', np.min(progs))
         logger.record_tabular('StdForwardProgress', np.std(progs))
-        self.plot_visitations(paths)
+        self.plot_visitations(paths, prefix=prefix)
 
-    def plot_visitations(self, paths, mesh_density=10, maze=None, scaling=2):
+    def plot_visitations(self, paths, mesh_density=20, prefix='', maze=None, scaling=2):
         fig, ax = plt.subplots()
         # now we will grid the space and check how much of it the policy is covering
         x_max = np.ceil(np.max(np.abs(np.concatenate([path["env_infos"]['com'][:, 0] for path in paths]))))
@@ -209,9 +207,9 @@ class AntEnv(MujocoEnv, Serializable):
 
         log_dir = logger.get_snapshot_dir()
         exp_name = log_dir.split('/')[-1] if log_dir else '?'
-        ax.set_title('visitation: ' + exp_name)
+        ax.set_title(prefix + 'visitation: ' + exp_name)
 
-        plt.savefig(osp.join(log_dir, 'visitation.png'))  # this saves the current figure, here f
+        plt.savefig(osp.join(log_dir, prefix + 'visitation.png'))  # this saves the current figure, here f
         plt.close()
 
         radius_furthest075 = {True: 1, False: 1}
@@ -227,12 +225,13 @@ class AntEnv(MujocoEnv, Serializable):
                     radius_furthest05[bool(visitation_all[i, j])] += 1
                 if 5. - delta < dist_to_origin < 5. + delta:
                     radius_5[bool(visitation_all[i, j])] += 1
-        logger.record_tabular('r_furthest075', radius_furthest075[True]/radius_furthest075[False])
-        logger.record_tabular('r_furthest05', radius_furthest05[True]/radius_furthest05[False])
-        logger.record_tabular('r_5', radius_5[True]/radius_5[False])
-        total_visitation = np.count_nonzero(visitation_all)
-        logger.record_tabular('VisitationTotal', total_visitation)
-        logger.record_tabular('VisitationOverlap', overlap)
+        with logger.tabular_prefix(prefix):
+            logger.record_tabular('r_furthest075', radius_furthest075[True]/radius_furthest075[False])
+            logger.record_tabular('r_furthest05', radius_furthest05[True]/radius_furthest05[False])
+            logger.record_tabular('r_5', radius_5[True]/radius_5[False])
+            total_visitation = np.count_nonzero(visitation_all)
+            logger.record_tabular('VisitationTotal', total_visitation)
+            logger.record_tabular('VisitationOverlap', overlap)
 
         ####
         # This was giving some problem with matplotlib and maximum number of colors
