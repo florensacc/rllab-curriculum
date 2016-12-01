@@ -4,20 +4,19 @@ import time
 from rllab.envs.normalized_env import NormalizedEnv  # this is just to check if the env passed is a normalized maze
 
 
-def rollout(env, agent, max_path_length=np.inf, reset_com=False, animated=False, speedup=1):
+def rollout(env, agent, max_path_length=np.inf, reset_start_rollout=True, animated=False, speedup=1):
     observations = []
     actions = []
     rewards = []
     agent_infos = []
     env_infos = []
-    # o = env.reset()  # otherwise it will never advance!!
-    if isinstance(env, NormalizedEnv):
-        o = env.wrapped_env.get_current_obs()
+    if reset_start_rollout:
+        o = env.reset()  # otherwise it will never advance!!
     else:
-        o = env.get_current_obs()
-    if reset_com:
-        o[-3:-1] = 0
-        o = env.reset(init_state=o)
+        if isinstance(env, NormalizedEnv):
+            o = env.wrapped_env.get_current_obs()
+        else:
+            o = env.get_current_obs()
     agent.reset()
     path_length = 0
     if animated:
