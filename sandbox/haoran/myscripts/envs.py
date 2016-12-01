@@ -9,6 +9,9 @@ from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.envs.box2d.double_pendulum_env import DoublePendulumEnv
 from rllab.envs.mujoco.inverted_double_pendulum_env import InvertedDoublePendulumEnv
 
+from sandbox.haoran.mddpg.envs.mujoco.swimmer_undirected_env import \
+    SwimmerUndirectedEnv
+
 class EnvChooser(object):
     def __init__(self):
         pass
@@ -16,6 +19,8 @@ class EnvChooser(object):
     def choose_env(self,env_name,**kwargs):
         if env_name == "swimmer":
             env = SwimmerEnv(**kwargs)
+        elif env_name == "swimmer_undirected":
+            env = SwimmerUndirectedEnv(**kwargs)
         elif env_name == "hopper":
             env = HopperEnv(**kwargs)
         elif env_name == "walker":

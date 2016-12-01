@@ -40,10 +40,23 @@ class NNCritic(NeuralNetwork):
             self.variable_scope = variable_scope
 
     def get_weight_tied_copy(self, action_input):
-        return self.get_copy(
+        """
+        HT: basically, re-run __init__ with specified kwargs. In particular,
+        the variable scope doesn't change, and self.observations_placeholder
+        and NN params are reused.
+        """
+        # This original version may try to pickle tensors, causing bugs
+        # return self.get_copy(
+        #     scope_name=self.scope_name,
+        #     action_input=action_input,
+        #     reuse=True)
+        return self.__class__(
             scope_name=self.scope_name,
+            observation_dim=self.observation_dim,
+            action_dim=self.action_dim,
             action_input=action_input,
-            reuse=True)
+            reuse=True,
+        )
 
     def create_network(self, action_input):
         raise NotImplementedError

@@ -1,13 +1,14 @@
 """
-Here we briefly explore how multiple cores accelerate DDPG training
-002a: c4.x
-002b: c4.2x
-002c: c4.4x
+Conservative version of MDDPG
+
+Test whether the implementation is correct
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
-from sandbox.haoran.mddpg.algos.ddpg import DDPG
-from sandbox.haoran.mddpg.policies.nn_policy import FeedForwardPolicy
+from sandbox.haoran.mddpg.algos.mddpg import MDDPG
+from sandbox.haoran.mddpg.policies.mnn_policy import \
+    FeedForwardMultiPolicy, MNNStrategy
+from sandbox.haoran.mddpg.kernels.gaussian_kernel import DiagonalGaussianKernel
 from sandbox.haoran.mddpg.qfunctions.nn_qfunction import FeedForwardCritic
 from sandbox.haoran.myscripts.envs import EnvChooser
 from sandbox.rocky.tf.envs.base import TfEnv
@@ -22,6 +23,7 @@ from rllab import config
 from rllab.misc.instrument import stub, run_experiment_lite
 import sys,os
 import copy
+import numpy as np
 
 stub(globals())
 
@@ -29,9 +31,9 @@ from rllab.misc.instrument import VariantGenerator, variant
 
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
-exp_prefix = "mddpg/tests/" + exp_index
-mode = "ec2_test"
-ec2_instance = "c4.8xlarge"
+exp_prefix = "mddpg/c_mddpg/" + exp_index
+mode = "ec2"
+ec2_instance = "c4.2xlarge"
 subnet = "us-west-1c"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
@@ -45,7 +47,7 @@ sync_s3_pkl = True
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [0]
+        return [0,100,200]
 
     @variant
     def env_name(self):
@@ -67,6 +69,9 @@ class VG(VariantGenerator):
     @variant
     def alive_coeff(self):
         return [0.5]
+    @variant
+    def K(self):
+        return [1,2,4]
 
 variants = VG().variants()
 
@@ -77,10 +82,13 @@ for v in variants:
     # algo
     seed=v["seed"]
     env_name = v["env_name"]
+    K = v["K"]
+    q_target_type = "max"
+    sigma=0.01
 
     if mode == "local_test" or mode == "local_docker_test":
         ddpg_kwargs = dict(
-            epoch_length = 10000,
+            epoch_length = 100,
             min_pool_size = 2,
             eval_samples = 10,
             n_epochs=5,
@@ -89,6 +97,7 @@ for v in variants:
         ddpg_kwargs = dict(
             epoch_length=20000,
             batch_size=v["batch_size"],
+            n_epochs=500,
         )
     env_kwargs = {
         "alive_coeff": v["alive_coeff"]
@@ -146,22 +155,35 @@ for v in variants:
     env_chooser = EnvChooser()
     env = TfEnv(normalize(env_chooser.choose_env(env_name,**env_kwargs)))
 
-    es = OUStrategy(env_spec=env.spec)
+    es = MNNStrategy(
+        K=K,
+        substrategy=OUStrategy(env_spec=env.spec),
+        switch_type="per_path"
+    )
     qf = FeedForwardCritic(
         "critic",
         env.observation_space.flat_dim,
         env.action_space.flat_dim,
     )
-    policy = FeedForwardPolicy(
+    policy = FeedForwardMultiPolicy(
         "actor",
         env.observation_space.flat_dim,
         env.action_space.flat_dim,
+        K=K,
     )
-    algorithm = DDPG(
-        env,
-        es,
-        policy,
-        qf,
+    kernel = DiagonalGaussianKernel(
+        "kernel",
+        dim=env.action_space.flat_dim,
+        sigma=sigma,
+    )
+    algorithm = MDDPG(
+        env=env,
+        exploration_strategy=es,
+        policy=policy,
+        kernel=kernel,
+        qf=qf,
+        K=K,
+        q_target_type=q_target_type,
         **ddpg_kwargs
     )
 

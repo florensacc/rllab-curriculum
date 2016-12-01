@@ -15,6 +15,7 @@ from rllab.misc import logger
 from rllab.misc.overrides import overrides
 from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 from sandbox.rocky.tf.samplers.vectorized_sampler import VectorizedSampler
+from sandbox.haoran.myscripts import tf_utils
 
 
 
@@ -85,7 +86,7 @@ class OnlineAlgorithm(RLAlgorithm):
                                      self.observation_dim,
                                      self.action_dim)
         self.last_statistics = OrderedDict()
-        self.sess = tf.get_default_session() or tf.Session()
+        self.sess = tf.get_default_session() or tf_utils.create_session()
         with self.sess.as_default():
             self._init_tensorflow_ops()
         self.es_path_returns = []
