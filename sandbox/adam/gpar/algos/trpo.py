@@ -9,11 +9,10 @@ from rllab.misc.overrides import overrides
 
 class TRPO(NPO):
     """
-    Trust Region Policy Optimization
+    Trust Region Policy Optimization.
     CHANGES:
-    1. Class inheritance.
-    2. Different optimizer file -- speedups.
-    3. Refactored optimize policy -- move logging inside optimizer to remove
+    1. Different optimizer file -- speedups.
+    2. Refactored optimize policy -- move logging inside optimizer to remove
        redundant calculations.
     """
 
@@ -28,9 +27,7 @@ class TRPO(NPO):
             optimizer = ConjugateGradientOptimizer(**optimizer_args)
         super(TRPO, self).__init__(optimizer=optimizer, **kwargs)
 
-
-    @overrides
-    def optimize_policy(self, itr, samples_data):
+    def prepare_opt_inputs(self, samples_data):
         all_input_values = tuple(ext.extract(
             samples_data,
             "observations", "actions", "advantages"
@@ -41,14 +38,12 @@ class TRPO(NPO):
         all_input_values += tuple(state_info_list) + tuple(dist_info_list)
         if self.policy.recurrent:
             all_input_values += (samples_data["valids"],)
-        # loss_before = self.optimizer.loss(all_input_values)
-        # mean_kl_before = self.optimizer.constraint_val(all_input_values)
+        return all_input_values
+
+    @overrides
+    def optimize_policy(self, itr, samples_data):
+        all_input_values = self.prepare_opt_inputs(samples_data)
         self.optimizer.optimize(all_input_values)
-        # mean_kl = self.optimizer.constraint_val(all_input_values)
-        # loss_after = self.optimizer.loss(all_input_values)
-        # logger.record_tabular('LossBefore', loss_before)
-        # logger.record_tabular('LossAfter', loss_after)
-        # logger.record_tabular('MeanKLBefore', mean_kl_before)
-        # logger.record_tabular('MeanKL', mean_kl)
-        # logger.record_tabular('dLoss', loss_before - loss_after)
         return dict()
+
+

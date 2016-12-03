@@ -1,6 +1,7 @@
 from rllab.envs.base import Step
 from rllab.misc.overrides import overrides
-from rllab.envs.mujoco.mujoco_env import MujocoEnv
+# from rllab.envs.mujoco.mujoco_env import MujocoEnv
+from sandbox.carlos_snn.envs.mujoco.mujoco_env import MujocoEnv_ObsInit as MujocoEnv
 import numpy as np
 from rllab.core.serializable import Serializable
 from rllab.misc import logger
@@ -8,9 +9,6 @@ from rllab.misc import autoargs
 
 import matplotlib as mpl
 from functools import reduce
-
-# from matplotlib.figure import Figure
-# from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 mpl.use('Agg')
 import matplotlib.pyplot as plt
@@ -26,7 +24,7 @@ class AntEnv(MujocoEnv, Serializable):
     @autoargs.arg('ctrl_cost_coeff', type=float,
                   help='cost coefficient for controls')
     def __init__(self,
-                 ctrl_cost_coeff=1e-2,
+                 ctrl_cost_coeff=1e-2,  # gym has 1 here!
                  rew_speed=False,  # if True the dot product is taken with the speed instead of the position
                  rew_dir=None,  # (x,y,z) -> Rew=dot product of the CoM SPEED with this dir. Otherwise, DIST to 0
                  ego_obs=False,
@@ -73,10 +71,7 @@ class AntEnv(MujocoEnv, Serializable):
             direction_com = self.get_body_com('torso')
         if self.reward_dir:
             direction = np.array(self.reward_dir, dtype=float) / np.linalg.norm(self.reward_dir)
-            print('my direction of reward:', direction)
-            print('my com: ', direction_com)
             forward_reward = np.dot(direction, direction_com)
-            print("the dot prod, ", forward_reward)
         else:
             forward_reward = np.linalg.norm(
                 direction_com[0:-1])  # instead of comvel[0] (does this give jumping reward??)
@@ -84,8 +79,8 @@ class AntEnv(MujocoEnv, Serializable):
         scaling = (ub - lb) * 0.5
         ctrl_cost = 0.5 * self.ctrl_cost_coeff * np.sum(np.square(action / scaling))
         contact_cost = 0.5 * 1e-3 * np.sum(
-            np.square(np.clip(self.model.data.cfrc_ext, -1, 1))),  # what is this??
-        survive_reward = 0.05  # this is not in swimmer neither!!
+            np.square(np.clip(self.model.data.cfrc_ext, -1, 1)))
+        survive_reward = 0.05  # this is not in swimmer neither!! And in the GYM env it's 1!!!
 
         if self.sparse:
             if np.linalg.norm(self.get_body_com("torso")[0:2]) > 10.0:
@@ -95,16 +90,19 @@ class AntEnv(MujocoEnv, Serializable):
         else:
             reward = forward_reward - ctrl_cost - contact_cost + survive_reward
 
+        # print("Forward reward: {}\nCtrl_cost: {}\nContact_cost: {}\n".format(forward_reward, ctrl_cost, contact_cost))
         state = self._state
         notdone = np.isfinite(state).all() \
-                  and state[2] >= 0.3 and state[2] <= 2.0  # this was 0.2 and 1.0
+                  and state[2] >= 0.3 and state[2] <= 1.0  # this was 0.2 and 1.0
         done = not notdone
         ob = self.get_current_obs()
         com = np.concatenate([self.get_body_com("torso").flat]).reshape(-1)
-        return Step(ob, float(reward), done, com=com)
+        return Step(ob, float(reward), done,
+                    com=com, forward_reward=forward_reward, ctrl_cost=ctrl_cost,
+                    contact_cost=contact_cost, survive_reward=survive_reward)
 
     @overrides
-    def log_diagnostics(self, paths):
+    def log_diagnostics(self, paths, prefix=''):
         progs = [
             np.linalg.norm(path["env_infos"]["com"][-1] - path["env_infos"]["com"][0])
             for path in paths
@@ -113,9 +111,9 @@ class AntEnv(MujocoEnv, Serializable):
         logger.record_tabular('MaxForwardProgress', np.max(progs))
         logger.record_tabular('MinForwardProgress', np.min(progs))
         logger.record_tabular('StdForwardProgress', np.std(progs))
-        self.plot_visitations(paths)
+        self.plot_visitations(paths, prefix=prefix)
 
-    def plot_visitations(self, paths, mesh_density=10, maze=None, scaling=2):
+    def plot_visitations(self, paths, mesh_density=20, prefix='', maze=None, scaling=2):
         fig, ax = plt.subplots()
         # now we will grid the space and check how much of it the policy is covering
         x_max = np.ceil(np.max(np.abs(np.concatenate([path["env_infos"]['com'][:, 0] for path in paths]))))
@@ -134,7 +132,7 @@ class AntEnv(MujocoEnv, Serializable):
                                                         and np.size(paths[0]['agent_infos']['latents'])) or
                                                            ('selectors' in list(paths[0]['agent_infos'].keys())
                                                             and np.size(paths[0]['agent_infos']['selectors']))):
-            selectors_name = 'latents' if 'latents' in list(paths[0]['agent_infos'].keys()) else 'selectors'
+            selectors_name = 'selectors' if 'selectors' in list(paths[0]['agent_infos'].keys()) else 'latents'
             dict_visit = collections.OrderedDict()  # keys: latents, values: np.array with number of visitations
             num_latents = np.size(paths[0]["agent_infos"][selectors_name][0])
             # set all the labels for the latents and initialize the entries of dict_visit
@@ -145,7 +143,7 @@ class AntEnv(MujocoEnv, Serializable):
             overlap = 0
             # now plot all the paths
             for path in paths:
-                lats = [np.nonzero(lat)[0][0] for lat in path['agent_infos'][selectors_name]]  # list of all lats by idx
+                lats = [np.argmax(lat, axis=-1) for lat in path['agent_infos'][selectors_name]]  # list of all lats by idx
                 com_x = np.ceil(((np.array(path['env_infos']['com'][:, 0]) + furthest) * mesh_density)).astype(int)
                 com_y = np.ceil(((np.array(path['env_infos']['com'][:, 1]) + furthest) * mesh_density)).astype(int)
                 coms = list(zip(com_x, com_y))
@@ -209,9 +207,9 @@ class AntEnv(MujocoEnv, Serializable):
 
         log_dir = logger.get_snapshot_dir()
         exp_name = log_dir.split('/')[-1] if log_dir else '?'
-        ax.set_title('visitation: ' + exp_name)
+        ax.set_title(prefix + 'visitation: ' + exp_name)
 
-        plt.savefig(osp.join(log_dir, 'visitation.png'))  # this saves the current figure, here f
+        plt.savefig(osp.join(log_dir, prefix + 'visitation.png'))  # this saves the current figure, here f
         plt.close()
 
         radius_furthest075 = {True: 1, False: 1}
@@ -227,12 +225,13 @@ class AntEnv(MujocoEnv, Serializable):
                     radius_furthest05[bool(visitation_all[i, j])] += 1
                 if 5. - delta < dist_to_origin < 5. + delta:
                     radius_5[bool(visitation_all[i, j])] += 1
-        logger.record_tabular('r_furthest075', radius_furthest075[True]/radius_furthest075[False])
-        logger.record_tabular('r_furthest05', radius_furthest05[True]/radius_furthest05[False])
-        logger.record_tabular('r_5', radius_5[True]/radius_5[False])
-        total_visitation = np.count_nonzero(visitation_all)
-        logger.record_tabular('VisitationTotal', total_visitation)
-        logger.record_tabular('VisitationOverlap', overlap)
+        with logger.tabular_prefix(prefix):
+            logger.record_tabular('r_furthest075', radius_furthest075[True]/radius_furthest075[False])
+            logger.record_tabular('r_furthest05', radius_furthest05[True]/radius_furthest05[False])
+            logger.record_tabular('r_5', radius_5[True]/radius_5[False])
+            total_visitation = np.count_nonzero(visitation_all)
+            logger.record_tabular('VisitationTotal', total_visitation)
+            logger.record_tabular('VisitationOverlap', overlap)
 
         ####
         # This was giving some problem with matplotlib and maximum number of colors

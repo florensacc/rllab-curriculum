@@ -129,6 +129,8 @@ class SGDOptimizer(Serializable):
             losses = []
             diags = OrderedDict([(k, []) for k in self.diagnostic_vars.keys()])
             for batch_idx in range(0, N, batch_size):
+                # must permute inputs first; otherwise minibatches are correlated
+                raise NotImplementedError
                 batch_sliced_inputs = [x[batch_idx:batch_idx + self.batch_size] for x in inputs]
                 _, loss, *diagnostics = self.f_train(*(batch_sliced_inputs + extra_inputs))
                 losses.append(loss)

@@ -268,7 +268,8 @@ class MazeEnv(ProxyEnv, Serializable):
         # The observation would include both information about the robot itself as well as the sensors around its
         # environment
         robot_x, robot_y = self.wrapped_env.get_body_com("torso")[:2]
-        ori = self.wrapped_env.model.data.qpos[self.__class__.ORI_IND]
+        ori = self.get_ori()
+        # ori = self.wrapped_env.model.data.qpos[self.__class__.ORI_IND]
 
         # print ori
 
@@ -342,6 +343,9 @@ class MazeEnv(ProxyEnv, Serializable):
         return np.concatenate([self.wrapped_env.get_current_obs(),
                                self.get_current_maze_obs()
                                ])
+
+    def get_ori(self):
+        return self.wrapped_env.model.data.qpos[self.__class__.ORI_IND]
 
     @property
     @overrides
@@ -436,4 +440,4 @@ class MazeEnv(ProxyEnv, Serializable):
             if 'env_infos' in paths[0].keys() and 'inner_reward' in paths[0]['env_infos'].keys():
                 wrapped_undiscounted_return = np.mean([np.sum(path['env_infos']['inner_reward']) for path in paths])
                 logger.record_tabular('AverageReturn', wrapped_undiscounted_return)
-            self.wrapped_env.log_diagnostics(stripped_paths)  # see swimmer_env.py for a scketch of the maze plotting!
+            self.wrapped_env.log_diagnostics(stripped_paths, *args, **kwargs)  # see swimmer_env.py for a scketch of the maze plotting!

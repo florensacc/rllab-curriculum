@@ -1,17 +1,18 @@
 from rllab.misc import ext
 from rllab.misc.overrides import overrides
 # from rllab.algos.batch_polopt import BatchPolopt
-from sandbox.adam.gpar.algos.batch_polopt import ParallelGpuBatchPolopt
-import rllab.misc.logger as logger
+# from sandbox.adam.gpar.algos.batch_polopt import ParallelGpuBatchPolopt
+from sandbox.adam.gpar.algos.batch_polopt import BatchPolopt
+# import rllab.misc.logger as logger
 import theano
 import theano.tensor as TT
 from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 
 
-class NPO(ParallelGpuBatchPolopt):
+class NPO(BatchPolopt):
     """
     Natural Policy Optimization.
-    ONLY CHANGE: Class inheritance.
+    ONLY CHANGES: Class inheritance, set device to GPU.
     """
 
     def __init__(
@@ -33,6 +34,8 @@ class NPO(ParallelGpuBatchPolopt):
 
     @overrides
     def init_opt(self):
+        # theano.sandbox.cuda.use('gpu0')
+
         is_recurrent = int(self.policy.recurrent)
         obs_var = self.env.observation_space.new_tensor_variable(
             'obs',
@@ -100,29 +103,29 @@ class NPO(ParallelGpuBatchPolopt):
         )
         return dict()
 
-    @overrides
-    def optimize_policy(self, itr, samples_data):
-        all_input_values = tuple(ext.extract(
-            samples_data,
-            "observations", "actions", "advantages"
-        ))
-        agent_infos = samples_data["agent_infos"]
-        state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
-        dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
-        all_input_values += tuple(state_info_list) + tuple(dist_info_list)
-        if self.policy.recurrent:
-            all_input_values += (samples_data["valids"],)
-        loss_before = self.optimizer.loss(all_input_values)
-        mean_kl_before = self.optimizer.constraint_val(all_input_values)
-        self.optimizer.optimize(all_input_values)
-        mean_kl = self.optimizer.constraint_val(all_input_values)
-        loss_after = self.optimizer.loss(all_input_values)
-        logger.record_tabular('LossBefore', loss_before)
-        logger.record_tabular('LossAfter', loss_after)
-        logger.record_tabular('MeanKLBefore', mean_kl_before)
-        logger.record_tabular('MeanKL', mean_kl)
-        logger.record_tabular('dLoss', loss_before - loss_after)
-        return dict()
+    # @overrides
+    # def optimize_policy(self, itr, samples_data):
+    #     all_input_values = tuple(ext.extract(
+    #         samples_data,
+    #         "observations", "actions", "advantages"
+    #     ))
+    #     agent_infos = samples_data["agent_infos"]
+    #     state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
+    #     dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
+    #     all_input_values += tuple(state_info_list) + tuple(dist_info_list)
+    #     if self.policy.recurrent:
+    #         all_input_values += (samples_data["valids"],)
+    #     loss_before = self.optimizer.loss(all_input_values)
+    #     mean_kl_before = self.optimizer.constraint_val(all_input_values)
+    #     self.optimizer.optimize(all_input_values)
+    #     mean_kl = self.optimizer.constraint_val(all_input_values)
+    #     loss_after = self.optimizer.loss(all_input_values)
+    #     logger.record_tabular('LossBefore', loss_before)
+    #     logger.record_tabular('LossAfter', loss_after)
+    #     logger.record_tabular('MeanKLBefore', mean_kl_before)
+    #     logger.record_tabular('MeanKL', mean_kl)
+    #     logger.record_tabular('dLoss', loss_before - loss_after)
+    #     return dict()
 
     @overrides
     def get_itr_snapshot(self, itr, samples_data):

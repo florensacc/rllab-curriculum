@@ -132,14 +132,39 @@ class ALEHashingBonusEvaluator(object):
                 if keys is None:
                     keys = new_keys
                 else:
-                    keys = np.concatenate([keys,new_keys])
+                    if isinstance(keys, np.ndarray):
+                        keys = np.concatenate([keys,new_keys])
+                    elif isinstance(keys, list):
+                        keys = keys + new_keys
+                    else:
+                        raise NotImplementedError
         return keys
 
     def fit_before_process_samples(self, paths):
         if self.parallel:
             shareds, barriers = self._par_objs
-            keys = self.retrieve_keys(paths)
-            prev_counts = self.hash.query_keys(keys)
+
+            # avoid re-computing keys and counts if they are already computed (probably in self.predict())
+            # storing keys is necessary when converting the keys into memory and speed optimized forms takes time
+            # storing counts is necessary if we count with a shared dict, which is slow in query
+            if "keys" in paths[0]:
+                example_path_keys = paths[0]["keys"]
+                if isinstance(example_path_keys, list):
+                    keys = []
+                    for path in paths:
+                        keys = keys + path["keys"]
+                elif isinstance(example_path_keys, np.ndarray):
+                    keys = np.concatenate([path["keys"] for path in paths])
+                else:
+                    raise NotImplementedError
+            else:
+                keys = self.retrieve_keys(paths)
+
+            if "counts" in paths[0]:
+                prev_counts = np.concatenate([path["counts"] for path in paths])
+            else:
+                prev_counts = self.hash.query_keys(keys)
+
             #FIXME: if a new state is encountered by more than one process, then it is counted more than once
             shareds.max_state_count_vec[self.rank] = max(prev_counts)
             shareds.min_state_count_vec[self.rank] = min(prev_counts)
@@ -219,6 +244,8 @@ class ALEHashingBonusEvaluator(object):
             counts = np.asarray(counts_updated)
         else:
             counts = np.maximum(counts, 1)
+        path["keys"] = keys
+        path["counts"] = counts
 
         if self.bonus_form == "1/n":
             bonuses = 1./counts

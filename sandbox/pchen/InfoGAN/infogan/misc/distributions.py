@@ -1833,7 +1833,7 @@ class ConvAR(Distribution):
         x_var, context_var = \
             tf.placeholder(tf.float32, shape=[n,]+list(self._shape)), \
             tf.placeholder(tf.float32, shape=[n, self.dist_flat_dim])
-        tgt_dict = self.infer(x_var, context_var)
+        tgt_dict = self._tgt_dist.activate_dist(self.infer(x_var, context_var))
         go, logpz = self.reshaped_sample_logli(tgt_dict)
         return x_var, context_var, go, tgt_dict
 
@@ -2037,6 +2037,7 @@ class CondPixelCNN(Distribution):
         self._name = "%sD_PixelCNN_id_%s" % (shape, G_IDX)
         self._shape = shape
         self._dim = np.prod(shape)
+        self._context_dim = nr_filters
         global G_IDX
         G_IDX += 1
         self._custom_phase = CustomPhase.train
@@ -2286,6 +2287,18 @@ class CondPixelCNN(Distribution):
             tf.reshape(logli, [-1, self._shape[0] * self._shape[1]]),
             reduction_indices=1
         )
+
+    @functools.lru_cache(maxsize=None)
+    def sample_sym(self, n, unconditional=False):
+        x_var, context_var = \
+            tf.placeholder(tf.float32, shape=[n,]+list(self._shape)), \
+            tf.placeholder(tf.float32, shape=[n, ] + list(self._shape[:2]) + [self.nr_filters])
+        causal = self.infer_temp(x_var)
+        if unconditional:
+            context_var = context_var * 0.
+        tgt_vec = self.cond_temp(causal, context_var)
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+        return x_var, context_var, nn.sample_from_discretized_mix_logistic(tgt_vec, self.nr_logistic_mix) / 2 # convert back to 0.5 scale
 
     @functools.lru_cache(maxsize=None)
     def sample_one_step(self, x_var, info):

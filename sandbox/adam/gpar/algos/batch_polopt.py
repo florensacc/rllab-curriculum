@@ -1,25 +1,42 @@
 from rllab.algos.base import RLAlgorithm
-# from rllab.sampler import parallel_sampler
-# from rllab.sampler.base import BaseSampler
+from rllab.sampler import parallel_sampler
+from rllab.sampler.base import BaseSampler
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
+from rllab.policies.base import Policy
 
-from rllab.misc import ext
-import multiprocessing as mp
-import numpy as np
-import psutil
-from sandbox.adam.gpar.sampler.parallel_gpu_sampler import ParallelGpuSampler
-from sandbox.adam.gpar.sampler.gpar_multisampler import GParMultiSampler
-from sandbox.adam.gpar.sampler.pairwise_gpu_sampler import PairwiseGpuSampler
-from sandbox.adam.gpar.sampler.pairwise_gpu_sampler_2 import PairwiseGpuSampler_2
-from sandbox.adam.gpar.sampler.pairwise_gpu_sampler_3 import PairwiseGpuSampler_3
-import cProfile
 import gtimer as gt
-import time
-import copy
 
 
-class ParallelGpuBatchPolopt(RLAlgorithm):
+class BatchSampler(BaseSampler):
+    def __init__(self, algo):
+        """
+        :type algo: BatchPolopt
+        """
+        self.algo = algo
+
+    def start_worker(self):
+        parallel_sampler.populate_task(self.algo.env, self.algo.policy, scope=self.algo.scope)
+
+    def shutdown_worker(self):
+        parallel_sampler.terminate_task(scope=self.algo.scope)
+
+    def obtain_samples(self, itr):
+        cur_params = self.algo.policy.get_param_values()
+        paths = parallel_sampler.sample_paths(
+            policy_params=cur_params,
+            max_samples=self.algo.batch_size,
+            max_path_length=self.algo.max_path_length,
+            scope=self.algo.scope,
+        )
+        if self.algo.whole_paths:
+            return paths
+        else:
+            paths_truncated = parallel_sampler.truncate_paths(paths, self.algo.batch_size)
+            return paths_truncated
+
+
+class BatchPolopt(RLAlgorithm):
     """
     Base class for batch sampling-based policy optimization methods.
     This includes various policy gradient methods like vpg, npg, ppo, trpo, etc.
@@ -45,10 +62,6 @@ class ParallelGpuBatchPolopt(RLAlgorithm):
             whole_paths=True,
             sampler_cls=None,
             sampler_args=None,
-            n_parallel=2,
-            n_simulators=1,
-            set_cpu_affinity=True,
-            cpu_assignments=None,
             **kwargs
     ):
         """
@@ -88,13 +101,9 @@ class ParallelGpuBatchPolopt(RLAlgorithm):
         self.store_paths = store_paths
         self.whole_paths = whole_paths
         if sampler_cls is None:
-            sampler_cls = ParallelGpuSampler
+            sampler_cls = BatchSampler
         if sampler_args is None:
             sampler_args = dict()
-        self.n_parallel = n_parallel
-        self.n_simulators = n_simulators
-        self.set_cpu_affinity = set_cpu_affinity
-        self.cpu_assignments = cpu_assignments
         self.sampler = sampler_cls(self, **sampler_args)
 
     def start_worker(self):
@@ -106,39 +115,21 @@ class ParallelGpuBatchPolopt(RLAlgorithm):
         self.sampler.shutdown_worker()
 
     def train(self):
-        # os.environ['THEANO_FLAGS'] = "device=cpu"
-        self.train_barrier = mp.Barrier(self.n_parallel + 1)
-        par_sim = [mp.Process(target=self.parallel_simulator, args=(rank,))
-            for rank in range(self.n_parallel)]
-        for sim in par_sim:
-            sim.start()
-        self.master_train()
-        for sim in par_sim:
-            sim.join()
-
-    def master_train(self):
         gt.reset_root()
-        gt.rename_root('master')
-        if self.set_cpu_affinity:
-            p = psutil.Process()
-            p.cpu_affinity([0])  # Keep us on core / thread 0.
-            all_cpus = list(range(psutil.cpu_count()))
+        self.start_worker()
         self.init_opt()
-        gt.stamp('init_opt')
-        loop = gt.timed_loop('train')
+        gt.stamp('init')
+        loop = gt.timed_loop('main')
         for itr in range(self.current_itr, self.n_itr):
             next(loop)
-            with logger.prefix('iter #%d | ' % itr):
-                p.cpu_affinity([0])
-                self.train_barrier.wait()  # outside obtain_samples: easier profiling
-                paths = self.sampler.obtain_samples_master(itr)  # synchronization with simulators in here.
-                gt.stamp('obtain_samp')
-                p.cpu_affinity(all_cpus)  # for baseline fitting.
+            with logger.prefix('itr #%d | ' % itr):
+                paths = self.sampler.obtain_samples(itr)
+                gt.stamp('paths')
                 samples_data = self.sampler.process_samples(itr, paths)
-                gt.stamp('process_samp')
-                # self.log_diagnostics(paths)
+                gt.stamp('samples')
+                self.log_diagnostics(paths)
                 self.optimize_policy(itr, samples_data)
-                gt.stamp('opt_pol')
+                gt.stamp('optimize')
                 logger.log("saving snapshot...")
                 params = self.get_itr_snapshot(itr, samples_data)
                 self.current_itr = itr + 1
@@ -154,115 +145,9 @@ class ParallelGpuBatchPolopt(RLAlgorithm):
                         input("Plotting evaluation run: Press Enter to "
                                   "continue...")
         loop.exit()
+        self.shutdown_worker()
         gt.stop()
         print(gt.report())
-
-    def prof_simulator(self, rank):
-        if rank == 0:
-            cProfile.runctx('self.parallel_simulator()', globals(), locals(), 'sandbox/adam/gpar/profs/sim_pws_3.prof')
-        else:
-            self.parallel_simulator(rank)
-
-    def parallel_simulator(self, rank=0):
-        gt.reset_root()
-        gt.rename_root('simulator_' + str(rank))
-        self.init_rank(rank)
-        gt.stamp('init_rank')
-        loop = gt.timed_loop('train')
-        for itr in range(self.current_itr, self.n_itr):
-            next(loop)
-            self.train_barrier.wait()  # outside obtain_samples: easier profiling
-            self.sampler.obtain_samples_simulator(rank, itr)  # synchronization with master in here
-            gt.stamp('obtain_samp')
-        loop.exit()
-        gt.stop()
-        if rank == 0:
-            time.sleep(1)
-            print(gt.report())
-
-    def init_rank(self, rank):
-        if self.set_cpu_affinity:
-            self._set_cpu_affinity(rank, verbose=True)
-        seed = ext.get_seed()
-        if seed is None:
-            # NOTE: not sure if this is a good source for seed?
-            seed = int(1e6 * np.random.rand())
-        ext.set_seed(seed + rank)
-        if isinstance(self.sampler, GParMultiSampler):
-            self.envs = [self.env]
-            for _ in range(self.n_simulators - 1):
-                self.envs.append(copy.deepcopy(self.env))
-        elif isinstance(self.sampler, PairwiseGpuSampler):
-            self.env_a = self.env
-            self.env_b = copy.deepcopy(self.env)
-        elif isinstance(self.sampler, PairwiseGpuSampler_2):
-            self.env = [self.env]
-            self.env.append(copy.deepcopy(self.env[0]))
-        elif isinstance(self.sampler, PairwiseGpuSampler_3):
-            envs_a = [copy.deepcopy(self.env) for _ in range(self.n_simulators)]
-            envs_b = [copy.deepcopy(self.env) for _ in range(self.n_simulators)]
-            self.envs = (envs_a, envs_b)
-
-    def _set_cpu_affinity(self, rank, verbose=False):
-        """
-        Check your logical cpu vs physical core configuration, use
-        cpu_assignments list to put one worker per physical core.  Default
-        behavior is to use logical cpus 0,1,2,...
-        """
-        # import psutil  # import in file, so subprocesses inherit.
-        if self.cpu_assignments is not None:
-            n_assignments = len(self.cpu_assignments)
-            assigned_affinity = [self.cpu_assignments[rank % n_assignments]]
-        else:
-            n_cpu = psutil.cpu_count()
-            # NOTE: use this scheme if:
-            # CPU numbering goes up from 0 to num_cores, one on each core,
-            # followed by num_cores + 1 to num_cores * 2, one on the second
-            # hyperthread of each core.
-            # assigned_affinity = [rank % n_cpu + rank // (n_cpu // 2) + 1]
-            r_mod = rank % (n_cpu - 2)
-            cpu = r_mod + 1
-            if cpu >= (n_cpu // 2):
-                cpu += 1
-            assigned_affinity = [cpu]
-        p = psutil.Process()
-        # NOTE: let psutil raise the error if invalid cpu assignment.
-        try:
-            p.cpu_affinity(assigned_affinity)
-            if verbose:
-                logger.log("\nRank: {},  CPU Affinity: {}".format(rank, p.cpu_affinity()))
-        except AttributeError:
-            logger.log("Cannot set CPU affinity (maybe in a Mac OS).")
-
-
-
-
-    # # OLD
-    # def _train(self):
-    #     self.start_worker()
-    #     self.init_opt()
-    #     for itr in range(self.current_itr, self.n_itr):
-    #         with logger.prefix('itr #%d | ' % itr):
-    #             paths = self.sampler.obtain_samples(itr)
-    #             samples_data = self.sampler.process_samples(itr, paths)
-    #             self.log_diagnostics(paths)
-    #             self.optimize_policy(itr, samples_data)
-    #             logger.log("saving snapshot...")
-    #             params = self.get_itr_snapshot(itr, samples_data)
-    #             self.current_itr = itr + 1
-    #             params["algo"] = self
-    #             if self.store_paths:
-    #                 params["paths"] = samples_data["paths"]
-    #             logger.save_itr_params(itr, params)
-    #             logger.log("saved")
-    #             logger.dump_tabular(with_prefix=False)
-    #             if self.plot:
-    #                 self.update_plot()
-    #                 if self.pause_for_plot:
-    #                     input("Plotting evaluation run: Press Enter to "
-    #                               "continue...")
-
-    #     self.shutdown_worker()
 
     def log_diagnostics(self, paths):
         self.env.log_diagnostics(paths)

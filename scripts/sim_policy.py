@@ -30,4 +30,4 @@ if __name__ == "__main__":
         env = data['env']
         while True:
             path = rollout(env, policy, max_path_length=args.max_path_length,
-                           animated=True, speedup=args.speedup, verbose=True)
+                           animated=True, speedup=args.speedup)

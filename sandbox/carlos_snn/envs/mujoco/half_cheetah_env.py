@@ -2,7 +2,8 @@ import numpy as np
 
 from rllab.core.serializable import Serializable
 from rllab.envs.base import Step
-from rllab.envs.mujoco.mujoco_env import MujocoEnv
+# from rllab.envs.mujoco.mujoco_env import MujocoEnv
+from sandbox.carlos_snn.envs.mujoco.mujoco_env import MujocoEnv_ObsInit as MujocoEnv
 from rllab.misc import logger
 from rllab.misc.overrides import overrides
 

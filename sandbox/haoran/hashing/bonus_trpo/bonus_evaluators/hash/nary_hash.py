@@ -1,12 +1,16 @@
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.base import Hash
+from rllab.misc import logger
 import numpy as np
 import multiprocessing as mp
 import copy
+import sys
 
 class NaryHash(Hash):
-    def __init__(self,n,dim_key, bucket_sizes=None,parallel=False):
+    def __init__(self,n,dim_key, bucket_sizes=None,parallel=False,key_form="bytes"):
         """
         Simple extension of BinaryHash to n-ary keys
+
+        dictionary counter: convert an n-ary key into a uint64 tuple; every x consecutive n-ary digits are converted to a single uint64 number, where x = floor(log_n(2**64))
 
         :param bucket_sizes: None means implementing the hash table with python dictionary
         """
@@ -16,6 +20,7 @@ class NaryHash(Hash):
         self.counter = "tables" if bucket_sizes is not None else "dict"
 
         self.parallel = parallel
+        self.key_form = key_form
         if self.counter == "tables":
             # precompute modulos of powers of 2
             mods_list = []
@@ -44,9 +49,16 @@ class NaryHash(Hash):
                 self.unpicklable_list = []
                 self.snapshot_list = []
         else:
+            if key_form == "uint64":
+                self.digit_group_len = int(np.floor(64 * np.log(2) / np.log(self.n)))
+            elif key_form == "bytes":
+                self.digit_group_len = int(np.floor(8 * np.log(2) / np.log(self.n)))
+            else:
+                raise NotImplementedError
+            self.key_len = int(np.ceil(self.dim_key / self.digit_group_len))
+            self.powers = [self.n ** j for j in range(self.digit_group_len)]
             if parallel:
-                self.shared_dict = dict() # for force_compiling
-                self.shared_dict_prefix = 'nary_hash_counter: '
+                self.shared_dict = dict() # a placeholder for force_compiling; to be replaced by a true shared_dict pass down from the manager
                 self.unpicklable_list = ["shared_dict"]
                 self.snapshot_list = []
                 #FIXME: snapshot only the hash counts rather than the entire shared dict
@@ -65,7 +77,7 @@ class NaryHash(Hash):
         if self.parallel and self.counter == "dict":
             state["counter_dict"] = {
                 key: value for key,value in self.shared_dict.items()
-                if self.shared_dict_prefix in key
+                if self.validate_key(key)
             }
         return state
 
@@ -85,18 +97,35 @@ class NaryHash(Hash):
         """
         Compute the keys for many items (row-wise stacked as a matrix)
         """
-        naries = self.compute_nary_keys(items)
+        if self.key_form == "bytes":
+            dtype = np.uint8
+        elif self.key_form == "uint64":
+            dtype = np.uint64
+        else:
+            raise NotImplementedError
+        naries = self.compute_nary_keys(items).astype(dtype)
         if self.counter == "tables":
             # compute the signs of the dot products with the random vectors
             keys = np.cast['int'](naries.dot(self.mods_list)) % self.bucket_sizes
         else:
-            if self.parallel:
-                def nary_to_string(nary):
-                    return self.shared_dict_prefix + str(list(nary)).replace(' ','')
+            N,k = naries.shape # dimension
+            assert k == self.dim_key
+
+            keys = np.zeros((N, self.key_len),dtype=dtype)
+            for i in range(0,k,self.digit_group_len):
+                uints = np.zeros(N,dtype=dtype)
+                for j in range(min(self.digit_group_len, k-i)):
+                    uints = uints + naries[:,i+j] * self.powers[j]
+                assert(uints.dtype == dtype)
+                keys[:,i//self.digit_group_len] = uints
+
+            if self.key_form == "bytes":
+                keys = [bytes(tuple(key)) for key in keys]
+            elif self.key_form == "uint64":
+                keys = [tuple(key) for key in keys]
             else:
-                def nary_to_string(nary):
-                    return str(list(nary)).replace(' ','')
-            keys = [nary_to_string(nary) for nary in naries]
+                raise NotImplementedError
+
         return keys
 
     def inc_keys(self, keys):
@@ -121,11 +150,13 @@ class NaryHash(Hash):
             else:
                 counter_dict = self.counter_dict
             # multiprocessing makes sure the following operations are synchronized
+            # updates interleave between processes
             for key in keys:
                 if key in counter_dict:
                     counter_dict[key] += 1
                 else:
                     counter_dict[key] = 1
+                # print("%d: update count"%(self.rank))
 
 
     def query_keys(self, keys):
@@ -161,12 +192,18 @@ class NaryHash(Hash):
         else:
             # should delete all keys from shared_dict starting with prefix "nary_hash_counter"
             if self.parallel:
-                for key in self.shared_dict.keys():
-                    if self.shared_dict_prefix in key:
+                for key in self.shared_dict:
+                    if self.validate_key(key):
                         self.shared_dict.pop(key)
             else:
                 self.counter_dict = dict()
 
+    def validate_key(self,key):
+        """
+        If the shared_dict has inserted by other objects, this function checks keys inserted by this object only. I am commenting it out as it is not necessary at the moment
+        """
+        # return isinstance(key, tuple) and len(key) = self.key_len and key[0].dtype==np.uint64
+        return True
 
     def total_state_count(self):
         """
@@ -177,10 +214,12 @@ class NaryHash(Hash):
             return np.max([np.count_nonzero(T) for T in self.tables])
         else:
             if self.parallel:
-                all_keys = [
-                    key for key in self.shared_dict.keys()
-                    if self.shared_dict_prefix in key
-                ]
+                # all_keys = [
+                #     key for key in self.shared_dict
+                #     if self.validate_key(key)
+                # ]
+                all_keys = self.shared_dict.keys()
+                logger.log("Nary hash total state count: %d, estimated memory requirement: %.3f MB"%(len(all_keys), self.key_len * (64/8) * len(all_keys) / 1024**2))
                 return len(all_keys)
             else:
-                return len(self.counter_dict.keys())
+                return len(self.counter_dict)

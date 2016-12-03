@@ -4,10 +4,12 @@ from rllab.misc import logger
 from rllab.core.serializable import Serializable
 import theano.tensor as TT
 import theano
-import itertools
+# import itertools
 import numpy as np
 from rllab.misc.ext import sliced_fun
-from _ast import Num
+# from _ast import Num
+
+import gtimer as gt
 
 
 class PerlmutterHvp(Serializable):
@@ -226,6 +228,7 @@ class ConjugateGradientOptimizer(Serializable):
     #         extra_inputs = tuple()
     #     return sliced_fun(self._opt_fun["f_constraint"], self._num_slices)(inputs, extra_inputs)
 
+    @gt.wrap
     def optimize(self, inputs, extra_inputs=None, subsample_grouped_inputs=None):
 
         inputs = tuple(inputs)
@@ -250,15 +253,18 @@ class ConjugateGradientOptimizer(Serializable):
         loss_before, mean_kl_before = \
             sliced_fun(self._opt_fun["f_loss_constraint"], self._num_slices)(
                 inputs, extra_inputs)
+        gt.stamp('loss_before')
         logger.log("performing update")
         logger.log("computing descent direction")
 
         flat_g = sliced_fun(self._opt_fun["f_grad"], self._num_slices)(
             inputs, extra_inputs)
+        gt.stamp('flat_g')
 
         Hx = self._hvp_approach.build_eval(subsample_inputs + extra_inputs)
 
         descent_direction = krylov.cg(Hx, flat_g, cg_iters=self._cg_iters)
+        gt.stamp('krylov')
 
         # initial_step_size = np.sqrt(
         #     2.0 * self._max_constraint_val *
@@ -284,6 +290,8 @@ class ConjugateGradientOptimizer(Serializable):
                 self._opt_fun["f_loss_constraint"], self._num_slices)(inputs, extra_inputs)
             if loss < loss_before and constraint_val <= self._max_constraint_val:
                 break
+        gt.stamp('bktrk')
+
         if (np.isnan(loss) or np.isnan(constraint_val) or loss >= loss_before or constraint_val >=
                 self._max_constraint_val) and not self._accept_violation:
             logger.log("Line search condition violated. Rejecting the step!")
@@ -298,6 +306,7 @@ class ConjugateGradientOptimizer(Serializable):
                 logger.log(
                     "Violated because constraint %s is violated" % self._constraint_name)
             self._target.set_param_values(prev_param, trainable=True)
+
         logger.log("backtrack iters: %d" % n_iter)
         logger.log("computing loss after")
         logger.log("optimization finished")
@@ -306,3 +315,13 @@ class ConjugateGradientOptimizer(Serializable):
         logger.record_tabular('MeanKLBefore', mean_kl_before)  # zero!
         logger.record_tabular('MeanKL', constraint_val)
         logger.record_tabular('dLoss', loss_before - loss)
+
+    def force_compile(self, inputs, extra_inputs=None):
+        inputs = tuple(inputs)
+        if extra_inputs is None:
+            extra_inputs = tuple()
+        # No longer sure how to call these outside of sliced_fun()
+        sliced_fun(self._opt_fun["f_loss_constraint"], 1)(inputs, extra_inputs)
+        flat_g = sliced_fun(self._opt_fun["f_grad"], 1)(inputs, extra_inputs)
+        Hx = self._hvp_approach.build_eval(inputs + extra_inputs)
+        Hx(flat_g)

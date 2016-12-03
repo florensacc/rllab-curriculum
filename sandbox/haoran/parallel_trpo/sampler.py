@@ -1,5 +1,6 @@
 
 import numpy as np
+import copy
 
 from rllab.misc import special, tensor_utils
 from rllab.algos import util
@@ -63,13 +64,27 @@ class WorkerBatchSampler(object):
     def process_samples(self, paths):
         baselines = []
         returns = []
+        discount = self.algo.discount
+        tmax = self.algo.tmax
         for path in paths:
             path_baselines = np.append(self.algo.baseline.predict(path), 0)
-            deltas = path["rewards"] + \
-                     self.algo.discount * path_baselines[1:] - \
-                     path_baselines[:-1]
-            path["advantages"] = special.discount_cumsum(
-                deltas, self.algo.discount * self.algo.gae_lambda)
+            path_len = len(path["rewards"])
+            if tmax < 0:
+                deltas = path["rewards"] + \
+                         self.algo.discount * path_baselines[1:] - \
+                         path_baselines[:-1]
+                path["advantages"] = special.discount_cumsum(
+                    deltas, discount * self.algo.gae_lambda)
+            else:
+                assert self.algo.gae_lambda == 1.0
+                path["advantages"] = np.zeros(path_len)
+                for t1 in range(path_len):
+                    t2 = t1 + tmax
+                    if t2 < path_len:
+                        path["advantages"][t1] = np.sum(path["rewards"][t1:t2+1] * (discount ** np.asarray(range(tmax+1)))) - path_baselines[t1] + path_baselines[t2] * (discount ** tmax)
+                    else:
+                        path["advantages"][t1] = np.sum(path["rewards"][t1:] * (discount ** np.asarray(range(path_len-t1)))) - path_baselines[t1]
+
             path["returns"] = special.discount_cumsum(path["rewards"], self.algo.discount)
             baselines.append(path_baselines[:-1])
             returns.append(path["returns"])
@@ -78,35 +93,42 @@ class WorkerBatchSampler(object):
 
         if not self.algo.policy.recurrent:
             if self.avoid_duplicate_paths:
-                tensor_list = ["observations","actions","raw_rewards","advantages","returns"]
-                dict_list = ["env_infos", "agent_infos"]
-                retain_list = ["returns","rewards","raw_rewards","bonus_rewards"]
-                samples_data = dict()
-                samples_data["paths"] = []
-
-                # reversely load path data into samples_data and delete the loaded path
-                for i in range(len(paths)-1, -1, -1):
-                    path = paths[i]
-                    if i == len(paths) - 1:
-                        for data in tensor_list + dict_list:
-                            samples_data[data] = path[data]
-                    else:
-                        for data in tensor_list:
-                            samples_data[data] = tensor_utils.concat_tensor_list([
-                                samples_data[data],
-                                path[data]
-                            ])
-                        for data in dict_list:
-                            samples_data[data] = tensor_utils.concat_tensor_dict_list([
-                                samples_data[data],
-                                path[data]
-                            ])
-                    new_path = {
-                        data: np.copy(path[data])
-                        for data in retain_list
-                    }
-                    samples_data["paths"].append(new_path)
-                    del paths[i]
+                raise NotImplementedError
+                # tensor_list = ["observations","actions","raw_rewards","advantages","returns"]
+                # dict_list = ["env_infos", "agent_infos"]
+                # retain_list = ["returns","rewards","raw_rewards","bonus_rewards"]
+                # samples_data = dict()
+                # samples_data["paths"] = []
+                #
+                # # reversely load path data into samples_data and delete the loaded path
+                # for i in range(len(paths)-1, -1, -1):
+                #     path = paths[i]
+                #     if i == len(paths) - 1:
+                #         for data in tensor_list + dict_list:
+                #             samples_data[data] = copy.deepcopy(path[data])
+                #     else:
+                #         for data in tensor_list:
+                #             samples_data[data] = tensor_utils.concat_tensor_list([
+                #                 copy.deepcopy(path[data]),
+                #                 samples_data[data],
+                #             ])
+                #         for data in dict_list:
+                #             samples_data[data] = tensor_utils.concat_tensor_dict_list([
+                #                 copy.deepcopy(path[data]),
+                #                 samples_data[data],
+                #             ])
+                #     new_path = {
+                #         data: copy.deepcopy(path[data])
+                #         for data in retain_list
+                #     }
+                #     samples_data["paths"] = [new_path] + samples_data["paths"]
+                #
+                #     # del paths[i]
+                # if self.algo.center_adv:
+                #     samples_data["advantages"] = util.center_advantages(samples_data["advantages"])
+                #
+                # if self.algo.positive_adv:
+                #     samples_data["advantages"] = util.shift_advantages_to_positive(samples_data["advantages"])
             else:
                 observations = tensor_utils.concat_tensor_list([path["observations"] for path in paths])
                 actions = tensor_utils.concat_tensor_list([path["actions"] for path in paths])
@@ -193,3 +215,21 @@ class WorkerBatchSampler(object):
 
         # NOTE: Removed baseline fitting to batch_polopt.
         return samples_data, dgnstc_data
+
+    def combine_samples(self, samples_data_list):
+        data_fields = samples_data_list[0].keys()
+
+        combined_data = dict()
+        for field in data_fields:
+            example = samples_data_list[0][field]
+            if isinstance(example, np.ndarray):
+                combined_data[field] = tensor_utils.concat_tensor_list([
+                    samples_data[field]
+                    for samples_data in samples_data_list
+                ])
+            elif isinstance(example, dict):
+                combined_data[field] = tensor_utils.concat_tensor_dict_list([
+                    samples_data[field]
+                    for samples_data in samples_data_list
+                ])
+        return combined_data

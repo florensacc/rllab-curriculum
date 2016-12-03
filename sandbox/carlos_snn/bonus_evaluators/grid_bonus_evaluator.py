@@ -3,6 +3,7 @@ import gc
 import os.path as osp
 import itertools
 from rllab.misc import logger
+from rllab.misc import tensor_utils
 import collections
 from functools import reduce
 import matplotlib as mpl
@@ -11,7 +12,7 @@ import matplotlib.pyplot as plt
 
 
 class GridBonusEvaluator(object):
-    def __init__(self, obs='com', env_spec=None, mesh_density=50, visitation_bonus=1.0, snn_H_bonus=0):  #it's not great to have policy info here.. but handy for latent
+    def __init__(self, obs='com', env_spec=None, mesh_density=50, visitation_bonus=1.0, snn_H_bonus=0, survival_bonus=0):
         self.mesh_density = mesh_density
         self.furthest = 0
         self.visitation_all = np.zeros((1, 1), dtype=int)
@@ -20,6 +21,7 @@ class GridBonusEvaluator(object):
         self.visitation_by_lat = np.zeros((1, 1), dtype=int)  # used to plot: matrix with a number for each lat/rep
         self.visitation_bonus = visitation_bonus
         self.snn_H_bonus = snn_H_bonus
+        self.survival_bonus = survival_bonus
         # in case I'm gridding all the obs_dim (not just the com) --> for this I should use hashing, ow too high dim
         if env_spec:
             obs_dim = env_spec.observation_space.flat_dim
@@ -28,6 +30,9 @@ class GridBonusEvaluator(object):
         """
         NEEDED: Called in process_samples, before processing them. This initializes the hashes based on the current obs.
         """
+        if 'env_infos' in paths[0].keys() and 'full_path' in paths[0]['env_infos'].keys():
+            paths = [tensor_utils.flatten_first_axis_tensor_dict(path['env_infos']['full_path']) for path in paths]
+
         if 'env_infos' in list(paths[0].keys()) and 'com' in list(paths[0]['env_infos'].keys()):
             x_max = np.ceil(np.max(np.abs(np.concatenate([path["env_infos"]['com'][:, 0] for path in paths]))))
             y_max = np.ceil(np.max(np.abs(np.concatenate([path["env_infos"]['com'][:, 1] for path in paths]))))
@@ -40,7 +45,7 @@ class GridBonusEvaluator(object):
                                                         and np.size(paths[0]['agent_infos']['latents'])) or
                                                            ('selectors' in list(paths[0]['agent_infos'].keys())
                                                             and np.size(paths[0]['agent_infos']['selectors']))):
-            selectors_name = 'latents' if 'latents' in list(paths[0]['agent_infos'].keys()) else 'selectors'
+            selectors_name = 'selectors' if 'selectors' in list(paths[0]['agent_infos'].keys()) else 'latents'
             self.num_latents = np.size(paths[0]["agent_infos"][selectors_name][0])
             # set all the labels for the latents and initialize the entries of dict_visit
             for i in range(self.num_latents):  # use integer to define the latents
@@ -73,6 +78,9 @@ class GridBonusEvaluator(object):
                     self.visitation_all[com] += 1
 
     def predict_count(self, path):
+        if 'env_infos' in path.keys() and 'full_path' in path['env_infos'].keys():
+            path = tensor_utils.flatten_first_axis_tensor_dict(path['env_infos']['full_path'])
+
         counts = []
         if 'env_infos' in list(path.keys()) and 'com' in list(path['env_infos'].keys()):
             com_x = np.ceil(((np.array(path['env_infos']['com'][:, 0]) + self.furthest) * self.mesh_density)).astype(int)
@@ -86,6 +94,9 @@ class GridBonusEvaluator(object):
         return 1. / np.maximum(1., np.sqrt(counts))
 
     def predict_entropy(self, path):
+        if 'env_infos' in path.keys() and 'full_path' in path['env_infos'].keys():
+            path = tensor_utils.flatten_first_axis_tensor_dict(path['env_infos']['full_path'])
+
         if 'env_infos' in list(path.keys()) and 'com' in list(path['env_infos'].keys()):
             com_x = np.ceil(((np.array(path['env_infos']['com'][:, 0]) + self.furthest) * self.mesh_density)).astype(int)
             com_y = np.ceil(((np.array(path['env_infos']['com'][:, 1]) + self.furthest) * self.mesh_density)).astype(int)
@@ -105,10 +116,26 @@ class GridBonusEvaluator(object):
         :param path: reward computed path by path
         :return: a 1d array
         """
+        if 'env_infos' in path.keys() and 'full_path' in path['env_infos'].keys():
+            expanded_path = tensor_utils.flatten_first_axis_tensor_dict(path['env_infos']['full_path'])
+        else:  # when it comes from log_diagnostics it's already expanded (or if it was never aggregated)
+            expanded_path = path
+
         if self.snn_H_bonus:  # I need the if because the snn bonus is only available when there are latents
-            return self.snn_H_bonus * self.predict_entropy(path) + self.visitation_bonus * self.predict_count(path)
+            bonus = self.snn_H_bonus * self.predict_entropy(expanded_path) + \
+                    self.visitation_bonus * self.predict_count(expanded_path)
         else:
-            return self.visitation_bonus * self.predict_count(path)
+            bonus = self.visitation_bonus * self.predict_count(expanded_path)
+        total_bonus = bonus + self.survival_bonus * np.ones_like(bonus)
+        if 'env_infos' in path.keys() and 'full_path' in path['env_infos'].keys():
+            aggregated_bonus = []
+            full_path_rewards = path['env_infos']['full_path']['rewards']
+            total_steps = 0
+            for sub_rewards in full_path_rewards:
+                aggregated_bonus.append(np.sum(total_bonus[total_steps:total_steps + len(sub_rewards)]))
+                total_steps += len(sub_rewards)
+            total_bonus = aggregated_bonus
+        return np.array(total_bonus)
 
     def fit_after_process_samples(self, samples_data):
         """
@@ -120,6 +147,9 @@ class GridBonusEvaluator(object):
         """
         NEEDED: I will basically plot
         """
+        if 'env_infos' in paths[0].keys() and 'full_path' in paths[0]['env_infos'].keys():
+            paths = [tensor_utils.flatten_first_axis_tensor_dict(path['env_infos']['full_path']) for path in paths]
+
         fig, ax = plt.subplots()
         overlap = 0  # keep track of the overlap
         delta = 1./self.mesh_density
@@ -140,7 +170,7 @@ class GridBonusEvaluator(object):
                                              num_colors - 1)  # mark overlaps
             cmap = plt.get_cmap('nipy_spectral', num_colors)
             map_plot = ax.pcolormesh(x, y, self.visitation_by_lat, cmap=cmap, vmin=0.1,
-                                     vmax=self.num_latents + 2)  # before 1 (will it affect when no walls?)
+                                     vmax=self.num_latents + 1)  # before 1 (will it affect when no walls?)
             color_len = (num_colors - 1.) / num_colors
             ticks = np.arange(color_len / 2., num_colors - 1, color_len)
             cbar = fig.colorbar(map_plot, ticks=ticks)
@@ -173,18 +203,16 @@ class GridBonusEvaluator(object):
         logger.record_tabular('VisitationMax', np.max(self.visitation_all))
 
         if self.snn_H_bonus:
-            total_grid_entropy_bonus = np.sum([np.sum(self.predict_entropy(path)) for path in paths])
             avg_grid_entropy_bonus = np.mean([np.sum(self.predict_entropy(path)) for path in paths])
-            logger.record_tabular('Total_Grid_EntropyBonus', total_grid_entropy_bonus)
             logger.record_tabular('AvgPath_Grid_EntropyBonus', avg_grid_entropy_bonus)
 
         # if self.visitation_bonus:
-        total_grid_count_bonus = np.sum([np.sum(self.predict_count(path)) for path in paths])
         avg_grid_count_bonus = np.mean([np.sum(self.predict_count(path)) for path in paths])
-        logger.record_tabular('Total_Grid_CountBonus', total_grid_count_bonus)
         logger.record_tabular('AvgPath_Grid_CountBonus', avg_grid_count_bonus)
 
-        total_grid_bonus = np.sum([np.sum(self.predict(path)) for path in paths])
+        # if self.survival_bonus:
+        avg_survival_bonus = np.mean([len(path['rewards']) for path in paths])
+        logger.record_tabular('AvgPath_SurviBonus', avg_survival_bonus)
+
         avg_grid_bonus = np.mean([np.sum(self.predict(path)) for path in paths])
-        logger.record_tabular('TotalGridBonus', total_grid_bonus)
         logger.record_tabular('AvgPathGridBonus', avg_grid_bonus)

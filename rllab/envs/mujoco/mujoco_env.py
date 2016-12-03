@@ -23,13 +23,28 @@ MODEL_DIR = osp.abspath(
 BIG = 1e6
 
 
+def q_inv(a):
+    return [a[0], -a[1], -a[2], -a[3]]
+
+
+def q_mult(a, b): # multiply two quaternion
+    w = a[0]*b[0] - a[1]*b[1] - a[2]*b[2] - a[3]*b[3]
+    i = a[0]*b[1] + a[1]*b[0] + a[2]*b[3] - a[3]*b[2]
+    j = a[0]*b[2] - a[1]*b[3] + a[2]*b[0] + a[3]*b[1]
+    k = a[0]*b[3] + a[1]*b[2] - a[2]*b[1] + a[3]*b[0]
+    return [w, i, j, k]
+
+
 class MujocoEnv(Env):
     FILE = None
 
     @autoargs.arg('action_noise', type=float,
                   help='Noise added to the controls, which will be '
                        'proportional to the action bounds')
-    def __init__(self, action_noise=0.0, file_path=None, template_args=None):
+    def __init__(self, action_noise=0.0, file_path=None, template_args=None,
+        random_init_state=True,
+    ):
+    #Haoran: even if random_init_state
         # compile template
         if file_path is None:
             if self.__class__.FILE is None:
@@ -60,6 +75,7 @@ class MujocoEnv(Env):
         self.qvel_dim = self.init_qvel.size
         self.ctrl_dim = self.init_ctrl.size
         self.action_noise = action_noise
+        self.random_init_state = random_init_state
         if "frame_skip" in self.model.numeric_names:
             frame_skip_id = self.model.numeric_names.index("frame_skip")
             addr = self.model.numeric_adr.flat[frame_skip_id]
@@ -98,10 +114,15 @@ class MujocoEnv(Env):
 
     def reset_mujoco(self, init_state=None):
         if init_state is None:
-            self.model.data.qpos = self.init_qpos + \
-                                   np.random.normal(size=self.init_qpos.shape) * 0.01
-            self.model.data.qvel = self.init_qvel + \
-                                   np.random.normal(size=self.init_qvel.shape) * 0.1
+            if self.random_init_state:
+                self.model.data.qpos = self.init_qpos + \
+                    np.random.normal(size=self.init_qpos.shape) * 0.01
+                self.model.data.qvel = self.init_qvel + \
+                    np.random.normal(size=self.init_qvel.shape) * 0.1
+            else:
+                self.model.data.qpos = self.init_qpos
+                self.model.data.qvel = self.init_qvel
+
             self.model.data.qacc = self.init_qacc
             self.model.data.ctrl = self.init_ctrl
         else:
@@ -187,9 +208,11 @@ class MujocoEnv(Env):
             self.viewer.set_model(self.model)
         return self.viewer
 
-    def render(self):
+    def render(self,close=False):
         viewer = self.get_viewer()
         viewer.loop_once()
+        if close:
+            self.stop_viewer()
 
     def start_viewer(self):
         viewer = self.get_viewer()

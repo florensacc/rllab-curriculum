@@ -29,8 +29,8 @@ class HierarchizedMultiPoliEnv(ProxyEnv, Serializable):
             npz_paths=None,
             animate=False,
     ):
-        ProxyEnv.__init__(self, env)
         Serializable.quick_init(self, locals())
+        ProxyEnv.__init__(self, env)
         self.time_steps_agg = time_steps_agg
         self.animate = animate
         if json_paths:
@@ -40,8 +40,8 @@ class HierarchizedMultiPoliEnv(ProxyEnv, Serializable):
         else:
             raise Exception("No path no file given")
 
-        # assert isinstance(env, MazeEnv) or isinstance(env.wrapped_env,
-        #                                               MazeEnv), "the obsSpaces mismatch but it's not a maze (by Carlos)"
+        # assert isinstance(env, FastMazeEnv) or isinstance(env.wrapped_env,
+        #                                               FastMazeEnv), "the obsSpaces mismatch but it's not a maze (by Carlos)"
 
         # I need to define a new hier-policy that will cope with that!
         self.low_policy = GaussianMLPPolicy_multi_hier(

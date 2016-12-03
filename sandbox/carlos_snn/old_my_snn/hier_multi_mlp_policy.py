@@ -205,6 +205,8 @@ class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializabl
                 for key in params_dict.keys():
                     if key == 'output_log_std.param':
                         old_params_dict['output_log_std{}.param'.format(i)] = params_dict[key]
+                    elif 'meanMLP_' == key[:8]:
+                        old_params_dict['meanMLP{}_'.format(i)+key[8:]] = params_dict[key]
                     else:
                         old_params_dict['meanMLP{}_'.format(i)+key] = params_dict[key]
             self.set_old_params(old_params_dict)
@@ -217,6 +219,8 @@ class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializabl
                 for param in params:
                     if param.name == 'output_log_std.param':
                         old_params_dict['output_log_std{}.param'.format(i)] = param.get_value()
+                    elif 'meanMLP_' == param.name[:8]:
+                        old_params_dict['meanMLP{}_'.format(i)+param.name[8:]] = param.get_value()
                     else:
                         old_params_dict['meanMLP{}_'.format(i)+param.name] = param.get_value()
             self.set_old_params(old_params_dict)

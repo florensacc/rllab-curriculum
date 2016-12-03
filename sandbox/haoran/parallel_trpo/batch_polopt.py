@@ -50,7 +50,9 @@ class ParallelBatchPolopt(RLAlgorithm):
             bonus_coeff=0,
             path_length_scheduler=None,
             log_memory_usage=True,
-            avoid_duplicate_paths=True,
+            avoid_duplicate_paths=False,
+            path_replayer=None,
+            tmax=-1,
             **kwargs
     ):
         """
@@ -106,6 +108,8 @@ class ParallelBatchPolopt(RLAlgorithm):
         if path_length_scheduler is not None:
             self.path_length_scheduler.set_algo(self)
         self.log_memory_usage = log_memory_usage
+        self.path_replayer = path_replayer
+        self.tmax = tmax
 
         self.unpicklable_list = ["_par_objs","manager","shared_dict"]
 
@@ -222,7 +226,7 @@ class ParallelBatchPolopt(RLAlgorithm):
         self.shared_dict = self.manager.dict()
 
         if self.n_parallel == 1:
-            self._train(rank=0)
+            self._train(0,self.shared_dict)
         else:
             processes = [mp.Process(target=self._train, args=(rank,self.shared_dict))
                 for rank in range(self.n_parallel)]
@@ -256,7 +260,9 @@ class ParallelBatchPolopt(RLAlgorithm):
                 if rank == 0:
                     logger.log("Collecting samples ...")
                 paths = self.sampler.obtain_samples()
-                self.process_paths(paths) # temporary change for debugging in exp-018f (could be a permanent change, as this tends to give higher bonuses)
+                if rank == 0:
+                    logger.log("Processing paths...")
+                self.process_paths(paths)
                 if self.bonus_evaluator is not None:
                     if rank == 0:
                         logger.log("fitting bonus evaluator...")
@@ -267,10 +273,21 @@ class ParallelBatchPolopt(RLAlgorithm):
                 self.log_diagnostics(itr, samples_data, dgnstc_data)  # (parallel)
                 if rank == 0:
                     logger.log("optimizing policy...")
+
+                if self.path_replayer is not None:
+                    replayed_paths = self.path_replayer.replay_paths()
+                    if len(replayed_paths) > 0:
+                        self.process_paths(replayed_paths)
+                        replayed_samples_data,_ = self.sampler.process_samples(replayed_paths)
+                        samples_data = self.sampler.combine_samples([
+                            samples_data, replayed_samples_data
+                        ])
+                    self.path_replayer.record_paths(paths)
                 self.optimize_policy(itr, samples_data)  # (parallel)
                 if rank == 0:
                     logger.log("fitting baseline...")
-                self.baseline.fit_by_samples_data(samples_data)  # (parallel)
+                # self.baseline.fit_by_samples_data(samples_data)  # (parallel)
+                self.baseline.fit(paths)
                 if rank == 0:
                     logger.log("fitted")
                     logger.log("saving snapshot...")
