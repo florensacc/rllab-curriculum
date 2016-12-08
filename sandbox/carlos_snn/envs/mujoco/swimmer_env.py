@@ -22,6 +22,7 @@ BIG = 1e6
 
 class SwimmerEnv(MujocoEnv, Serializable):
     FILE = 'swimmer.xml'
+    ORI_IND = 2
 
     @autoargs.arg('ctrl_cost_coeff', type=float,
                   help='cost coefficient for controls')
@@ -50,6 +51,9 @@ class SwimmerEnv(MujocoEnv, Serializable):
                 self.get_body_com("torso").flat,
             ]).reshape(-1)
 
+    def get_ori(self):
+        return self.model.data.qpos[self.__class__.ORI_IND]
+
 ## hack that I will have to remove!!!  I think I actually don't need it anymore! Check maze_env.py
     @property
     def robot_observation_space(self):
@@ -61,7 +65,6 @@ class SwimmerEnv(MujocoEnv, Serializable):
     def maze_observation_space(self):
         ub = BIG * np.array(())
         return spaces.Box(ub, ub)
-
 
     def step(self, action):
         self.forward_dynamics(action)
@@ -80,7 +83,8 @@ class SwimmerEnv(MujocoEnv, Serializable):
             else:
                 reward = 0.
         com = np.concatenate([self.get_body_com("torso").flat]).reshape(-1)
-        return Step(next_obs, reward, done, com=com)
+        ori = self.get_ori()
+        return Step(next_obs, reward, done, com=com, ori=ori)
 
     @overrides
     def log_diagnostics(self, paths, prefix=''):
