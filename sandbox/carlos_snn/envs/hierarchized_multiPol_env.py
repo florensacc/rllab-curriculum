@@ -66,7 +66,7 @@ class HierarchizedMultiPoliEnv(ProxyEnv, Serializable):
         with self.low_policy.fix_selector(action):
             # print("The hier action is prefixed selector: {}".format(self.low_policy.pre_fix_selector))
             frac_path = rollout(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg,
-                                animated=self.animate, speedup=1000)
+                                reset_start_rollout=False, animated=self.animate, speedup=1000)
             next_obs = frac_path['observations'][-1]
             reward = np.sum(frac_path['rewards'])
             done = self.time_steps_agg > len(
