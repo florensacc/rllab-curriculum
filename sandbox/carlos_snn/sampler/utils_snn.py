@@ -4,7 +4,8 @@ import time
 from rllab.envs.normalized_env import NormalizedEnv  # this is just to check if the env passed is a normalized maze
 
 
-def rollout(env, agent, max_path_length=np.inf, reset_start_rollout=True, animated=False, speedup=1):
+def rollout_snn(env, agent, max_path_length=np.inf, reset_start_rollout=True,
+                switch_lat_every=0, animated=False, speedup=1):
     observations = []
     actions = []
     rewards = []
@@ -17,11 +18,13 @@ def rollout(env, agent, max_path_length=np.inf, reset_start_rollout=True, animat
             o = env.wrapped_env.get_current_obs()
         else:
             o = env.get_current_obs()
-    agent.reset()
+    agent.reset()  # this resamples a latent!
     path_length = 0
     if animated:
         env.render()
     while path_length < max_path_length:
+        if switch_lat_every > 0 and path_length % switch_lat_every == 0:
+            agent.reset(force_resample_lat=True)  # here forced to resample a latent
         a, agent_info = agent.get_action(o)
         next_o, r, d, env_info = env.step(a)
         observations.append(env.observation_space.flatten(o))

@@ -212,7 +212,7 @@ class GridBonusEvaluator(object):
 
         # if self.survival_bonus:
         avg_survival_bonus = np.mean([len(path['rewards']) for path in paths])
-        logger.record_tabular('AvgPath_SurviBonus', avg_grid_count_bonus)
+        logger.record_tabular('AvgPath_SurviBonus', avg_survival_bonus)
 
         avg_grid_bonus = np.mean([np.sum(self.predict(path)) for path in paths])
         logger.record_tabular('AvgPathGridBonus', avg_grid_bonus)

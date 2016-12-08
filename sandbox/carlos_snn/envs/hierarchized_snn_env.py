@@ -1,5 +1,7 @@
 import numpy as np
 from sandbox.carlos_snn.envs.mujoco.maze.maze_env import MazeEnv
+from sandbox.carlos_snn.envs.mujoco.maze.fast_maze_env import FastMazeEnv
+from rllab.envs.normalized_env import NormalizedEnv
 
 from rllab import spaces
 from rllab.core.serializable import Serializable
@@ -44,8 +46,6 @@ class HierarchizedSnnEnv(ProxyEnv, Serializable):
         else:
             raise Exception("No path to file given")
 
-        # assert isinstance(env, MazeEnv) or isinstance(env.wrapped_env,
-        #                                               MazeEnv), "the obsSpaces mismatch but it's not a maze (by Carlos)"
         # I need to define a new hier-policy that will cope with that!
         self.low_policy = GaussianMLPPolicy_snn_hier(
             env_spec=env.spec,
@@ -72,9 +72,21 @@ class HierarchizedSnnEnv(ProxyEnv, Serializable):
         action = self.action_space.flatten(action)
         with self.low_policy.fix_latent(action):
             # print("From hier_snn_env --> the hier action is prefixed latent: {}".format(self.low_policy.pre_fix_latent))
-            frac_path = rollout_noEnvReset(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg,
-                                           animated=self.animate, speedup=1000)
-            next_obs = frac_path['observations'][-1]
+            if isinstance(self.wrapped_env, FastMazeEnv):
+                with self.wrapped_env.blank_maze():
+                    frac_path = rollout_noEnvReset(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg,
+                                                   animated=self.animate, speedup=1000)
+                next_obs = self.wrapped_env.get_current_obs()
+            elif isinstance(self.wrapped_env, NormalizedEnv) and isinstance(self.wrapped_env.wrapped_env, FastMazeEnv):
+                with self.wrapped_env.wrapped_env.blank_maze():
+                    frac_path = rollout_noEnvReset(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg,
+                                                   animated=self.animate, speedup=1000)
+                next_obs = self.wrapped_env.wrapped_env.get_current_obs()
+            else:
+                frac_path = rollout_noEnvReset(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg,
+                                               animated=self.animate, speedup=1000)
+                next_obs = frac_path['observations'][-1]
+
             reward = np.sum(frac_path['rewards'])
             done = self.time_steps_agg > len(
                 frac_path['observations'])  # if the rollout was not maximal it was "done"!`
@@ -93,6 +105,9 @@ class HierarchizedSnnEnv(ProxyEnv, Serializable):
             # you might be padding the rewards!!! Error!!!
             actual_path_length = len(frac_path['rewards'])
             full_path['rewards'][actual_path_length:] = 0.
+            # do the same for the maze_rewards
+            if 'env_infos' in full_path.keys() and 'maze_rewards' in full_path['env_infos']:
+                full_path['env_infos']['maze_rewards'][actual_path_length:] = 0.
         else:
             full_path = frac_path
 
@@ -105,7 +120,7 @@ class HierarchizedSnnEnv(ProxyEnv, Serializable):
         ## to use the visualization I need to append all paths!
         ## and also I need the paths to have the "agent_infos" key including the latent!!
         expanded_paths = [tensor_utils.flatten_first_axis_tensor_dict(path['env_infos']['full_path']) for path in paths]
-        self.wrapped_env.log_diagnostics(expanded_paths)
+        self.wrapped_env.log_diagnostics(expanded_paths, *args, **kwargs)
 
     def __str__(self):
         return "Hierarchized: %s" % self._wrapped_env
