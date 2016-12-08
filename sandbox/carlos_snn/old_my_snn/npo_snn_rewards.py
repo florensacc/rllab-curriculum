@@ -24,9 +24,8 @@ from rllab.misc import special
 from rllab.misc import tensor_utils
 from rllab.algos import util
 import os.path as osp
-from rllab.sampler.utils import rollout
 from sandbox.carlos_snn.sampler.utils_snn import rollout_snn
-from sandbox.carlos_snn.sampler.utils import rollout as rollout_noEnvReset
+from sandbox.carlos_snn.sampler.utils import rollout
 import collections
 import gc
 
@@ -41,7 +40,7 @@ class BatchSampler_snn(BatchSampler):
                  logged_MI=None,  # a list of tuples specifying the (obs,actions) that are regressed to find the latents
                  hallucinator=None,
                  n_hallu=0,
-                 virtual_reset=False,
+                 # virtual_reset=False,
                  switch_lat_every=0,
                  **kwargs
                  ):
@@ -56,7 +55,7 @@ class BatchSampler_snn(BatchSampler):
         self.logged_MI = logged_MI  # a list of tuples specifying the (obs,actions) that are regressed to find the latents
         self.hallucinator = hallucinator
         self.n_hallu = n_hallu
-        self.virtual_reset = virtual_reset
+        # self.virtual_reset = virtual_reset
         self.switch_lat_every = switch_lat_every
 
         # see what are the MI that want to be logged (it has to be done after initializing the super to have self.env)
@@ -91,6 +90,7 @@ class BatchSampler_snn(BatchSampler):
 
     def _worker_collect_one_path(self, G, max_path_length, scope=None):
         G = parallel_sampler._get_scoped_G(G, scope)
+        # print('####\nthe switch_lat_every in the sampler is ', self.switch_lat_every)
         path = rollout_snn(G.env, G.policy, max_path_length, switch_lat_every=self.switch_lat_every)
         return path, len(path["rewards"])
 
@@ -120,7 +120,7 @@ class BatchSampler_snn(BatchSampler):
                 [(env_params, scope)] * parallel_sampler.singleton_pool.n_parallel
             )
         return parallel_sampler.singleton_pool.run_collect(
-            self._worker_collect_one_path,
+            self._worker_collect_one_path,  # use the run_each with the proper rollout above
             threshold=max_samples,
             args=(max_path_length, scope),
             show_prog_bar=True
@@ -128,7 +128,7 @@ class BatchSampler_snn(BatchSampler):
 
     def obtain_samples(self, itr):
         cur_params = self.algo.policy.get_param_values()
-        paths = self.sample_paths(
+        paths = self.sample_paths(  # use the sample function above
             policy_params=cur_params,
             max_samples=self.algo.batch_size,
             max_path_length=self.algo.max_path_length,
@@ -216,37 +216,24 @@ class NPO_snn(NPO):
 
     def __init__(
             self,
-            # # this is for NPO! In fact we should inherit from NPO to avoid having this here
-            # optimizer=None,
-            # optimizer_args=None,
-            # step_size=0.01,
             # some extra logging. What of this could be included in the sampler?
             log_individual_latents=False,  # to log the progress of each individual latent
             log_deterministic=False,  # log the performance of the policy with std=0 (for each latent separate)
             log_hierarchy=False,
-            # possible modifications of the objective function with KL or L2 divergences between latents!
-            L2_ub=1e6,
+            L2_ub=1e6, # possible modifications of the objective function with KL or L2 divergences between latents!
             KL_ub=1e6,
             reward_coef_l2=0,
             reward_coef_kl=0,
-            # kwargs to the sampler (that also processes)
-            reward_coef_mi=0,
+            reward_coef_mi=0,   # kwargs to the sampler (that also processes)
             reward_coef_bonus=None,
             bonus_evaluator=None,
             latent_regressor=None,
             logged_MI=None,  # a list of tuples specifying the (obs,actions) that are regressed to find the latents
             hallucinator=None,
             n_hallu=0,
-            virtual_reset=False,
+            # virtual_reset=False,
             switch_lat_every=0,
             **kwargs):
-        # # this should be just inherited from NPO
-        # if optimizer is None:
-        #     if optimizer_args is None:
-        #         optimizer_args = dict()
-        #     optimizer = PenaltyLbfgsOptimizer(**optimizer_args)
-        # self.optimizer = optimizer
-        # self.step_size = step_size
         # some logging
         self.log_individual_latents = log_individual_latents
         self.log_deterministic = log_deterministic
@@ -256,11 +243,11 @@ class NPO_snn(NPO):
         self.L2_ub = L2_ub
         self.reward_coef_kl = reward_coef_kl
         self.KL_ub = KL_ub
-        print(switch_lat_every)
+
 
         sampler_cls = BatchSampler_snn
         sampler_args = {'switch_lat_every': switch_lat_every,
-                        'virtual_reset': virtual_reset,
+                        # 'virtual_reset': virtual_reset,
                         'hallucinator': hallucinator,
                         'n_hallu': n_hallu,
                         'latent_regressor': latent_regressor,
@@ -497,7 +484,8 @@ class NPO_snn(NPO):
                     if len(path['rewards']) == max_in_path_length:
                         completed_in_paths += 1
                         for t in range(1, 50):
-                            path = rollout_noEnvReset(self.env, self.policy, max_path_length=10, animated=False)
+                            path = rollout(self.env, self.policy, max_path_length=10, animated=False,
+                                                      reset_start_rollout=False)
                             if len(path['rewards']) < 10:
                                 break
                             completed_in_paths += 1
