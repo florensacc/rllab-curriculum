@@ -150,8 +150,8 @@ class MDDPGTest(MDDPG):
         }
         xs = self.sess.run(self.policy.output, feed_dict).ravel()
         import matplotlib.pyplot as plt
-        plt.figure()
-        xx = np.linspace(-3, 3, num=100)
+        plt.clf()
+        xx = np.linspace(-5, 5, num=100)
         yy = np.zeros_like(xx)
         # fixed density kernel size
         q_sigma = 0.1
@@ -176,7 +176,7 @@ class MDDPGTest(MDDPG):
         plt.legend(['q','p'])
         plt.xlim([-3, 3])
         plt.ylim([0,0.5])
-        plt.pause(0.01)
+        plt.pause(0.001)
 
 
 # -------------------------------------------------------------------
@@ -187,7 +187,7 @@ from sandbox.haoran.mddpg.kernels.gaussian_kernel import \
 from sandbox.rocky.tf.envs.base import TfEnv
 from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 
-K = 100 # number of particles
+K = 20 # number of particles
 weights = np.array([1./3., 2./3.],np.float32)
 mus = np.array([-2., 2.],np.float32)
 sigmas = np.array([1., 1.],np.float32)
@@ -229,8 +229,8 @@ policy = FeedForwardMultiPolicyTest(
     env.observation_space.flat_dim,
     env.action_space.flat_dim,
     K=K,
-    shared_hidden_sizes=(10,),
-    independent_hidden_sizes=(10,),
+    shared_hidden_sizes=tuple(),
+    independent_hidden_sizes=tuple(),
 )
 kernel = SimpleAdaptiveDiagonalGaussianKernel(
     "kernel",
