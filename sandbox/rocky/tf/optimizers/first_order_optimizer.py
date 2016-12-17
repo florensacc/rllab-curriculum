@@ -95,7 +95,9 @@ class FirstOrderOptimizer(Serializable):
         if extra_inputs is None:
             extra_inputs = tuple()
 
+        logger.log("Computing loss before")
         last_loss = f_loss(*(tuple(inputs) + extra_inputs))
+        logger.log("Computed loss before")
 
         start_time = time.time()
 
@@ -134,6 +136,6 @@ class FirstOrderOptimizer(Serializable):
                 if callback:
                     callback(**callback_args)
 
-            if abs(last_loss - new_loss) < self._tolerance:
+            if self._tolerance is not None and abs(last_loss - new_loss) < self._tolerance:
                 break
             last_loss = new_loss

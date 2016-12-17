@@ -107,14 +107,12 @@ class GaussianLSTMPolicy(StochasticPolicy, LayersPowered, Serializable):
             self.f_step_mean_std = tensor_utils.compile_function(
                 [
                     flat_input_var,
-                    mean_network.step_prev_hidden_layer.input_var,
-                    mean_network.step_prev_cell_layer.input_var
+                    mean_network.step_prev_state_layer.input_var,
                 ],
                 L.get_output([
                     mean_network.step_output_layer,
                     l_step_log_std,
-                    mean_network.step_hidden_layer,
-                    mean_network.step_cell_layer
+                    mean_network.step_state_layer,
                 ], {mean_network.step_input_layer: feature_var})
             )
 
@@ -123,10 +121,10 @@ class GaussianLSTMPolicy(StochasticPolicy, LayersPowered, Serializable):
             self.input_dim = input_dim
             self.action_dim = action_dim
             self.hidden_dim = hidden_dim
+            self.state_dim = mean_network.state_dim
 
             self.prev_actions = None
-            self.prev_hiddens = None
-            self.prev_cells = None
+            self.prev_states = None
             self.dist = RecurrentDiagonalGaussian(action_dim)
 
             out_layers = [mean_network.output_layer, l_log_std]
@@ -168,12 +166,10 @@ class GaussianLSTMPolicy(StochasticPolicy, LayersPowered, Serializable):
         dones = np.asarray(dones)
         if self.prev_actions is None or len(dones) != len(self.prev_actions):
             self.prev_actions = np.zeros((len(dones), self.action_space.flat_dim))
-            self.prev_hiddens = np.zeros((len(dones), self.hidden_dim))
-            self.prev_cells = np.zeros((len(dones), self.hidden_dim))
+            self.prev_states = np.zeros((len(dones), self.state_dim))
 
         self.prev_actions[dones] = 0.
-        self.prev_hiddens[dones] = self.mean_network.hid_init_param.eval()
-        self.prev_cells[dones] = self.mean_network.cell_init_param.eval()
+        self.prev_states[dones] = self.mean_network.state_init_param.eval()
 
     # The return value is a pair. The first item is a matrix (N, A), where each
     # entry corresponds to the action value taken. The second item is a vector
@@ -195,14 +191,12 @@ class GaussianLSTMPolicy(StochasticPolicy, LayersPowered, Serializable):
             ], axis=-1)
         else:
             all_input = flat_obs
-        # probs, hidden_vec, cell_vec = self.f_step_prob(all_input, self.prev_hiddens, self.prev_cells)
-        means, log_stds, hidden_vec, cell_vec = self.f_step_mean_std(all_input, self.prev_hiddens, self.prev_cells)
+        means, log_stds, state_vec = self.f_step_mean_std(all_input, self.prev_states)
         rnd = np.random.normal(size=means.shape)
         actions = rnd * np.exp(log_stds) + means
         prev_actions = self.prev_actions
         self.prev_actions = self.action_space.flatten_n(actions)
-        self.prev_hiddens = hidden_vec
-        self.prev_cells = cell_vec
+        self.prev_states = state_vec
         agent_info = dict(mean=means, log_std=log_stds)
         if self.state_include_action:
             agent_info["prev_action"] = np.copy(prev_actions)

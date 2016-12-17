@@ -253,3 +253,14 @@ def single_threaded_session():
         inter_op_parallelism_threads=1,
         intra_op_parallelism_threads=1)
     return tf.Session(config=tf_config)
+
+
+def initialize_new_variables(sess):
+    uninitialized_vars = []
+    for var in tf.all_variables():
+        try:
+            sess.run(var)
+        except tf.errors.FailedPreconditionError:
+            uninitialized_vars.append(var)
+    sess.run(tf.initialize_variables(uninitialized_vars))
+

@@ -11,7 +11,8 @@ class MLP(LayersPowered, Serializable):
     def __init__(self, name, output_dim, hidden_sizes, hidden_nonlinearity,
                  output_nonlinearity, hidden_W_init=L.XavierUniformInitializer(), hidden_b_init=tf.zeros_initializer,
                  output_W_init=L.XavierUniformInitializer(), output_b_init=tf.zeros_initializer,
-                 input_var=None, input_layer=None, input_shape=None, batch_normalization=False, weight_normalization=False,
+                 input_var=None, input_layer=None, input_shape=None, batch_normalization=False,
+                 weight_normalization=False,
                  ):
 
         Serializable.quick_init(self, locals())
@@ -409,6 +410,99 @@ class LSTMNetwork(object):
     @property
     def state_init_param(self):
         return tf.concat(0, [self._hid_init_param, self._cell_init_param])
+
+
+class TfRNNNetwork(object):
+    def __init__(self, name, input_shape, output_dim, cell,
+                 output_nonlinearity=None, input_var=None, input_layer=None):
+        with tf.variable_scope(name):
+            if input_layer is None:
+                l_in = L.InputLayer(shape=(None, None) + input_shape, input_var=input_var, name="input")
+            else:
+                l_in = input_layer
+            l_step_input = L.InputLayer(shape=(None,) + input_shape, name="step_input")
+            # contains previous hidden and cell state
+            l_rnn = L.TfRNNLayer(incoming=l_in, cell=cell)
+            l_step_prev_state = L.InputLayer(shape=(None, l_rnn.state_dim), name="step_prev_state")
+
+            l_rnn_flat = L.ReshapeLayer(
+                l_rnn, shape=(-1, l_rnn.output_dim),
+                name="lstm_flat"
+            )
+            l_output_flat = L.DenseLayer(
+                l_rnn_flat,
+                num_units=output_dim,
+                nonlinearity=output_nonlinearity,
+                name="output_flat"
+            )
+            l_output = L.OpLayer(
+                l_output_flat,
+                op=lambda flat_output, l_input:
+                tf.reshape(flat_output, tf.pack((tf.shape(l_input)[0], tf.shape(l_input)[1], -1))),
+                shape_op=lambda flat_output_shape, l_input_shape:
+                (l_input_shape[0], l_input_shape[1], flat_output_shape[-1]),
+                extras=[l_in],
+                name="output"
+            )
+            l_step = l_rnn.get_step_layer(l_step_input, l_step_prev_state, name="step_state")
+            l_step_output = L.DenseLayer(
+                l_step,
+                num_units=output_dim,
+                nonlinearity=output_nonlinearity,
+                W=l_output_flat.W,
+                b=l_output_flat.b,
+                name="step_output"
+            )
+
+            self._l_in = l_in
+            self._state_init_param = tf.Variable(initial_value=np.zeros((l_rnn.state_dim,)))
+            self._l_rnn = l_rnn
+            self._l_out = l_output
+            self._l_step_input = l_step_input
+            self._l_step_prev_state = l_step_prev_state
+            self._l_step = l_step
+            self._l_step_output = l_step_output
+            self._state_dim = l_rnn.state_dim
+
+    @property
+    def state_dim(self):
+        return self._state_dim
+
+    @property
+    def input_layer(self):
+        return self._l_in
+
+    @property
+    def input_var(self):
+        return self._l_in.input_var
+
+    @property
+    def output_layer(self):
+        return self._l_out
+
+    @property
+    def recurrent_layer(self):
+        return self._l_rnn
+
+    @property
+    def step_recurrent_layer(self):
+        return self._l_step
+
+    @property
+    def step_input_layer(self):
+        return self._l_step_input
+
+    @property
+    def step_prev_state_layer(self):
+        return self._l_step_prev_state
+
+    @property
+    def step_output_layer(self):
+        return self._l_step_output
+
+    @property
+    def state_init_param(self):
+        return self._state_init_param
 
 
 class ConvMergeNetwork(LayersPowered, Serializable):
