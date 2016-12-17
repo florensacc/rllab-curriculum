@@ -32,9 +32,6 @@ class TRPO(NPO):
             samples_data,
             "observations", "actions", "advantages"
         ))
-        print("obs dtype: ", samples_data["observations"].dtype)
-        print("act dtype: ", samples_data["actions"].dtype)
-        print("adv dtype: ", samples_data["advantages"].dtype)
         agent_infos = samples_data["agent_infos"]
         state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
         dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
