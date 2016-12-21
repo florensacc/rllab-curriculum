@@ -27,10 +27,12 @@ class DoubleSlitEnv(Env, Serializable):
         self.init_mu = np.array((0,0,0,0), dtype=np.float32)
         self.init_sigma = 0
         self.goal_position = np.array((5, 0), dtype=np.float32)
-        self.goal_threshold = 0.5
+        self.goal_threshold = 1.
+        self.goal_reward = 100
         self.barrier_info = ((np.array((3,  2)), 0.5),
                          (np.array((3,  0)), 0.5),
                          (np.array((3, -2)), 0.5))
+        # self.barrier_info = ((np.array((3,0)), 0.5),)
         self.lam_barrier=30
         self.action_cost_coeff = 0
         self.xlim = (-2, 6)
@@ -101,6 +103,8 @@ class DoubleSlitEnv(Env, Serializable):
         cur_position = self.observation[:2]
         dist_to_goal = np.linalg.norm(cur_position - self.goal_position)
         done =  dist_to_goal < self.goal_threshold
+        if done:
+            reward += self.goal_reward
 
         self.observation = np.copy(next_obs)
         return next_obs, reward, done, {}

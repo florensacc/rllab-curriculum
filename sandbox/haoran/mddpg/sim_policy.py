@@ -21,7 +21,8 @@ def rollout(sess,env, agent, exploration_strategy, qf, random=False,
     agent_infos = []
     env_infos = []
     o = env.reset()
-    agent.reset()
+    # agent.reset()
+    agent.k = np.mod(agent.k + 1, agent.K)
     path_length = 0
 
     fig = plt.figure()
@@ -60,6 +61,7 @@ def rollout(sess,env, agent, exploration_strategy, qf, random=False,
                 a = exploration_strategy.get_action(0, o, policy)
             else:
                 a, agent_info = agent.get_action(o)
+            print("head: %d"%(agent.k))
         print('action: ', a)
 
         agent_info = {}
@@ -80,7 +82,19 @@ def rollout(sess,env, agent, exploration_strategy, qf, random=False,
             ax_qf.clear()
             contours = ax_qf.contour(X,Y,Q, 20)
             ax_qf.clabel(contours,inline=1,fontsize=10,fmt='%.0f')
+
+            # current action
+            a = a.ravel()
             ax_qf.plot(a[0],a[1],'r*')
+
+            # all actions
+            all_actions, agent_info = policy.get_action(o,k='all')
+            for k, action in enumerate(all_actions[0]):
+                x = action[0]
+                y = action[1]
+                ax_qf.plot(x,y,'*')
+                ax_qf.text(x,y,'%d'%(k))
+
 
             plt.draw()
             timestep = 0.05
@@ -141,7 +155,7 @@ if __name__ == "__main__":
                         optimal=args.optimal,
                         max_path_length=args.max_path_length,
                         animated=True,
-                        speedup=args.speedup
+                        speedup=args.speedup,
                     )
 
                 # Hack for now. Not sure why rollout assumes that close is an

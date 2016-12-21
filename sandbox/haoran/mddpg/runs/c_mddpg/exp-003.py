@@ -34,7 +34,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/c_mddpg/" + exp_index
-mode = "local_test"
+mode = "ec2"
 ec2_instance = "c4.4xlarge"
 subnet = "us-west-1c"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils

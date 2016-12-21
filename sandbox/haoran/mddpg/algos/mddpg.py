@@ -34,7 +34,7 @@ class MDDPG(OnlineAlgorithm):
             qf_learning_rate=1e-3,
             policy_learning_rate=1e-4,
             Q_weight_decay=0.,
-            q_multiplier=1,
+            alpha=1.,
             **kwargs
     ):
         """
@@ -57,7 +57,7 @@ class MDDPG(OnlineAlgorithm):
         self.critic_learning_rate = qf_learning_rate
         self.actor_learning_rate = policy_learning_rate
         self.Q_weight_decay = Q_weight_decay
-        self.q_multiplier = q_multiplier
+        self.alpha = alpha
 
         assert isinstance(policy, MNNPolicy)
         assert policy.K == self.K
@@ -198,9 +198,10 @@ class MDDPG(OnlineAlgorithm):
         # grad w.r.t. left kernel inut
         kappa_grads = self.kernel.kappa_grads
 
-        # average over j
-        action_grads = tf.reduce_mean(
-            self.q_multiplier * kappa * qf_grads + kappa_grads,
+        # sum (not avg) over j
+        # using sum ensures that the gradient scale is close to DDPG
+        action_grads = tf.reduce_sum(
+            kappa * qf_grads + self.alpha * kappa_grads,
             reduction_indices=1,
         )
         # ---------------------------------------------------------------
