@@ -143,11 +143,19 @@ class GaussianGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
             all_input_var = tf.concat(2, [obs_var, prev_action_var])
         else:
             all_input_var = obs_var
+
+        prev_hidden = None
+        recurrent_state_output = dict()
+
         if self.feature_network is None:
             means, log_stds = L.get_output(
                 [self.mean_network.output_layer, self.l_log_std],
-                {self.l_input: all_input_var}
+                {self.l_input: all_input_var},
+                recurrent_state={self.mean_network.recurrent_layer: prev_hidden},
+                recurrent_state_output=recurrent_state_output,
             )
+            next_hidden = recurrent_state_output[self.mean_network.recurrent_layer]
+
         else:
             flat_input_var = tf.reshape(all_input_var, (-1, self.input_dim))
             means, log_stds = L.get_output(

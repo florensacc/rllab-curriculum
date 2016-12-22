@@ -265,9 +265,9 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
         self._set_std_to_0 = False
 
     @overrides
-    def reset(self):  # executed at the start of every rollout. Will fix the latent if needed.
+    def reset(self, force_resample_lat=False):  # executed at the start of every rollout. Will fix the latent if needed.
         if not self.resample and self.latent_dim:
-            if self.pre_fix_latent.size > 0:
+            if self.pre_fix_latent.size > 0 and not force_resample_lat:
                 self.latent_fix = self.pre_fix_latent
             else:
                 self.latent_fix = self.latent_dist.sample(self.latent_dist_info)

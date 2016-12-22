@@ -49,6 +49,9 @@ class OUStrategy(ExplorationStrategy, Serializable):
     @overrides
     def get_action(self, t, observation, policy, **kwargs):
         action, _ = policy.get_action(observation)
+        return self.get_modified_action(t, action)
+
+    def get_modified_action(self, t, action):
         ou_state = self.evolve_state()
         return np.clip(action + ou_state, self.action_space.low, self.action_space.high)
 

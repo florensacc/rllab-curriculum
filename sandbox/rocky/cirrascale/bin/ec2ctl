@@ -126,11 +126,15 @@ def get_exp_prefix_tag(instance):
 
 
 @cli.command()
-def jobs():
+@click.option('--verbose', '-v', is_flag=True, help='verbose')
+def jobs(verbose):
     jobs = []
     for instance in get_all_instances():
         name = get_name_tag(instance)
-        if name is not None:
+        if verbose:
+            print("{}: \n\t region: {}, id: {}, state: {}".format(
+                name, instance['Region'], instance['InstanceId'], instance['State']['Name']))
+        if (name is not None) and (instance['State']['Name'] != 'terminated'):
             jobs.append(name)
 
     for job in sorted(jobs):
@@ -216,16 +220,23 @@ def sim_policy(job):
 @cli.command()
 @click.argument('pattern')
 def kill_f(pattern):
+    print("trying to kill the patter: ", pattern)
     to_kill = []
     to_kill_ids = {}
     for instance in get_all_instances():
         name = get_name_tag(instance)
-        if name is not None and pattern in name:
+        print(name)
+        if name is None or pattern in name:
+            instance_id = instance['InstanceId']
             region = instance['Region']
-            if region not in to_kill_ids:
-                to_kill_ids[region] = []
-            to_kill_ids[region].append(instance['InstanceId'])
-            to_kill.append(name)
+            if name is None and query_yes_no(question="Kill instance {} without name in region {}?".format(
+                    instance_id, region)):
+                name = instance_id
+            if name:
+                if region not in to_kill_ids:
+                    to_kill_ids[region] = []
+                to_kill_ids[region].append(instance_id)
+                to_kill.append(name)
 
     print("This will kill the following jobs:")
     print(", ".join(sorted(to_kill)))
@@ -358,8 +369,12 @@ def spot_history(instance_type, duration):
 
         print("Spot pricing information for instance type {type}".format(type=instance_type))
 
+        list_string = ''
         for zone, price in sorted(price_list, key=lambda x: x[1]):
             print("Zone: {zone}, Max Price: {price}".format(zone=zone, price=price))
+            list_string += "'{}', ".format(zone)
+        print(list_string)
+
 
 
 @cli.command()

@@ -259,12 +259,12 @@ class GatherEnv(ProxyEnv, Serializable):
 
     def step(self, action):
         _, inner_rew, done, info = self.wrapped_env.step(action)
+        info['inner_rewards'] = inner_rew
+        info['gather_rewards'] = 0
         if done:
             return Step(self.get_current_obs(), -10, done, **info)
         com = self.wrapped_env.get_body_com("torso")
         x, y = com[:2]
-        info['inner_rewards'] = inner_rew
-        info['gather_rewards'] = 0
         reward = self.coef_inner_rew * inner_rew
         new_objs = []
         for obj in self.objects:
@@ -296,7 +296,9 @@ class GatherEnv(ProxyEnv, Serializable):
             (o[0] - robot_x) ** 2 + (o[1] - robot_y) ** 2)[::-1]
         # fill the readings
         bin_res = self.sensor_span / self.n_bins
-        ori = self.wrapped_env.model.data.qpos[self.__class__.ORI_IND]
+
+        ori = self.get_ori()  # overwrite this for Ant!
+
         for ox, oy, typ in sorted_objects:
             # compute distance between object and robot
             dist = ((oy - robot_y) ** 2 + (ox - robot_x) ** 2) ** 0.5
@@ -391,6 +393,9 @@ class GatherEnv(ProxyEnv, Serializable):
     def render(self):
         self.get_viewer()
         self.wrapped_env.render()
+
+    def get_ori(self):
+        return self.wrapped_env.model.data.qpos[self.__class__.ORI_IND]
 
 
     # CF

@@ -157,7 +157,7 @@ class ShareVAE(object):
                 self.optimizer_args["learning_rate"] = self.lr_var
             self.optimizer = self.optimizer_cls(**self.optimizer_args)
 
-    def init_opt(self, init=False, eval=False):
+    def init_opt(self, init=False, eval=False, opt_off=False):
         if init:
             self.model.init_mode()
         else:
@@ -344,7 +344,7 @@ class ShareVAE(object):
             (key, tf.add_n(vals) / self.num_gpus)
             for key, vals in dict_log_vars.items()
         ]
-        if (not init) and (not eval):
+        if (not init) and (not eval) and (not opt_off):
             for name, var in log_vars:
                 tf.scalar_summary(name, var)
 
@@ -967,4 +967,141 @@ class ShareVAE(object):
         #                 atol=2e-5,
         #             )
         #             print("step %s: check %s" % ((yi, xi), check))
+
+    def resume_init(self, init_train=False):
+        sess = tf.Session()
+        self.sess = sess
+        with self.sess.as_default():
+            self.init_opt(init=True)
+            if init_train:
+                self.init_opt(init=False, eval=False, opt_off=True)
+            self.init_opt(init=False, eval=True)
+            saver = tf.train.Saver()
+            if self.resume_from is not None:
+                # print("not resuming")
+                print("resuming from %s" % self.resume_from)
+                # fn = tf.train.latest_checkpoint(self.resume_from)
+                # print("latest ckpt: %s" % fn)
+                saver.restore(sess, self.resume_from)
+                print("resumed")
+
+    def vis(self,init=True):
+        if init:
+            self.resume_init(init_train=True)
+        sess = self.sess
+        self.sess.as_default().__enter__()
+
+        feed = self.prepare_feed(self.dataset.validation, self.true_batch_size)
+
+        dist = self.model.output_dist
+        bs_per_gpu = self.batch_size // self.num_gpus
+
+        x_var, context_var, proposal_sym = dist.sample_sym(
+            bs_per_gpu, unconditional=self.unconditional
+        )
+        batch_imshp = [bs_per_gpu, ] + list(self.model.image_shape)
+        h, w = self.model.image_shape[:2]
+        import scipy
+        def custom_imsave(name, img):
+            assert img.ndim == 3
+            if img.shape[2] == 3:
+                img = (img + 0.5) * 256
+            elif img.shape[2] == 1:
+                img = img.reshape(img.shape[:2])
+            scipy.misc.imsave(
+                name,
+                img
+            )
+
+        # # samples
+        z_var = self.model.latent_dist.sample_prior(bs_per_gpu)
+        _, x_dist_info = self.model.decode(z_var, sample=False)
+        context = sess.run(x_dist_info)
+        if self.unconditional:
+            context["context"] = np.zeros_like(context["context"])
+        fol = "%s/samples/" % self.checkpoint_dir
+        try:
+            import os
+            os.makedirs(fol)
+        except:
+            pass
+        # originals = tuple(feed.items())[0][1].reshape([128,32,32,3])
+        # cur_zeros = np.copy(self.dataset.train.images[:128].reshape([-1,32,32,3]))
+        cur_zeros = np.zeros(batch_imshp)
+        for yi in range(h):
+            for xi in range(w):
+                ind = xi + yi * w
+                if (ind % 16 == 1):
+                    for ix in range(bs_per_gpu):
+                        # scipy.misc.imsave(
+                        #     "%s/%s_step%s.png" % (fol, ix, ind),
+                        #                   (cur_zeros[ix] + 0.5) * 255)
+                        custom_imsave(
+                            "%s/%s_step%s.png" % (fol, ix, ind),
+                            cur_zeros[ix]
+                        )
+                proposal_zeros = sess.run(proposal_sym, {
+                    x_var: cur_zeros,
+                    context_var: context['context'],
+                })
+                cur_zeros[:, yi, xi, :] = proposal_zeros[:, yi, xi, :].copy()
+        os.system(
+            "tar -zcvf %s/../samples.tar.gz %s" % (fol, fol)
+        )
+        from sandbox.pchen.InfoGAN.infogan.misc.imported import plotting
+        img_tile = plotting.img_tile(cur_zeros, aspect_ratio=1.0, border_color=1.0, stretch=True)
+        img = plotting.plot_img(img_tile, title=None, )
+        plotting.plt.savefig("%s/sample_summary.png" % self.checkpoint_dir)
+        plotting.plt.close('all')
+
+        # img_tile = plotting.img_tile(cur_zeros, aspect_ratio=1.0, border_color=1.0, stretch=True)
+        # img = plotting.plot_img(img_tile, title=None)
+        # plotting.plt.savefig("%s/summary.png" % fol)
+        # plotting.plt.close('all')
+        # # import ipdb; ipdb.set_trace()
+
+        # decompress
+        originals = tuple(feed.items())[0][1][-bs_per_gpu:].reshape(batch_imshp)
+        # context = sess.run(self.sym_vars["train"]["x_dist_info"], feed)
+        cond = sess.run(self.sym_vars["train"]["cond_feats"], feed)
+        fol = "%s/decomp/" % self.checkpoint_dir
+        try:
+            import os
+            os.makedirs(fol)
+        except:
+            pass
+        # originals = tuple(feed.items())[0][1].reshape([128,32,32,3])
+        # cur_zeros = np.copy(self.dataset.train.images[:128].reshape([-1,32,32,3]))
+        for ix in range(bs_per_gpu):
+            custom_imsave(
+                "%s/%s_step%s.png" % (fol, ix, 0),
+                originals[ix]
+            )
+        cur_zeros = np.zeros_like(originals)
+        for yi in range(h):
+            for xi in range(w):
+                ind = xi + yi * w
+                if (ind % 8 == 1):
+                    for ix in range(bs_per_gpu):
+                        custom_imsave(
+                            "%s/%s_step%s.png" % (fol, ix, ind),
+                            cur_zeros[ix]
+                        )
+                proposal_zeros = sess.run(proposal_sym, {
+                    x_var: cur_zeros,
+                    context_var: cond,
+                })
+                cur_zeros[:, yi, xi, :] = proposal_zeros[:, yi, xi, :].copy()
+        os.system(
+            "tar -zcvf %s/../decomp.tar.gz %s" % (fol, fol)
+        )
+        interleaved = np.concatenate(
+            [originals[np.newaxis, :, :, :, :], cur_zeros[np.newaxis, :, :, :, :]]
+        ).transpose([1, 0, 2, 3, 4]).reshape([-1, 32, 32, 3])
+        img_tile = plotting.img_tile(interleaved, aspect_ratio=1., border_color=1., stretch=True)
+        img = plotting.plot_img(img_tile, title=None, )
+        plotting.plt.savefig("%s/decomp_summary.png" % self.checkpoint_dir)
+        plotting.plt.close('all')
+
+        import IPython; IPython.embed()
 

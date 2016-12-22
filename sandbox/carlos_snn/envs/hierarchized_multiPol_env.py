@@ -40,8 +40,8 @@ class HierarchizedMultiPoliEnv(ProxyEnv, Serializable):
         else:
             raise Exception("No path no file given")
 
-        # assert isinstance(env, MazeEnv) or isinstance(env.wrapped_env,
-        #                                               MazeEnv), "the obsSpaces mismatch but it's not a maze (by Carlos)"
+        # assert isinstance(env, FastMazeEnv) or isinstance(env.wrapped_env,
+        #                                               FastMazeEnv), "the obsSpaces mismatch but it's not a maze (by Carlos)"
 
         # I need to define a new hier-policy that will cope with that!
         self.low_policy = GaussianMLPPolicy_multi_hier(
@@ -66,7 +66,7 @@ class HierarchizedMultiPoliEnv(ProxyEnv, Serializable):
         with self.low_policy.fix_selector(action):
             # print("The hier action is prefixed selector: {}".format(self.low_policy.pre_fix_selector))
             frac_path = rollout(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg,
-                                animated=self.animate, speedup=1000)
+                                reset_start_rollout=False, animated=self.animate, speedup=1000)
             next_obs = frac_path['observations'][-1]
             reward = np.sum(frac_path['rewards'])
             done = self.time_steps_agg > len(
