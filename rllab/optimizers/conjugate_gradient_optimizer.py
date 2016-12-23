@@ -57,7 +57,7 @@ class PerlmutterHvp(Serializable):
 
 class FiniteDifferenceHvp(Serializable):
 
-    def __init__(self, base_eps=1e-8, symmetric=True, grad_clip=None, num_slices=1):
+    def __init__(self, base_eps=1e-5, symmetric=True, grad_clip=None, num_slices=1):
         Serializable.quick_init(self, locals())
         self.base_eps = base_eps
         self.symmetric = symmetric
@@ -79,8 +79,7 @@ class FiniteDifferenceHvp(Serializable):
             xs = args[len(inputs):]
             flat_xs = np.concatenate([np.reshape(x, (-1,)) for x in xs])
             param_val = self.target.get_param_values(trainable=True)
-            eps = np.cast['float32'](
-                self.base_eps / (np.linalg.norm(param_val) + 1e-8))
+            eps = self.base_eps
             self.target.set_param_values(
                 param_val + eps * flat_xs, trainable=True)
             flat_grad_dvplus = self.opt_fun["f_grad"](*inputs_)

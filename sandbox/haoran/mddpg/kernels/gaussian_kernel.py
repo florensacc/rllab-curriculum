@@ -131,6 +131,7 @@ class SimpleAdaptiveDiagonalGaussianKernel(DiagonalGaussianKernel):
         xs = self.sess.run(algo.policy.output, actor_feed) # N x K x d
         N, K, d = xs.shape
         assert self.dim == d
+        assert K > 1, "cannot compute pairwise distance if K = 1"
 
         # See SVGD for details:
         # basically, we want \sum_j \kappa(x_j, x_k) \approx 1

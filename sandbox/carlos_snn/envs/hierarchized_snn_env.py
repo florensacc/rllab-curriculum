@@ -11,7 +11,7 @@ from rllab.misc.overrides import overrides
 from rllab.envs.base import Step
 from rllab.misc import tensor_utils
 
-from sandbox.carlos_snn.sampler.utils import rollout as rollout_noEnvReset  # different rollout! (no reset!)
+from sandbox.carlos_snn.sampler.utils import rollout
 from sandbox.carlos_snn.old_my_snn.hier_snn_mlp_policy import GaussianMLPPolicy_snn_hier
 
 import joblib
@@ -74,17 +74,17 @@ class HierarchizedSnnEnv(ProxyEnv, Serializable):
             # print("From hier_snn_env --> the hier action is prefixed latent: {}".format(self.low_policy.pre_fix_latent))
             if isinstance(self.wrapped_env, FastMazeEnv):
                 with self.wrapped_env.blank_maze():
-                    frac_path = rollout_noEnvReset(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg,
-                                                   animated=self.animate, speedup=1000)
+                    frac_path = rollout(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg,
+                                        reset_start_rollout=False, animated=self.animate, speedup=1000)
                 next_obs = self.wrapped_env.get_current_obs()
             elif isinstance(self.wrapped_env, NormalizedEnv) and isinstance(self.wrapped_env.wrapped_env, FastMazeEnv):
                 with self.wrapped_env.wrapped_env.blank_maze():
-                    frac_path = rollout_noEnvReset(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg,
-                                                   animated=self.animate, speedup=1000)
+                    frac_path = rollout(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg,
+                                        reset_start_rollout=False, animated=self.animate, speedup=1000)
                 next_obs = self.wrapped_env.wrapped_env.get_current_obs()
             else:
-                frac_path = rollout_noEnvReset(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg,
-                                               animated=self.animate, speedup=1000)
+                frac_path = rollout(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg,
+                                    reset_start_rollout=False, animated=self.animate, speedup=1000)
                 next_obs = frac_path['observations'][-1]
 
             reward = np.sum(frac_path['rewards'])

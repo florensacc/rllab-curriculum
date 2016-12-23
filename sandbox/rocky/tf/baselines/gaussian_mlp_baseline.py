@@ -15,6 +15,7 @@ class GaussianMLPBaseline(Baseline, Parameterized, Serializable):
             regressor_args=None,
     ):
         Serializable.quick_init(self, locals())
+        Parameterized.__init__(self)
         super(GaussianMLPBaseline, self).__init__(env_spec)
         if regressor_args is None:
             regressor_args = dict()
@@ -43,3 +44,6 @@ class GaussianMLPBaseline(Baseline, Parameterized, Serializable):
     @overrides
     def set_param_values(self, flattened_params, **tags):
         self._regressor.set_param_values(flattened_params, **tags)
+
+    def get_params_internal(self, **tags):
+        return self._regressor.get_params_internal(**tags)

@@ -3,6 +3,7 @@ from rllab.envs.base import EnvSpec
 from rllab.spaces.box import Box as TheanoBox
 from rllab.spaces.discrete import Discrete as TheanoDiscrete
 from rllab.spaces.product import Product as TheanoProduct
+from sandbox.rocky.tf.envs.vec_env import VecEnv
 from sandbox.rocky.tf.spaces.discrete import Discrete
 from sandbox.rocky.tf.spaces.box import Box
 from sandbox.rocky.tf.spaces.product import Product
@@ -59,13 +60,16 @@ class TfEnv(ProxyEnv):
         return WrappedCls(cls, env_cls, extra_kwargs)
 
 
-class VecTfEnv(object):
+class VecTfEnv(VecEnv):
 
     def __init__(self, vec_env):
         self.vec_env = vec_env
 
-    def reset(self, dones):
-        return self.vec_env.reset(dones)
+    def reset_trial(self, dones, seeds=None, *args, **kwargs):
+        return self.vec_env.reset_trial(dones, seeds=seeds, *args, **kwargs)
+
+    def reset(self, dones, seeds=None, *args, **kwargs):
+        return self.vec_env.reset(dones, seeds=seeds, *args, **kwargs)
 
     @property
     def n_envs(self):
@@ -76,3 +80,6 @@ class VecTfEnv(object):
 
     def terminate(self):
         self.vec_env.terminate()
+
+    def handle_policy_reset(self, policy, dones):
+        self.vec_env.handle_policy_reset(policy, dones)

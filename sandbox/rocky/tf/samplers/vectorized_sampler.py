@@ -1,7 +1,6 @@
 import pickle
 
-import tensorflow as tf
-from rllab.sampler.base import BaseSampler
+from rllab.sampler.base import Sampler
 from sandbox.rocky.tf.envs.parallel_vec_env_executor import ParallelVecEnvExecutor
 from sandbox.rocky.tf.envs.vec_env_executor import VecEnvExecutor
 from rllab.misc import tensor_utils
@@ -11,31 +10,38 @@ import rllab.misc.logger as logger
 import itertools
 
 
-class VectorizedSampler(BaseSampler):
+class VectorizedSampler(Sampler):
 
-    def __init__(self, algo, n_envs=None):
-        super(VectorizedSampler, self).__init__(algo)
+    def __init__(self, env, policy, n_envs, vec_env=None, parallel=False):
+        self.env = env
+        self.policy = policy
         self.n_envs = n_envs
+        self.vec_env = vec_env
+        self.env_spec = env.spec
+        self.parallel = parallel
 
     def start_worker(self):
-        n_envs = self.n_envs
-        if n_envs is None:
-            n_envs = int(self.algo.batch_size / self.algo.max_path_length)
-            n_envs = max(1, min(n_envs, 100))
-
-        if getattr(self.algo.env, 'vectorized', False):
-            self.vec_env = self.algo.env.vec_env_executor(n_envs=n_envs)
-        else:
-            envs = [pickle.loads(pickle.dumps(self.algo.env)) for _ in range(n_envs)]
-            self.vec_env = VecEnvExecutor(
-                envs=envs,
-            )
-        self.env_spec = self.algo.env.spec
+        if self.vec_env is None:
+            n_envs = self.n_envs
+            if getattr(self.env, 'vectorized', False):
+                self.vec_env = self.env.vec_env_executor(n_envs=n_envs)
+            elif self.parallel:
+                self.vec_env = ParallelVecEnvExecutor(
+                    env=self.env,
+                    n_envs=self.n_envs,
+                )
+            else:
+                envs = [pickle.loads(pickle.dumps(self.env)) for _ in range(n_envs)]
+                self.vec_env = VecEnvExecutor(
+                    envs=envs,
+                )
 
     def shn_envswn_worker(self):
         self.vec_env.terminate()
 
-    def obtain_samples(self, itr, max_path_length, batch_size):
+    def obtain_samples(self, itr, max_path_length, batch_size, max_n_trajs=None):
+        # if self.vec_env is None:
+        #     raise
         logger.log("Obtaining samples for iteration %d..." % itr)
         paths = []
         n_samples = 0
@@ -48,7 +54,7 @@ class VectorizedSampler(BaseSampler):
         env_time = 0
         process_time = 0
 
-        policy = self.algo.policy
+        policy = self.policy
         import time
         while n_samples < batch_size:
             t = time.time()
@@ -98,6 +104,10 @@ class VectorizedSampler(BaseSampler):
                     ))
                     n_samples += len(running_paths[idx]["rewards"])
                     running_paths[idx] = None
+
+            if max_n_trajs is not None and len(paths) >= max_n_trajs:
+                break
+
             process_time += time.time() - t
             pbar.inc(len(obses))
             obses = next_obses

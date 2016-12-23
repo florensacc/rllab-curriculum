@@ -34,6 +34,7 @@ class MDDPG(OnlineAlgorithm):
             qf_learning_rate=1e-3,
             policy_learning_rate=1e-4,
             Q_weight_decay=0.,
+            q_multiplier=1,
             **kwargs
     ):
         """
@@ -56,6 +57,7 @@ class MDDPG(OnlineAlgorithm):
         self.critic_learning_rate = qf_learning_rate
         self.actor_learning_rate = policy_learning_rate
         self.Q_weight_decay = Q_weight_decay
+        self.q_multiplier = q_multiplier
 
         assert isinstance(policy, MNNPolicy)
         assert policy.K == self.K
@@ -198,7 +200,7 @@ class MDDPG(OnlineAlgorithm):
 
         # average over j
         action_grads = tf.reduce_mean(
-            kappa * qf_grads + kappa_grads,
+            self.q_multiplier * kappa * qf_grads + kappa_grads,
             reduction_indices=1,
         )
         # ---------------------------------------------------------------
@@ -314,6 +316,7 @@ class MDDPG(OnlineAlgorithm):
             qf_outputs,
             target_qf_outputs,
             ys,
+            kappa, # N x K x K
         ) = self.sess.run(
             [
                 self.actor_surrogate_loss,
@@ -323,6 +326,7 @@ class MDDPG(OnlineAlgorithm):
                 self.qf.output,
                 self.target_qf_outputs,
                 self.ys,
+                self.kernel.kappa,
             ],
             feed_dict=feed_dict)
         average_discounted_return = np.mean(
@@ -332,6 +336,7 @@ class MDDPG(OnlineAlgorithm):
         returns = np.asarray([sum(path["rewards"]) for path in paths])
         rewards = np.hstack([path["rewards"] for path in paths])
         policy_vars = np.mean(np.var(policy_outputs,axis=1),axis=1)
+        kappa_sum = np.sum(kappa,axis=1).ravel()
 
         # Log statistics
         self.last_statistics.update(OrderedDict([
@@ -354,6 +359,9 @@ class MDDPG(OnlineAlgorithm):
         self.last_statistics.update(create_stats_ordered_dict('returns', returns))
         self.last_statistics.update(
             create_stats_ordered_dict('PolicyVars',policy_vars)
+        )
+        self.last_statistics.update(
+            create_stats_ordered_dict('KappaSum',kappa_sum)
         )
 
         if len(es_path_returns) == 0 and epoch == 0:

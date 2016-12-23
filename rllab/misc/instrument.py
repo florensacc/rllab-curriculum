@@ -645,6 +645,7 @@ def to_local_command(params, python_command="python", script=osp.join(config.PRO
 
 def to_docker_command(params, docker_image, python_command="python", script='scripts/run_experiment_lite.py',
                       pre_commands=None, use_tty=False,
+                      mujoco_path=None,
                       post_commands=None, dry=False, use_gpu=False, env=None, local_code_dir=None):
     """
     :param params: The parameters for the experiment. If logging directory parameters are provided, we will create
@@ -659,6 +660,8 @@ def to_docker_command(params, docker_image, python_command="python", script='scr
         pre_commands = params.pop("pre_commands", None)
     if post_commands is None:
         post_commands = params.pop("post_commands", None)
+    if mujoco_path is None:
+        mujoco_path = config.MUJOCO_KEY_PATH
     # script = 'rllab/' + script
     # if not dry:
 
@@ -680,7 +683,7 @@ def to_docker_command(params, docker_image, python_command="python", script='scr
         for k, v in env.items():
             command_prefix += " -e \"{k}={v}\"".format(k=k, v=v)
     command_prefix += " -v {local_mujoco_key_dir}:{docker_mujoco_key_dir}".format(
-        local_mujoco_key_dir=config.MUJOCO_KEY_PATH, docker_mujoco_key_dir='/root/.mujoco')
+        local_mujoco_key_dir=mujoco_path, docker_mujoco_key_dir='/root/.mujoco')
     command_prefix += " -v {local_log_dir}:{docker_log_dir}".format(
         local_log_dir=log_dir,
         docker_log_dir=docker_log_dir

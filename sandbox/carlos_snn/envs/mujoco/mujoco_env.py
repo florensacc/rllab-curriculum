@@ -19,3 +19,6 @@ class MujocoEnv_ObsInit(MujocoEnv):
     @overrides
     def observation_space(self):
         return self._observation_space
+
+    def get_ori(self):
+        raise NotImplementedError

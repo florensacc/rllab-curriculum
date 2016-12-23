@@ -1,7 +1,3 @@
-
-
-
-
 class Distribution(object):
     @property
     def dim(self):

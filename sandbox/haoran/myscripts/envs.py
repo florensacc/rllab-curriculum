@@ -11,6 +11,7 @@ from rllab.envs.mujoco.inverted_double_pendulum_env import InvertedDoublePendulu
 
 from sandbox.haoran.mddpg.envs.mujoco.swimmer_undirected_env import \
     SwimmerUndirectedEnv
+from sandbox.haoran.mddpg.envs.double_slit_env import DoubleSlitEnv
 
 class EnvChooser(object):
     def __init__(self):
@@ -37,6 +38,8 @@ class EnvChooser(object):
             env = DoublePendulumEnv(**kwargs)
         elif env_name == "inv_double_pendulum":
             env = InvertedDoublePendulumEnv(**kwargs)
+        elif env_name == "double_slit":
+            env = DoubleSlitEnv()
         else:
             print("Unknown environment %s"%(env_name))
             raise NotImplementedError
