@@ -30,12 +30,24 @@ class AtariEnv(GymEnv):
         self._observation_space = Box(0.,1.,(N_FRAMES,RESIZE_H,RESIZE_W))
         self.update_curr_obs(None)
 
+        # adversary_fn - function handle for adversarial perturbation of observation
+        self.adversary_fn = None
+
+    def set_adversary_fn(self, fn_handle):
+        self.adversary_fn = fn_handle
+
+    def clear_curr_obs(self):
+        self._curr_obs = np.zeros(self.observation_space.shape)
+
     def update_curr_obs(self, next_obs):
         if next_obs is None:
-            self._curr_obs = np.zeros(self.observation_space.shape)
+            self.clear_curr_obs()
         else:
             next_obs = self.preprocess_obs(next_obs)
             self._curr_obs = np.r_[self._curr_obs[1:,:,:], next_obs[np.newaxis,:]]
+            if self.adversary_fn is not None:
+                # Adversarially perturb input
+                self._curr_obs = self.adversary_fn(self._curr_obs)
 
     def preprocess_obs(self, obs):
         # Preprocess Atari frames based on released DQN code from Nature paper:
@@ -55,5 +67,6 @@ class AtariEnv(GymEnv):
     @overrides
     def reset(self):
         obs = self.env.reset()
+        self.clear_curr_obs()
         self.update_curr_obs(obs)
         return self._curr_obs
