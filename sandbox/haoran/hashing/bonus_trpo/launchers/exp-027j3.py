@@ -1,8 +1,7 @@
 """
 Image obs, image simhash
 
-Test the effect of Bloom filters; continue exp-027i
-Repeat exp-027i with more seeds
+Repeat exp-027j with more seeds
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -74,23 +73,48 @@ else:
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [500,600,700,800,900]
-
-    @variant
-    def bonus_coeff(self):
-        return [0.01]
+        return [500, 600, 700, 800, 900]
 
     @variant
     def game(self):
-        return ["frostbite"]
+        return [
+            "frostbite",
+            # "venture",
+        ]
 
     @variant
-    def dim_key(self):
-        return [64,256, 512]
+    def simhash(self):
+        return [
+            (16, 0.01),
+            (16, 0.02),
+            (16, 0.04),
+            (16, 0.08),
+            (16, 0.16),
+            # (64, 0.01),
+            (64, 0.02),
+            # (64, 0.04),
+            (64, 0.08),
+            (64, 0.16),
+            # (128, 0.01),
+            # (128, 0.02),
+            (128, 0.04),
+            (128, 0.08),
+            (128, 0.16),
+            # (256, 0.01),
+            (256, 0.02),
+            (256, 0.04),
+            (256, 0.08),
+            (256, 0.16),
+            # (512, 0.01),
+            (512, 0.02),
+            (512, 0.04),
+            (512, 0.08),
+            (512, 0.16),
+        ]
 
     @variant
     def bucket_sizes(self):
-        return ["6M","90M"]
+        return ["6M"]
 
     @variant
     def count_target(self):
@@ -152,7 +176,7 @@ for v in variants:
     record_internal_state=False
 
     # bonus
-    bonus_coeff=v["bonus_coeff"]
+    dim_key, bonus_coeff = v["simhash"]
     bonus_form="1/sqrt(n)"
     count_target=v["count_target"]
     retrieve_sample_size=100000 # compute keys for all paths at once
@@ -273,7 +297,7 @@ for v in variants:
 
     _hash = SimHashV3(
         item_dim=state_preprocessor.get_output_dim(), # get around stub
-        dim_key=v["dim_key"],
+        dim_key=dim_key,
         bucket_sizes=bucket_sizes,
         parallel=use_parallel,
         standard_code=True,
