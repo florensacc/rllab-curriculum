@@ -51,3 +51,4 @@ dependencies:
         - chainer==1.15.0
         - dominate
         - scikit-image
+        - git+https://github.com/tflearn/tflearn.git
