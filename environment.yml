@@ -49,3 +49,5 @@ dependencies:
         - jupyter
         - progressbar2
         - chainer==1.15.0
+        - dominate
+        - scikit-image

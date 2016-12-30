@@ -1,9 +1,14 @@
+import os
+os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
+
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
-from rllab.envs.box2d.cartpole_env import CartpoleEnv
+# from rllab.envs.box2d.cartpole_env import CartpoleEnv
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
+from rllab.envs.mujoco.swimmer_env import SwimmerEnv
+
 import sys
 
 stub(globals())
@@ -12,7 +17,7 @@ for step_size in [0.01, 0.05, 0.1]:
 
     for seed in [1, 11, 21, 31, 41]:
 
-        env = normalize(CartpoleEnv())
+        env = normalize(env=SwimmerEnv())
 
         policy = GaussianMLPPolicy(
             env_spec=env.spec,
