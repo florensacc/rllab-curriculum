@@ -141,6 +141,7 @@ class SimpleAdaptiveDiagonalGaussianKernel(DiagonalGaussianKernel):
         # is to compute the pairwise distances over the entire batch.
         hs = []
         for x in xs:
+            # x is K x D
             dist = distance.pdist(x)
             h = np.median(dist)**2 / np.log(K)
             h = max(h, self.h_min)

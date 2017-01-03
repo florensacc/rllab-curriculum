@@ -210,7 +210,7 @@ class MDDPG(OnlineAlgorithm):
             tmp,
             [2,0,1,3]
             # then it becomse (N,j,k,d)
-        )
+        ) # \nabla_a Q(s,a)
         kappa = tf.expand_dims(
             self.kernel.kappa,
             dim=3,
@@ -267,7 +267,6 @@ class MDDPG(OnlineAlgorithm):
         #             full_grad = low_grad * high_grad
         #             flat_grads += full_grad
 
-        #HT: need to double check this, since params is a list
         self.actor_surrogate_loss = tf.reduce_sum(
             - flatten_tensor_variables(all_dummy_params) *
             flatten_tensor_variables(grads)
