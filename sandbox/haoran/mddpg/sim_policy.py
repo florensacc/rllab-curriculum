@@ -21,7 +21,7 @@ def rollout(sess,env, agent, exploration_strategy, qf, random=False,
     agent_infos = []
     env_infos = []
     o = env.reset()
-    # agent.reset()
+    exploration_strategy.reset()
     agent.k = np.mod(agent.k + 1, agent.K)
     path_length = 0
 
@@ -156,6 +156,7 @@ if __name__ == "__main__":
                         max_path_length=args.max_path_length,
                         animated=True,
                         speedup=args.speedup,
+                        random=args.random,
                     )
 
                 # Hack for now. Not sure why rollout assumes that close is an

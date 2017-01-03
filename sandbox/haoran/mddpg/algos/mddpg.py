@@ -35,6 +35,10 @@ class MDDPG(OnlineAlgorithm):
             policy_learning_rate=1e-4,
             Q_weight_decay=0.,
             alpha=1.,
+            qf_extra_training=0,
+            only_train_critic=False,
+            only_train_actor=False,
+            resume=False,
             **kwargs
     ):
         """
@@ -58,12 +62,24 @@ class MDDPG(OnlineAlgorithm):
         self.actor_learning_rate = policy_learning_rate
         self.Q_weight_decay = Q_weight_decay
         self.alpha = alpha
+        self.qf_extra_training = qf_extra_training
+        self.only_train_critic = only_train_critic
+        self.only_train_actor = only_train_actor
+        self.resume = resume
 
+        assert not (only_train_actor and only_train_critic)
         assert isinstance(policy, MNNPolicy)
         assert policy.K == self.K
         assert isinstance(exploration_strategy, MNNStrategy)
 
+        if resume:
+            qf_params = qf.get_param_values()
+            policy_params = policy.get_param_values()
         super().__init__(env, policy, exploration_strategy, **kwargs)
+        if resume:
+            qf.set_param_values(qf_params)
+            policy.set_param_values(policy_params)
+
 
     @overrides
     def _init_tensorflow_ops(self):
@@ -103,8 +119,10 @@ class MDDPG(OnlineAlgorithm):
             target_qf.sess = self.sess
         self.target_policy.sess = self.sess
         self.dummy_policy.sess = self.sess
+        # if not self.only_train_actor:
         self._init_critic_ops()
-        self._init_actor_ops()
+        if not self.only_train_critic:
+            self._init_actor_ops()
         self._init_target_ops()
         self.sess.run(tf.initialize_all_variables())
 
@@ -114,7 +132,7 @@ class MDDPG(OnlineAlgorithm):
                 (1. - self.terminals_placeholder) *
                 self.discount * qf.output)
             for qf in self.target_qf_list
-        ]
+        ] # K x N
         if self.q_target_type == "max":
             self.ys = tf.reduce_max(
                 self.all_target_qs,
@@ -150,10 +168,11 @@ class MDDPG(OnlineAlgorithm):
         if self.q_target_type == "none":
             self.train_critic_op = tf.constant(1.)
         else:
-            self.train_critic_op = tf.train.AdamOptimizer(
-                self.critic_learning_rate).minimize(
-                self.critic_total_loss,
-                var_list=self.qf.get_params_internal())
+            if not self.only_train_actor:
+                self.train_critic_op = tf.train.AdamOptimizer(
+                    self.critic_learning_rate).minimize(
+                    self.critic_total_loss,
+                    var_list=self.qf.get_params_internal())
     def _init_actor_ops(self):
         """
         SVGD
@@ -190,6 +209,7 @@ class MDDPG(OnlineAlgorithm):
             # here the dimensions are (j,k,N,d)
             tmp,
             [2,0,1,3]
+            # then it becomse (N,j,k,d)
         )
         kappa = tf.expand_dims(
             self.kernel.kappa,
@@ -200,18 +220,52 @@ class MDDPG(OnlineAlgorithm):
 
         # sum (not avg) over j
         # using sum ensures that the gradient scale is close to DDPG
+        # since kappa(x,x) = 1, but we may need to use different learning rates
+        # for different numbers of heads
         action_grads = tf.reduce_sum(
             kappa * qf_grads + self.alpha * kappa_grads,
             reduction_indices=1,
-        )
+        ) # (N,k,d)
         # ---------------------------------------------------------------
 
         # propagate action grads to NN parameter grads
+        # this part computes sum_{i,k,l} (action_grads[i,k,l] *
+        #   d(action[i,k,l]) / d theta), where
+        # i: sample index
+        # k: head index
+        # l: action dimension index
+        # actually grads is not a 1D vector, but a list of tensors corresponding
+        # to weights and biases of different layers; but
+        #   np.concatenate([g.ravel() for g in grads])
+        # gives you the flat gradient
+
+
         grads = tf.gradients(
             self.policy.output,
             all_true_params,
             grad_ys=action_grads,
         )
+
+        # In case you doubt, flat grads is essentially the same as below
+        # flat_grads = np.zeros_like(self.policy.get_param_values())
+        # for i in range(N):
+        #     for k in range(K):
+        #         for l in range(d):
+        #             low_grad = (
+        #                 np.concatenate([
+        #                     g.ravel() for g in
+        #                     self.sess.run(
+        #                         tf.gradients(
+        #                             self.policy.output[i,k,l],
+        #                             self.policy.get_params_internal(),
+        #                         ),
+        #                         feed_dict
+        #                     )
+        #                 ])
+        #             ) # length L
+        #             high_grad = agrads[i,k,l]
+        #             full_grad = low_grad * high_grad
+        #             flat_grads += full_grad
 
         #HT: need to double check this, since params is a list
         self.actor_surrogate_loss = tf.reduce_sum(
@@ -234,21 +288,23 @@ class MDDPG(OnlineAlgorithm):
         ]
 
     def _init_target_ops(self):
-        actor_vars = self.policy.get_params_internal()
-        target_actor_vars = self.target_policy.get_params_internal()
-        assert len(actor_vars) == len(target_actor_vars)
-        self.update_target_actor_op = [
-            tf.assign(target, (self.tau * src + (1 - self.tau) * target))
-            for target, src in zip(target_actor_vars, actor_vars)]
+        if not self.only_train_critic:
+            actor_vars = self.policy.get_params_internal()
+            target_actor_vars = self.target_policy.get_params_internal()
+            assert len(actor_vars) == len(target_actor_vars)
+            self.update_target_actor_op = [
+                tf.assign(target, (self.tau * src + (1 - self.tau) * target))
+                for target, src in zip(target_actor_vars, actor_vars)]
 
-        # Since target Q functions share weights, only update one of them
-        critic_vars = self.qf.get_params_internal()
-        target_critic_vars = self.target_qf_list[0].get_params_internal()
-        assert len(critic_vars) == len(target_critic_vars)
-        self.update_target_critic_op = [
-            tf.assign(target, (self.tau * src + (1 - self.tau) * target))
-            for target, src in zip(target_critic_vars, critic_vars)
-        ]
+        if not self.only_train_actor:
+            # Since target Q functions share weights, only update one of them
+            critic_vars = self.qf.get_params_internal()
+            target_critic_vars = self.target_qf_list[0].get_params_internal()
+            assert len(critic_vars) == len(target_critic_vars)
+            self.update_target_critic_op = [
+                tf.assign(target, (self.tau * src + (1 - self.tau) * target))
+                for target, src in zip(target_critic_vars, critic_vars)
+            ]
 
     @overrides
     def _init_training(self):
@@ -259,12 +315,29 @@ class MDDPG(OnlineAlgorithm):
 
     @overrides
     def _get_training_ops(self):
-        return [
-            self.train_actor_op,
-            self.train_critic_op,
-            self.update_target_critic_op,
-            self.update_target_actor_op,
-        ]
+        if self.only_train_critic:
+            train_ops = [
+                self.train_critic_op,
+                self.update_target_critic_op,
+            ]
+        elif self.only_train_actor:
+            train_ops = [
+                self.train_actor_op,
+                self.update_target_actor_op,
+            ]
+        else:
+            basic_ops = [
+                self.train_actor_op,
+                self.train_critic_op,
+                self.update_target_critic_op,
+                self.update_target_actor_op,
+            ]
+            extra_ops = [
+                self.train_critic_op,
+                self.update_target_critic_op,
+            ] * self.qf_extra_training
+            train_ops = basic_ops + extra_ops
+        return train_ops
 
     @overrides
     def _update_feed_dict(self, rewards, terminals, obs, actions, next_obs):

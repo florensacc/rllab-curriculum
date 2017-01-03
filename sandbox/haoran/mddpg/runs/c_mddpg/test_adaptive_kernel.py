@@ -188,17 +188,26 @@ from sandbox.rocky.tf.envs.base import TfEnv
 from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 
 K = 20 # number of particles
+
+# two modes
 weights = np.array([1./3., 2./3.],np.float32)
 mus = np.array([-2., 2.],np.float32)
 sigmas = np.array([1., 1.],np.float32)
+
+# one mode
+# weights = np.array([1.],np.float32)
+# mus = np.array([0.],np.float32)
+# sigmas = np.array([1.],np.float32)
+
 ddpg_kwargs = dict(
     epoch_length = 1,
     min_pool_size = 2, # must be at least 2
     replay_pool_size=2, # should only sample from recent experiences
     eval_samples = 1, # doesn't matter since we override evaluate()
     n_epochs=1000,
-    policy_learning_rate=0.1, # note: this is higher than DDPG's 1e-4
+    policy_learning_rate=0.01, # note: this is higher than DDPG's 1e-4
     batch_size=1, # only need recent samples, though it's slow
+    alpha=1, # 1 produces the best result
 )
 q_target_type = "none"
 

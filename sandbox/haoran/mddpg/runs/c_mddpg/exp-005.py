@@ -1,9 +1,7 @@
 """
 Conservative version of MDDPG
 
-Try MDDPG on double slit. In particular, we use fixed kernels and tune
-    sigma and alpha to get interpolated behavior.
-    sigma -> 0 and alpha = 0 corresponds to exactly DDPG
+Try the MultiGoalEnv
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
@@ -41,7 +39,7 @@ ec2_instance = "c4.4xlarge"
 subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
-n_parallel = 4 # only for local exp
+n_parallel = 1 # only for local exp
 snapshot_mode = "all"
 snapshot_gap = 10
 plot = False
@@ -56,23 +54,15 @@ class VG(VariantGenerator):
     @variant
     def env_name(self):
         return [
-            "double_slit",
-            # "swimmer",
-            # "hopper",
-            # "walker",
-            # "ant",
-            # "halfcheetah",
-            # "humanoid",
-            # "cartpole",
-            # "inv_double_pendulum",
+            "multi_goal"
         ]
     @variant
     def K(self):
-        return [2,4,8]
+        return [2, 4, 8]
 
     @variant
     def alpha(self):
-        return [0,10,100,1e3]
+        return [1, 10, 100]
 
     @variant
     def sigma(self):
@@ -90,6 +80,24 @@ class VG(VariantGenerator):
     def theta(self):
         return [0]
 
+    @variant
+    def qf_extra_training(self):
+        return [0]
+
+    @variant
+    def switch_type(self):
+        return [
+            # "per_action",
+            "per_path"
+        ]
+
+    @variant
+    def q_target_type(self):
+        return [
+            "mean",
+            "max"
+        ]
+
 variants = VG().variants()
 
 print("#Experiments: %d" % len(variants))
@@ -100,7 +108,6 @@ for v in variants:
     seed=v["seed"]
     env_name = v["env_name"]
     K = v["K"]
-    q_target_type = "max"
     adaptive_kernel = False
     sigma = v["sigma"]
     theta = v["theta"]
@@ -109,13 +116,16 @@ for v in variants:
         alpha=v["alpha"],
         max_path_length=v["max_path_length"],
         policy_learning_rate=v["policy_learning_rate"],
+        qf_extra_training=v["qf_extra_training"],
+        q_target_type = v["q_target_type"],
     )
     if mode == "local_test" or mode == "local_docker_test":
         ddpg_kwargs = dict(
-            epoch_length = 100,
+            epoch_length = 1000,
             min_pool_size = 2,
             eval_samples = 100,
             n_epochs=50,
+            batch_size=4,
         )
     else:
         ddpg_kwargs = dict(
@@ -186,7 +196,7 @@ for v in variants:
     es = MNNStrategy(
         K=K,
         substrategy=OUStrategy(env_spec=env.spec,theta=theta),
-        switch_type="per_path"
+        switch_type=v["switch_type"],
     )
     qf = FeedForwardCritic(
         "critic",
@@ -220,7 +230,6 @@ for v in variants:
         kernel=kernel,
         qf=qf,
         K=K,
-        q_target_type=q_target_type,
         **ddpg_kwargs
     )
 

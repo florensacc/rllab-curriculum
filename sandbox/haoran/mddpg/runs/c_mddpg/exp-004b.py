@@ -1,9 +1,7 @@
 """
 Conservative version of MDDPG
 
-Try MDDPG on double slit. In particular, we use fixed kernels and tune
-    sigma and alpha to get interpolated behavior.
-    sigma -> 0 and alpha = 0 corresponds to exactly DDPG
+Continue exp-003c, with higher learning rate for the critic
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
@@ -56,23 +54,15 @@ class VG(VariantGenerator):
     @variant
     def env_name(self):
         return [
-            "double_slit",
-            # "swimmer",
-            # "hopper",
-            # "walker",
-            # "ant",
-            # "halfcheetah",
-            # "humanoid",
-            # "cartpole",
-            # "inv_double_pendulum",
+            "double_slit_v2",
         ]
     @variant
     def K(self):
-        return [2,4,8]
+        return [8,4,2]
 
     @variant
     def alpha(self):
-        return [0,10,100,1e3]
+        return [100,10,0]
 
     @variant
     def sigma(self):
@@ -90,6 +80,18 @@ class VG(VariantGenerator):
     def theta(self):
         return [0]
 
+    @variant
+    def qf_extra_training(self):
+        return [0]
+
+    @variant
+    def switch_type(self):
+        return ["per_action", "per_path"]
+
+    @variant
+    def q_target_type(self):
+        return ["mean", "max"]
+
 variants = VG().variants()
 
 print("#Experiments: %d" % len(variants))
@@ -100,7 +102,7 @@ for v in variants:
     seed=v["seed"]
     env_name = v["env_name"]
     K = v["K"]
-    q_target_type = "max"
+    q_target_type = v["q_target_type"]
     adaptive_kernel = False
     sigma = v["sigma"]
     theta = v["theta"]
@@ -109,10 +111,11 @@ for v in variants:
         alpha=v["alpha"],
         max_path_length=v["max_path_length"],
         policy_learning_rate=v["policy_learning_rate"],
+        qf_extra_training=v["qf_extra_training"]
     )
     if mode == "local_test" or mode == "local_docker_test":
         ddpg_kwargs = dict(
-            epoch_length = 100,
+            epoch_length = 1000,
             min_pool_size = 2,
             eval_samples = 100,
             n_epochs=50,
@@ -186,7 +189,7 @@ for v in variants:
     es = MNNStrategy(
         K=K,
         substrategy=OUStrategy(env_spec=env.spec,theta=theta),
-        switch_type="per_path"
+        switch_type=v["switch_type"],
     )
     qf = FeedForwardCritic(
         "critic",

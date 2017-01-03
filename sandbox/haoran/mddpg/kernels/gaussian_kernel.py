@@ -98,9 +98,10 @@ class DiagonalGaussianKernel(Kernel):
         # at a time
         K = int(xs.get_shape()[1])
         diff = tf.pack(
-            [xs_other[:,:,k,:] - xs_cur[:,:,0,:] for k in range(K)],
+            [xs_cur[:,:,0,:] - xs_other[:,:,k,:] for k in range(K)],
+            # [xs_other[:,:,k,:] - xs_cur[:,:,0,:] for k in range(K)],
             axis=2
-        )
+        ) # N x K x K x d: (x_j - x_k)
         kappa_grads = - kappa *  self.diag_kappa_grads * diff
         return kappa_grads
 
@@ -110,9 +111,10 @@ class SimpleAdaptiveDiagonalGaussianKernel(DiagonalGaussianKernel):
     Since tensorflow doesn't allow computing the median in the graph, we do it
     in np and then feed the values back
     """
-    def __init__(self, scope_name, dim):
+    def __init__(self, scope_name, dim, h_min=1e-3):
         self.scope_name = scope_name
         self.dim = dim
+        self.h_min = h_min
 
         Serializable.quick_init(self, locals())
         with tf.variable_scope(self.scope_name):
@@ -141,6 +143,7 @@ class SimpleAdaptiveDiagonalGaussianKernel(DiagonalGaussianKernel):
         for x in xs:
             dist = distance.pdist(x)
             h = np.median(dist)**2 / np.log(K)
+            h = max(h, self.h_min)
             hs.append(h)
         self.diags = np.outer(1./np.array(hs), np.ones(d))
 
@@ -180,13 +183,58 @@ class TestDiagonalGaussianKernel(unittest.TestCase):
                                [0.1346602956955058, 1.0]]],np.float32)
 
         kappa_grads_expected = np.array([[[[0, 0],
-                                     [-0.0013466, 0.26932059]],
-                                    [[0.0013466, -0.26932059],
+                                     [0.0013466, -0.26932059]],
+                                    [[-0.0013466, 0.26932059],
                                      [0, 0]]]],np.float32)
 
         np.testing.assert_almost_equal(kappa_val, kappa_expected, decimal=6)
         np.testing.assert_almost_equal(
             kappa_grads_val, kappa_grads_expected, decimal=6)
+
+    def test_computation_2(self):
+        """
+        Check whether the computation is correct
+        """
+        diag = np.array([1.]) ** 2
+        kernel = DiagonalGaussianKernel('kernel',diag)
+        xs = tf.placeholder(tf.float32, [None, 2, 1])
+        kappa = kernel.get_kappa(xs)
+        kappa_grads = kernel.get_kappa_grads(xs)
+
+        with tf.Session() as sess:
+            sess.run(tf.initialize_all_variables())
+            feed = {xs: np.array([[[0],[1]]])}
+            kappa_val, kappa_grads_val = sess.run([kappa,kappa_grads], feed)
+
+        kappa_expected = np.array([[[1., np.exp(-0.5)],
+                               [np.exp(-0.5), 1.0]]],np.float32)
+        kappa_grads_expected = np.array([
+            [
+                [
+                    [0],
+                    [1 * np.exp(-0.5)]
+                ],
+                [
+                    [- 1 * np.exp(-0.5)],
+                    [0]
+                ]
+            ]
+        ],np.float32)
+
+        np.testing.assert_almost_equal(kappa_val, kappa_expected, decimal=6)
+        np.testing.assert_almost_equal(
+            kappa_grads_val, kappa_grads_expected, decimal=6)
+
+        # diff_expected = np.array([
+        #     [
+        #         [[0.], [-1.]],
+        #         [[1.], [0.]]
+        #     ]
+        # ])
+        # np.testing.assert_almost_equal(
+        #     diff_val, diff_expected, decimal=6
+        # )
+
 
     def test_adaptive_kernel(self):
         """

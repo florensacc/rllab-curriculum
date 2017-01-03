@@ -108,7 +108,7 @@ class MNNStrategy(ExplorationStrategy):
         action_modified = self.substrategy.get_modified_action(t, action)
         if self.switch_type == "per_action":
             self.k = np.mod(self.k + 1, self.K)
-            print("{} switches to head {}".format(policy.scope_name, self.k))
+            # print("{} switches to head {}".format(policy.scope_name, self.k))
         return action_modified
 
     def reset(self):
