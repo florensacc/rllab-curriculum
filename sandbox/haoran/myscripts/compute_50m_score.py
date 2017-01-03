@@ -41,6 +41,10 @@ for csv_file in csv_files:
     data["TotalSamples"] = np.cumsum(num_samples)
     if "TotalSamples" not in fieldnames:
         fieldnames.append("TotalSamples")
+    t = np.where(data["TotalSamples"] >= 50 * 1e6)[0][0]
+    data["50M_score"] = data["RawReturnAverage"][t] * np.ones_like(data["TotalSamples"])
+    if "50M_score" not in fieldnames:
+        fieldnames.append("50M_score")
 
     with open(csv_file,"w") as f:
         writer = csv.DictWriter(f, fieldnames)
