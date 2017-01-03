@@ -130,14 +130,17 @@ class FeedForwardMultiPolicyTest(FeedForwardMultiPolicy):
         Turning off scalar_network allows gradients to be propagated to network
         parameters. This way we can test whether the jacobian is computed and
         used correctly. Since NNs have high representation power, the ultimate
-        distribution should be identical to scalar networks.
+        distribution should be identical to scalar networks. However, different
+        network structures and learning rates may lead to different local
+        optima.
         """
         Serializable.quick_init(self, locals())
         if scalar_network:
             hidden_W_init = tf.constant_initializer(0.)
             hidden_b_init = tf.constant_initializer(0.)
             output_W_init = tf.constant_initializer(0.)
-            output_b_init = tf.random_uniform_initializer(-2,2)
+            output_b_init = tf.random_uniform_initializer(-3, -2)
+            # modify output_b_init to change the initial particle distribution
         super(FeedForwardMultiPolicyTest, self).__init__(
             scope_name,
             observation_dim,
@@ -152,6 +155,29 @@ class FeedForwardMultiPolicyTest(FeedForwardMultiPolicy):
             hidden_nonlinearity,
             output_nonlinearity,
         )
+class OneSampleReplayPool(object):
+    def __init__(self):
+        pass
+
+    def add_sample(self, observation, action, reward, terminal,
+                   final_state):
+        self._observations = np.array([observation])
+        self._actions = np.array([action])
+        self._rewards = np.array([reward])
+        self._terminals = np.array([terminal])
+        self._final_state = np.array([final_state])
+
+    def random_batch(self, batch_size):
+        return dict(
+            observations=self._observations,
+            actions=self._actions,
+            rewards=self._rewards,
+            terminals=self._terminals,
+            next_observations=self._observations
+        )
+    @property
+    def size(self):
+        return 2 # lie
 
 from sandbox.haoran.mddpg.algos.mddpg import MDDPG
 from rllab.misc.overrides import overrides
@@ -198,11 +224,19 @@ class MDDPGTest(MDDPG):
 def test():
     from rllab.exploration_strategies.ou_strategy import OUStrategy
     from sandbox.haoran.mddpg.kernels.gaussian_kernel import \
-        SimpleAdaptiveDiagonalGaussianKernel
+        SimpleAdaptiveDiagonalGaussianKernel, \
+        SimpleDiagonalConstructor, DiagonalGaussianKernel
     from sandbox.rocky.tf.envs.base import TfEnv
     from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 
     K = 20 # number of particles
+
+    adaptive_kernel = True
+
+    # three modes
+    # weights = np.array([1./4., 1./2., 1./4.],np.float32)
+    # mus = np.array([-2., 0., 2.],np.float32)
+    # sigmas = np.array([0.3, 0.3, 0.3],np.float32)
 
     # two modes
     weights = np.array([1./3., 2./3.],np.float32)
@@ -221,7 +255,7 @@ def test():
                         # note that the sample drawn can be one iteration older
         eval_samples = 1, # doesn't matter since we override evaluate()
         n_epochs=1000, # number of SVGD steps
-        policy_learning_rate=0.03, # note: this is higher than DDPG's 1e-4
+        policy_learning_rate=0.1, # note: this is higher than DDPG's 1e-4
         batch_size=1, # only need recent samples, though it's slow
         alpha=1, # 1 is the SVGD default
     )
@@ -255,14 +289,24 @@ def test():
         env.action_space.flat_dim,
         K=K,
         shared_hidden_sizes=tuple(),
-        independent_hidden_sizes=(8,8),
-        scalar_network=False,
+        independent_hidden_sizes=tuple(),
+        scalar_network=True,
     )
-    kernel = SimpleAdaptiveDiagonalGaussianKernel(
-        "kernel",
-        dim=env.action_space.flat_dim,
-        h_min=0,
-    )
+    if adaptive_kernel:
+        kernel = SimpleAdaptiveDiagonalGaussianKernel(
+            "kernel",
+            dim=env.action_space.flat_dim,
+            h_min=0,
+        )
+    else:
+        diag_constructor = SimpleDiagonalConstructor(
+            dim=env.action_space.flat_dim,
+            sigma=0.1,
+        )
+        kernel = DiagonalGaussianKernel(
+            "kernel",
+            diag=diag_constructor.diag(),
+        )
     algorithm = MDDPGTest(
         env=env,
         exploration_strategy=es,
@@ -273,6 +317,7 @@ def test():
         q_target_type=q_target_type,
         **ddpg_kwargs
     )
+    # algorithm.pool = OneSampleReplayPool()
     algorithm.train()
 
 if __name__ == "__main__":

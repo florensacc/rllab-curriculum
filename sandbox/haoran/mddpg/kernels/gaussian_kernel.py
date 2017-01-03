@@ -143,7 +143,12 @@ class SimpleAdaptiveDiagonalGaussianKernel(DiagonalGaussianKernel):
         for x in xs:
             # x is K x D
             dist = distance.pdist(x)
-            h = np.median(dist)**2 / np.log(K)
+
+            # the fisrt h is suggested by the SVGD paper
+            # h = np.median(dist)**2 / np.log(K)
+            # the second h is used in Thomas' code for particle GPS
+            h = 0.5 * np.median(dist) / np.log(K+1)
+
             h = max(h, self.h_min)
             hs.append(h)
         self.diags = np.outer(1./np.array(hs), np.ones(d))
