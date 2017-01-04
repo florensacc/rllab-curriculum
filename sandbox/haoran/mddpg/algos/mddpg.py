@@ -8,6 +8,7 @@ from sandbox.rocky.tf.misc.tensor_utils import flatten_tensor_variables
 from rllab.misc import logger
 from rllab.misc import special
 from rllab.misc.overrides import overrides
+from rllab.envs.proxy_env import ProxyEnv
 
 import time
 from collections import OrderedDict
@@ -445,6 +446,12 @@ class MDDPG(OnlineAlgorithm):
             train_returns = np.asarray(es_path_returns) / self.scale_reward
             self.last_statistics.update(create_stats_ordered_dict(
                 'TrainingReturns', train_returns))
+
+        true_env = self.env
+        while isinstance(true_env,ProxyEnv):
+            true_env = true_env._wrapped_env
+        env_stats = true_env.log_stats(paths)
+        self.last_statistics.update(env_stats)
 
         for key, value in self.last_statistics.items():
             logger.record_tabular(key, value)
