@@ -8,37 +8,35 @@ from rllab.spaces.box import Box
 import numpy as np
 import matplotlib.pyplot as plt
 
-class DoubleSlitEnv(Env, Serializable):
+class MultiGoalEnv(Env, Serializable):
     """
-    Moving a 2D point mass to a target location.
-    Three circular log barriers form two slits for the mass to go through.
-    A reward is given at each time step to encourage going to the goal and
-        avoiding the barriers.
-    We could modify the dynamics to make the barriers solid, but that makes
-        it a bit hard to compare to traj-opt results.
+    Moving a 2D point mass to one of the goal positions.
+    Cost is the distance to the shortest goal.
 
-    state: (position, velocity)
-    action: acceleration
+    state: position
+    action: velocity
     """
     def __init__(self):
         Serializable.quick_init(self, locals())
 
-        self.dynamics = PointMassDynamics(dim=2, sigma=0)
-        self.init_mu = np.array((0,0,0,0), dtype=np.float32)
+        self.dynamics = PointDynamics(dim=2, sigma=0)
+        self.init_mu = np.array((0,0), dtype=np.float32)
         self.init_sigma = 0
-        self.goal_position = np.array((5, 0), dtype=np.float32)
+        self.goal_positions = np.array(
+            [
+                [5, 0],
+                [-5, 0],
+                # [0, 5],
+                # [0, -5]
+            ],
+            dtype=np.float32
+        )
         self.goal_threshold = 1.
-        self.goal_reward = 100
-        self.barrier_info = ((np.array((3,  2)), 0.5),
-                         (np.array((3,  0)), 0.5),
-                         (np.array((3, -2)), 0.5))
-        # self.barrier_info = ((np.array((3,0)), 0.5),)
-        self.lam_barrier=30
+        self.goal_reward = 0
         self.action_cost_coeff = 0
-        self.xlim = (-2, 6)
-        self.ylim = (-4, 4)
+        self.xlim = (-7, 7)
+        self.ylim = (-7, 7)
         self.vel_bound = 1
-        self.acc_bound = 0.1
         self.reset()
         self.dynamic_plots = []
 
@@ -52,18 +50,16 @@ class DoubleSlitEnv(Env, Serializable):
     @property
     def observation_space(self):
         return Box(
-            low=np.array((self.xlim[0],self.ylim[0],
-                -self.vel_bound,-self.vel_bound)),
-            high=np.array((self.xlim[1],self.ylim[1],
-                self.vel_bound,self.vel_bound)),
+            low=np.array((self.xlim[0],self.ylim[0])),
+            high=np.array((self.xlim[1],self.ylim[1])),
             shape=None
         )
 
     @property
     def action_space(self):
         return Box(
-            low= -self.acc_bound,
-            high=self.acc_bound,
+            low= -self.vel_bound,
+            high=self.vel_bound,
             shape=(self.dynamics.a_dim,)
         )
 
@@ -100,8 +96,11 @@ class DoubleSlitEnv(Env, Serializable):
         next_obs = np.clip(next_obs, o_lb, o_ub)
 
         reward = self.compute_reward(self.observation, action)
-        cur_position = self.observation[:2]
-        dist_to_goal = np.linalg.norm(cur_position - self.goal_position)
+        cur_position = self.observation
+        dist_to_goal = np.amin([
+            np.linalg.norm(cur_position - goal_position)
+            for goal_position in self.goal_positions
+        ])
         done =  dist_to_goal < self.goal_threshold
         if done:
             reward += self.goal_reward
@@ -114,16 +113,14 @@ class DoubleSlitEnv(Env, Serializable):
         action_cost = np.sum(action ** 2) * self.action_cost_coeff
 
         # penalize squared dist to goal
-        cur_pos = observation[:2]
-        goal_cost = np.sum((cur_pos - self.goal_position)**2)
+        cur_position = observation
+        goal_cost = np.amin([
+            np.sum((cur_position - goal_position) ** 2)
+            for goal_position in self.goal_positions
+        ])
 
         # penalize staying with the log barriers
-        barrier_cost = np.sum([
-            self.compute_log_barrier_cost(np.array([cur_pos]),
-                barrier_position, radius)[0]
-            for barrier_position, radius in self.barrier_info
-        ])
-        costs = [action_cost, goal_cost, barrier_cost]
+        costs = [action_cost, goal_cost]
         reward = -np.sum(costs)
         return reward
 
@@ -136,10 +133,9 @@ class DoubleSlitEnv(Env, Serializable):
             self.fixed_plots = self.plot_position_cost(self.ax)
         for obj in self.dynamic_plots:
             obj.remove()
-        x,y,vx,vy = self.observation
+        x,y = self.observation
         point = self.ax.plot(x,y,'b*')
-        arrow = self.ax.arrow(x,y,vx,vy)
-        self.dynamic_plots = point + [arrow]
+        self.dynamic_plots = point
 
         if close:
             self.fixed_plots = None
@@ -152,23 +148,18 @@ class DoubleSlitEnv(Env, Serializable):
             np.arange(xmin,xmax,delta),
             np.arange(ymin,ymax,delta)
         )
-        goal_x, goal_y = self.goal_position
-        goal_costs = (X - goal_x) ** 2 + (Y - goal_y) ** 2
+        goal_costs = np.amin([
+            (X - goal_x) ** 2 + (Y - goal_y) ** 2
+            for goal_x, goal_y in self.goal_positions
+        ], axis=0)
         positions = np.vstack([X.ravel(), Y.ravel()]).transpose()
-        barrier_costs = np.sum([
-            self.compute_log_barrier_cost(
-                positions, barrier_position, radius
-            )
-            for barrier_position, radius in self.barrier_info
-        ],axis=0)
-        barrier_costs = barrier_costs.reshape(X.shape)
-        costs = goal_costs + barrier_costs
+        costs = goal_costs
 
         contours = ax.contour(X,Y,costs,20)
         ax.clabel(contours,inline=1,fontsize=10,fmt='%.0f')
         ax.set_xlim([xmin,xmax])
         ax.set_ylim([ymin,ymax])
-        goal = ax.plot(goal_x,goal_y,'ro')
+        goal = ax.plot(self.goal_positions[:,0],self.goal_positions[:,1],'ro')
         return [contours, goal]
 
     @overrides
@@ -179,7 +170,7 @@ class DoubleSlitEnv(Env, Serializable):
         return None
 
 
-class PointMassDynamics(object):
+class PointDynamics(object):
     """
     state: (position, velocity)
     action: acceleration
@@ -187,19 +178,11 @@ class PointMassDynamics(object):
     def __init__(self, dim, sigma):
         self.dim = dim
         self.sigma = sigma
-        self.s_dim = 2 * dim
+        self.s_dim = dim
         self.a_dim = dim
 
     def forward(self, state, action):
-        eye = np.identity(self.dim, dtype=np.float32)
-        zeros = np.zeros((self.dim, self.dim), dtype=np.float32)
-        A = np.concatenate([
-                np.concatenate([eye, eye], axis=1),
-                np.concatenate([zeros, eye], axis=1),
-            ], axis=0
-        )
-        B = np.concatenate([zeros, eye], axis=0)
-        mu_next = A.dot(state) + B.dot(action)
+        mu_next = state + action
         state_next = mu_next + self.sigma * \
             np.random.normal(size=self.s_dim)
         return state_next

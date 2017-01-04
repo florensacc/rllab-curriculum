@@ -770,6 +770,9 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
     sio.write("""
         docker --config /home/ubuntu/.docker pull {docker_image}
     """.format(docker_image=docker_image))
+    sio.write("""
+        export AWS_DEFAULT_REGION={aws_region}
+    """.format(aws_region=config.AWS_REGION_NAME))
     if config.FAST_CODE_SYNC:
         # sio.write("""
         #     aws s3 cp {code_full_path} /tmp/rllab_code.tar.gz --region {aws_region}

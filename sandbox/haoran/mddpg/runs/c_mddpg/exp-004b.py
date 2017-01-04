@@ -1,7 +1,7 @@
 """
 Conservative version of MDDPG
 
-Continue exp-002c, tested on swimmer_undirected
+Continue exp-003c, with higher learning rate for the critic
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
@@ -9,7 +9,8 @@ from sandbox.haoran.mddpg.algos.mddpg import MDDPG
 from sandbox.haoran.mddpg.policies.mnn_policy import \
     FeedForwardMultiPolicy, MNNStrategy
 from sandbox.haoran.mddpg.kernels.gaussian_kernel import \
-    SimpleAdaptiveDiagonalGaussianKernel
+    SimpleAdaptiveDiagonalGaussianKernel, \
+    SimpleDiagonalConstructor, DiagonalGaussianKernel
 from sandbox.haoran.mddpg.qfunctions.nn_qfunction import FeedForwardCritic
 from sandbox.haoran.myscripts.envs import EnvChooser
 from sandbox.rocky.tf.envs.base import TfEnv
@@ -33,14 +34,14 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/c_mddpg/" + exp_index
-mode = "ec2_test"
+mode = "ec2"
 ec2_instance = "c4.4xlarge"
-subnet = "us-west-1c"
+subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
 n_parallel = 4 # only for local exp
-snapshot_mode = "last"
-snapshot_gap = 100
+snapshot_mode = "all"
+snapshot_gap = 10
 plot = False
 sync_s3_pkl = True
 
@@ -53,26 +54,43 @@ class VG(VariantGenerator):
     @variant
     def env_name(self):
         return [
-            "swimmer_undirected",
-            # "swimmer",
-            # "hopper",
-            # "walker",
-            # "ant",
-            # "halfcheetah",
-            # "humanoid",
-            # "cartpole",
-            # "inv_double_pendulum",
+            "double_slit_v2",
         ]
     @variant
     def K(self):
-        return [4]
-    @variant
-    def policy_learning_rate(self):
-        return [0.001]
+        return [8,4,2]
 
     @variant
-    def q_multiplier(self):
-        return [1000, 10, 100, 1000]
+    def alpha(self):
+        return [100,10,0]
+
+    @variant
+    def sigma(self):
+        return [1e-3]
+
+    @variant
+    def max_path_length(self):
+        return [15]
+
+    @variant
+    def policy_learning_rate(self):
+        return [1e-4]
+
+    @variant
+    def theta(self):
+        return [0]
+
+    @variant
+    def qf_extra_training(self):
+        return [0]
+
+    @variant
+    def switch_type(self):
+        return ["per_action", "per_path"]
+
+    @variant
+    def q_target_type(self):
+        return ["mean", "max"]
 
 variants = VG().variants()
 
@@ -84,24 +102,31 @@ for v in variants:
     seed=v["seed"]
     env_name = v["env_name"]
     K = v["K"]
-    q_target_type = "max"
+    q_target_type = v["q_target_type"]
+    adaptive_kernel = False
+    sigma = v["sigma"]
+    theta = v["theta"]
 
+    shared_ddpg_kwargs = dict(
+        alpha=v["alpha"],
+        max_path_length=v["max_path_length"],
+        policy_learning_rate=v["policy_learning_rate"],
+        qf_extra_training=v["qf_extra_training"]
+    )
     if mode == "local_test" or mode == "local_docker_test":
         ddpg_kwargs = dict(
-            epoch_length = 100,
+            epoch_length = 1000,
             min_pool_size = 2,
             eval_samples = 100,
-            n_epochs=5,
-            policy_learning_rate=v["policy_learning_rate"],
-            q_multiplier=v["q_multiplier"],
+            n_epochs=50,
         )
     else:
         ddpg_kwargs = dict(
-            epoch_length=20000,
+            epoch_length=10000,
             batch_size=64,
-            policy_learning_rate=v["policy_learning_rate"],
-            q_multiplier=v["q_multiplier"],
+            n_epochs=100,
         )
+    ddpg_kwargs.update(shared_ddpg_kwargs)
     if env_name == "hopper":
         env_kwargs = {
             "alive_coeff": 0.5
@@ -163,8 +188,8 @@ for v in variants:
 
     es = MNNStrategy(
         K=K,
-        substrategy=OUStrategy(env_spec=env.spec),
-        switch_type="per_path"
+        substrategy=OUStrategy(env_spec=env.spec,theta=theta),
+        switch_type=v["switch_type"],
     )
     qf = FeedForwardCritic(
         "critic",
@@ -177,10 +202,20 @@ for v in variants:
         env.action_space.flat_dim,
         K=K,
     )
-    kernel = SimpleAdaptiveDiagonalGaussianKernel(
-        "kernel",
-        dim=env.action_space.flat_dim,
-    )
+    if K > 1 and adaptive_kernel:
+        kernel = SimpleAdaptiveDiagonalGaussianKernel(
+            "kernel",
+            dim=env.action_space.flat_dim,
+        )
+    else:
+        diag_constructor = SimpleDiagonalConstructor(
+            dim=env.action_space.flat_dim,
+            sigma=sigma,
+        )
+        kernel = DiagonalGaussianKernel(
+            "kernel",
+            diag=diag_constructor.diag(),
+        )
     algorithm = MDDPG(
         env=env,
         exploration_strategy=es,

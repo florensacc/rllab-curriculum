@@ -37,6 +37,7 @@ _snapshot_gap = 1
 
 _log_tabular_only = False
 _header_printed = False
+_disable_prefix = False
 
 _tf_summary_dir = None
 _tf_summary_writer = None
@@ -156,11 +157,18 @@ def set_log_tabular_only(log_tabular_only):
 def get_log_tabular_only():
     return _log_tabular_only
 
+def set_disable_prefix(disable_prefix):
+    global _disable_prefix
+    _disable_prefix = disable_prefix
+
+def get_disable_prefix():
+    return _disable_prefix
+
 
 def log(s, with_prefix=True, with_timestamp=True, color=None):
     if not _disabled:
         out = s
-        if with_prefix:
+        if with_prefix and not _disable_prefix:
             out = _prefix_str + out
         if with_timestamp:
             now = datetime.datetime.now(dateutil.tz.tzlocal())

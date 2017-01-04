@@ -3,13 +3,15 @@
 import argparse
 import sys
 import boto3
+from rllab import config
 
 parser = argparse.ArgumentParser()
 parser.add_argument('prefix',type=str, default='xxxxxxxxxxxxxxxxxxxxx',nargs='?')
+parser.add_argument('--postfix',type=str, default='',nargs='?')
 args = parser.parse_args()
 
 prefix = args.prefix
-bucket = 'hrtang0'
+bucket = config.BUCKET
 
 client = boto3.client('s3')
 keys = []
@@ -25,10 +27,10 @@ for i in range(1000):
             finished = True
             break
         else:
-            keys.append(obj['Key'])
+            if obj['Key'].endswith(args.postfix):
+                keys.append(obj['Key'])
     if finished:
         break
-    
 
 print("Ready to delete keys:")
 for key in keys:

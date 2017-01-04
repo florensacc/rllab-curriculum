@@ -1,21 +1,26 @@
 """
 Conservative version of MDDPG
 
-Continue exp-002c, tested on swimmer_undirected
+Try SVGD with the pre-computed Q^*
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
+import joblib
 from sandbox.haoran.mddpg.algos.mddpg import MDDPG
 from sandbox.haoran.mddpg.policies.mnn_policy import \
     FeedForwardMultiPolicy, MNNStrategy
 from sandbox.haoran.mddpg.kernels.gaussian_kernel import \
-    SimpleAdaptiveDiagonalGaussianKernel
+    SimpleAdaptiveDiagonalGaussianKernel, \
+    SimpleDiagonalConstructor, DiagonalGaussianKernel
 from sandbox.haoran.mddpg.qfunctions.nn_qfunction import FeedForwardCritic
 from sandbox.haoran.myscripts.envs import EnvChooser
 from sandbox.rocky.tf.envs.base import TfEnv
 from rllab.envs.normalized_env import normalize
 from rllab.exploration_strategies.ou_strategy import OUStrategy
 from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
+from sandbox.haoran.mddpg.qfunctions.interpolate_qfunction \
+    import InterpolateQFunction, DataLoader
+
 
 """ others """
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
@@ -33,14 +38,14 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/c_mddpg/" + exp_index
-mode = "ec2_test"
+mode = "local_test"
 ec2_instance = "c4.4xlarge"
-subnet = "us-west-1c"
+subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
-n_parallel = 4 # only for local exp
-snapshot_mode = "last"
-snapshot_gap = 100
+n_parallel = 1 # only for local exp
+snapshot_mode = "all"
+snapshot_gap = 10
 plot = False
 sync_s3_pkl = True
 
@@ -53,26 +58,50 @@ class VG(VariantGenerator):
     @variant
     def env_name(self):
         return [
-            "swimmer_undirected",
-            # "swimmer",
-            # "hopper",
-            # "walker",
-            # "ant",
-            # "halfcheetah",
-            # "humanoid",
-            # "cartpole",
-            # "inv_double_pendulum",
+            "multi_goal"
         ]
     @variant
     def K(self):
-        return [4]
-    @variant
-    def policy_learning_rate(self):
-        return [0.001]
+        return [8,
+            2, 4, 8]
 
     @variant
-    def q_multiplier(self):
-        return [1000, 10, 100, 1000]
+    def alpha(self):
+        return [1, 10, 100]
+
+    @variant
+    def sigma(self):
+        return [1e-2]
+
+    @variant
+    def max_path_length(self):
+        return [15]
+
+    @variant
+    def policy_learning_rate(self):
+        return [1e-4]
+
+    @variant
+    def theta(self):
+        return [0]
+
+    @variant
+    def qf_extra_training(self):
+        return [0]
+
+    @variant
+    def switch_type(self):
+        return [
+            # "per_action",
+            "per_path"
+        ]
+
+    @variant
+    def q_target_type(self):
+        return [
+            # "mean",
+            "max"
+        ]
 
 variants = VG().variants()
 
@@ -84,24 +113,33 @@ for v in variants:
     seed=v["seed"]
     env_name = v["env_name"]
     K = v["K"]
-    q_target_type = "max"
+    adaptive_kernel = True
+    sigma = v["sigma"]
+    theta = v["theta"]
 
+    shared_ddpg_kwargs = dict(
+        alpha=v["alpha"],
+        max_path_length=v["max_path_length"],
+        policy_learning_rate=v["policy_learning_rate"],
+        qf_extra_training=v["qf_extra_training"],
+        q_target_type = v["q_target_type"],
+        only_train_actor=True,
+    )
     if mode == "local_test" or mode == "local_docker_test":
         ddpg_kwargs = dict(
-            epoch_length = 100,
+            epoch_length = 1000,
             min_pool_size = 2,
             eval_samples = 100,
-            n_epochs=5,
-            policy_learning_rate=v["policy_learning_rate"],
-            q_multiplier=v["q_multiplier"],
+            n_epochs=50,
+            batch_size=64,
         )
     else:
         ddpg_kwargs = dict(
-            epoch_length=20000,
+            epoch_length=10000,
             batch_size=64,
-            policy_learning_rate=v["policy_learning_rate"],
-            q_multiplier=v["q_multiplier"],
+            n_epochs=100,
         )
+    ddpg_kwargs.update(shared_ddpg_kwargs)
     if env_name == "hopper":
         env_kwargs = {
             "alive_coeff": 0.5
@@ -161,26 +199,46 @@ for v in variants:
     env_chooser = EnvChooser()
     env = TfEnv(normalize(env_chooser.choose_env(env_name,**env_kwargs)))
 
+    data_loader = DataLoader(
+        "sandbox/haoran/mddpg/envs/multi_goal_grid_1.pkl", 'mQ')
+    grid_size = 1.
+    s_grid_sizes = [grid_size] * 2
+    a_grid_sizes = s_grid_sizes
+    qf = InterpolateQFunction(
+        scope_name="qf",
+        discrete_Q=data_loader.load(),
+        env_spec=env.spec,
+        s_grid_sizes=s_grid_sizes,
+        a_grid_sizes=a_grid_sizes,
+    )
+
     es = MNNStrategy(
         K=K,
-        substrategy=OUStrategy(env_spec=env.spec),
-        switch_type="per_path"
-    )
-    qf = FeedForwardCritic(
-        "critic",
-        env.observation_space.flat_dim,
-        env.action_space.flat_dim,
+        substrategy=OUStrategy(env_spec=env.spec,theta=theta),
+        switch_type=v["switch_type"],
     )
     policy = FeedForwardMultiPolicy(
         "actor",
         env.observation_space.flat_dim,
         env.action_space.flat_dim,
         K=K,
+        shared_hidden_sizes=tuple(),
+        independent_hidden_sizes=(8,8),
     )
-    kernel = SimpleAdaptiveDiagonalGaussianKernel(
-        "kernel",
-        dim=env.action_space.flat_dim,
-    )
+    if K > 1 and adaptive_kernel:
+        kernel = SimpleAdaptiveDiagonalGaussianKernel(
+            "kernel",
+            dim=env.action_space.flat_dim,
+        )
+    else:
+        diag_constructor = SimpleDiagonalConstructor(
+            dim=env.action_space.flat_dim,
+            sigma=sigma,
+        )
+        kernel = DiagonalGaussianKernel(
+            "kernel",
+            diag=diag_constructor.diag(),
+        )
     algorithm = MDDPG(
         env=env,
         exploration_strategy=es,
@@ -188,7 +246,6 @@ for v in variants:
         kernel=kernel,
         qf=qf,
         K=K,
-        q_target_type=q_target_type,
         **ddpg_kwargs
     )
 
