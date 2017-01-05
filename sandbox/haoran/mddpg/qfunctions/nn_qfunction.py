@@ -90,6 +90,22 @@ class FeedForwardCritic(NNCritic):
         super().__init__(scope_name, observation_dim, action_dim,
                          action_input=action_input, reuse=reuse)
 
+    def get_weight_tied_copy(self, action_input):
+        return self.__class__(
+            scope_name=self.scope_name,
+            observation_dim=self.observation_dim,
+            action_dim=self.action_dim,
+            action_input=action_input,
+            reuse=True,
+            hidden_W_init=self.hidden_W_init,
+            hidden_b_init=self.hidden_b_init,
+            output_W_init=self.output_W_init,
+            output_b_init=self.output_b_init,
+            embedded_hidden_sizes=self.embedded_hidden_sizes,
+            observation_hidden_sizes=self.observation_hidden_sizes,
+            hidden_nonlinearity=self.hidden_nonlinearity,
+        )
+
     def create_network(self, action_input):
         with tf.variable_scope("observation_mlp") as _:
             observation_output = mlp(self.observations_placeholder,
