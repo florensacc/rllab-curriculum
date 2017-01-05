@@ -165,6 +165,15 @@ class FeedForwardMultiPolicy(MNNPolicy):
             shared_output_size = self.shared_hidden_sizes[-1]
         else:
             shared_output_size = self.observation_dim
+
+        # TH: Hacky way to initialize different heads with different consts.
+        if type(self.output_b_init) == list:
+            output_b_initializer = tf.constant_initializer(
+                self.output_b_init[k]
+            )
+        else:
+            output_b_initializer = self.output_b_init
+
         preoutput_layer = mlp(
             self.shared_variables["shared_layer"],
             shared_output_size,
@@ -184,6 +193,7 @@ class FeedForwardMultiPolicy(MNNPolicy):
             preoutput_layer_size,
             self.action_dim,
             W_initializer=self.output_W_init,
-            b_initializer=self.output_b_init,
+            b_initializer=output_b_initializer,
+            #b_initializer=self.output_b_init,
         ))
         return output

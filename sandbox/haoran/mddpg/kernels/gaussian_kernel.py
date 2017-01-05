@@ -96,14 +96,22 @@ class DiagonalGaussianKernel(Kernel):
 
         # tf hasn't implemented (N,1,K,d) - (N,K,1,d); need to do it one dim
         # at a time
-        K = int(xs.get_shape()[1])
-        diff = tf.pack(
-            [xs_cur[:,:,0,:] - xs_other[:,:,k,:] for k in range(K)],
-            # [xs_other[:,:,k,:] - xs_cur[:,:,0,:] for k in range(K)],
-            axis=2
-        ) # N x K x K x d: (x_j - x_k)
+        # TH: Do you have an outdated version of TF? This works on my machine:
+        diff = xs_cur - xs_other
+        #K = int(xs.get_shape()[1])
+        #diff = tf.pack(
+        #    [xs_cur[:,:,0,:] - xs_other[:,:,k,:] for k in range(K)],
+        #    # [xs_other[:,:,k,:] - xs_cur[:,:,0,:] for k in range(K)],
+        #    axis=2
+        #) # N x K x K x d: (x_j - x_k)
+
+
+        self.diag_kappa_grads = tf.Print(self.diag_kappa_grads,
+                                         [self.diag_kappa_grads], 'diag')
+
         kappa_grads = - kappa *  self.diag_kappa_grads * diff
         return kappa_grads
+
 
 from scipy.spatial import distance
 class SimpleAdaptiveDiagonalGaussianKernel(DiagonalGaussianKernel):
