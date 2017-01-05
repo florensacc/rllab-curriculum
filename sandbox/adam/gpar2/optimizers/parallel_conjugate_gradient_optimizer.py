@@ -309,7 +309,7 @@ class ParallelConjugateGradientOptimizer(Serializable):
         self.par_data.rank = rank
         self.par_data.vb_pair = self.par_data.vb_pairs[rank]
 
-        # Initialize the parameters to the same values across all GPUs.
+        # Initialize the parameters to the same values across all ranks.
         # NOTE: What about parameters other than "trainable"?
         cur_param = self.par_objs.shareds.cur_param
         if rank == (self.n_parallel - 1):  # (this one is the "master")

@@ -12,7 +12,7 @@ import theano.tensor as TT
 class MultiGpuNPO(MultiGpuBatchPolopt):
     """
     Natural Policy Optimization for multiple GPUs.
-    ONLY CHANGES: Class inheritance
+    ONLY CHANGES: Class inheritance, calls optimizer.initialize_rank()
     """
 
     def __init__(
@@ -33,7 +33,7 @@ class MultiGpuNPO(MultiGpuBatchPolopt):
         super(MultiGpuNPO, self).__init__(**kwargs)
 
     @overrides
-    def init_opt(self):
+    def init_opt(self, rank):
 
         is_recurrent = int(self.policy.recurrent)
         obs_var = self.env.observation_space.new_tensor_variable(
@@ -100,6 +100,9 @@ class MultiGpuNPO(MultiGpuBatchPolopt):
             inputs=input_list,
             constraint_name="mean_kl"
         )
+
+        self.optimizer.initialize_rank(rank)
+
         return dict()
 
     # @overrides
