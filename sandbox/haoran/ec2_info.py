@@ -7,6 +7,7 @@ instance_info = {
     "m4.10xlarge": dict(price=2.394,vCPU=40),
     "c4.8xlarge": dict(price=1.675,vCPU=36),
     "g2.2xlarge": dict(price=0.65, vCPU=8),
+    "p2.xlarge": dict(price=0.9, vCPU=4),
 }
 
 all_subnet_info = {
@@ -21,6 +22,15 @@ all_subnet_info = {
             SubnetID="subnet-03eb6e5a", Groups=["sg-960f08f2"]),
         "us-west-1b": dict(
             SubnetID="subnet-f7296d92", Groups=["sg-960f08f2"]),
+        "us-west-2a": dict(
+            SubnetID="subnet-201c0945", Groups=["sg-4f4bd936"]
+        ),
+        "us-west-2b": dict(
+            SubnetID="subnet-73d9f704", Groups=["sg-4f4bd936"],
+        ),
+        "us-west-2c": dict(
+            SubnetID="subnet-fe195fa7", Groups=["sg-4f4bd936"],
+        ),
     }
 }
 subnet_info = all_subnet_info[config.BUCKET]
