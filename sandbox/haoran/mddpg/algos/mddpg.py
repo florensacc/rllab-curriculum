@@ -109,6 +109,9 @@ class MDDPG(OnlineAlgorithm):
             [target_qf.output for target_qf in self.target_qf_list],
             axis=1,
         ) # N x K
+        # TH: It's a bit weird to set class attributes (kernel.kappa and
+        # kernel.kappa_grads) outside the class. Could we do this somehow
+        # differently?
         self.kernel.kappa = self.kernel.get_kappa(self.policy.output)
         self.kernel.kappa_grads = self.kernel.get_kappa_grads(
             self.policy.output)
@@ -223,7 +226,9 @@ class MDDPG(OnlineAlgorithm):
         # using sum ensures that the gradient scale is close to DDPG
         # since kappa(x,x) = 1, but we may need to use different learning rates
         # for different numbers of heads
-        action_grads = tf.reduce_sum(
+        # TH: Changed this from sum to average for easier debugging.
+        #action_grads = tf.reduce_sum(
+        action_grads = tf.reduce_mean(
             kappa * qf_grads + self.alpha * kappa_grads,
             reduction_indices=1,
         ) # (N,k,d)
@@ -279,7 +284,11 @@ class MDDPG(OnlineAlgorithm):
                 self.actor_surrogate_loss,
                 var_list=all_dummy_params)
         ]
-        self.train_actor_op += [
+
+        # TH: Assign op needs to be run AFTER optimizer. To guarantee the right
+        # order, they need to be run with separate tf.run calls.
+        #self.train_actor_op += [
+        self.finalize_actor_op = [
             tf.assign(true_param, dummy_param)
             for true_param, dummy_param in zip(
                 all_true_params,
@@ -338,6 +347,9 @@ class MDDPG(OnlineAlgorithm):
             ] * self.qf_extra_training
             train_ops = basic_ops + extra_ops
         return train_ops
+
+    def _get_finalize_ops(self):
+        return [self.finalize_actor_op]
 
     @overrides
     def _update_feed_dict(self, rewards, terminals, obs, actions, next_obs):

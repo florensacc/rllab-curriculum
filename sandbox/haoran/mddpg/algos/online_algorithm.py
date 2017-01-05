@@ -208,7 +208,11 @@ class OnlineAlgorithm(RLAlgorithm):
                                            sampled_obs,
                                            sampled_actions,
                                            sampled_next_obs)
+
+
+        # TH: First train, then finalize. This can be suboptimal.
         self.sess.run(self._get_training_ops(), feed_dict=feed_dict)
+        self.sess.run(self._get_finalize_ops(), feed_dict=feed_dict)
 
     def get_epoch_snapshot(self, epoch):
         return dict(
