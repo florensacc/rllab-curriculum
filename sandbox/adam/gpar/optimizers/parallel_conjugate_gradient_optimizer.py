@@ -13,6 +13,8 @@ from sandbox.adam.util import struct
 import multiprocessing as mp
 from ctypes import c_bool
 
+import gtimer as gt
+
 
 class ParallelPerlmutterHvp(Serializable):
 
@@ -325,6 +327,7 @@ class ParallelConjugateGradientOptimizer(Serializable):
     #         extra_inputs = tuple()
     #     return sliced_fun(self._opt_fun["f_constraint"], self._num_slices)(inputs, extra_inputs)
 
+    @gt.wrap
     def loss_constraint(self, inputs, extra_inputs):
         """ Parallelized: same values return in all processes """
         shareds = self.par_objs.shareds
@@ -332,20 +335,32 @@ class ParallelConjugateGradientOptimizer(Serializable):
         avg_fac = self.par_data.avg_fac
         loss, constraint_val = sliced_fun(self._opt_fun["f_loss_constraint"],
             self._num_slices)(inputs, extra_inputs)
+        gt.stamp('priv')
         shareds.loss[rank] = avg_fac * loss
         shareds.constraint_val[rank] = avg_fac * constraint_val
+        gt.stamp('write')
         self.par_objs.barriers.loss_cnstr.wait()
+        gt.stamp('wait')
         return sum(shareds.loss), sum(shareds.constraint_val)
 
+    @gt.wrap
     def flat_g(self, inputs, extra_inputs):
         """ Parallelized: same values returne din all processes """
         shareds = self.par_objs.shareds
         vb = self.par_data.vb_pair
-        shareds.grads_2d[self.par_data.rank, :] = self.par_data.avg_fac * \
+        # shareds.grads_2d[self.par_data.rank, :] = self.par_data.avg_fac * \
+        #     sliced_fun(self._opt_fun["f_grad"], self._num_slices)(inputs, extra_inputs)
+        flat_g = self.par_data.avg_fac * \
             sliced_fun(self._opt_fun["f_grad"], self._num_slices)(inputs, extra_inputs)
+        gt.stamp('priv')
+        shareds.grads_2d[self.par_data.rank, :] = flat_g
+        gt.stamp('write')
         self.par_objs.barriers.flat_g[0].wait()
+        gt.stamp('write_wait')
         shareds.flat_g[vb[0]:vb[1]] = shareds.grads_2d[:, vb[0]:vb[1]].sum(axis=0)
+        gt.stamp('sum')
         self.par_objs.barriers.flat_g[1].wait()
+        gt.stamp('sum_wait')
         return shareds.flat_g  # (or access this elsewhere)
 
     # Instead, have the master set this when it assigns paths.
@@ -374,6 +389,7 @@ class ParallelConjugateGradientOptimizer(Serializable):
 
         return inputs, extra_inputs, subsample_inputs
 
+    @gt.wrap
     def optimize(self, inputs, extra_inputs=None, subsample_grouped_inputs=None, avg_fac=None):
         """ Master (rank 0) process executes this method """
 
@@ -387,13 +403,16 @@ class ParallelConjugateGradientOptimizer(Serializable):
 
         logger.log("computing loss, mean KL before")
         loss_before, mean_kl_before = self.loss_constraint(inputs, extra_inputs)
+        gt.stamp('loss_before')
 
         logger.log("performing update")
         logger.log("computing descent direction")
         self.flat_g(inputs, extra_inputs)  # writes to shareds.flat_g
+        gt.stamp('flat_g')
         Hx = self._hvp_approach.build_eval(subsample_inputs + extra_inputs)
         krylov.cg(Hx, shareds.flat_g, self.par_objs.cg_par_objs,
             cg_iters=self._cg_iters)
+        gt.stamp('krylov')
         initial_step_size = np.sqrt(
             2.0 * self._max_constraint_val *
             (1. / (shareds.descent.dot(shareds.flat_g) + 1e-8))
@@ -415,6 +434,7 @@ class ParallelConjugateGradientOptimizer(Serializable):
             #     self._opt_fun["f_loss_constraint"], self._num_slices)(inputs, extra_inputs)
             if loss < loss_before and constraint_val <= self._max_constraint_val:
                 break
+        gt.stamp('bktrk')
 
         if (np.isnan(loss) or np.isnan(constraint_val) or loss >= loss_before or constraint_val >=
                 self._max_constraint_val) and not self._accept_violation:

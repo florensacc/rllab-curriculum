@@ -72,14 +72,22 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
             states = self.state_preprocessor.process(states)
         return states
 
-    def update(self, states, actions, ram_states):
+    def update(self, states, actions, env_infos):
         """
         Assume that actions are integers.
         """
         if self.count_target == "ram_states":
-            targets = ram_states
+            targets = np.array([
+                env_info["ram_state"]
+                for env_info in env_infos
+            ])
         elif self.count_target == "states":
             targets = states
+        elif self.count_target == "rgb_images":
+            targets = np.array([
+                env_info["rgb_image"]
+                for env_info in env_infos
+            ])
         else:
             raise NotImplementedError
         targets = self.preprocess(targets)
@@ -100,14 +108,22 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
         else:
             raise NotImplementedError
 
-    def evaluate(self, states, actions, next_states, ram_states):
+    def evaluate(self, states, actions, next_states, env_infos):
         """
         Compute a bonus score.
         """
         if self.count_target == "ram_states":
-            targets = ram_states
+            targets = np.array([
+                env_info["ram_state"]
+                for env_info in env_infos
+            ])
         elif self.count_target == "states":
             targets = states
+        elif self.count_target == "rgb_images":
+            targets = np.array([
+                env_info["rgb_image"]
+                for env_info in env_infos
+            ])
         else:
             raise NotImplementedError
 

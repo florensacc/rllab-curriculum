@@ -7,6 +7,7 @@ import os
 from rllab.misc import console
 from rllab import config
 from string import Template
+from collections import OrderedDict
 
 ACCESS_KEY = os.environ["AWS_ACCESS_KEY"]
 ACCESS_SECRET = os.environ["AWS_ACCESS_SECRET"]
@@ -20,19 +21,21 @@ INSTANCE_ROLE_NAME = PREFIX + "rllab"
 ALL_REGION_AWS_SECURITY_GROUP_IDS = {}
 ALL_REGION_AWS_KEY_NAMES = {}
 
+ALL_SUBNET_INFO = {}
+
 REGIONS = [
-    "ap-northeast-1",
-    "ap-northeast-2",
-    "ap-south-1",
-    "ap-southeast-1",
-    "ap-southeast-2",
-    "eu-central-1",
-    "eu-west-1",
-    "sa-east-1",
-    "us-east-1",
-    "us-east-2",
-    "us-west-1",
-    "us-west-2",
+   "ap-northeast-1",
+   "ap-northeast-2",
+   "ap-south-1",
+   "ap-southeast-1",
+   "ap-southeast-2",
+   "eu-central-1",
+   "eu-west-1",
+   "sa-east-1",
+   "us-east-1",
+   "us-east-2",
+   "us-west-1",
+   "us-west-2",
 ]
 
 CONFIG_TEMPLATE = Template("""
@@ -69,6 +72,23 @@ ALL_REGION_AWS_IMAGE_IDS = {
     "us-east-2": "ami-e0481285",
     "us-west-1": "ami-efb5ff8f",
     "us-west-2": "ami-53903033",
+}
+
+ALL_SUBNET_INFO = $all_subnet_info
+
+INSTANCE_TYPE_INFO = {  #this prices are orientative.
+    "c4.large": dict(price=0.105, vCPU=2),
+    "c4.xlarge": dict(price=0.209, vCPU=4),
+    "c4.2xlarge": dict(price=0.419, vCPU=8),
+    "c4.4xlarge": dict(price=0.838, vCPU=16),
+    "c4.8xlarge": dict(price=1.00, vCPU=36),
+    "m4.large": dict(price=0.1, vCPU=2),
+    "m4.xlarge": dict(price=0.5, vCPU=4),
+    "m4.2xlarge": dict(price=0.5, vCPU=8),
+    "m4.4xlarge": dict(price=0.8, vCPU=16),
+    "m4.10xlarge": dict(price=2.394, vCPU=40),
+    "m4.16xlarge": dict(price=1.5, vCPU=64),
+    "g2.2xlarge": dict(price=0.65, vCPU=8),
 }
 
 AWS_IMAGE_ID = ALL_REGION_AWS_IMAGE_IDS[AWS_REGION_NAME]
@@ -324,17 +344,44 @@ def setup_ec2():
         print(ALL_REGION_AWS_KEY_NAMES)
         print(ALL_REGION_AWS_SECURITY_GROUP_IDS)
 
+    subnets_info = get_subnets_info(REGIONS)  # this could be done at the same time than the above, keep it here for now
+    for key, value in subnets_info.items():
+        ALL_SUBNET_INFO[key] = value
+
+
+def get_subnets_info(regions):
+    clients = []
+    for region in regions:
+        client = boto3.client(
+            "ec2",
+            region_name=region,
+            aws_access_key_id=config.AWS_ACCESS_KEY,
+            aws_secret_access_key=config.AWS_ACCESS_SECRET,
+        )
+        client.region = region
+        clients.append(client)
+    subnet_info = OrderedDict()
+    for client in clients:
+        # first find the group
+        security_group = client.describe_security_groups()['SecurityGroups'][0]['GroupId']
+        subnets = client.describe_subnets()['Subnets']
+        for subnet in subnets:
+            subnet_info[subnet['AvailabilityZone']] = dict(SubnetID=subnet['SubnetId'], Groups=security_group)
+    return subnet_info
+
 
 def write_config():
     print("Writing config file...")
     content = CONFIG_TEMPLATE.substitute(
         all_region_aws_key_names=json.dumps(ALL_REGION_AWS_KEY_NAMES, indent=4),
+        all_subnet_info=json.dumps(ALL_SUBNET_INFO, indent=4),  # CF
         all_region_aws_security_group_ids=json.dumps(ALL_REGION_AWS_SECURITY_GROUP_IDS, indent=4),
         s3_bucket_name=S3_BUCKET_NAME,
         security_group_name=SECURITY_GROUP_NAME,
         instance_profile_name=INSTANCE_PROFILE_NAME,
         instance_role_name=INSTANCE_ROLE_NAME,
     )
+
     config_personal_file = os.path.join(config.PROJECT_PATH, "rllab/config_personal.py")
     if os.path.exists(config_personal_file):
         if not query_yes_no("rllab/config_personal.py exists. Override?", "no"):

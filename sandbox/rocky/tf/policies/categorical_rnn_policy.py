@@ -18,6 +18,7 @@ class SoftmaxDefault(object):
     """
     Normal softmax. Parametrize via logits.
     """
+
     def __init__(self, dim):
         self.dim = dim
 
@@ -33,6 +34,7 @@ class SoftmaxNormalized(object):
     """
     Normalized softmax. Normalize logits to unit standard deviation, and then apply temperature.
     """
+
     def __init__(self, dim, bias=1.0):
         self.dim = dim
         self.bias = bias
@@ -59,7 +61,6 @@ class SoftmaxExactEntropy(object):
     """
 
     pass
-
 
 
 class CategoricalRNNPolicy(StochasticPolicy, LayersPowered, Serializable):

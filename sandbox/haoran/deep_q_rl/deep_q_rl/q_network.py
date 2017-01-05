@@ -30,7 +30,7 @@ class DeepQLearner(Serializable):
                  num_frames, discount, learning_rate, rho,
                  rms_epsilon, momentum, clip_delta, freeze_interval,
                  use_double, batch_size, network_type, conv_type, update_rule,
-                 batch_accumulator, input_scale=255.0, network_args=dict(),
+                 batch_accumulator, input_scale=np.float32(255.0), network_args=dict(),
                  eta=0):
         Serializable.quick_init(self,locals())
 
@@ -80,14 +80,15 @@ class DeepQLearner(Serializable):
 
         self.states_shared = theano.shared(
             np.zeros((batch_size, num_frames, input_height, input_width),
-                     dtype=theano.config.floatX))
+                     dtype=np.float32),
+        )
 
         self.next_states_shared = theano.shared(
             np.zeros((batch_size, num_frames, input_height, input_width),
-                     dtype=theano.config.floatX))
+                     dtype=np.float32))
 
         self.rewards_shared = theano.shared(
-            np.zeros((batch_size, 1), dtype=theano.config.floatX),
+            np.zeros((batch_size, 1), dtype=np.float32),
             broadcastable=(False, True))
 
         self.actions_shared = theano.shared(
@@ -99,7 +100,7 @@ class DeepQLearner(Serializable):
             broadcastable=(False, True))
 
         self.returns_shared = theano.shared(
-            np.zeros((batch_size, 1), dtype=theano.config.floatX),
+            np.zeros((batch_size, 1), dtype=np.float32),
             broadcastable=(False, True))
 
         q_vals = lasagne.layers.get_output(self.l_out, states / input_scale)
@@ -245,7 +246,7 @@ class DeepQLearner(Serializable):
 
     def q_vals(self, state):
         states = np.zeros((self.batch_size, self.num_frames, self.input_height,
-                           self.input_width), dtype=theano.config.floatX)
+                           self.input_width), dtype=np.float32)
         states[0, ...] = state
         self.states_shared.set_value(states)
         return self._q_vals()[0]

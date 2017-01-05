@@ -34,6 +34,7 @@ class PPOSGD(BatchPolopt):
             step_size=0.01,
             min_n_epochs=2,
             log_prefix="pposgd: ",
+            reset_penalty_every_itr=True,
             **kwargs
     ):
         self.clip_lr = clip_lr
@@ -53,6 +54,7 @@ class PPOSGD(BatchPolopt):
         self.min_n_epochs = min_n_epochs
         self.optimizer = optimizer
         self.log_prefix = log_prefix
+        self.reset_penalty_every_itr = reset_penalty_every_itr
         super().__init__(**kwargs)
 
     def log(self, message, color=None):
@@ -165,6 +167,7 @@ class PPOSGD(BatchPolopt):
     def optimize_policy(self, itr, samples_data):
         """
         For each iteration, outer loop is changing kl_penalty, while inner loop is calling a first-order optimizer to decrease (surr_loss + penalty * kl - entropy_bonus * entropy), one minibatch at a time, but all data are used in the inner loop. The outer loop is repeated at least self.min_n_epochs times; if the kl constraint is violated after that, increase kl penalty until the constraint is satisfied.
+        Note that d(mean_kl) / d(params) = 0 when computed at old params, but not at intermediate params
         """
         self.log("Policy param norm: %f" % np.linalg.norm(self.policy.get_param_values()))
         self.log("Start optimizing..")
@@ -196,8 +199,10 @@ class PPOSGD(BatchPolopt):
         best_loss = None
         best_kl = None
         best_params = None
+        best_epoch = None
 
-        self.f_reset_penalty()
+        if self.reset_penalty_every_itr:
+            self.f_reset_penalty()
 
         def itr_callback(itr, loss, diagnostics, *args, **kwargs):
             """
@@ -207,6 +212,7 @@ class PPOSGD(BatchPolopt):
             nonlocal best_loss
             nonlocal best_params
             nonlocal best_kl
+            nonlocal best_epoch
             surr_loss = diagnostics["UnclippedSurrLoss"]
             mean_kl = diagnostics["MeanKL"]
             epoch_surr_losses.append(surr_loss)
@@ -218,6 +224,7 @@ class PPOSGD(BatchPolopt):
                     best_loss = surr_loss
                     best_kl = mean_kl
                     best_params = self.policy.get_param_values()
+                    best_epoch = itr
             if mean_kl <= self.step_size and itr + 1 >= self.min_n_epochs:
                 penalty = self.f_decrease_penalty() # useful for next algo iteration
                 self.log("Epoch %d; Loss %f; Mean KL: %f; decreasing penalty to %f and finish opt since KL and "
@@ -243,6 +250,7 @@ class PPOSGD(BatchPolopt):
 
         if best_params is not None:
             self.policy.set_param_values(best_params)
+        self.log("Use best params from epoch %d"%(best_epoch))
 
         # compute loss and kl constraint; backtrack if kl constraint violated
         if self.log_loss_kl_after or self.use_line_search:
@@ -285,6 +293,8 @@ class PPOSGD(BatchPolopt):
                 logger.record_tabular('LastEpoch.MeanKL', best_kl)
         if self.log_loss_kl_before and self.log_loss_kl_after:
             logger.record_tabular('dSurrLoss', surr_loss_before - surr_loss_after)
+        if self.use_kl_penalty:
+            logger.record_tabular("KLPenalty",self._kl_penalty_var.get_value())
 
         if np.isnan(epoch_surr_losses[-1]):
             self.log("NaN detected! Terminating")

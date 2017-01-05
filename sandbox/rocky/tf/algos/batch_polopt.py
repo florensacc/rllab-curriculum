@@ -1,11 +1,16 @@
 import time
+from contextlib import contextmanager
+
 from rllab.algos.base import RLAlgorithm
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
+from sandbox.rocky.neural_learner.sample_processors.default_sample_processor import DefaultSampleProcessor
+from sandbox.rocky.tf.misc import tensor_utils
 from sandbox.rocky.tf.policies.base import Policy
 import tensorflow as tf
 from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 from sandbox.rocky.tf.samplers.vectorized_sampler import VectorizedSampler
+import numpy as np
 
 
 class BatchPolopt(RLAlgorithm):
@@ -23,9 +28,7 @@ class BatchPolopt(RLAlgorithm):
             n_itr=500,
             start_itr=0,
             batch_size=5000,
-            batch_size_schedule=None,
             max_path_length=500,
-            max_path_length_schedule=None,
             discount=0.99,
             gae_lambda=1,
             plot=False,
@@ -34,10 +37,11 @@ class BatchPolopt(RLAlgorithm):
             positive_adv=False,
             store_paths=False,
             whole_paths=True,
-            fixed_horizon=False,
-            sampler_cls=None,
-            sampler_args=None,
-            force_batch_sampler=False,
+            sampler=None,
+            sample_processor_cls=None,
+            sample_processor_args=None,
+            n_vectorized_envs=None,
+            parallel_vec_env=False,
             **kwargs
     ):
         """
@@ -50,7 +54,6 @@ class BatchPolopt(RLAlgorithm):
         :param n_itr: Number of iterations.
         :param start_itr: Starting iteration.
         :param batch_size: Number of samples per iteration.
-        :param max_path_length: Maximum length of a single rollout.
         :param discount: Discount.
         :param gae_lambda: Lambda used for generalized advantage estimation.
         :param plot: Plot evaluation run after each iteration.
@@ -59,6 +62,7 @@ class BatchPolopt(RLAlgorithm):
         :param positive_adv: Whether to shift the advantages so that they are always positive. When used in
         conjunction with center_adv the advantages will be standardized before shifting.
         :param store_paths: Whether to save all paths data to the snapshot.
+        :param parallel_vec_env: whether to use ParallelVecEnvExecutor, versus running environments sequentially
         :return:
         """
         self.env = env
@@ -68,9 +72,7 @@ class BatchPolopt(RLAlgorithm):
         self.n_itr = n_itr
         self.start_itr = start_itr
         self.batch_size = batch_size
-        self.batch_size_schedule = batch_size_schedule
         self.max_path_length = max_path_length
-        self.max_path_length_schedule = max_path_length_schedule
         self.discount = discount
         self.gae_lambda = gae_lambda
         self.plot = plot
@@ -79,15 +81,26 @@ class BatchPolopt(RLAlgorithm):
         self.positive_adv = positive_adv
         self.store_paths = store_paths
         self.whole_paths = whole_paths
-        self.fixed_horizon = fixed_horizon
-        if sampler_cls is None:
-            if self.policy.vectorized and not force_batch_sampler:
-                sampler_cls = VectorizedSampler
+
+        if sampler is None:
+            if n_vectorized_envs is None:
+                n_vectorized_envs = min(100, max(1, int(np.ceil(batch_size / max_path_length))))
+            if self.policy.vectorized:
+                sampler = VectorizedSampler(env=env, policy=policy, n_envs=n_vectorized_envs, parallel=parallel_vec_env)
             else:
-                sampler_cls = BatchSampler
-        if sampler_args is None:
-            sampler_args = dict()
-        self.sampler = sampler_cls(self, **sampler_args)
+                sampler = BatchSampler(self)
+
+        self.sampler = sampler
+
+        if sample_processor_cls is None:
+            sample_processor_cls = DefaultSampleProcessor
+        if sample_processor_args is None:
+            sample_processor_args = dict(algo=self)
+        else:
+            sample_processor_args = dict(sample_processor_args, algo=self)
+
+        self.sample_processor = sample_processor_cls(**sample_processor_args)
+
         self.init_opt()
 
     def start_worker(self):
@@ -99,54 +112,55 @@ class BatchPolopt(RLAlgorithm):
         self.sampler.shutdown_worker()
 
     def obtain_samples(self, itr):
-        if self.max_path_length_schedule is not None:
-            max_path_length = self.max_path_length_schedule[itr]
-        else:
-            max_path_length = self.max_path_length
-        if self.batch_size_schedule is not None:
-            batch_size = self.batch_size_schedule[itr]
-        else:
-            batch_size = self.batch_size
         return self.sampler.obtain_samples(
             itr,
-            max_path_length=max_path_length,
-            batch_size=batch_size
+            max_path_length=self.max_path_length,
+            batch_size=self.batch_size
         )
 
     def process_samples(self, itr, paths):
-        return self.sampler.process_samples(itr, paths)
+        return self.sample_processor.process_samples(itr, paths)
 
-    def train(self):
-        with tf.Session() as sess:
-            sess.run(tf.initialize_all_variables())
-            self.start_worker()
-            start_time = time.time()
-            for itr in range(self.start_itr, self.n_itr):
-                itr_start_time = time.time()
-                with logger.prefix('itr #%d | ' % itr):
-                    logger.log("Obtaining samples...")
-                    paths = self.obtain_samples(itr)
-                    logger.log("Processing samples...")
-                    samples_data = self.process_samples(itr, paths)
-                    logger.log("Logging diagnostics...")
-                    self.log_diagnostics(paths)
-                    logger.log("Optimizing policy...")
-                    self.optimize_policy(itr, samples_data)
-                    logger.log("Saving snapshot...")
-                    params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
-                    if self.store_paths:
-                        params["paths"] = samples_data["paths"]
-                    logger.save_itr_params(itr, params)
-                    logger.log("Saved")
-                    logger.record_tabular('Time', time.time() - start_time)
-                    logger.record_tabular('ItrTime', time.time() - itr_start_time)
-                    logger.dump_tabular(with_prefix=False)
-                    if self.plot:
-                        self.update_plot()
-                        if self.pause_for_plot:
-                            input("Plotting evaluation run: Press Enter to "
-                                  "continue...")
+    def train(self, sess=None):
+        session_created = False
+        if sess is None:
+            sess = tf.Session()
+            sess.__enter__()
+            session_created = True
+        # Only initialize variables that have not been initialized
+
+        tensor_utils.initialize_new_variables(sess=sess)
+
+        self.start_worker()
+        start_time = time.time()
+        for itr in range(self.start_itr, self.n_itr):
+            itr_start_time = time.time()
+            with logger.prefix('itr #%d | ' % itr):
+                logger.log("Obtaining samples...")
+                paths = self.obtain_samples(itr)
+                logger.log("Processing samples...")
+                samples_data = self.process_samples(itr, paths)
+                logger.log("Logging diagnostics...")
+                self.log_diagnostics(paths)
+                logger.log("Optimizing policy...")
+                self.optimize_policy(itr, samples_data)
+                logger.log("Saving snapshot...")
+                params = self.get_itr_snapshot(itr, samples_data)
+                if self.store_paths:
+                    params["paths"] = samples_data["paths"]
+                logger.save_itr_params(itr, params)
+                logger.log("Saved")
+                logger.record_tabular('Time', time.time() - start_time)
+                logger.record_tabular('ItrTime', time.time() - itr_start_time)
+                logger.dump_tabular(with_prefix=False)
+                if self.plot:
+                    self.update_plot()
+                    if self.pause_for_plot:
+                        input("Plotting evaluation run: Press Enter to "
+                              "continue...")
         self.shutdown_worker()
+        if session_created:
+            sess.__exit__(None, None, None)
 
     def log_diagnostics(self, paths):
         self.env.log_diagnostics(paths)

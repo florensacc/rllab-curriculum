@@ -35,3 +35,14 @@ class SimHashV3(NaryHash):
         if self.standard_code:
             binaries = (0.5*(binaries+1)).astype(int)
         return binaries
+
+    def get_copy(self):
+        h = SimHashV3(
+            item_dim=self.item_dim,
+            dim_key=self.dim_key,
+            bucket_sizes=self.bucket_sizes,
+            parallel=self.parallel,
+            standard_code=self.standard_code,
+        )
+        h.projection_matrix = np.copy(self.projection_matrix)
+        return h

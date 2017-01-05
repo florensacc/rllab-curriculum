@@ -157,6 +157,7 @@ class BaseGpuSampler(Sampler):
             path["returns"] = special.discount_cumsum(path["rewards"], self.algo.discount)
             baselines.append(path_baselines[:-1])
             returns.append(path["returns"])
+        print("\nNum paths organized: ", idx)
 
         if not self.algo.policy.recurrent:
             observations = tensor_utils.concat_tensor_list([path["observations"] for path in paths])

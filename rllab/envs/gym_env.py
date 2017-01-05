@@ -30,7 +30,6 @@ class CappedCubicVideoSchedule(object):
 
 
 class FixedIntervalVideoSchedule(object):
-
     def __init__(self, interval):
         self.interval = interval
 
@@ -44,7 +43,8 @@ class NoVideoSchedule(object):
 
 
 class GymEnv(Env, Serializable):
-    def __init__(self, env_name, record_video=True, video_schedule=None, log_dir=None, record_log=True):
+    def __init__(self, env_name, record_video=True, video_schedule=None, log_dir=None, record_log=True,
+                 force_reset=False):
         if log_dir is None:
             if logger.get_snapshot_dir() is None:
                 logger.log("Warning: skipping Gym environment monitoring since snapshot_dir not configured.")
@@ -75,6 +75,7 @@ class GymEnv(Env, Serializable):
         self._action_space = convert_gym_space(env.action_space)
         self._horizon = env.spec.timestep_limit
         self._log_dir = log_dir
+        self._force_reset = force_reset
 
     @property
     def observation_space(self):
@@ -89,6 +90,12 @@ class GymEnv(Env, Serializable):
         return self._horizon
 
     def reset(self):
+        if self._force_reset:
+            if hasattr(self.env, 'monitor'):
+                if hasattr(self.env.monitor, 'stats_recorder'):
+                    recorder = self.env.monitor.stats_recorder
+                    if recorder is not None:
+                        recorder.done = True
         return self.env.reset()
 
     def step(self, action):
