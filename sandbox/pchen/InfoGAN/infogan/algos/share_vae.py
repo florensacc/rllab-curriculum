@@ -90,7 +90,7 @@ class ShareVAE(object):
             self.kl_coeff = kl_coeff
         else:
             self.kl_coeff = tf.Variable(
-                initial_value=kl_coeff_spec.start,
+                initial_value=kl_coeff_spec(0),
                 trainable=False,
                 name="kl_coeff"
             )
@@ -832,9 +832,11 @@ class ShareVAE(object):
                 assert self.model.output_dist._sanity2
         if self.kl_coeff_spec is not None:
             spec = self.kl_coeff_spec
-            if epoch <= spec.end:
-                # repeated nodes creations but whatever
-                desired = spec.start + (spec.end - spec.start) / spec.length * epoch
+            prev = kw["sess"].run(
+                self.kl_coeff
+            ) if epoch != 0 else None
+            desired = spec(epoch)
+            if prev != desired:
                 kw["sess"].run(
                     self.kl_coeff.assign(
                         desired
