@@ -1,11 +1,12 @@
-from ale_python_interface.ale_python_interface import ALEInterface
+from sandbox.haoran.ale_python_interface.ale_python_interface \
+    import ALEInterface
 import os
 import json
 
 ale = ALEInterface()
 
-games = ['breakout']
-base_rom_path = "sandbox/haoran/deep_q_rl/roms"
+games = ['venture']
+base_rom_path = "sandbox/haoran/ale_python_interface/roms"
 
 for game in games:
     game_info = dict()
@@ -15,7 +16,7 @@ for game in games:
         if answer in ['n','N']:
             continue
     full_rom_path = os.path.join(base_rom_path,game+'.bin')
-    ale.loadROM(full_rom_path)
+    ale.loadROM(str.encode(full_rom_path))
     game_info["min_action_set_length"] = len(ale.getMinimalActionSet())
     game_info["ram_size"] = ale.getRAMSize()
 

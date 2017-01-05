@@ -1,5 +1,9 @@
 """
 Try state-action count
+
+Extreme hyper-parameter sweep in Frostbite / venture + RAM
+Since each exp takes a bit more than 1 hour, it's better to batch them.
+Similar setting to exp-019g; but we sacrifice subsample_factor for speed.
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -27,6 +31,7 @@ from sandbox.haoran.hashing.bonus_trpo.resetter.atari_save_load_resetter import 
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.ale_action_hashing_bonus_evaluator import ALEActionHashingBonusEvaluator
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.sim_hash_v3 import SimHashV3
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.slicing_preprocessor import SlicingPreprocessor
+from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.image_vectorize_preprocessor import ImageVectorizePreprocessor
 
 """ others """
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
@@ -48,9 +53,11 @@ ec2_instance = "c4.8xlarge"
 price_multiplier = 1.5
 subnet = "us-west-1a"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
+config.AWS_IMAGE_ID = "ami-309ccd50"
+n_task_per_instance = 30
 
-n_parallel = 1 # only for local exp
-snapshot_mode = "none"
+n_parallel = 2 # only for local exp
+snapshot_mode = "last"
 snapshot_gap = -1
 plot = False
 use_gpu = False
@@ -71,7 +78,11 @@ else:
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [0, 100, 200, 300, 400]
+        return [
+            0, 100, 200, 300, 400, 500, 600, 700, 800, 900,
+            1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900,
+            2000, 2100, 2200, 2300, 2400, 2500, 2600, 2700, 2800, 2900,
+        ]
 
     @variant
     def game(self):
@@ -84,7 +95,14 @@ class VG(VariantGenerator):
     def simhash(self):
         return [
             (64, 0.01),
-            (64, 0.18)
+            (64, 0.05),
+            (64, 0.1),
+            (128, 0.01),
+            (128, 0.05),
+            (128, 0.1),
+            (256, 0.01),
+            (256, 0.05),
+            (256, 0.1),
         ]
 
     @variant
@@ -108,6 +126,7 @@ variants = VG().variants()
 
 
 print("#Experiments: %d" % len(variants))
+batch_tasks = []
 for v in variants:
     # non-variant params ------------------------------
     # algo
@@ -124,8 +143,8 @@ for v in variants:
     policy_opt_args = dict(
         name="pi_opt",
         cg_iters=10,
-        reg_coeff=1e-3,
-        subsample_factor=0.1,
+        reg_coeff=1e-5,
+        subsample_factor=1.,
         max_backtracks=15,
         backtrack_ratio=0.8,
         accept_violation=False,
@@ -143,7 +162,7 @@ for v in variants:
     img_height=42
     n_last_screens=4
     clip_reward = True
-    obs_type = "image"
+    obs_type = "ram"
     count_target = v["count_target"]
     record_image=(count_target == "images")
     record_rgb_image=False
@@ -235,20 +254,24 @@ for v in variants:
         max_start_nullops=max_start_nullops,
         correct_luminance=True,
     )
-    policy = CategoricalConvPolicy(
+    policy = CategoricalMLPPolicy(
         env_spec=env.spec,
-        name="policy",
-        **network_args
+        hidden_sizes=(32,32),
     )
 
     # baseline
-    network_args_for_vf = copy.deepcopy(network_args)
-    network_args_for_vf.pop("output_nonlinearity")
+    network_args_for_vf = dict(
+        hidden_sizes=(32,32),
+        conv_filters=[],
+        conv_filter_sizes=[],
+        conv_strides=[],
+        conv_pads=[],
+    )
     baseline = ParallelGaussianConvBaseline(
         env_spec=env.spec,
         regressor_args = dict(
             optimizer=ParallelConjugateGradientOptimizer(
-                subsample_factor=0.1,
+                subsample_factor=0.5,
                 cg_iters=10,
                 name="vf_opt",
             ),
@@ -262,24 +285,18 @@ for v in variants:
     )
 
     # bonus
-    total_pixels=img_width * img_height
-    state_preprocessor = SlicingPreprocessor(
-        input_dim=total_pixels * n_last_screens,
-        start=total_pixels * (n_last_screens - 1),
-        stop=total_pixels * n_last_screens,
-        step=1,
-    )
+    state_preprocessor = None
 
     _hash = SimHashV3(
-        item_dim=state_preprocessor.get_output_dim(), # get around stub
+        item_dim=128, # get around stub
         dim_key=dim_key,
         bucket_sizes=bucket_sizes,
         parallel=use_parallel,
-        standard_code=True,
+        standard_code=False,
     )
     bonus_evaluator = ALEActionHashingBonusEvaluator(
         log_prefix="",
-        state_dim=state_preprocessor.get_output_dim(), # get around stub
+        state_dim=128, # get around stub
         n_action=env.action_space.n,
         state_preprocessor=state_preprocessor,
         hash=_hash,
@@ -310,22 +327,29 @@ for v in variants:
     )
 
     if use_parallel:
-        run_experiment_lite(
-            algo.train(),
-            exp_prefix=exp_prefix,
-            exp_name=exp_name,
-            seed=seed,
-            snapshot_mode=snapshot_mode,
-            snapshot_gap=snapshot_gap,
-            mode=actual_mode,
-            variant=v,
-            use_gpu=use_gpu,
-            plot=plot,
-            sync_s3_pkl=sync_s3_pkl,
-            sync_s3_log=sync_s3_log,
-            sync_log_on_termination=True,
-            sync_all_data_node_to_s3=True,
+        batch_tasks.append(
+            dict(
+                stub_method_call=algo.train(),
+                exp_name=exp_name,
+                seed=seed,
+                snapshot_mode=snapshot_mode,
+                snapshot_gap=snapshot_gap,
+                variant=v,
+                plot=plot,
+            )
         )
+        if len(batch_tasks) >= n_task_per_instance:
+            run_experiment_lite(
+                batch_tasks=batch_tasks,
+                exp_prefix=exp_prefix,
+                mode=actual_mode,
+                use_gpu=use_gpu,
+                sync_s3_pkl=sync_s3_pkl,
+                sync_s3_log=sync_s3_log,
+                sync_log_on_termination=True,
+                sync_all_data_node_to_s3=True,
+            )
+            batch_tasks = []
     else:
         raise NotImplementedError
 

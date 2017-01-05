@@ -1,5 +1,7 @@
 """
-Try state-action count
+Retrain the baseline, see if it's actually much worse
+
+Continue exp-028 with even more seeds
 """
 # imports -----------------------------------------------------
 """ baseline """
@@ -24,7 +26,7 @@ from sandbox.haoran.hashing.bonus_trpo.envs.atari_env import AtariEnv
 from sandbox.haoran.hashing.bonus_trpo.resetter.atari_save_load_resetter import AtariSaveLoadResetter
 
 """ bonus """
-from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.ale_action_hashing_bonus_evaluator import ALEActionHashingBonusEvaluator
+from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.ale_hashing_bonus_evaluator import ALEHashingBonusEvaluator
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.hash.sim_hash_v3 import SimHashV3
 from sandbox.haoran.hashing.bonus_trpo.bonus_evaluators.preprocessor.slicing_preprocessor import SlicingPreprocessor
 
@@ -33,6 +35,7 @@ from sandbox.haoran.myscripts.myutilities import get_time_stamp
 from sandbox.haoran.ec2_info import instance_info, subnet_info
 from rllab import config
 from rllab.misc.instrument import stub, run_experiment_lite
+import numpy as np
 import sys,os
 import copy
 
@@ -46,10 +49,10 @@ exp_prefix = "bonus-trpo-atari/" + exp_index
 mode = "ec2"
 ec2_instance = "c4.8xlarge"
 price_multiplier = 1.5
-subnet = "us-west-1a"
+subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 
-n_parallel = 1 # only for local exp
+n_parallel = 2 # only for local exp
 snapshot_mode = "none"
 snapshot_gap = -1
 plot = False
@@ -71,7 +74,10 @@ else:
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [0, 100, 200, 300, 400]
+        return [
+            1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900,
+            2000, 2100, 2200, 2300, 2400, 2500, 2600, 2700, 2800, 2900
+        ]
 
     @variant
     def game(self):
@@ -83,8 +89,7 @@ class VG(VariantGenerator):
     @variant
     def simhash(self):
         return [
-            (64, 0.01),
-            (64, 0.18)
+            (16, 0),
         ]
 
     @variant
@@ -277,10 +282,9 @@ for v in variants:
         parallel=use_parallel,
         standard_code=True,
     )
-    bonus_evaluator = ALEActionHashingBonusEvaluator(
+    bonus_evaluator = ALEHashingBonusEvaluator(
         log_prefix="",
         state_dim=state_preprocessor.get_output_dim(), # get around stub
-        n_action=env.action_space.n,
         state_preprocessor=state_preprocessor,
         hash=_hash,
         bonus_form=bonus_form,

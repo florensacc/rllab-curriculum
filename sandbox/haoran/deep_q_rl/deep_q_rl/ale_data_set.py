@@ -5,6 +5,7 @@ construct randomly selected batches of phi's from the stored history.
 import numpy as np
 import time
 import theano
+from collections import deque
 
 floatX = theano.config.floatX
 
@@ -38,13 +39,13 @@ actions, and rewards.
         self.terminal = np.zeros(max_steps, dtype='bool')
         self.terminal[max_steps-1] = True # useful if we track back to find the end of the 0-th episode
         self.returns = np.zeros(max_steps, dtype=floatX)
-        self.ram_states = np.zeros((max_steps, 128), dtype='uint8')
+        self.env_infos = deque(maxlen=max_steps)
 
         self.bottom = 0
         self.top = 0
         self.size = 0
 
-    def add_sample(self, img, action, reward, terminal, ram_state):
+    def add_sample(self, img, action, reward, terminal, env_info):
         """Add a time step record.
 
         Arguments:
@@ -58,7 +59,10 @@ actions, and rewards.
         self.actions[self.top] = action
         self.rewards[self.top] = reward
         self.terminal[self.top] = terminal
-        self.ram_states[self.top] = ram_state
+        if len(self.env_infos) == self.env_infos.maxlen:
+            self.env_infos[self.top] = env_info
+        else:
+            self.env_infos.append(env_info)
 
         if self.size == self.max_steps:
             self.bottom = (self.bottom + 1) % self.max_steps
@@ -134,7 +138,7 @@ next_states for batch_size randomly chosen state transitions.
                                 self.width),
                                dtype='uint8')
         returns = np.zeros((batch_size, 1), dtype=floatX)
-        ram_states = np.zeros((batch_size, 128),dtype='uint8')
+        env_infos = deque(maxlen=batch_size)
 
         count = 0
         while count < batch_size:
@@ -165,11 +169,10 @@ next_states for batch_size randomly chosen state transitions.
                                                 axis=0,
                                                 mode='wrap')
             returns[count] = self.returns.take(end_index, mode='wrap')
-            ram_states[count] = self.ram_states.take(end_index, axis=0, mode='wrap')
+            env_infos.append(self.env_infos[np.mod(end_index, self.max_steps)])
             count += 1
 
-        return states, actions, rewards, next_states, terminal, returns, ram_states
-
+        return states, actions, rewards, next_states, terminal, returns, env_infos
 
 # TESTING CODE BELOW THIS POINT...
 

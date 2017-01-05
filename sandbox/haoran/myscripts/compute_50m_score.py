@@ -41,16 +41,19 @@ for csv_file in csv_files:
     data["TotalSamples"] = np.cumsum(num_samples)
     if "TotalSamples" not in fieldnames:
         fieldnames.append("TotalSamples")
-    t = np.where(data["TotalSamples"] >= 50 * 1e6)[0][0]
-    data["50M_score"] = data["RawReturnAverage"][t] * np.ones_like(data["TotalSamples"])
-    if "50M_score" not in fieldnames:
-        fieldnames.append("50M_score")
+    if data["TotalSamples"][-1] < 50* 1e6:
+        print("%s only trained on %d samples"%(csv_file, data["TotalSamples"][-1]))
+    else:
+        t = np.where(data["TotalSamples"] >= 50 * 1e6)[0][0]
+        data["50M_score"] = data["RawReturnAverage"][t] * np.ones_like(data["TotalSamples"])
+        if "50M_score" not in fieldnames:
+            fieldnames.append("50M_score")
 
-    with open(csv_file,"w") as f:
-        writer = csv.DictWriter(f, fieldnames)
-        writer.writeheader()
-        T = len(data["NumSamples"])
-        for t in range(T):
-            row = {key: data[key][t] for key in fieldnames}
-            writer.writerow(row)
-    print("Modified %s"%(csv_file))
+        with open(csv_file,"w") as f:
+            writer = csv.DictWriter(f, fieldnames)
+            writer.writeheader()
+            T = len(data["NumSamples"])
+            for t in range(T):
+                row = {key: data[key][t] for key in fieldnames}
+                writer.writerow(row)
+        print("Modified %s"%(csv_file))
