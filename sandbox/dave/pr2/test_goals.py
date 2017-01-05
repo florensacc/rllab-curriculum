@@ -15,8 +15,8 @@ from sandbox.dave.rllab.envs.mujoco.pr2_env_lego import Pr2EnvLego
 from rllab.envs.normalized_env import normalize
 import os.path as osp
 
-from sandbox.dave.rllab.goal_generators.pr2_goal_generators import PR2BoxGoalGenerator #PR2TestGoalGenerator
-from sandbox.dave.rllab.lego_generators.pr2_lego_generators import PR2LegoFixedBlockGenerator #PR2TestGoalGenerator
+from sandbox.dave.rllab.goal_generators.pr2_goal_generators import PR2CrownGoalGeneratorSmall #PR2BoxGoalGeneratorSmall #PR2FixedGoalGenerator #PR2CrownGoalGeneratorSmall #PR2TestGoalGenerator
+from sandbox.dave.rllab.lego_generators.pr2_lego_generators import PR2LegoBoxBlockGeneratorSmall #PR2LegoFixedBlockGenerator #PR2TestGoalGenerator
 from sandbox.dave.rllab.policies.pretrain_gaussian_mlp_policy import PretrainGaussianMLPPolicy
 from rllab.sampler.utils import rollout
 
@@ -31,7 +31,7 @@ def do_test(env, policy, num_test_goals, max_path_length):
             env.log_diagnostics(paths)
             policy.log_diagnostics(paths)
 
-            #logger.dump_tabular(with_prefix=True)
+            #loggerdump_tabular(with_prefix=True)
             # if self.plot:
             #     self.update_plot()
             #     if self.pause_for_plot:
@@ -56,7 +56,7 @@ def setup_logging():
 
     exp_count = 1
     exp_name = "%s_%s_%04d" % ('experiment', timestamp, exp_count)
-    log_dir = config.LOG_DIR + "/local/" + "test/"  + exp_name
+    log_dir = config.LOG_DIR + "/local/" + "test/" + exp_name
 
     tabular_log_file = osp.join(log_dir, 'progress.csv')
     text_log_file = osp.join(log_dir, 'debug.log')
@@ -96,7 +96,8 @@ if __name__ == "__main__":
     # To test something on the robot, this would be the best.
     #pkl_file = "data/s3/train139/train139_2016_09_01_15_59_53_0001/params.pkl"
 
-    pkl_file = "/home/ignasi/GitRepos/rllab-private/data/local/train-Lego/random-goals-random-lego-small/random_goals_random_lego_small/params.pkl"
+    # pkl_file = "/home/ignasi/GitRepos/rllab-private/data/local/train-Lego/state/fixed_block_fixed_block_left_down_lego_pixel_penalty_p0005_d_06_reward_distance_15/params.pkl"
+    pkl_file = "/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/state/fixed_block_crown_goal_lego_pixel_penalty_p0005_d_06_reward_distance_1/params.pkl"
     #pkl_file = "upload/fine_tune/train139/params.pkl"
 
 
@@ -139,7 +140,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--file', type=str, default=pkl_file,
                         help='path to the snapshot file')
-    parser.add_argument('--max_length', type=int, default=300,
+    parser.add_argument('--max_length', type=int, default=200,
                         help='Max length of rollout')
     parser.add_argument('--speedup', type=int, default=1,
                         help='Speedup')
@@ -151,11 +152,8 @@ if __name__ == "__main__":
 
     # Add one to account for the goal created during environment initialization.
     # TODO - fix this hack.
-    test_goal_generator = PR2BoxGoalGenerator()  #PR2TestGoalGenerator(
-    test_lego_generator = PR2LegoFixedBlockGenerator()
-        #small_range=False,
-        #num_test_goals=args.num_goals + 1)
-        #seed=0)
+    test_goal_generator = PR2CrownGoalGeneratorSmall() #PR2TestGoalGenerator()  #PR2TestGoalGenerator(
+    test_lego_generator = PR2LegoBoxBlockGeneratorSmall()
 
     # env = normalize(Pr2Env(
     #     goal_generator=test_goal_generator,
@@ -198,11 +196,8 @@ if __name__ == "__main__":
         pos_normal_sample=False, # Uniform sampling
         pos_normal_sample_std=0.01,
         model="pr2_legofree.xml",
-        # use_vision=True,
+        use_vision=True,
         # use_depth=True,
-        #model="pr2_1arm_i.xml",
-        #model = "pr2_1arm_e.xml",
-        #model = "pr2_1arm_g.xml",
     ))
 
     # policy = ScaledGaussianMLPPolicy(

@@ -10,7 +10,9 @@ from rllab.misc.overrides import overrides
 from rllab.misc import logger
 from scipy.misc import imresize
 import time
-
+import cv2
+import pdb
+np.set_printoptions(threshold=np.nan, linewidth=np.nan)
 class Pr2EnvLego(MujocoEnv, Serializable):
 
     FILE = 'pr2_legofree.xml' #'pr2_1arm.xml'
@@ -61,11 +63,13 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.failure_rate_gamma = failure_rate_gamma
         self.use_running_average_failure_rate = use_running_average_failure_rate
         self.offset = offset
-        self.distance_tip_lego_penalty_weight = 0.6 #0.4 #1  #0.1  #0.3
+        self.distance_tip_lego_penalty_weight = 0.6 #0.5 #0.4 #1  #0.1  #0.3
         self.angle_penalty_weight = 0.2 #0.2 #0.4 #0.5 #1 #0.05
+        self.occlusion_weight = 0.0005 #0.0005
         self.use_vision = use_vision
         self.use_depth = use_depth
         self.discount = 0.95
+        self.depth = np.zeros([99, 99, 3])  #TODO: Hacky
 
         super(Pr2EnvLego, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
@@ -74,31 +78,32 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.__class__.FILE = model
 
     def get_current_obs(self):
-        #assert(np.array_equal(self.model.data.qpos[-3:], self.goal[:,None]))
-
         vec_to_goal = self.get_vec_to_goal()
         dim = self.model.data.qpos.shape[0]
 
-        if not self.use_depth:
-            idxpos = list(range(7)) + list(range(14, dim))  # TODO: Hacky
-            idxvel = list(range(7)) + list(range(14, dim - 3 - 1))
+        if self.use_depth:
+            self.depth = self.viewer.get_depth_map()
+            # depth = self.depth.astype(np.uint8)
+            # depth = imresize(depth, (227, 227))
+            # depth = depth.astype(np.float32).transpose([2, 0, 1])
+            # img,_,_ = self.viewer.get_image()
+            # img = img.astype(np.uint8)
+            # imsave('data/local/imgs/lego' + str(time.clock()) + '.png', img)
+            # depth = self.depth.transpose([2,0,1])
+            idxpos = list(range(7)) + list(range(dim - 3, dim))  # TODO: Hacky
+            idxvel = list(range(7))
             return  np.concatenate([
                 self.model.data.qpos.flat[idxpos],
                 # self.model.data.qpos.flat[:-3], # We do not need to explicitly include the goal
                 #                                 # since we already have the vec to the goal.
                 self.model.data.qvel.flat[idxvel],  # Do not include the velocity of the target (should be 0).
-                vec_to_goal,
                 self.get_tip_position(),
                 self.get_vec_tip_to_lego(),
-                # self.viewer_bot.get_depth_map(),
+                np.reshape(self.depth, -1),
             ]).reshape(-1)
         else:
-            depth = self.viewer_bot.get_depth_map()
-            depth = depth.astype(np.uint8)
-            depth = imresize(depth, (227, 227))
-            depth = depth.astype(np.float32).transpose([2, 0, 1])
-            idxpos = list(range(7)) + list(range(dim - 3, dim))  # TODO: Hacky
-            idxvel = list(range(7))
+            idxpos = list(range(7)) + list(range(14, dim))  # TODO: Hacky
+            idxvel = list(range(7)) + list(range(14, dim - 3 - 1))
             return np.concatenate([
                 self.model.data.qpos.flat[idxpos],
                 # self.model.data.qpos.flat[:-3], # We do not need to explicitly include the goal
@@ -106,7 +111,8 @@ class Pr2EnvLego(MujocoEnv, Serializable):
                 self.model.data.qvel.flat[idxvel],  # Do not include the velocity of the target (should be 0).
                 self.get_tip_position(),
                 self.get_vec_tip_to_lego(),
-                np.reshape(depth, -1),
+                vec_to_goal,
+                # np.linalg.norm(vec_to_goal),
             ]).reshape(-1)
 
 
@@ -171,16 +177,167 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         return np.dot(vec_to_goal[:2], vec_tip_to_lego[:2]) / (
             np.linalg.norm(vec_to_goal[:2]) * np.linalg.norm(vec_tip_to_lego[:2]))
 
+    def get_reward_occlusion(self):
+        _image, height, width = self.viewer.get_image()
+        image = np.uint8(_image)[40:70, 10:80, :].copy()
+        lower_boundary_red = np.array([130, 0, 0], dtype='uint8')
+        upper_boundary_red = np.array([255, 90, 90], dtype='uint8')
+        mask_red = cv2.inRange(image, lower_boundary_red, upper_boundary_red)
+        return np.sum(mask_red.astype(np.float32)) / 255.
+
+    def get_lego_from_image(self):
+        _image, height, width = self.viewer.get_image()
+        h_lego = 11
+        w_lego = 7
+        # image = image[195:360,50:450,:]
+        # _image = cv2.resize(_image, (4 * 99, 4 * 99))
+        # image = cv2.cvtColor(np.uint8(_image)[70:40:-1, 10:80,:], cv2.COLOR_RGB2HSV)
+        image = np.uint8(_image)[40:70, 10:80,:]
+        # mask_red = cv2.inRange(image, np.array([0, 200, 130]), np.array([1, 255, 255]))
+        # mask_red = mask1_red
+        lower_boundary_red = np.array([130, 30, 30], dtype='uint8')
+        upper_boundary_red = np.array([255, 90, 90], dtype='uint8')
+        # lower_boundary_green = np.array([5, 60, 5], dtype='uint8')
+        # upper_boundary_green = np.array([65, 255, 65], dtype='uint8')
+        mask_red = cv2.inRange(image, lower_boundary_red, upper_boundary_red)
+        # mask_red = cv2.resize(mask_red, (2*210, 2*90))
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+        mask_green = cv2.inRange(image, np.array([55, 0, 0]), np.array([65, 255, 255]))
+        mask2_green = cv2.inRange(image, np.array([254, -1, -1]), np.array([256, 2, 2]))
+        # mask_green = (mask1_green + mask2_green)/255.
+        corners = cv2.goodFeaturesToTrack(mask_red, 10, 1e-4, 4)
+        filter_size = 3
+        lego_corners = []
+        thresh = 16 * 255
+        # image = cv2.cvtColor(image, cv2.COLOR_HSV2BGR)
+        if corners is not None:
+            mask_green= cv2.copyMakeBorder(mask_green,filter_size, filter_size, filter_size,
+                                          filter_size, cv2.BORDER_CONSTANT, value=0)
+            corners = np.int0(corners)
+            for corner in corners:
+                x, y = corner.ravel()
+                greenpix = np.sum(mask_green[y:y + 2*filter_size + 1, x:x + 2*filter_size + 1])
+                print(greenpix)
+
+                if greenpix > thresh:
+                    lego_corners.append((40+y, 10+x))
+                    cv2.circle(image, (x, y), 4, 255, -1)
+                # image[y,x,0] = 255
+
+        # pdb.set_trace()
+        print('len', len(lego_corners))
+        lego_corners.sort()
+        if len(lego_corners) == 4:
+            #No oclusions for now, lego block always perpendicular to the table
+            world_coordinates = []
+            for r, c in lego_corners:
+                world_coordinates.append(self.viewer.get_3D(r, c, self.depth[0, r, c]))
+            lego_position = np.mean(world_coordinates, 0)
+            uw = world_coordinates[1] - world_coordinates[0]
+            uh = world_coordinates[2] - world_coordinates[0]
+            uw_norm = np.linalg.norm(uw)
+            uh_norm = np.linalg.norm(uh)
+            if uw_norm > uh_norm:
+                uw, uh = uh, uw
+            cos_theta = np.dot(uh,np.array([1,0,0]))/uh_norm
+            cos_half_theta = np.sqrt(0.5*(1+cos_theta)) * np.sign(cos_theta)
+            sin_half_theta = np.sqrt(0.5*(1-cos_theta)) * np.sign(cos_theta)
+            quaternion = np.array([cos_half_theta, 0, 0, -sin_half_theta])
+        if len(lego_corners) != 4 and len(lego_corners) != 2 and len(lego_corners) != 3:
+            # image = cv2.cvtColor(image, cv2.COLOR_HSV2BGR)
+            # cv2.imshow('i', image)
+            # cv2.waitKey(0)
+            # cv2.destroyAllWindows()
+            # import pdb; pdb.set_trace()
+            return np.zeros(7)
+
+        elif len(lego_corners) == 3:
+            world_coordinates = []
+            for r, c in lego_corners:
+                world_coordinates.append(self.viewer.get_3D(r, c, self.depth[0, r, c]))
+                world_coordinates[-1][-1] = 0.5015
+            us = [world_coordinates[2] - world_coordinates[1],
+                  world_coordinates[2] - world_coordinates[0],
+                  world_coordinates[1] - world_coordinates[0]]
+            us_norm = np.sqrt(np.sum(np.square(us), axis=-1)).tolist()
+            index = np.argmax(us_norm) #it is done that the index is the corner
+            uw, uh = us[:index] + us[index+1:]
+            uw_norm, uh_norm = us_norm[:index] + us_norm[index+1:]
+            sign = 1
+            if uw_norm > uh_norm:
+                uw, uh = uh, uw
+                uw_norm, uh_norm = uh_norm, uw_norm
+                sign = -1
+
+            cos_theta = np.dot(uh, np.array([1, 0, 0])) / uh_norm
+            cos_half_theta = np.sqrt(0.5 * (1 + cos_theta)) * np.sign(cos_theta)
+            sin_half_theta = np.sqrt(0.5 * (1 - cos_theta)) * np.sign(cos_theta)
+            quaternion = np.array([cos_half_theta, 0, 0, -sin_half_theta])
+            if index == 0:
+                lego_position = world_coordinates[index] + (uw/uw_norm * 0.0475/2 + uh/uh_norm * 0.0975)
+            elif index == 1:
+                lego_position = world_coordinates[index] + sign * (uw/uw_norm * 0.0475/2 - uh/uh_norm * 0.0975)
+            else:
+                lego_position = world_coordinates[index] - (uw/uw_norm * 0.0475/2 + uh/uh_norm * 0.0975)
+
+        if len(lego_corners) == 2:
+            world_coordinates = []
+            for r, c in lego_corners:
+                world_coordinates.append(self.viewer.get_3D(r, c, self.depth[0, r, c]))
+            u = world_coordinates[1] - world_coordinates[0]
+            if np.linalg.norm(u) + 0.06 > 0.0975 * 2:
+                u[-1] = 0
+                uh = u
+                uw = np.array([-u[1], u[0], u[2]])
+                uh_image = np.array(lego_corners[1]) - np.array(lego_corners[0])
+                uw_image = np.array([uh_image[1], -uh_image[0]])
+                p = np.array(lego_corners[0]) + uh_image/np.linalg.norm(uh_image) * filter_size + uw_image/np.linalg.norm(uw_image) * filter_size
+                if np.sum(mask_green[p[1]:p[1] + 2*filter_size + 1, p[0]:p[0] + 2*filter_size + 1]) > thresh:
+                    uw = -uw
+                # lego_position = world_coordinates[0] + uh/2+ uw/np.linalg.norm(uw) * 0.0475 / 2 #lego width
+                lego_position = world_coordinates[0] + uh/np.linalg.norm(uh)*0.0975+ uw/np.linalg.norm(uw) * 0.0475 / 2 #lego width
+                cos_theta = np.dot(uh, np.array([1, 0, 0])) / np.linalg.norm(uh)
+                cos_half_theta = np.sqrt(0.5 * (1 + cos_theta)) * np.sign(cos_theta)
+                sin_half_theta = np.sqrt(0.5 * (1 - cos_theta)) * np.sign(cos_theta)
+                quaternion = np.array([cos_half_theta, 0, 0, -sin_half_theta])
+            else:
+                u[-1] = 0
+                uw = u
+                uh = np.array([u[1], -u[0], u[2]])  #TODO: Not sure about the signs
+                uw_image = np.array(lego_corners[1]) - np.array(lego_corners[0])
+                uh_image = np.array([uw_image[1], -uw_image[0]])
+                p = np.array(lego_corners[0]) + uh_image / np.linalg.norm(uh_image) * 2 + uw_image / np.linalg.norm(
+                    uw_image) * 2
+                if np.sum(mask_green[p[1]:p[1] + 2 * filter_size + 1, p[0]:p[0] + 2 * filter_size + 1]) > thresh:
+                    uh = -uh
+                lego_position = world_coordinates[0] + uw / 2 + uh/np.linalg.norm(uh) * 0.0975  # lego width
+
+                cos_theta = np.dot(uh, np.array([1, 0, 0])) / np.linalg.norm(uh)
+                cos_half_theta = np.sqrt(0.5 * (1 + cos_theta)) * np.sign(cos_theta)
+                sin_half_theta = np.sqrt(0.5 * (1 - cos_theta)) * np.sign(cos_theta)
+                quaternion = np.array([cos_half_theta, 0, 0, -sin_half_theta])
+
+
+
+
+        lego_position[-1] = 0.4815
+        error_position = np.linalg.norm(lego_position - self.get_lego_position())
+        print(error_position, lego_position, self.get_lego_position())
+        image = cv2.cvtColor(image, cv2.COLOR_HSV2BGR)
+        # cv2.imshow('i', image); cv2.waitKey(0); cv2.destroyAllWindows()
+        # cv2.waitKey(5)
+        # cv2.destroyAllWindows()
+        return np.concatenate([lego_position, quaternion])
+
     def step(self, action):
         #action /= 10
 
-        #image, width, height = self.viewer.get_image()
-
         # Limit actions to the specified range.
+        if self.use_depth and self.use_vision:
+            self.depth = self.viewer.get_depth_map().astype(np.float32)
         action_limit = self.action_limit * self.action_space.ones()
         action = np.maximum(action, -action_limit)
         action = np.minimum(action, action_limit)
-
         vec_tip_to_lego = self.get_vec_tip_to_lego()
         distance_tip_to_lego_previous = np.linalg.norm(vec_tip_to_lego)
         cos_angle_previous = self.get_cos_vecs()
@@ -188,38 +345,39 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         # Simulate this action and get the resulting state.
         self.forward_dynamics(action)
 
-        # Compute the magnitude of the position error
+
+        # image_pos = np.zeros(3)
+        # a = self.get_lego_from_image()
+        # if a is not None:
+        #     image_pos = a
+
         vec_to_goal = self.get_vec_to_goal()
         distance_to_goal = np.linalg.norm(vec_to_goal)
         distance_tip_to_lego = np.linalg.norm(vec_tip_to_lego)
 
+        # print("calculat:  ", self.get_lego_from_image(), "|", "real:  ", self.get_lego_position())
         # Penalize the robot for being far from the goal and for having the arm far from the lego.
         reward_dist = - distance_to_goal
         reward_tip = - self.distance_tip_lego_penalty_weight * distance_tip_to_lego
 
         cos_angle = self.get_cos_vecs()
         reward_angle = - self.angle_penalty_weight * cos_angle
-        # Penalize the robot for large actions.
+
+        # Penalize the robot for large actions.f
+        # reward_occlusion = self.occlusion_weight * self.get_reward_occlusion()
         reward_ctrl = - self.action_penalty_weight * np.square(action).sum()
-        reward = reward_dist + reward_tip + reward_ctrl + reward_angle
+        reward = reward_dist + reward_tip + reward_ctrl + reward_angle #+ reward_occlusion
         state = self._state
+        # print(reward_occlusion, reward_angle, reward_tip, reward_dist, )
         notdone = np.isfinite(state).all()
         done = not notdone
+
         ob = self.get_current_obs()
+
+
         # Viewer
         if self.use_vision:
             self.viewer.loop_once()
-        if self.use_depth:
-            self.viewer_bot.loop_once()
-        #
-        # img = self.viewer_bot.get_depth_map()
-        # img = img.astype(np.ubyte)
-        # imsave('data/local/imgs/depth' + str(time.clock()) + '.png', img)
-        # (img, h, w) = self.viewer.get_image()
-        # rect = self.viewer_bot.get_rect()
-        # img = np.fromstring(img, dtype='uint8').reshape(h, w, 3)[::-1, :, :]
-        # imsave('data/local/imgs/lego' + str(time.clock()) + '.png', img)
-        # if self.use_depth:
 
         return Step(ob, float(reward), done, #not self.do_rand,
                     distance_to_goal=distance_to_goal,
@@ -230,17 +388,21 @@ class Pr2EnvLego(MujocoEnv, Serializable):
                     reward_dist=reward_dist,
                     reward_tip=reward_tip,
                     reward_angle=reward_angle,
+                    # reward_occlusion=reward_occlusion,
+                    # error_position_x=error_position[0],
+                    # error_position_y=error_position[1],
+                    # error_position_z=error_position[2],
                     )
 
     def viewer_setup(self, is_bot=False):
         #self.viewer.cam.lookat[0] = self.model.stat.center[0]
         #self.viewer.cam.lookat[1] = self.model.stat.center[1]
         #self.viewer.cam.lookat[2] = self.model.stat.center[2]
-        if not is_bot:
-            self.viewer.cam.distance = self.model.stat.extent * 1.5
-            self.viewer.cam.camid = -1
+        if self.use_vision:
+            self.viewer.cam.camid = 0
         else:
-            self.viewer_bot.cam.camid = 0
+            self.viewer.cam.camid = -1
+            self.viewer.cam.distance = self.model.stat.extent * 1.5
         #self.viewer.cam.trackbodyid = -1   # 39
         #self.viewer.cam.elevation = 0
         #self.viewer.cam.azimuth = 0
@@ -251,7 +413,6 @@ class Pr2EnvLego(MujocoEnv, Serializable):
     def reset_mujoco(self):
         goal_dims = 3 # self.goal_dims
         lego_dims = 6
-
         if self.allow_random_restarts or self.first_time:
             if self.pos_normal_sample:
                 # Sample a new random initial robot position from a normal distribution.
@@ -279,8 +440,15 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         # Generate a new goal.
         lego_position = self.get_lego_position()
 
+        if self._lego_generator is not None:
+            self.lego = self._lego_generator.generate_goal(lego_position)
+            qpos[-goal_dims - lego_dims - 1:-goal_dims] = self.lego[:, None]
+        else:
+        # print("No lego generator!")
+            qpos[-goal_dims - lego_dims - 1:-goal_dims] = np.array((0.6, 0.5, 0.5025, 1, 0, 0, 0))[:, None]
+
         if self._goal_generator is not None:
-            self.goal = self._goal_generator.generate_goal(lego_position)
+            self.goal = self._goal_generator.generate_goal(lego_position[:goal_dims])
             qpos[-goal_dims:] = self.goal[:goal_dims, None]
         else:
             print("No goal generator!")
@@ -292,13 +460,6 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             #qvel = self.init_qvel + np.random.normal(size=self.init_qvel.shape) * 10
         else:
             qvel = np.array(self.model.data.qvel)
-
-        if self._lego_generator is not None:
-            self.lego = self._lego_generator.generate_goal(lego_position)
-            qpos[-goal_dims - lego_dims - 1:-goal_dims] = self.lego[:, None]
-        else:
-        # print("No lego generator!")
-            qpos[-goal_dims - lego_dims - 1:-goal_dims] = np.array((0.6, 0.5, 0.5249, 1, 0, 0, 0))[:, None]
 
         # Set the velocity of the goal (the goal itself -
         # this is NOT the arm velocity at the goal position!) to 0.
@@ -319,22 +480,16 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         #Apply a force in the Lego block
         xfrc = np.zeros(self.model.data.xfrc_applied.shape)
         xfrc[-2, 2] = -0.981
+        xfrc[13, 2] = - 9.81 * 0.0917
         self.model.data.xfrc_applied = xfrc
         #Viewer
-        if self.use_vision:
-            if self.viewer is None:
-                self.viewer = MjViewer()
-                self.viewer.start()
-                self.viewer.set_model(self.model)
-                self.viewer_setup()
-        if self.use_depth:
-            if self.viewer_bot is None:
-                self.viewer_bot = MjViewer(is_bot=True)
-                self.viewer_bot.start()
-                self.viewer_bot.set_model(self.model)
-                self.viewer_setup(is_bot=True)
-            # data = self.viewer_bot.get_depth_map()
-            # imsave('data/local/imgs/lego' + '.png', data)
+
+        if self.viewer is None and self.use_vision:
+            self.viewer = MjViewer(visible=True, go_fast=False)
+            self.viewer.start()
+            self.viewer.set_model(self.model)
+            self.viewer_setup()
+
 
         # Choose an action limit from the range of action limits.
         #self.action_limit = np.random.uniform(self.min_action_limit, self.max_action_limit)
@@ -390,6 +545,14 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         logger.record_tabular('RewardDistanceLegoTip', np.mean([np.sum(r) for r in distances_to_goal]))
         distances_to_goal = [path["env_infos"]["reward_angle"] for path in paths]
         logger.record_tabular('RewardAngle', np.mean([np.sum(r) for r in distances_to_goal]))
+        # distances_to_goal = [path["env_infos"]["reward_occlusion"] for path in paths]
+        # logger.record_tabular('RewardOcclusion', np.mean([np.sum(r) for r in distances_to_goal]))
+        # error_position_x = [path["env_infos"]["error_position_x"] for path in paths]
+        # logger.record_tabular('ErrorpositionX', np.max([np.max(e) for e in error_position_x]))
+        # error_position_y = [path["env_infos"]["error_position_y"] for path in paths]
+        # logger.record_tabular('ErrorpositionY', np.max([np.max(e) for e in error_position_y]))
+        # error_position_z = [path["env_infos"]["error_position_z"] for path in paths]
+        # logger.record_tabular('ErrorpositionZ', np.max([np.max(e) for e in error_position_z]))
         # The task is considered complete when we get within distance_thresh of the goal.
         #reached_goal_indices = np.where(distances_to_goal < distance_thresh)
         #if (distances_to_goal < distance_thresh).any():

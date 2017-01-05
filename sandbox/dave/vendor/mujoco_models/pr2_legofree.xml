@@ -54,7 +54,12 @@
 		<pair geom1="base" geom2="r_forearm"/>
 		<pair geom1="base" geom2="l_forearm"/>
 		<pair geom1="table_geom" geom2="l_forearm"/>
-        <pair geom1="l_gripper_l_finger_tip" geom2="brick1_base"/>
+          <pair geom1="l_gripper_l_finger_tip" geom2="brick"/>
+        <pair geom1="l_gripper_r_finger_tip" geom2="brick"/>
+        <pair geom1="l_forearm" geom2="brick"/>
+        <pair geom1="table_geom" geom2="brick"/>
+
+        <!--<pair geom1="l_gripper_l_finger_tip" geom2="brick1_base"/>
         <pair geom1="l_gripper_r_finger_tip" geom2="brick1_base"/>
         <pair geom1="l_forearm" geom2="brick1_base"/>
         <pair geom1="l_gripper_l_finger_tip" geom2="brick1_b"/>
@@ -73,7 +78,7 @@
         <pair geom1="brick1_b" geom2="table_geom"/>
         <pair geom1="brick1_t" geom2="table_geom"/>
         <pair geom1="brick1_l" geom2="table_geom"/>
-        <pair geom1="brick1_r" geom2="table_geom"/>
+        <pair geom1="brick1_r" geom2="table_geom"/>-->
 
     </contact>
 
@@ -90,10 +95,9 @@
 	<geom name="gnd" material="MatGnd" type="plane" contype="0" conaffinity="1" pos="0 0 0" size="1.5 1.5 0.25"/>
 
         <body name="base_footprint" pos="0 0 0">
-            <camera name="cam" fovy="45" euler="0 0 -1.57" target="target" pos="0.6
-             0 1.25"/>
-            <!--camera name="cam" fovy="90" mode="targetbody"  euler="-2 1.75 0.6" target="target" pos="0.55
-             0 1.5"/-->
+            <camera name="vision" fovy="75" euler="0 0 -1.57" target="table" pos="0.52 0 1.4"/>
+            <!--camera name="depth" fovy="45" euler="0 0 -1.57" target="target" pos="0.6 0 1.25"/-->
+            <camera name="depth" fovy="75" euler="0 0 -1.57" target="target" pos="0.52 0 1.4"/>
             <!--<joint name="rootx" type="slide"   pos="0 0 0" axis="1 0 0"/>-->
             <!--<joint name="rooty" type="slide"   pos="0 0 0" axis="0 1 0"/>-->
             <!--<joint name="rootwz" type="hinge"   pos="0 0 0" axis="0 0 1"/>-->
@@ -268,7 +272,7 @@
                     <body name="l_shoulder_pan_link" pos="0 0.188 0">
                         <inertial pos="-0.001201 0.024513 -0.098231" quat="0.927482 -0.087656 0.074060 -0.355821" mass="25.799322" diaginertia="0.934201 0.837701 0.242033" />
                         <joint name="l_shoulder_pan_joint" type="hinge" pos="0 0 0" axis="0 0 1" limited="true" range="-0.714602 2.285398" damping="10.0"/>
-                        <geom name="geom50" rgba="0 0 0.8 1" mesh="shoulder_pan" contype="0"/>
+                        <geom name="geom50" rgba="0.7 0.7 0.7 1" mesh="shoulder_pan" contype="0"/>
 
                         <!--geom name="geom50f" type="box" pos="0.01642114 0.00171030 -0.18118357" size="0.18 0.13 0.32589236" rgba="0 0 0.8 1" group="1"/-->
 
@@ -283,7 +287,7 @@
                                 <!--mesh name="geom52" mesh="upper_arm_roll_L" /-->
                                 <body name="l_upper_arm_link" pos="0 0 0">
                                     <inertial pos="0.21405 0.01658 -0.00057" quat="-0.090901 0.708675 -0.051638 0.697746" mass="6.01769" diaginertia="0.076070 0.074882 0.015107" />
-                                    <geom name="geom53" rgba="0 0.8 0 1" mesh="upper_arm" contype="0"/>
+                                    <geom name="geom53" rgba="0.7 0.7 0.7 1" mesh="upper_arm" contype="0"/>
                                     <body name="l_elbow_flex_link" pos="0.4 0 0">
                                         <inertial pos="0.01014 0.00032 -0.01211" quat="0.308784 0.646797 0.639077 0.279083" mass="1.90327" diaginertia="0.004419 0.003965 0.003090" />
                                         <joint name="l_elbow_flex_joint" type="hinge" pos="0 0 0" axis="0 1 0" limited="true" range="-2.3213 0" damping="1.0"/>
@@ -306,10 +310,12 @@
                                                         <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01" />
                                                         <joint name="l_wrist_roll_joint" type="hinge"   pos="0 0 0" axis="1 0 0" damping="0.1"/>
                                                         <!--mesh name="geom58" mesh="wrist_roll_L" /-->
-                                                        <body name="l_gripper_palm_link" pos="0 0 0" childclass="gripper">
+                                                        <body name="l_gripper_palm_link" pos="0.038 0 0" childclass="gripper">
                                                             <inertial pos="0.06623 0.00053 -0.00119" quat="-0.018184 0.706274 0.016077 0.707523" mass="0.58007" diaginertia="0.000866 0.000678 0.000351" />
-                                                            <geom name="geom59" rgba="0.8 0 0 1" mesh="gripper_palm"/>
-
+                                                            <geom name="geom59" rgba="0.7 0.7 0.7 1" mesh="gripper_palm" pos="0 0 0"/>
+                                                            <body name="sensor" pos="0.01 0 0">
+                                                                <geom name="sensor" rgba="0.7 0.7 0.7 1" type="cylinder" size="0.022 0.019" pos="0 0 0" quat="-0.018184 0.706274 0.016077 0.707523"/>
+                                                            </body>
                                                             <!--geom name="geom59f" type="capsule" pos="0.07750326 -0.00000579 -0.00000142" quat="0.49981788 0.50015276 -0.49991269 0.50011660" size="0.05263874 0.00669171" rgba="0.8 0 0 1" group="1" contype="1"/-->
                                                             <body name="l_gripper_led_frame" pos="0.0513 0 0.0244">
                                                                 <inertial pos="0 0 0" mass="0.001" diaginertia="0.000000 0.000000 0.000000" />
@@ -348,7 +354,7 @@
                                                                 <body name="l_gripper_l_finger_tip_link" pos="0.09137 0.00495 0">
                                                                     <inertial pos="0.00423 0.00284 0" quat="0.249588 0.661594 -0.249588 0.661594" mass="0.04419" diaginertia="0.000015 0.000015 0.000003" />
                                                                     <!--<joint name="l_gripper_l_finger_tip_joint" type="hinge" pos="0 0 0" axis="0 0 1" limited="true" range="-.548 0"/>-->
-                                                                    <geom name="l_gripper_l_finger_tip" rgba="0 0.8 0 1" mesh="l_finger_tip" />
+                                                                    <geom name="l_gripper_l_finger_tip" rgba="0.7 0.7 0.7 1" mesh="l_finger_tip" />
                                                                 </body>
 
                                                             </body>
@@ -361,7 +367,7 @@
                                                                 <body name="l_gripper_r_finger_tip_link" pos="0.09137 -0.00495 0">
                                                                     <inertial pos="0.00423 -0.00284 0" quat="-0.249588 0.661594 0.249588 0.661594" mass="0.04419" diaginertia="0.000015 0.000015 0.000003" />
                                                                     <!--<joint name="l_gripper_r_finger_tip_joint" type="hinge" pos="0 0 0" axis="0 0 -1" limited="true" range="-.548 0"/>-->
-                                                                    <geom name="l_gripper_r_finger_tip" euler="3.14 0 0" rgba="0 0.8 0 1" mesh="l_finger_tip" />
+                                                                    <geom name="l_gripper_r_finger_tip" euler="3.14 0 0" rgba="0.7 0.7 0.7 1" mesh="l_finger_tip" />
                                                                     <!--body name="l_gripper_l_finger_tip_frame" pos="0 0 0">
                                                                         <inertial pos="0 0 0" mass="0.001" diaginertia="0.000000 0.000000 0.000000" />
                                                                         <joint name="l_gripper_joint" type="slide" pos="0 0 0" axis="0 1 0" limited="true" range="0 0.09"/>
@@ -404,7 +410,7 @@
 
                         <joint name="r_shoulder_pan_joint" type="hinge" pos="0 0 0" axis="0 0 1" limited="true" range="-0.719 -0.718" />
                         <!--joint name="r_shoulder_pan_joint" type="hinge" pos="0 0 0" axis="0 0 1" limited="true" range="-2.285398 0.714602" /-->
-                        <geom name="geom32" rgba="0 0 0.8 1" mesh="shoulder_pan" contype="0"/>
+                        <geom name="geom32" rgba="0.7 0.7 0.7 1" mesh="shoulder_pan" contype="0"/>
                         <!--geom name="geom32f" type="capsule" pos="0.01642114 -0.00171030 -0.18118357" quat="0.69209327 0.05075781 0.04887308 0.71836061" size="0.21476608 0.19522579" rgba="0 0 0.8 1" group="1"/-->
                         <!--geom name="geom32f" type="box" pos="0.01642114 -0.00171030 -0.18118357" quat="0.69209327 0.05075781 0.04887308 0.71836061" size="0.13091806 0.18720169 0.32589236" rgba="0 0 0.8 1" group="1"/-->
 
@@ -426,7 +432,7 @@
                                 <!--geom name="geom34f" type="capsule" pos="0.12961979 -0.00000014 0" quat="1 -0.00001340 0.00000169 -0.00000728" size="0.07297432 0.00139096" group="1"/-->
                                 <body name="r_upper_arm_link" pos="0 0 0">
                                     <inertial pos="0.21398 -0.01621 -0.0002" quat="-0.045020 0.697462 -0.088537 0.709705" mass="6.01769" diaginertia="0.076138 0.074931 0.015133" />
-                                    <geom name="geom35" rgba="0 0.8 0 1" mesh="upper_arm" contype="0"/>
+                                    <geom name="geom35"rgba="0.7 0.7 0.7 1" mesh="upper_arm" contype="0"/>
                                     <!--geom name="geom35f" type="capsule" pos="0.21533518 0.00017574 -0.00229182" quat="0.50005025 0.49945472 0.50003903 0.50045548" size="0.09823026 0.18895381" rgba="0 0.8 0 1" group="1"/-->
                                     <body name="r_elbow_flex_link" pos="0.4 0 0">
                                         <inertial pos="0.01014 0.00032 -0.01211" quat="0.308784 0.646797 0.639077 0.279083" mass="1.90327" diaginertia="0.004419 0.003965 0.003090" />
@@ -465,8 +471,8 @@
                                                         <!--geom name="geom40f" type="capsule" pos="0.03324894 0.00005320 -0.00012423" quat="0.67531716 0.73752742 -0.00019246 0.00000483" size="0.02078140 0.00071779" group="1"/-->
                                                         <body name="r_gripper_palm_link" pos="0 0 0" childclass="gripper">
                                                             <inertial pos="0.06623 0.00053 -0.00119" quat="-0.018184 0.706274 0.016077 0.707523" mass="0.58007" diaginertia="0.000866 0.000678 0.000351" />
-                                                            <geom name="geom41" rgba="0.8 0 0 1" mesh="gripper_palm" contype="0"/>
-                                                            <geom name="geom41f" type="capsule" pos="0.07750326 0.00000579 -0.00000142" quat="0.49981788 0.50015276 -0.49991269 0.50011660" size="0.05263874 0.00669171" rgba="0.8 0 0 1" group="1"/>
+                                                            <geom name="geom41" rgba="0.7 0.7 0.7 1" mesh="gripper_palm" contype="0"/>
+                                                            <!--geom name="geom41f" type="capsule" pos="0.07750326 0.00000579 -0.00000142" quat="0.49981788 0.50015276 -0.49991269 0.50011660" size="0.05263874 0.00669171" rgba="0.8 0 0 1" group="1"/-->
                                                             <!--geom name="geom41f" type="box" pos="0.07750326 0.00000579 -0.00000142" quat="0.49981788 0.50015276 -0.49991269 0.50011660" size="0.02425377 0.048 0.05" rgba="0.8 0 0 1" group="1"/-->
                                                             <!--body name="r_gripper_led_frame" pos="0.0513 0 0.0244">
                                                                 <inertial pos="0 0 0" mass="0.001" diaginertia="0.000000 0.000000 0.000000" />
@@ -486,7 +492,7 @@
                                                                 <body name="r_gripper_l_finger_tip_link" pos="0.09137 0.00495 0">
                                                                     <inertial pos="0.00423 0.00284 0" quat="0.249588 0.661594 -0.249588 0.661594" mass="0.04419" diaginertia="0.000015 0.000015 0.000003" />
                                                                     <!--<joint name="r_gripper_l_finger_tip_joint" type="hinge" pos="0 0 0" axis="0 0 1" limited="true" range="-.548 0"/>-->
-                                                                    <geom name="r_gripper_l_finger_tip" rgba="0 0.8 0 1" mesh="l_finger_tip" />
+                                                                    <geom name="r_gripper_l_finger_tip" rgba="0.7 0.7 0.7 1" mesh="l_finger_tip" />
                                                                 </body>
                                                             </body>
                                                             <body name="r_gripper_r_finger_link" pos="0.07691 -0.01 0">
@@ -496,7 +502,7 @@
                                                                 <body name="r_gripper_r_finger_tip_link" pos="0.09137 -0.00495 0">
                                                                     <inertial pos="0.00423 -0.00284 0" quat="-0.249588 0.661594 0.249588 0.661594" mass="0.04419" diaginertia="0.000015 0.000015 0.000003" />
                                                                     <!--<joint name="r_gripper_r_finger_tip_joint" type="hinge" pos="0 0 0" axis="0 0 -1" limited="true" range="-.548 0"/>-->
-                                                                    <geom name="r_gripper_r_finger_tip" euler="3.14 0 0" rgba="0 0.8 0 1" mesh="l_finger_tip" />
+                                                                    <geom name="r_gripper_r_finger_tip" euler="3.14 0 0" rgba="0.7 0.7 0.7 1" mesh="l_finger_tip" />
                                                                     <!--body name="r_gripper_l_finger_tip_frame" pos="0 0 0">
                                                                         <inertial pos="0 0 0" mass="0.001" diaginertia="0.000000 0.000000 0.000000" />
                                                                         <joint name="r_gripper_joint" type="slide" pos="0 0 0" axis="0 1 0" limited="true" range="0 0.09" maxvel="0.2" />
@@ -538,12 +544,8 @@
             <inertial pos="0 0 0" mass="100.0" diaginertia="1.0 1.0 1.0"/>
             <geom name="table_geom" type="box" pos="0.6 0 0.42" size="0.25 1.0 0.05" rgba="0 0.3 0 1" contype="1" conaffinity="1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
         </body>
-        <body name="OBJ_brick1" pos ="0.6 0.3 0.525">
+        <!--<body name="OBJ_brick1" pos ="0.6 0.2 0.5249">
             <joint type="free" />
-            <!--<site name="ee_pt_1" pos="0.035 0.0275 0.0275" size="0.005"/>
-            <site name="ee_pt_2" pos="0.035 -0.0275 0.0275" size="0.005"/>
-            <site name="ee_pt_3" pos="0.035 0.0275 -0.0275" size="0.005"/>
-            <site name="ee_pt_4" pos="0.035 -0.0275 -0.0275" size="0.005"/>-->
             <site name="lego_target" pos="0 0 0" size="0.005"/>
 
             <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>  #mass was 0.00001
@@ -555,6 +557,15 @@
             <geom name="brick1_t" pos="0.045 0 -0.05" type="box" size="0.01 0.055 0.005" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
             <geom name="brick1_cross1" pos="0.045 0 0" type="box" size="0.01 0.055 0.01" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
             <geom name="brick1_cross2" pos="0.045 0 0" type="box" size="0.01 0.01 0.055" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+        </body>-->
+
+        <body name="OBJ_brick1" pos ="0.6 0.2 0.5025">
+            <joint type="free" />
+            <site name="lego_target" pos="0 0 0" size="0.005"/>
+
+            <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>  #mass was 0.00001
+            <geom name="brick" pos="0 0 0" type="box" size="0.0975 0.0475 0.0325" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+
         </body>
 
 
