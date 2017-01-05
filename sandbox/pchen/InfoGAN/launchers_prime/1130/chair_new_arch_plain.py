@@ -17,7 +17,7 @@ from sandbox.pchen.InfoGAN.infogan.models.regularized_gan import RegularizedGAN
 now = datetime.datetime.now(dateutil.tz.tzlocal())
 timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
 
-name = "1129_chair_subpixel_f_sweep_lr"
+name = "1130_plain_chair_subpixel_f_sweep_lr"
 root_log_dir = "logs/" + name
 root_checkpoint_dir = "ckt/" + name
 batch_size = 128
@@ -231,6 +231,7 @@ for v in variants:
                 generator_learning_rate=v["g_lr"],
                 discriminator_learning_rate=v["d_lr"],
                 reg_epochs=v["reg_epochs"],
+                max_stuck_epochs=2000,
             )
 
             algo.train()

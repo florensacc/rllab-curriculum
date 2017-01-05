@@ -32,6 +32,76 @@ class RegularizedGAN(object):
         image_size = image_shape[0]
         if network_type == "face_conv":
             raise NotImplementedError
+        elif network_type == "tmp1_subg_convd":
+            with tf.variable_scope("d_net"):
+                common_tmpl = lambda dim: (
+                    pt.template("input").
+                        reshape([-1] + list(image_shape)).
+                        custom_conv2d(64, k_h=4, k_w=4, d_h=2, d_w=2).
+                        apply(leaky_rectify).
+                        custom_conv2d(128, k_h=4, k_w=4, d_h=2, d_w=2).
+                        conv_batch_norm().
+                        apply(leaky_rectify).
+                        custom_conv2d(256, k_h=4, k_w=4, d_h=2, d_w=2).
+                        conv_batch_norm().
+                        apply(leaky_rectify).
+                        custom_conv2d(256, k_h=4, k_w=4, d_h=1, d_w=1).
+                        conv_batch_norm().
+                        apply(leaky_rectify).
+                        custom_conv2d(256, k_h=4, k_w=4, d_h=1, d_w=1).
+                        conv_batch_norm().
+                        apply(leaky_rectify).
+                        custom_fully_connected(1024).
+                        apply(leaky_rectify).
+                        custom_fully_connected(dim))
+                if use_separate_recog:
+                    # use separate networks for the discriminator + continuous encoder, and discrete encoder
+                    self.discriminator_template = common_tmpl(1 + self.reg_cont_latent_dist.dist_flat_dim)
+                    # self.continuous_encoder_template = common_tmpl()
+                    self.discrete_encoder_template = common_tmpl(self.reg_disc_latent_dist.dist_flat_dim)
+
+                else:
+                    self.discriminator_template = common_tmpl(1 + self.reg_latent_dist.dist_flat_dim)
+
+            with tf.variable_scope("g_net"):
+                self.generator_template = \
+                    (pt.template("input").
+                     custom_fully_connected(1024).
+                     fc_batch_norm().
+                     apply(tf.nn.relu).
+                     custom_fully_connected(256 * image_size // 8 * image_size // 8).
+                     fc_batch_norm().
+                     apply(tf.nn.relu).
+                     reshape([-1, image_size // 8, image_size // 8, 256]).
+                     custom_deconv2d(
+                        [0, image_size//8, image_size//8, 256],
+                        k_h=4, k_w=4, d_h=1, d_w=1
+                    ).
+                     conv_batch_norm().
+                     apply(tf.nn.relu).
+                     custom_deconv2d(
+                        [0, image_size//8, image_size//8, 256],
+                        k_h=4, k_w=4, d_h=1, d_w=1).
+                     conv_batch_norm().
+                     apply(tf.nn.relu).
+                     # custom_conv2d(256, k_h=4, k_w=4, d_h=1, d_w=1).
+                     # apply(resize_nearest_neighbor, 2).
+                     conv2d_mod(2, 256*4, activation_fn=None).
+                     depool2d_split().
+                     conv_batch_norm().
+                     apply(tf.nn.relu).
+                     # custom_conv2d(64, k_h=4, k_w=4, d_h=1, d_w=1).
+                     # apply(resize_nearest_neighbor, 2).
+                     conv2d_mod(2, 64*4, activation_fn=None).
+                     depool2d_split().
+                     conv_batch_norm().
+                     apply(tf.nn.relu).
+                     # custom_deconv2d([0] + list(image_shape), k_h=4, k_w=4).
+                     # custom_conv2d(image_shape[-1], k_h=4, k_w=4, d_h=1, d_w=1).
+                     # apply(resize_nearest_neighbor, 2).
+                     conv2d_mod(2, image_shape[-1]*4, activation_fn=None).
+                     depool2d_split().
+                     flatten())
         elif network_type == "tmp1_subg_resized":
             with tf.variable_scope("d_net"):
                 common_tmpl = lambda dim: (
@@ -100,8 +170,10 @@ class RegularizedGAN(object):
                      conv_batch_norm().
                      apply(tf.nn.relu).
                      # custom_deconv2d([0] + list(image_shape), k_h=4, k_w=4).
-                     custom_conv2d(image_shape[-1], k_h=4, k_w=4, d_h=1, d_w=1).
-                     apply(resize_nearest_neighbor, 2).
+                     # custom_conv2d(image_shape[-1], k_h=4, k_w=4, d_h=1, d_w=1).
+                     # apply(resize_nearest_neighbor, 2).
+                     conv2d_mod(2, image_shape[-1]*4, activation_fn=None).
+                     depool2d_split().
                      flatten())
         elif network_type == "tmp1_resize":
             with tf.variable_scope("d_net"):

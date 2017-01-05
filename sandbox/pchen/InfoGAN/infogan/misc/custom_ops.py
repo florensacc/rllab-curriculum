@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from collections import namedtuple
 
 import enum
 import prettytensor as pt
@@ -14,6 +15,8 @@ class CustomPhase(enum.Enum):
     train = 1999
     test = 2999
     init = 3999
+
+Anneal = namedtuple("Anneal", ["start", "end", "length"], )
 
 
 class conv_batch_norm(pt.VarStoreMethod):

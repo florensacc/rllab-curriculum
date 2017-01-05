@@ -4,11 +4,12 @@
 # eval seems to take up some cycles -> trim it down a lot
 # code seems killed -> much more generous freebits
 
-# kl never exceeds 0.02
+# kl never exceeds 0.02 under expfreebits
+# trying kl annealing instead
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
-from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
+from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, Anneal
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli, Mixture, AR, \
     IAR, ConvAR, DiscretizedLogistic, DistAR, PixelCNN, CondPixelCNN
 
@@ -52,7 +53,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.02]# 0.1]
+        return [0.]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -88,11 +89,20 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [8, ]
+        return [0, ]
 
     @variant(hide=False)
     def i_nr(self):
-        return [5,]
+        return [2,]
+
+    @variant(hide=False)
+    def nar(self, ):
+        return [4,]
+
+    @variant(hide=False)
+    def nr(self, zdim, base_filters):
+        return [2]
+
 
     @variant(hide=False)
     def i_context(self):
@@ -148,16 +158,8 @@ class VG(VariantGenerator):
             # [0,]*7,
             # [1,]*6,
             # [1,]*10,
-            [1,1,1,1,1,1,],
+            [1,1,1,],
         ]
-
-    @variant(hide=False)
-    def nar(self, ):
-        return [8,]
-
-    @variant(hide=False)
-    def nr(self, zdim, base_filters):
-        return [5]
 
 vg = VG()
 
@@ -254,7 +256,7 @@ for v in variants[i:i+1]:
             monte_carlo_kl=True,
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=1000000 * 3, # 3 epochs per eval roughly
+            vali_eval_interval=10000 * 3, # 3 epochs per eval roughly
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
@@ -262,7 +264,8 @@ for v in variants[i:i+1]:
             vis_ar=False,
             slow_kl=True,
             unconditional=False,
-            kl_coeff=1,
+            kl_coeff_spec=Anneal(start=0.001, end=1.0, length=30),
+            updates_per_epoch=50,
             # resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
             # staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
@@ -273,7 +276,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="1116_imgnet_32_freer",
+            exp_prefix="1229_imgnet_32_anneal_test_anneal",
             seed=v["seed"],
             variant=v,
             mode="local",

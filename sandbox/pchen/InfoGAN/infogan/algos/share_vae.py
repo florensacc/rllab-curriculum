@@ -48,6 +48,7 @@ class ShareVAE(object):
             l2_reg=None,
             img_on=True,
             kl_coeff=1.,
+            kl_coeff_spec=None,
             noise=True,
             vis_ar=True,
             num_gpus=1,
@@ -84,7 +85,15 @@ class ShareVAE(object):
         if isinstance(optimizer_cls, str):
             optimizer_cls = eval(optimizer_cls)
         self.noise = noise
-        self.kl_coeff = kl_coeff
+        self.kl_coeff_spec = kl_coeff_spec
+        if kl_coeff_spec is None:
+            self.kl_coeff = kl_coeff
+        else:
+            self.kl_coeff = tf.Variable(
+                initial_value=kl_coeff_spec.start,
+                trainable=False,
+                name="kl_coeff"
+            )
         self.anneal_factor = anneal_factor
         self.anneal_every = anneal_every
         self.img_on = img_on
@@ -107,8 +116,10 @@ class ShareVAE(object):
         self.log_dir = logger.get_snapshot_dir()
         self.snapshot_interval = snapshot_interval
         if updates_per_epoch:
-            print("should not set updates_per_epoch")
-        self.updates_per_epoch = dataset.train.images.shape[0] // batch_size
+            input("should not set updates_per_epoch")
+            self.updates_per_epoch = updates_per_epoch
+        else:
+            self.updates_per_epoch = dataset.train.images.shape[0] // batch_size
         self.summary_interval = summary_interval
         # self.learning_rate = learning_rate
         self.trainer = None
@@ -819,6 +830,16 @@ class ShareVAE(object):
                 print("code ON: %s"%inp_mask)
             elif epoch == 0:
                 assert self.model.output_dist._sanity2
+        if self.kl_coeff_spec is not None:
+            spec = self.kl_coeff_spec
+            if epoch <= spec.end:
+                # repeated nodes creations but whatever
+                desired = spec.start + (spec.end - spec.start) / spec.length * epoch
+                kw["sess"].run(
+                    self.kl_coeff.assign(
+                        desired
+                    )
+                )
 
 
 
