@@ -341,11 +341,12 @@ class ParallelBatchPolopt(RLAlgorithm):
             shareds.min_raw_return[i] = np.min(undiscounted_raw_returns)
             shareds.max_raw_return[i] = np.max(undiscounted_raw_returns)
 
-            # bonuses
-            bonuses = np.concatenate([path["bonus_rewards"] for path in samples_data["paths"]])
-            shareds.max_bonus[i] = np.max(bonuses)
-            shareds.min_bonus[i] = np.min(bonuses)
-            shareds.sum_bonus[i] = np.sum(bonuses)
+            if self.bonus_evaluator is not None:
+                # bonuses
+                bonuses = np.concatenate([path["bonus_rewards"] for path in samples_data["paths"]])
+                shareds.max_bonus[i] = np.max(bonuses)
+                shareds.min_bonus[i] = np.min(bonuses)
+                shareds.sum_bonus[i] = np.sum(bonuses)
 
             if not self.policy.recurrent:
                 shareds.sum_ent[i] = np.sum(self.policy.distribution.entropy(
@@ -391,9 +392,10 @@ class ParallelBatchPolopt(RLAlgorithm):
                 max_raw_return = max(shareds.max_raw_return)
                 min_raw_return = min(shareds.min_raw_return)
 
-                max_bonus = max(shareds.max_bonus)
-                min_bonus = min(shareds.min_bonus)
-                average_bonus = sum(shareds.sum_bonus) / n_steps
+                if self.bonus_evaluator is not None:
+                    max_bonus = max(shareds.max_bonus)
+                    min_bonus = min(shareds.min_bonus)
+                    average_bonus = sum(shareds.sum_bonus) / n_steps
 
                 # compute explained variance
                 y_mean = sum(shareds.baseline_stats.y_sum_vec) / n_steps
@@ -429,9 +431,10 @@ class ParallelBatchPolopt(RLAlgorithm):
                 logger.record_tabular('PathLenAverage',avg_path_len)
                 logger.record_tabular('PathLenMax',max_path_len)
                 logger.record_tabular('PathLenMin',min_path_len)
-                logger.record_tabular('BonusRewardMax',max_bonus)
-                logger.record_tabular('BonusRewardMin',min_bonus)
-                logger.record_tabular('BonusRewardAverage',average_bonus)
+                if self.bonus_evaluator is not None:
+                    logger.record_tabular('BonusRewardMax',max_bonus)
+                    logger.record_tabular('BonusRewardMin',min_bonus)
+                    logger.record_tabular('BonusRewardAverage',average_bonus)
 
 
         # NOTE: These others might only work if all path data is collected
