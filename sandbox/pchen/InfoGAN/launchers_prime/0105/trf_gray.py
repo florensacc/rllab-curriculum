@@ -60,6 +60,8 @@
 
 # try kl annealing instead
 
+# try greyscale conditioning
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, Anneal
@@ -327,6 +329,7 @@ for v in variants[i:i+1]:
             nr_cond_nins=v["ar_nr_cond_nins"],
             nr_extra_nins=v["ar_nr_extra_nins"],
             extra_compute=False,
+            grayscale=True,
         )
 
         model = RegularizedHelmholtzMachine(
@@ -372,6 +375,7 @@ for v in variants[i:i+1]:
             # kl_coeff_spec=Anneal(start=0.001, end=1.0, length=60),
             adaptive_kl=True,
             ema_kl_decay=0.9,
+            input_skip=True,
             # resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
             # staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
@@ -382,7 +386,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0105_TRF_adaptive_anneal",
+            exp_prefix="0105_TRF_gray",
             seed=v["seed"],
             variant=v,
             mode="local",

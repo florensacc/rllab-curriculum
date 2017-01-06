@@ -2031,6 +2031,7 @@ class CondPixelCNN(Distribution):
             nr_logistic_mix=10,
             nr_extra_nins=0, # when this is a list, use repetively gated arch
             extra_compute=False,
+            grayscale=True,
     ):
         Serializable.quick_init(self, locals())
 
@@ -2062,6 +2063,7 @@ class CondPixelCNN(Distribution):
         self.nr_cond_nins = nr_cond_nins
         self.nr_extra_nins = nr_extra_nins
         self.extra_compute = extra_compute
+        self.grayscale = grayscale
 
     @overrides
     def init_mode(self):
@@ -2082,6 +2084,7 @@ class CondPixelCNN(Distribution):
     def infer(self, x, context=None):
         import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
         import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+        assert not self.grayscale
         x = tf.reshape(
             x,
             [-1,] + list(self._shape)
@@ -2154,6 +2157,9 @@ class CondPixelCNN(Distribution):
             x,
             [-1,] + list(self._shape)
         )
+        if self.grayscale:
+            r, g, b = x[:,:,:,0:1], x[:,:,:,1:2], x[:,:,:,2:3]
+            x = (0.299 * r) + (0.587 * g) + (0.114 * b)
         counters = {}
 
         def extra_nin(x, extra):

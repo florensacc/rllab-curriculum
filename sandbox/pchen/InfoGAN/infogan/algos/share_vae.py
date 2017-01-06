@@ -61,6 +61,8 @@ class ShareVAE(object):
             unconditional=False,
             resume_includes=None,
             adaptive_kl=False,
+            ema_kl_decay=0.99,
+            input_skip=False,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -73,6 +75,8 @@ class ShareVAE(object):
         Parameters
         ----------
         """
+        self.input_skip = input_skip
+        self.ema_kl_decay = ema_kl_decay
         self.resume_includes = resume_includes
         self.unconditional = unconditional
         self.staged = staged
@@ -213,9 +217,16 @@ class ShareVAE(object):
                 causal_feats = pixelcnn.infer_temp(
                     x
                 )
+                if self.input_skip:
+                    encoder_feats = tf.concat(
+                        3,
+                        [causal_feats, tf.reshape(x, (-1,) + pixelcnn._shape)]
+                    )
+                else:
+                    encoder_feats = causal_feats
 
                 z_var, log_p_z_given_x, z_dist_info = \
-                    self.model.encode(causal_feats, k=self.k if eval else 1)
+                    self.model.encode(encoder_feats, k=self.k if eval else 1)
 
                 if not self.noise:
                     z_var = z_dist_info["mean"]
@@ -303,7 +314,7 @@ class ShareVAE(object):
                         if self.slow_kl:
                             ema_kl = self.ema_kl
                             dict_log_vars["ema_kl"].append(ema_kl / ndim)
-                            ema_kl_decay = 0.99
+                            ema_kl_decay = self.ema_kl_decay
                             if self.slow_kl is True:
                                 # "soft" version
                                 kl, _ = tf.tuple([
@@ -868,17 +879,18 @@ class ShareVAE(object):
             **kw
     ):
         if self.adaptive_kl:
-            ema_kl = dict(zip(log_keys, log_vals))["ema_kl"]
-            cur_coeff = desired = 0.001
-            if ema_kl < self.min_kl:
-                cur_coeff = sess.run(self.kl_coeff)
-                desired = max(cur_coeff * 0.9, 0.001)
-            elif ema_kl > self.min_kl * 1.3:
-                cur_coeff = sess.run(self.kl_coeff)
-                desired = min(cur_coeff * 1.1, 1.)
-            if cur_coeff != desired:
-                sess.run(self.kl_coeff_assginment, {self.kl_coeff_assignee: desired})
-                print("\n adjusting from %s to %s "%(cur_coeff, desired))
+            if counter % int(1. / (1.-self.ema_kl_decay)) == 0:
+                ema_kl = dict(zip(log_keys, log_vals))["ema_kl"]
+                cur_coeff = desired = 0.001
+                if ema_kl < self.min_kl:
+                    cur_coeff = sess.run(self.kl_coeff)
+                    desired = max(cur_coeff * 0.9, 0.001)
+                elif ema_kl > self.min_kl * 1.3:
+                    cur_coeff = sess.run(self.kl_coeff)
+                    desired = min(cur_coeff * 1.1, 1.)
+                if not np.allclose(cur_coeff, desired):
+                    sess.run(self.kl_coeff_assginment, {self.kl_coeff_assignee: desired})
+                    print("\nema_kl:%s adjusting from %s to %s "%(ema_kl, cur_coeff, desired))
 
 
 
