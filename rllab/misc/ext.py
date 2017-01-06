@@ -122,6 +122,12 @@ def scanr(f, l, base=None):
     return list(iscanr(f, l, base))
 
 
+def delete(dict, key):
+    new_d = dict.copy()
+    new_d.pop(key)
+    return new_d
+
+
 def compile_function(inputs=None, outputs=None, updates=None, givens=None, log_name=None, **kwargs):
     import theano
     if log_name:
@@ -221,7 +227,6 @@ def using_seed(seed):
     yield
     random.setstate(rand_state)
     np.random.set_state(np_rand_state)
-
 
 
 def get_seed():
@@ -356,6 +361,8 @@ Assume:
 1. each of f's inputs is iterable and composed of multiple "samples"
 2. outputs can be averaged over "samples"
 """
+
+
 def sliced_fun(f, n_slices):
     def sliced_f(sliced_inputs, non_sliced_inputs=None):
         if non_sliced_inputs is None:

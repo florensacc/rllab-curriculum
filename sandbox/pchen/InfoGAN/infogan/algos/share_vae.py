@@ -9,6 +9,7 @@ import numpy as np
 from progressbar import ETA, Bar, Percentage, ProgressBar
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Bernoulli, Gaussian, Mixture, DiscretizedLogistic, ConvAR
 import rllab.misc.logger as logger
+from rllab.misc.ext import delete
 import sys
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp, flatten, assign_to_gpu, \
     average_grads, temp_restore
@@ -59,6 +60,7 @@ class ShareVAE(object):
             staged=False,
             unconditional=False,
             resume_includes=None,
+            adaptive_kl=False,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -86,14 +88,19 @@ class ShareVAE(object):
             optimizer_cls = eval(optimizer_cls)
         self.noise = noise
         self.kl_coeff_spec = kl_coeff_spec
-        if kl_coeff_spec is None:
+        if kl_coeff_spec is None and (not adaptive_kl):
             self.kl_coeff = kl_coeff
         else:
             self.kl_coeff = tf.Variable(
-                initial_value=kl_coeff_spec(0),
+                initial_value=kl_coeff_spec(0) if kl_coeff_spec else 0.001,
                 trainable=False,
                 name="kl_coeff"
             )
+        if adaptive_kl:
+            assert min_kl != 0.
+            self.kl_coeff_assignee = tf.placeholder(tf.float32)
+            self.kl_coeff_assginment = self.kl_coeff.assign(self.kl_coeff_assignee)
+        self.adaptive_kl = adaptive_kl
         self.anneal_factor = anneal_factor
         self.anneal_every = anneal_every
         self.img_on = img_on
@@ -274,6 +281,7 @@ class ShareVAE(object):
                         kl if self.kl_coeff != 0. else 0.
                     )
                     if self.min_kl_onesided:
+                        assert not self.adaptive_kl
                         avg_log_p_sg_z = tf.reduce_mean(
                             # self.model.latent_dist.logli_prior(
                             #     tf.stop_gradient(z_var)
@@ -317,6 +325,8 @@ class ShareVAE(object):
                                 kl,
                                 self.min_kl * ndim
                             )
+                        if self.adaptive_kl:
+                            surr_kl = kl
                         vlb = tf.reduce_mean(log_p_x_given_z) - (
                             surr_kl * self.kl_coeff * self.staged_cond_mask
                             if self.kl_coeff != 0 else 0.
@@ -661,6 +671,10 @@ class ShareVAE(object):
                         feed
                     )[1:]
                     all_log_vals.append(log_vals)
+
+                    self.post_iter_hook(
+                        **delete(locals(), "self")
+                    )
                     # if any(np.any(np.isnan(val)) for val in log_vals):
                     #     print("NaN detected! ")
                     #     # if self.ema:
@@ -847,6 +861,26 @@ class ShareVAE(object):
 
     def iter_hook(self, **kw):
         pass
+
+    def post_iter_hook(
+            self,
+            log_vals, log_keys, sess, counter,
+            **kw
+    ):
+        if self.adaptive_kl:
+            ema_kl = dict(zip(log_keys, log_vals))["ema_kl"]
+            cur_coeff = desired = 0.001
+            if ema_kl < self.min_kl:
+                cur_coeff = sess.run(self.kl_coeff)
+                desired = max(cur_coeff * 0.9, 0.001)
+            elif ema_kl > self.min_kl * 1.3:
+                cur_coeff = sess.run(self.kl_coeff)
+                desired = min(cur_coeff * 1.1, 1.)
+            if cur_coeff != desired:
+                sess.run(self.kl_coeff_assginment, {self.kl_coeff_assignee: desired})
+                print("\n adjusting from %s to %s "%(cur_coeff, desired))
+
+
 
     def ar_vis(self, sess, feed, vars):
         import scipy
