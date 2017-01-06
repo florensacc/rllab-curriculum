@@ -90,6 +90,7 @@ class OnlineAlgorithm(RLAlgorithm):
         with self.sess.as_default():
             self._init_tensorflow_ops()
         self.es_path_returns = []
+        self.es_path_lengths = []
 
         #HT: in general, VectorizedSampler can significantly reduce
         # PolicyExecTime, but not EnvExecTime. The latter consumes more
@@ -149,6 +150,7 @@ class OnlineAlgorithm(RLAlgorithm):
                         observation = self.env.reset()
                         self.exploration_strategy.reset()
                         self.es_path_returns.append(path_return)
+                        self.es_path_lengths.append(path_length)
                         path_length = 0
                         path_return = 0
                     else:
@@ -162,8 +164,12 @@ class OnlineAlgorithm(RLAlgorithm):
                     gt.stamp('train: updates')
 
                 # testing ---------------------------------
+                train_info = dict(
+                    es_path_returns=self.es_path_returns,
+                    es_path_lengths=self.es_path_lengths,
+                )
                 if self.n_eval_samples > 0:
-                    self.evaluate(epoch, self.es_path_returns)
+                    self.evaluate(epoch, train_info)
                     self.es_path_returns = []
                 gt.stamp("test")
 

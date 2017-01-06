@@ -40,13 +40,13 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/c_mddpg/" + exp_index
-mode = "local"
+mode = "ec2"
 ec2_instance = "c4.4xlarge"
 subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 config.AWS_IMAGE_ID = "ami-309ccd50" # with docker already pulled
 
-n_task_per_instance = 1
+n_task_per_instance = 10
 n_parallel = 1 # only for local exp
 snapshot_mode = "gap"
 snapshot_gap = 10
@@ -66,7 +66,7 @@ class VG(VariantGenerator):
         ]
     @variant
     def K(self):
-        return [8, 16, 32]
+        return [4,8, 16, 32]
 
     @variant
     def alpha(self):

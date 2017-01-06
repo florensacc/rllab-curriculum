@@ -1,7 +1,7 @@
 """
 Conservative version of MDDPG
 
-Try SVGD with the pre-computed Q^*
+Try SVGD with the pre-computed Q^*. Try switching a head per time step.
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
@@ -64,11 +64,11 @@ class VG(VariantGenerator):
         ]
     @variant
     def K(self):
-        return [4, 8, 16, 32]
+        return [4, 8, 16]
 
     @variant
     def alpha(self):
-        return [0, 0.01, 0.1, 1, 10]
+        return [0, 0.01, 0.1, 1]
 
     @variant
     def sigma(self):
@@ -93,8 +93,8 @@ class VG(VariantGenerator):
     @variant
     def switch_type(self):
         return [
-            # "per_action",
-            "per_path"
+            "per_action",
+            # "per_path"
         ]
 
     @variant
@@ -138,7 +138,7 @@ for v in variants:
         ddpg_kwargs = dict(
             epoch_length=1000,
             batch_size=64,
-            n_epochs=100,
+            n_epochs=50,
         )
     ddpg_kwargs.update(shared_ddpg_kwargs)
     if env_name == "hopper":

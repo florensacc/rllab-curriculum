@@ -85,7 +85,7 @@ class MDDPG(OnlineAlgorithm):
     @overrides
     def _init_tensorflow_ops(self):
         # Initialize variables for get_copy to work
-        self.sess.run(tf.initialize_all_variables())
+        self.sess.run(tf.global_variables_initializer())
         self.target_policy = self.policy.get_copy(
             scope_name=TARGET_PREFIX + self.policy.scope_name,
         )
@@ -128,7 +128,7 @@ class MDDPG(OnlineAlgorithm):
         if not self.only_train_critic:
             self._init_actor_ops()
         self._init_target_ops()
-        self.sess.run(tf.initialize_all_variables())
+        self.sess.run(tf.global_variables_initializer())
 
     def _init_critic_ops(self):
         self.all_target_qs = [
@@ -382,7 +382,7 @@ class MDDPG(OnlineAlgorithm):
         }
 
     @overrides
-    def evaluate(self, epoch, es_path_returns):
+    def evaluate(self, epoch, train_info):
         logger.log("Collecting samples for evaluation")
         paths = self.eval_sampler.obtain_samples(
             itr=epoch,
@@ -450,6 +450,7 @@ class MDDPG(OnlineAlgorithm):
             create_stats_ordered_dict('KappaSum',kappa_sum)
         )
 
+        es_path_returns = train_info["es_path_returns"]
         if len(es_path_returns) == 0 and epoch == 0:
             es_path_returns = [0]
         if len(es_path_returns) > 0:
@@ -458,6 +459,15 @@ class MDDPG(OnlineAlgorithm):
             train_returns = np.asarray(es_path_returns) / self.scale_reward
             self.last_statistics.update(create_stats_ordered_dict(
                 'TrainingReturns', train_returns))
+
+        es_path_lengths = train_info["es_path_lengths"]
+        if len(es_path_lengths) == 0 and epoch == 0:
+            es_path_lengths = [0]
+        if len(es_path_lengths) > 0:
+            # if eval is too often, training may not even have collected a full
+            # path
+            self.last_statistics.update(create_stats_ordered_dict(
+                'TrainingPathLengths', es_path_lengths))
 
         true_env = self.env
         while isinstance(true_env,ProxyEnv):

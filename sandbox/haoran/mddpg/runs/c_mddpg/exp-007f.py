@@ -1,7 +1,7 @@
 """
 Conservative version of MDDPG
 
-Try SVGD with the pre-computed Q^*
+Continue exp-007d, with larger K
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
@@ -17,6 +17,7 @@ from sandbox.haoran.myscripts.envs import EnvChooser
 from sandbox.rocky.tf.envs.base import TfEnv
 from rllab.envs.normalized_env import normalize
 from rllab.exploration_strategies.ou_strategy import OUStrategy
+from sandbox.haoran.mddpg.gaussian_strategy import GaussianStrategy
 from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 from sandbox.haoran.mddpg.qfunctions.interpolate_qfunction \
     import InterpolateQFunction, DataLoader
@@ -39,14 +40,14 @@ from rllab.misc.instrument import VariantGenerator, variant
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/c_mddpg/" + exp_index
 mode = "ec2"
-ec2_instance = "c4.2xlarge"
+ec2_instance = "c4.4xlarge"
 subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
-config.AWS_IMAGE_ID = "ami-309ccd50" # with docker already pulled
+config.AWS_IMAGE_ID = "ami-85d181e5" # with docker already pulled
 
-n_task_per_instance = 10
-n_parallel = 4 # only for local exp
-snapshot_mode = "all"
+n_task_per_instance = 5
+n_parallel = 1 # only for local exp
+snapshot_mode = "gap"
 snapshot_gap = 10
 plot = False
 sync_s3_pkl = True
@@ -55,7 +56,7 @@ sync_s3_pkl = True
 class VG(VariantGenerator):
     @variant
     def zzseed(self):
-        return [0,100,200,300,400,500,600,700,800,900]
+        return [0,100,200,300,400]
 
     @variant
     def env_name(self):
@@ -64,11 +65,11 @@ class VG(VariantGenerator):
         ]
     @variant
     def K(self):
-        return [4, 8, 16, 32]
+        return [32, 64, 128]
 
     @variant
     def alpha(self):
-        return [0, 0.01, 0.1, 1, 10]
+        return [0, 0.1]
 
     @variant
     def sigma(self):
@@ -76,7 +77,7 @@ class VG(VariantGenerator):
 
     @variant
     def max_path_length(self):
-        return [15]
+        return [100]
 
     @variant
     def policy_learning_rate(self):
@@ -84,7 +85,7 @@ class VG(VariantGenerator):
 
     @variant
     def theta(self):
-        return [0]
+        return [0.15]
 
     @variant
     def qf_extra_training(self):
@@ -103,6 +104,15 @@ class VG(VariantGenerator):
             # "mean",
             "max"
         ]
+    @variant
+    def exploration_strategy(self):
+        return [
+            # "gaussian",
+            "OU",
+        ]
+    @variant
+    def scale_reward(self):
+        return [0.1]
 
 variants = VG().variants()
 batch_tasks = []
@@ -117,6 +127,7 @@ for v in variants:
     adaptive_kernel = True
     sigma = v["sigma"]
     theta = v["theta"]
+    ou_sigma = 0.3
 
     shared_ddpg_kwargs = dict(
         alpha=v["alpha"],
@@ -124,14 +135,14 @@ for v in variants:
         policy_learning_rate=v["policy_learning_rate"],
         qf_extra_training=v["qf_extra_training"],
         q_target_type = v["q_target_type"],
-        only_train_actor=True,
+        scale_reward=v["scale_reward"],
     )
     if mode == "local_test" or mode == "local_docker_test":
         ddpg_kwargs = dict(
             epoch_length = 1000,
-            min_pool_size = 2,
+            min_pool_size = 100,
             eval_samples = 100,
-            n_epochs=50,
+            n_epochs=5,
             batch_size=64,
         )
     else:
@@ -139,6 +150,7 @@ for v in variants:
             epoch_length=1000,
             batch_size=64,
             n_epochs=100,
+            eval_samples=100,
         )
     ddpg_kwargs.update(shared_ddpg_kwargs)
     if env_name == "hopper":
@@ -198,28 +210,34 @@ for v in variants:
 
     # construct objects ----------------------------------
     env_chooser = EnvChooser()
-    env = TfEnv(normalize(env_chooser.choose_env(env_name,**env_kwargs)))
+    env = TfEnv(normalize(
+        env_chooser.choose_env(env_name,**env_kwargs)
+    ))
 
-    data_file = "sandbox/haoran/mddpg/envs/multi_goal_goal_4_grid_0.5.pkl"
-    if "ec2" in mode:
-        data_file = "/root/code/rllab/" + data_file
-        # need to use absolute path, since the python command is not executed
-        # in the rllab directory
-    data_loader = DataLoader(data_file, 'mQ')
-    grid_size = 0.5
-    s_grid_sizes = [grid_size] * 2
-    a_grid_sizes = s_grid_sizes
-    qf = InterpolateQFunction(
-        scope_name="qf",
-        discrete_Q=data_loader.load(),
-        env_spec=env.spec,
-        s_grid_sizes=s_grid_sizes,
-        a_grid_sizes=a_grid_sizes,
+    qf = FeedForwardCritic(
+        "critic",
+        env.observation_space.flat_dim,
+        env.action_space.flat_dim,
+        observation_hidden_sizes=(100,),
+        embedded_hidden_sizes=(100,),
     )
-
+    if v["exploration_strategy"] == "OU":
+        substrategy = OUStrategy(
+            env_spec=env.spec,
+            theta=theta,
+            sigma=ou_sigma
+        )
+    elif v["exploration_strategy"] == "gaussian":
+        substrategy = GaussianStrategy(
+            env_spec=env.spec,
+            mu=0,
+            sigma=1.0,
+        )
+    else:
+        raise NotImplementedError
     es = MNNStrategy(
         K=K,
-        substrategy=OUStrategy(env_spec=env.spec,theta=theta),
+        substrategy=substrategy,
         switch_type=v["switch_type"],
     )
     policy = FeedForwardMultiPolicy(
@@ -228,7 +246,7 @@ for v in variants:
         env.action_space.flat_dim,
         K=K,
         shared_hidden_sizes=tuple(),
-        independent_hidden_sizes=(8,8),
+        independent_hidden_sizes=(100,100),
     )
     if K > 1 and adaptive_kernel:
         kernel = SimpleAdaptiveDiagonalGaussianKernel(
@@ -277,7 +295,7 @@ for v in variants:
             sync_s3_log=True,
             sync_log_on_termination=True,
             sync_all_data_node_to_s3=True,
-            terminate_machine="test" not in mode,
+            terminate_machine=True,
         )
         batch_tasks = []
         if "test" in mode:
