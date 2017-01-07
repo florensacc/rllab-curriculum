@@ -39,6 +39,7 @@ class OnlineAlgorithm(RLAlgorithm):
             max_path_length=1000,
             eval_samples=10000,
             scale_reward=1.,
+            scale_reward_annealer=None,
             render=False,
     ):
         """
@@ -72,6 +73,7 @@ class OnlineAlgorithm(RLAlgorithm):
         self.max_path_length = max_path_length
         self.n_eval_samples = eval_samples
         self.scale_reward = scale_reward
+        self.scale_reward_annealer = scale_reward_annealer
         self.render = render
 
         self.observation_dim = self.env.observation_space.flat_dim
@@ -121,6 +123,7 @@ class OnlineAlgorithm(RLAlgorithm):
             for epoch in gt.timed_for(
                 range(self.n_epochs),save_itrs=True
             ):
+                self.update_training_settings(epoch)
                 logger.push_prefix('Epoch #%d | ' % epoch)
                 for _ in range(self.epoch_length):
                     # sampling
@@ -188,6 +191,7 @@ class OnlineAlgorithm(RLAlgorithm):
                 logger.record_tabular("time: train",train_time)
                 logger.record_tabular("time: eval",eval_time)
                 logger.record_tabular("time: total",total_time)
+                logger.record_tabular("scale_reward", self.scale_reward)
                 logger.dump_tabular(with_prefix=False)
                 logger.pop_prefix()
                 gt.stamp("logging")
@@ -270,3 +274,7 @@ class OnlineAlgorithm(RLAlgorithm):
         :return: Dictionary of statistics.
         """
         return
+
+    def update_training_settings(self, epoch):
+        if self.scale_reward_annealer is not None:
+            self.scale_reward = self.scale_reward_annealer.get_new_value(epoch)
