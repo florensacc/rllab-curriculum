@@ -2031,7 +2031,7 @@ class CondPixelCNN(Distribution):
             nr_logistic_mix=10,
             nr_extra_nins=0, # when this is a list, use repetively gated arch
             extra_compute=False,
-            grayscale=True,
+            grayscale=False,
     ):
         Serializable.quick_init(self, locals())
 

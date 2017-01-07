@@ -1,64 +1,15 @@
-# inherit from pool_encoder_arch_on_overfit
-# test better setting to more symmetric network & try more rep
+# super big model on image net
 
+# from imgnet_32.py
+# eval seems to take up some cycles -> trim it down a lot
+# code seems killed -> much more generous freebits
 
-# more rep -> code not used! this means designing an architecture to make
-# sure information propogates is very important as expected!
+# kl never exceeds 0.02 under expfreebits
+# trying kl annealing instead
 
-# train/test don't really get better
+# annealing ok; but might need bigger model
 
-# mgpu version and ardepth12
-
-# sparse adamax to deal with instabitlity when nar=2 (not surprising!_
-
-
-# just test the pixelcnn part
-
-# test tim's better pixelcnn
-
-# 80 epochs to get under 3.10 and appraoching 3.0 in 200 epochs
-
-# scaling down to observe performance difference
-
-# sharing lvae
-# fix kl accounting & nr_cond_nins sweep
-
-# observe that nr_cond_nins didnt make that much a difference; but 64 featmaps much better than 32
-
-# this experiment explores
-# 1. staged training so that the unconditional pixelcnn approximately finishes training before conditional part starts
-# 2. varying the number of extra_nins to see if a more powerful pixelcnn is needed
-
-# gain going from 64 -> 92 (0.01)
-# some gain from 0 extranin -> 1 extra nin (0.01)
-# staging introduced however instability when cond is turned on
-
-# ^ this hence explores no kl
-
-# this is based on the observation that as kl is used more, overfitting is started to be observed.
-# try smaller vae
-
-# error: no nar used!
-
-# using nar & experiment with radically smaller min kl
-
-# try smaller receptive field, unconditional resnets=3 seems to do very well on its own
-# resume above with larger llr^
-
-### try tiny receptive field: left 3 up 4
-# but maintain a good amount of computation
-
-# try repetiviely shortcircuted gated pixelcnn to expand parameters rather than extranins
-# larger pixelcnn
-
-# deeper pixelcnn
-
-# [0,0,1,1] grows faster in the beginning but approaching the same point as [0]*4.
-# meaning vae part becomes the bottleneck
-
-# try deeper iaf & af
-
-# try kl annealing instead
+# fix anneal
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -68,7 +19,7 @@ from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Categorica
 
 import os
 from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDataset, BinarizedMnistDataset, \
-    ResamplingBinarizedMnistDataset, ResamplingBinarizedOmniglotDataset, Cifar10Dataset
+    ResamplingBinarizedMnistDataset, ResamplingBinarizedOmniglotDataset, Cifar10Dataset, ImageNet32Dataset
 from sandbox.pchen.InfoGAN.infogan.models.regularized_helmholtz_machine import RegularizedHelmholtzMachine
 from sandbox.pchen.InfoGAN.infogan.algos.vae import VAE
 from sandbox.pchen.InfoGAN.infogan.misc.utils import mkdir_p, set_seed, skip_if_exception
@@ -101,22 +52,26 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [256, ]#[12, 32]
+        return [1024, ]#[12, 32]
         # return [256*2, ]#[12, 32]
 
     @variant
     def min_kl(self):
-        return [0.07, 0.15, 0.03]# 0.1]
+        return [0.04]# 0.1]
     #
     @variant(hide=False)
     def network(self):
-        # yield "pixelcnn_based_shared_spatial_code"
-        yield "pixelcnn_based_shared_spatial_code_tiny"
+        yield "pixelcnn_based_shared_spatial_code"
+        # yield "pixelcnn_based_shared_spatial_code_tiny"
         # yield "dummy"
+
+    @variant()
+    def rep(self):
+        return [1]
 
     @variant(hide=False)
     def base_filters(self, ):
-        return [64]
+        return [32]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -124,7 +79,8 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def k(self, num_gpus):
-        return [batch_size // num_gpus, ]
+        return [1]
+        # return [batch_size // num_gpus, ]
 
     @variant(hide=False)
     def num_gpus(self):
@@ -137,11 +93,20 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [8, ]
+        return [0, ]
 
     @variant(hide=False)
     def i_nr(self):
-        return [5,]
+        return [2,]
+
+    @variant(hide=False)
+    def nar(self, ):
+        return [6,]
+
+    @variant(hide=False)
+    def nr(self, zdim, base_filters):
+        return [4]
+
 
     @variant(hide=False)
     def i_context(self):
@@ -159,7 +124,7 @@ class VG(VariantGenerator):
 
     @variant(hide=True)
     def max_epoch(self, ):
-        yield 3000
+        yield 30000
 
     @variant(hide=True)
     def anneal_after(self, max_epoch):
@@ -167,7 +132,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def context_dim(self, base_filters):
-        return [base_filters]
+        return [base_filters*3]
         return [32]
         return [64]
 
@@ -178,102 +143,34 @@ class VG(VariantGenerator):
     @variant(hide=False)
     def ar_nr_resnets(self, num_gpus):
         return [
-            (1,)
+            (1,),
         ]
 
     @variant(hide=False)
     def ar_nr_cond_nins(self, num_gpus):
         return [
-            1,
+            2,
         ]
-
-    # @variant(hide=False)
-    # def ar_nr_extra_nins(self, num_gpus):
-    #     return [
-    #         2,
-    #     ]
-    #
-    # @variant
-    # def enc_tie_weights(self):
-    #     return [True, ]
-    #
-    # @variant
-    # def unconditional(self):
-    #     return [True, False]
-    #
-    # @variant(hide=False)
-    # def nar(self, unconditional):
-    #     return [0 if unconditional else 4,]
-    #
-    # @variant(hide=False)
-    # def rep(self, unconditional):
-    #     if unconditional:
-    #         return [1, ]
-    #     else:
-    #         return [1, 3]
 
     @variant(hide=False)
     def ar_nr_extra_nins(self, num_gpus):
         return [
             # [0,0], # 1min15s, 660k infer params
-            # [0,0,0], # 1min40s, 1M infer params
-            [0,0,0,0],
-            # [0,0,1,1,]
-            # [1,]*7
+            # [0,0,0], # 1min10s, 892k infer params
+            # [0,0,1,1,1],
+            # [1,]*5,
+            # [0,]*7,
+            # [1,]*6,
+            # [1,]*10,
+            [1,1,1,4],
         ]
-
-    @variant
-    def enc_tie_weights(self):
-        return [True, ]
-
-    @variant
-    def unconditional(self):
-        return [False, ]
-
-    @variant(hide=False)
-    def nar(self, i_nar):
-        return [i_nar,]
-
-    @variant(hide=False)
-    def nr(self, unconditional):
-        return [4,]
-
-    @variant(hide=False)
-    def rep(self, unconditional):
-        return [1]
-
-    # @variant(hide=False)
-    # def ar_nr_extra_nins(self, num_gpus):
-    #     return [
-    #         2,
-    #     ]
-    #
-    # @variant
-    # def enc_tie_weights(self):
-    #     return [True, ]
-    #
-    # @variant
-    # def unconditional(self):
-    #     return [False]
-    #
-    # @variant(hide=False)
-    # def nar(self, unconditional):
-    #     return [6,]
-    #
-    # @variant(hide=False)
-    # def nr(self, zdim, base_filters):
-    #     return [8]
-    #
-    # @variant(hide=False)
-    # def rep(self, unconditional):
-    #     return [3]
 
 vg = VG()
 
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 2
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -286,7 +183,8 @@ for v in variants[i:i+1]:
 
         print("Exp name: %s" % exp_name)
 
-        dataset = Cifar10Dataset()
+        # dataset = Cifar10Dataset()
+        dataset = ImageNet32Dataset()
 
         dist = Gaussian(zdim)
         for _ in range(v["nar"]):
@@ -313,10 +211,12 @@ for v in variants[i:i+1]:
                 zdim,
                 inf_dist,
                 neuron_ratio=v["i_nr"],
+                data_init_wnorm=True,
                 data_init_scale=0.01,
                 linear_context="linear" in v["i_context"],
                 gating_context="gating" in v["i_context"],
                 share_context=True,
+                var_scope=None,
                 img_shape=[8,8,zdim//64],
                 mean_only=True,
             )
@@ -340,9 +240,9 @@ for v in variants[i:i+1]:
             network_args=dict(
                 cond_rep=v["cond_rep"],
                 base_filters=v["base_filters"],
+                filter_size=3,
                 enc_rep=v["rep"],
                 dec_rep=v["rep"],
-                enc_tie_weights=v["enc_tie_weights"],
             ),
         )
 
@@ -360,18 +260,18 @@ for v in variants[i:i+1]:
             monte_carlo_kl=True,
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=1000*5,
+            vali_eval_interval=10000 * 3, # 3 epochs per eval roughly
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
             num_gpus=v["num_gpus"],
             vis_ar=False,
             slow_kl=True,
-            unconditional=v["unconditional"],
-            # kl_coeff=0. if v["unconditional"] else 1,
-            # kl_coeff_spec=Anneal(start=0.001, end=1.0, length=60),
+            unconditional=False,
+            # kl_coeff_spec=Anneal(start=0.001, end=1.0, length=15),
             adaptive_kl=True,
             ema_kl_decay=0.9,
+            # updates_per_epoch=50,
             # resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
             # staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
@@ -382,7 +282,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0105_TRF_adaptive_anneal",
+            exp_prefix="0105_imgnet_32_FIXanneal_bigger",
             seed=v["seed"],
             variant=v,
             mode="local",

@@ -890,7 +890,10 @@ class ShareVAE(object):
                     desired = min(cur_coeff * 1.1, 1.)
                 if not np.allclose(cur_coeff, desired):
                     sess.run(self.kl_coeff_assginment, {self.kl_coeff_assignee: desired})
-                    print("\nema_kl:%s adjusting from %s to %s "%(ema_kl, cur_coeff, desired))
+                    logger.log("\nema_kl:%s adjusting from %s to %s "%(ema_kl, cur_coeff, desired))
+            if counter % self.updates_per_epoch == 0:
+                cur_coeff = sess.run(self.kl_coeff)
+                logger.log("current coeff %s" % cur_coeff)
 
 
 

@@ -57,7 +57,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.]# 0.1]
+        return [0.04]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -260,7 +260,7 @@ for v in variants[i:i+1]:
             monte_carlo_kl=True,
             min_kl=v["min_kl"],
             k=v["k"],
-            vali_eval_interval=10000 * 3, # 3 epochs per eval roughly
+            vali_eval_interval=10000 * 3 * 3, # 9 epochs per eval roughly
             exp_avg=v["exp_avg"],
             anneal_after=v["anneal_after"],
             img_on=False,
@@ -268,7 +268,10 @@ for v in variants[i:i+1]:
             vis_ar=False,
             slow_kl=True,
             unconditional=False,
-            kl_coeff_spec=Anneal(start=0.001, end=1.0, length=15),
+            adaptive_kl=True,
+            ema_kl_decay=0.9,
+            # input_skip=True,
+            # kl_coeff_spec=Anneal(start=0.001, end=1.0, length=15),
             # updates_per_epoch=50,
             # resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
             # staged=True,

@@ -1484,11 +1484,11 @@ class RegularizedHelmholtzMachine(object):
                          tf.ones([1, self.inference_dist.dist_flat_dim])
                          )
                     decoder = (pt.template('input', self.book).
-                               apply(tf.reduce_sum, None, True)
+                               apply(tf.reduce_sum, 1, True)
                     )
                     self.decoder_template = (
                         decoder*0. +
-                        tf.zeros([1, self.output_dist.dim * cond_rep])
+                        tf.zeros([1, self.output_dist.dim * cond_rep // 3])
                     )
             elif self.network_type == "resv1_k3_pixel_bias_filters_ratio_32_global_pool":
                 from prettytensor import UnboundVariable

@@ -60,6 +60,8 @@
 
 # try kl annealing instead
 
+# try a much bigger vae
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, Anneal
@@ -101,17 +103,17 @@ class VG(VariantGenerator):
 
     @variant
     def zdim(self):
-        return [256, ]#[12, 32]
+        return [1024, ]#[12, 32]
         # return [256*2, ]#[12, 32]
 
     @variant
     def min_kl(self):
-        return [0.07, 0.15, 0.03]# 0.1]
+        return [0.07, ]# 0.1]
     #
     @variant(hide=False)
     def network(self):
-        # yield "pixelcnn_based_shared_spatial_code"
-        yield "pixelcnn_based_shared_spatial_code_tiny"
+        yield "pixelcnn_based_shared_spatial_code"
+        # yield "pixelcnn_based_shared_spatial_code_tiny"
         # yield "dummy"
 
     @variant(hide=False)
@@ -137,19 +139,19 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [8, ]
+        return [4, ]
 
     @variant(hide=False)
     def i_nr(self):
-        return [5,]
+        return [2,]
 
     @variant(hide=False)
     def i_context(self):
         # return [True, False]
         return [
-            [],
+            # [],
             # ["linear"],
-            # ["gating"],
+            ["gating"],
             # ["linear", "gating"]
         ]
 
@@ -187,31 +189,6 @@ class VG(VariantGenerator):
             1,
         ]
 
-    # @variant(hide=False)
-    # def ar_nr_extra_nins(self, num_gpus):
-    #     return [
-    #         2,
-    #     ]
-    #
-    # @variant
-    # def enc_tie_weights(self):
-    #     return [True, ]
-    #
-    # @variant
-    # def unconditional(self):
-    #     return [True, False]
-    #
-    # @variant(hide=False)
-    # def nar(self, unconditional):
-    #     return [0 if unconditional else 4,]
-    #
-    # @variant(hide=False)
-    # def rep(self, unconditional):
-    #     if unconditional:
-    #         return [1, ]
-    #     else:
-    #         return [1, 3]
-
     @variant(hide=False)
     def ar_nr_extra_nins(self, num_gpus):
         return [
@@ -236,7 +213,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nr(self, unconditional):
-        return [4,]
+        return [2,]
 
     @variant(hide=False)
     def rep(self, unconditional):
@@ -273,7 +250,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 2
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
