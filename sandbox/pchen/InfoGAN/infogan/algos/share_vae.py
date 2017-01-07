@@ -76,6 +76,7 @@ class ShareVAE(object):
         Parameters
         ----------
         """
+        self.deep_cond = deep_cond
         self.input_skip = input_skip
         self.ema_kl_decay = ema_kl_decay
         self.resume_includes = resume_includes
@@ -217,17 +218,20 @@ class ShareVAE(object):
             x = xs[i]
             with tf.device(assign_to_gpu(i)):
                 # get activations of pixelcnn
-                causal_feats = pixelcnn.infer_temp(
-                    x
-                )
-                logger.log("causal_feats")
-                if self.input_skip:
-                    encoder_feats = tf.concat(
-                        3,
-                        [causal_feats, tf.reshape(x, (-1,) + pixelcnn._shape)]
-                    )
+                if self.deep_cond:
+                    encoder_feats = tf.reshape(x, (-1,) + pixelcnn._shape)
                 else:
-                    encoder_feats = causal_feats
+                    causal_feats = pixelcnn.infer_temp(
+                        x
+                    )
+                    logger.log("causal_feats")
+                    if self.input_skip:
+                        encoder_feats = tf.concat(
+                            3,
+                            [causal_feats, tf.reshape(x, (-1,) + pixelcnn._shape)]
+                        )
+                    else:
+                        encoder_feats = causal_feats
 
                 z_var, log_p_z_given_x, z_dist_info = \
                     self.model.encode(encoder_feats, k=self.k if eval else 1)
@@ -240,6 +244,9 @@ class ShareVAE(object):
                 # get raw conditional feats to avoid changing helmhpltz machine
                 cond_feats = self.model.decode(z_var, raw=True)
                 logger.log("decoded")
+
+                if self.deep_cond:
+                    causal_feats = pixelcnn.infer_temp(x, context=cond_feats)
                 x_dist_info = dict(
                     causal_feats=causal_feats,
                     cond_feats=cond_feats * self.staged_cond_mask,

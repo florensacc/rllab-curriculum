@@ -2167,6 +2167,13 @@ class CondPixelCNN(Distribution):
                 x = nn.gated_resnet(x, conv=nn.nin)
             return x
 
+        if context is not None:
+            with scopes.arg_scope(
+                    [nn.down_shifted_conv2d, nn.down_right_shifted_conv2d, nn.down_shifted_deconv2d, nn.down_right_shifted_deconv2d, nn.nin],
+                    counters=counters, init=self._custom_phase == CustomPhase.init, ema=None,
+            ):
+                context = nn.nin(context, self.nr_filters*2)
+
         with scopes.arg_scope(
                 [nn.down_shifted_conv2d, nn.down_right_shifted_conv2d, nn.down_shifted_deconv2d, nn.down_right_shifted_deconv2d, nn.nin],
                 counters=counters, init=self._custom_phase == CustomPhase.init, ema=None,
