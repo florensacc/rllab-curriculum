@@ -170,7 +170,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 2
+i = 1
 for v in variants[i:i+1]:
 
     # with skip_if_exception():

@@ -63,6 +63,7 @@ class ShareVAE(object):
             adaptive_kl=False,
             ema_kl_decay=0.99,
             input_skip=False,
+            deep_cond=False,
     ):
         """
         :type model: RegularizedHelmholtzMachine

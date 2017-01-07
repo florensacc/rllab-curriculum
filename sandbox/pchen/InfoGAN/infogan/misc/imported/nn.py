@@ -284,10 +284,13 @@ def gated_resnet(x, nonlinearity=concat_elu, conv=conv2d, **kwargs):
     return x+c3
 
 @scopes.add_arg_scope
-def aux_gated_resnet(x, u, nonlinearity=concat_elu, conv=conv2d, **kwargs):
+def aux_gated_resnet(x, u, nonlinearity=concat_elu, conv=conv2d, context=None, **kwargs):
     num_filters = int(x.get_shape()[-1])
     c1 = conv(nonlinearity(x), num_filters, nonlinearity=None, **kwargs) + nin(nonlinearity(u), num_filters, nonlinearity=None, **kwargs)
     c2 = nin(nonlinearity(c1), num_filters*2, nonlinearity=None, init_scale=0.1, **kwargs)
+    if context is not None:
+        print("using context!")
+        c2 = c2 + context
     c3 = c2[:,:,:,:num_filters] * tf.nn.sigmoid(c2[:,:,:,num_filters:])
     return x+c3
 

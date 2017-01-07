@@ -60,8 +60,8 @@
 
 # try kl annealing instead
 
-# try greyscale conditioning
-# 0.07 got stuck; suspect it needs more bits to make optimization smooth
+# try a much bigger vae
+# deeper
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -109,12 +109,12 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.07, 0.14]# 0.1]
+        return [0.025, ]# 0.1]
     #
     @variant(hide=False)
     def network(self):
-        # yield "pixelcnn_based_shared_spatial_code"
-        yield "pixelcnn_based_shared_spatial_code_tiny"
+        yield "pixelcnn_based_shared_spatial_code"
+        # yield "pixelcnn_based_shared_spatial_code_tiny"
         # yield "dummy"
 
     @variant(hide=False)
@@ -140,7 +140,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [8, ]
+        return [4, ]
 
     @variant(hide=False)
     def i_nr(self):
@@ -150,9 +150,9 @@ class VG(VariantGenerator):
     def i_context(self):
         # return [True, False]
         return [
-            [],
+            # [],
             # ["linear"],
-            # ["gating"],
+            ["gating"],
             # ["linear", "gating"]
         ]
 
@@ -190,31 +190,6 @@ class VG(VariantGenerator):
             1,
         ]
 
-    # @variant(hide=False)
-    # def ar_nr_extra_nins(self, num_gpus):
-    #     return [
-    #         2,
-    #     ]
-    #
-    # @variant
-    # def enc_tie_weights(self):
-    #     return [True, ]
-    #
-    # @variant
-    # def unconditional(self):
-    #     return [True, False]
-    #
-    # @variant(hide=False)
-    # def nar(self, unconditional):
-    #     return [0 if unconditional else 4,]
-    #
-    # @variant(hide=False)
-    # def rep(self, unconditional):
-    #     if unconditional:
-    #         return [1, ]
-    #     else:
-    #         return [1, 3]
-
     @variant(hide=False)
     def ar_nr_extra_nins(self, num_gpus):
         return [
@@ -243,7 +218,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def rep(self, unconditional):
-        return [1]
+        return [2]
 
     # @variant(hide=False)
     # def ar_nr_extra_nins(self, num_gpus):
@@ -276,7 +251,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 1
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -330,7 +305,6 @@ for v in variants[i:i+1]:
             nr_cond_nins=v["ar_nr_cond_nins"],
             nr_extra_nins=v["ar_nr_extra_nins"],
             extra_compute=False,
-            grayscale=True,
         )
 
         model = RegularizedHelmholtzMachine(
@@ -376,7 +350,6 @@ for v in variants[i:i+1]:
             # kl_coeff_spec=Anneal(start=0.001, end=1.0, length=60),
             adaptive_kl=True,
             ema_kl_decay=0.9,
-            input_skip=True,
             # resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
             # staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
@@ -387,7 +360,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0105_TRF_gray",
+            exp_prefix="0105_TRF_adaptive_anneal",
             seed=v["seed"],
             variant=v,
             mode="local",

@@ -2169,7 +2169,8 @@ class CondPixelCNN(Distribution):
 
         with scopes.arg_scope(
                 [nn.down_shifted_conv2d, nn.down_right_shifted_conv2d, nn.down_shifted_deconv2d, nn.down_right_shifted_deconv2d, nn.nin],
-                counters=counters, init=self._custom_phase == CustomPhase.init, ema=None
+                counters=counters, init=self._custom_phase == CustomPhase.init, ema=None,
+                context=context,
         ):
 
             # ////////// up pass ////////

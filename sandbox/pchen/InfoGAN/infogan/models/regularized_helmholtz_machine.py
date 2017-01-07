@@ -1851,7 +1851,7 @@ class RegularizedHelmholtzMachine(object):
                     print("encoder nn %s" % nn)
                     print("encoder fs %s" % fs)
 
-                    # encoder = encoder.conv2d_mod(1, base_filters)
+                    encoder = encoder.conv2d_mod(1, base_filters)
                     for _ in range(rep):
                         encoder = resconv_v1(
                             encoder,
