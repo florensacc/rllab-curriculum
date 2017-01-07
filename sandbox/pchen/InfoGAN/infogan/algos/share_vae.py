@@ -179,6 +179,8 @@ class ShareVAE(object):
                 self.optimizer_args["learning_rate"] = self.lr_var
             self.optimizer = self.optimizer_cls(**self.optimizer_args)
 
+        logger.log("Algo inited")
+
     def init_opt(self, init=False, eval=False, opt_off=False):
         if init:
             self.model.init_mode()
@@ -517,6 +519,7 @@ class ShareVAE(object):
         self.sess = sess
 
         self.init_opt(init=True)
+        logger.log("opt_inited w/ init=True")
 
         prev_bits = -10.
 
@@ -581,15 +584,18 @@ class ShareVAE(object):
                     if counter == 0:
                         if self.resume_from is None or (self.resume_includes is not None):
                             sess.run(init, feed)
+                            logger.log("TF init op finished")
                         self.init_opt(init=False, eval=True)
+                        logger.log("opt_inited eval=True")
                         self.init_opt(init=False, eval=False)
+                        logger.log("opt_inited eval=False")
                         vs = tf.all_variables()
                         sess.run(tf.initialize_variables([
                             v for v in vs if
                                 "optim" in v.name or "global_step" in v.name or \
                                 ("cv_coeff" in v.name)
                         ]))
-                        print("vars initd")
+                        logger.log("vars initd")
                         if self.staged:
                             sess.run(
                                 self.staged_cond_mask.assign(0.)

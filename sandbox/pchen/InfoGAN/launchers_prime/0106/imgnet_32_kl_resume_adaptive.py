@@ -57,7 +57,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.04, 0.07]# 0.1]
+        return [0.02,0.01,0.07]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -170,7 +170,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 1
+i = 2
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -271,6 +271,7 @@ for v in variants[i:i+1]:
             # kl_coeff_spec=Anneal(start=0.001, end=1.0, length=15),
             adaptive_kl=True,
             ema_kl_decay=0.9,
+            resume_from="/home/peter/rllab-private/data/local/0105-imgnet-32-FIXanneal-bigger/0105_imgnet_32_FIXanneal_bigger_2017_01_05_13_43_46_0001/bak"
             # updates_per_epoch=50,
             # resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
             # staged=True,
@@ -282,7 +283,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0105_imgnet_32_FIXanneal_bigger",
+            exp_prefix="0105_imgnet_32_resume_of_Fanneal",
             seed=v["seed"],
             variant=v,
             mode="local",
