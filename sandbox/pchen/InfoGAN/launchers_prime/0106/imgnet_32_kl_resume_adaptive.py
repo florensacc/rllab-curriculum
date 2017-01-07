@@ -271,7 +271,7 @@ for v in variants[i:i+1]:
             # kl_coeff_spec=Anneal(start=0.001, end=1.0, length=15),
             adaptive_kl=True,
             ema_kl_decay=0.9,
-            resume_from="/home/peter/rllab-private/data/local/0105-imgnet-32-FIXanneal-bigger/0105_imgnet_32_FIXanneal_bigger_2017_01_05_13_43_46_0001/bak"
+            resume_from="/home/peter/rllab-private/data/local/0105-imgnet-32-FIXanneal-bigger/0105_imgnet_32_FIXanneal_bigger_2017_01_05_13_43_46_0001/bak/pa_mnist_ar_nr_cond__160000.ckpt"
             # updates_per_epoch=50,
             # resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
             # staged=True,

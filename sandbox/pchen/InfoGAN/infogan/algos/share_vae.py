@@ -219,6 +219,7 @@ class ShareVAE(object):
                 causal_feats = pixelcnn.infer_temp(
                     x
                 )
+                logger.log("causal_feats")
                 if self.input_skip:
                     encoder_feats = tf.concat(
                         3,
@@ -229,6 +230,7 @@ class ShareVAE(object):
 
                 z_var, log_p_z_given_x, z_dist_info = \
                     self.model.encode(encoder_feats, k=self.k if eval else 1)
+                logger.log("encoded")
 
                 if not self.noise:
                     z_var = z_dist_info["mean"]
@@ -236,6 +238,7 @@ class ShareVAE(object):
 
                 # get raw conditional feats to avoid changing helmhpltz machine
                 cond_feats = self.model.decode(z_var, raw=True)
+                logger.log("decoded")
                 x_dist_info = dict(
                     causal_feats=causal_feats,
                     cond_feats=cond_feats * self.staged_cond_mask,
@@ -250,9 +253,12 @@ class ShareVAE(object):
                     ) if eval else x,
                     x_dist_info
                 )
+                logger.log("cond_logli")
 
                 ndim = self.model.output_dist.effective_dim
                 log_p_z = self.model.latent_dist.logli_prior(z_var)
+                logger.log("prior_logli")
+
                 dict_log_vars["log_p_z"].append(
                     tf.reduce_mean(log_p_z)
                 )
@@ -368,6 +374,7 @@ class ShareVAE(object):
                 if tower_grads is None:
                     tower_grads = self.optimizer.compute_gradients(surr_loss)
                 grads.append(tower_grads)
+                logger.log("grads")
 
         if init and self.exp_avg is not None:
             self.ema = tf.train.ExponentialMovingAverage(decay=self.exp_avg)
@@ -605,6 +612,9 @@ class ShareVAE(object):
                             # print("not resuming")
                             print("resuming from %s" % self.resume_from)
                             fn = tf.train.latest_checkpoint(self.resume_from)
+                            if fn is None:
+                                print("cant find latest checkpoint, treating as checkpoint file")
+                                fn = self.resume_from
                             print("latest ckpt: %s" % fn)
                             if self.resume_includes is None:
                                 saver.restore(sess, fn)

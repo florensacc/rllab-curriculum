@@ -1,4 +1,5 @@
 import numpy as np
+import rllab.misc.logger as logger
 import pickle as pkl
 import pickle as cPkl
 import gzip, zipfile, tarfile
@@ -1404,6 +1405,7 @@ class Cifar10Dataset(object):
 
 class ImageNet32Dataset(object):
     def __init__(self, scale=1., scramble_vai=False, scramble_vali_ch=False):
+        logger.log("imgnet_32 pre init")
         self._image_shape = (32, 32, 3)
         self._image_dim = np.prod(self._image_shape)
 
@@ -1419,6 +1421,7 @@ class ImageNet32Dataset(object):
         if scramble_vali_ch:
             test_x = test_x[:, :, :, np.random.permutation(3)]
         self.validation = Dataset(test_x * scale)
+        logger.log("imgnet_32 post init")
 
     def transform(self, data):
         return data
