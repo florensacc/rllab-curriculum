@@ -128,7 +128,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def k(self, num_gpus):
-        return [batch_size // num_gpus, ]
+        return [1, ]
 
     @variant(hide=False)
     def num_gpus(self):
@@ -350,7 +350,7 @@ for v in variants[i:i+1]:
             # kl_coeff=0. if v["unconditional"] else 1,
             # kl_coeff_spec=Anneal(start=0.001, end=1.0, length=60),
             adaptive_kl=True,
-            ema_kl_decay=0.9,
+            ema_kl_decay=0.95,
             deep_cond=True,
             # resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
             # staged=True,
@@ -362,7 +362,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0107_TRF_adaptive_anneal_deepcond",
+            exp_prefix="0107_TRF_adaptive_anneal_deepcond_debug2",
             seed=v["seed"],
             variant=v,
             mode="local",

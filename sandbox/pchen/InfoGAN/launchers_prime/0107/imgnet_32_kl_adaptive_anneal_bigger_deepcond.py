@@ -284,7 +284,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0107_imgnet_32_deepcond",
+            exp_prefix="0107_imgnet_32_deepcond_debug2",
             seed=v["seed"],
             variant=v,
             mode="local",

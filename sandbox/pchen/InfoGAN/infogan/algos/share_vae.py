@@ -246,7 +246,10 @@ class ShareVAE(object):
                 logger.log("decoded")
 
                 if self.deep_cond:
-                    causal_feats = pixelcnn.infer_temp(x, context=cond_feats)
+                    causal_feats = pixelcnn.infer_temp(
+                        x,
+                        context=cond_feats
+                    )
                 x_dist_info = dict(
                     causal_feats=causal_feats,
                     cond_feats=cond_feats * self.staged_cond_mask,
