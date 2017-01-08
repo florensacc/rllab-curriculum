@@ -143,7 +143,7 @@ class VDDPG(OnlineAlgorithm):
         action_grads = tf.reduce_mean(
             kappa * grad_qf + self.alpha * kappa_grads,
             reduction_indices=1,
-        ) # (N,k,d)
+        ) # N x K x Da
         # The first two dims needs to be flattened to correctly propagate the
         # gradients to the policy network.
         action_grads = tf.reshape(action_grads, (-1, Da))

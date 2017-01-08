@@ -6,25 +6,27 @@ import numpy as np
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
-flags.DEFINE_float('learning_rate', 0.001, 'Base learning rate.')
+flags.DEFINE_float('learning_rate', 0.01, 'Base learning rate.')
 flags.DEFINE_integer('modes', 2, 'Number of modes.')
 flags.DEFINE_boolean('fixed', False, 'Fixed target distribution.')
 
 
 class MultimodalGaussianEnv(Env):
 
-    def __init__(self, n_modes, action_lb, action_ub, fixed_observation):
+    def __init__(self, n_modes, action_lb, action_ub, fixed_observations):
         self._n_modes = n_modes
         self._action_lb = action_lb
         self._action_ub = action_ub
-        self._fixed_observation = fixed_observation
+        self._fixed_observations = fixed_observations
 
     def step(self, action):
         return self.observe(), 0, True, {}
 
     def observe(self):
-        if self._fixed_observation is not None:
-            return self._fixed_observation
+        if self._fixed_observations is not None:
+            n_cases = self._fixed_observations.shape[0]
+            i = np.random.randint(low=0, high=n_cases)
+            return self._fixed_observations[i]
 
         modes = self._n_modes
 
@@ -33,8 +35,8 @@ class MultimodalGaussianEnv(Env):
         mus = np.random.randn(modes)*2 - 1
         sigmas = np.random.rand(modes) + 0.5
 
-        obs = np.stack((weights, mus, sigmas), axis=1)
-        obs = np.ndarray.flatten(obs)
+        obs = np.stack((weights, mus, sigmas), axis=1) # one row per mode
+        obs = np.ndarray.flatten(obs) # (w_1, mu_1, sigma_1, w_2, ...)
 
         return obs
 
@@ -82,7 +84,9 @@ class MixtureGaussianCritic(NNCritic):
 
     def create_network(self, action_input, observation_input):
         obs = tf.unstack(observation_input, axis=1)
-        weights = obs[0::3]
+        weights = obs[0::3] # a list of [w_i^1, w_i^2,...], where
+        # i is the index of the mode, the superscript indexes the sample.
+        # So we assume that all observations have the same n_modes
         mus = obs[1::3]
         sigmas = obs[2::3]
 
@@ -196,16 +200,34 @@ def test():
 
     # ----------------------------------------------------------------------
     if FLAGS.fixed:
-        fixed_observation = np.array((1./3., -2., 1.,
-                                      2./3., 2., 1.))
+        if FLAGS.modes == 1:
+            # near uniform
+            fixed_observations = np.array([
+                [1., 0., 100.],
+            ])
+        elif FLAGS.modes == 2:
+            # two modes, two cases
+            fixed_observations = np.array([
+                [1./3., -2., 1.,    2./3., 2., 1.],
+                [2./3., -2., 1.,    1./3., 2., 1.],
+            ])
+        elif FLAGS.modes == 3:
+            # three modes, three cases
+            fixed_observations = np.array([
+                [1./3., -4., 1.,    1./3., 0., 1.,    1./3., 4., 1.],
+                [1./2., -4., 1.,    1./4., 0., 1.,    1./4., 4., 1.],
+                [1./4., -4., 1.,    1./4., 0., 1.,    1./2., 4., 1.],
+            ])
+        else:
+            raise NotImplementedError
     else:
-        fixed_observation = None
+        fixed_observations = None
 
     env = TfEnv(MultimodalGaussianEnv(
         n_modes=FLAGS.modes,
         action_lb=np.array([-10]), # bounds on the particles
         action_ub=np.array([10]),
-        fixed_observation=fixed_observation
+        fixed_observations=fixed_observations
     ))
 
     #es = MNNStrategy(
