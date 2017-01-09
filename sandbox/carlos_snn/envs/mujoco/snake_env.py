@@ -106,12 +106,8 @@ class SnakeEnv(MujocoEnv, Serializable):
     def plot_visitation(self, paths, mesh_density=50, maze=None, scaling=2, prefix=''):
         fig, ax = plt.subplots()
         # now we will grid the space and check how much of it the policy is covering
-        if self.ego_obs:
-            x_max = np.ceil(np.max(np.abs(np.concatenate([path["env_infos"]['com'][:, 0] for path in paths]))))
-            y_max = np.ceil(np.max(np.abs(np.concatenate([path["env_infos"]['com'][:, 1] for path in paths]))))
-        else:
-            x_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -3] for path in paths]))))
-            y_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -2] for path in paths]))))
+        x_max = np.ceil(np.max(np.abs(np.concatenate([path["env_infos"]['com'][:, 0] for path in paths]))))
+        y_max = np.ceil(np.max(np.abs(np.concatenate([path["env_infos"]['com'][:, 1] for path in paths]))))
         furthest = max(x_max, y_max)
         print('THE FUTHEST IT WENT COMPONENT-WISE IS: x_max={}, y_max={}'.format(x_max, y_max))
         # if maze:
@@ -138,12 +134,8 @@ class SnakeEnv(MujocoEnv, Serializable):
             # now plot all the paths
             for path in paths:
                 lats = [np.nonzero(lat)[0][0] for lat in path['agent_infos'][selectors_name]]  # list of all lats by idx
-                # if self.ego_obs:
                 com_x = np.ceil(((np.array(path['env_infos']['com'][:, 0]) + furthest) * mesh_density)).astype(int)
                 com_y = np.ceil(((np.array(path['env_infos']['com'][:, 1]) + furthest) * mesh_density)).astype(int)
-                # else:
-                #     com_x = np.ceil(((np.array(path['observations'][:, -3]) + furthest) * mesh_density)).astype(int)
-                #     com_y = np.ceil(((np.array(path['observations'][:, -2]) + furthest) * mesh_density)).astype(int)
                 coms = list(zip(com_x, com_y))
                 for i, com in enumerate(coms):
                     dict_visit[lats[i]][com] += 1
