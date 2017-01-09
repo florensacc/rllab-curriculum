@@ -17,7 +17,7 @@ class GridBonusEvaluator(object):
                  obs='com',
                  env_spec=None,
                  mesh_density=50,
-                 visitation_bonus=1.0,
+                 visitation_bonus=0,
                  snn_H_bonus=0,
                  virtual_reset=False,  # the paths are split by latents and every switch gets the robot to 0 (xy,ori)
                  switch_lat_every=0,
@@ -37,7 +37,7 @@ class GridBonusEvaluator(object):
         self.survival_bonus = survival_bonus
         self.dist_from_reset_bonus = dist_from_reset_bonus
         self.start_bonus_after = start_bonus_after
-        # in case I'm gridding all the obs_dim (not just the com) --> for this I should use hashing, ow too high dim
+        # in case I'm gridding all the obs_dim (not just the com) --> for this I should use hashing, or too high dim
         if env_spec:
             obs_dim = env_spec.observation_space.flat_dim
 
@@ -80,9 +80,9 @@ class GridBonusEvaluator(object):
             selectors_name = 'selectors' if 'selectors' in list(paths[0]['agent_infos'].keys()) else 'latents'
             self.num_latents = np.size(paths[0]["agent_infos"][selectors_name][0])
             # set all the labels for the latents and initialize the entries of dict_visit
+            size_grid = int(2 * self.furthest * self.mesh_density + 1)
             for i in range(self.num_latents):  # use integer to define the latents
-                self.dict_visit[i] = np.zeros(
-                    (2 * self.furthest * self.mesh_density + 1, 2 * self.furthest * self.mesh_density + 1))
+                self.dict_visit[i] = np.zeros((size_grid, size_grid))
             lats = [[np.nonzero(lat)[0][0] for lat in path['agent_infos'][selectors_name]]
                     for path in paths]  # list of all lats by idx
             for k, com in enumerate(coms):  # this iterates through paths
@@ -276,8 +276,9 @@ class GridBonusEvaluator(object):
             # fix the colors for each latent
             num_colors = self.num_latents + 2  # +2 for the 0 and Repetitions NOT COUNTING THE WALLS
             # create a matrix with entries corresponding to the latent that was there (or other if several/wall/nothing)
+            size_grid = int(2 * self.furthest * self.mesh_density + 1)
             self.visitation_by_lat = np.zeros(
-                (2 * self.furthest * self.mesh_density + 1, 2 * self.furthest * self.mesh_density + 1))
+                (size_grid, size_grid))
             for i, visit in self.dict_visit.items():
                 lat_visit = np.where(visit == 0, visit, i + 1)  # transform the map into 0 or i+1
                 self.visitation_by_lat += lat_visit
