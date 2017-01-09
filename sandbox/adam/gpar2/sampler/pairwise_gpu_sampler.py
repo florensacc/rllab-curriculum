@@ -29,6 +29,20 @@ def get_space_properties(space_obj):
     return shape, size, typecode
 
 
+def get_env_info_shapes(env, act):
+    o, r, d, env_info = env.step(act)
+    env.reset()
+    env_info_shapes = dict()
+    for k, v in env_info.items():
+            v_np = np.asarray(v)
+            if v_np.dtype == 'object':
+                raise TypeError("Unsupported agent_info data structure under key: {}"
+                    "\n  (must be able to cast under np.asarray() and not result in "
+                    "dtype=='object')".format(k))
+            env_info_shapes[k] = v_np.shape
+    return env_info_shapes
+
+
 class PairwiseGpuSampler(BaseGpuSampler):
 
     def __init__(
@@ -51,10 +65,26 @@ class PairwiseGpuSampler(BaseGpuSampler):
         n_par = self.n_parallel
         obs_shape, obs_size, obs_tc = get_space_properties(self.algo.env.observation_space)
         act_shape, act_size, act_tc = get_space_properties(self.algo.env.action_space)
+        env_info_shapes = get_env_info_shapes(self.algo.env, self.algo.env.action_space.sample())
 
-        # NOTE: using typecode 'f' (float32) for floats.
+        # NOTE: consider using typecode 'f' (float32) for floats entering GPU.
         n_arr = np.ctypeslib.as_array
         m_arr = mp.RawArray
+        env_info = list()
+        for env_ind in range(2):
+            env_info_sub = list()
+            for rank in range(n_par):
+                env_info_rank = struct()
+                # assume float64 is good for all these
+                for k, v_shape in env_info_shapes.items():
+                    if not v_shape:  # i.e. scalar, v_shape = ()
+                        v_size = 1
+                        v_shape = (1,)
+                    else:
+                        v_size = int(np.prod(v_shape))
+                    env_info_rank[k] = n_arr(m_arr('d', v_size)).reshape(*v_shape)
+                env_info_sub.append(env_info_rank)
+            env_info.append(env_info_sub)
         shareds = struct(
             obs=[n_arr(m_arr(obs_tc, n_par * obs_size)).reshape(n_par, *obs_shape)
                 for _ in range(2)],
@@ -62,6 +92,7 @@ class PairwiseGpuSampler(BaseGpuSampler):
                 for _ in range(2)],
             rew=[n_arr(m_arr('f', n_par)) for _ in range(2)],
             done=[m_arr(c_bool, n_par) for _ in range(2)],
+            env_info=env_info,
             continue_sampling=mp.RawValue(c_bool, True),
         )
         sync = struct(
@@ -124,10 +155,11 @@ class PairwiseGpuSampler(BaseGpuSampler):
         sims_obs = [[[] for _ in range_par] for _ in range(2)]
         sims_rew = [[[] for _ in range_par] for _ in range(2)]
         sims_agent_info = [[[] for _ in range_par] for _ in range(2)]
+        sims_env_info = [[[] for _ in range_par] for _ in range(2)]
         all_obs = [None] * 2
         all_act = [None] * 2
         all_agent_info = [None] * 2
-        all_rew = [None] * 2
+        # all_rew = [None] * 2
         all_done = np.empty(len(shareds.done[0]), dtype='bool')  # buffer
 
         pbar = ProgBarCounter(self.batch_size)
@@ -164,9 +196,10 @@ class PairwiseGpuSampler(BaseGpuSampler):
 
             [b.acquire() for b in step_blockers[j]]
 
-            all_rew[j] = shareds.rew[j].copy()  # new object
             next_obs = shareds.obs[j].copy()  # new object
+            all_rew = shareds.rew[j].copy()  # new object
             all_done[:] = shareds.done[j]  # copy to buffer
+            all_env_info = copy.deepcopy(shareds.env_info[j])
 
             # gt.stamp('copy')
             next_act, next_agent_info = get_actions(next_obs)  # new objects
@@ -178,22 +211,24 @@ class PairwiseGpuSampler(BaseGpuSampler):
             # Move current data into persistent variables.
             for i in range_par:
                 sims_act[j][i].append(all_act[j][i])
-                sims_rew[j][i].append(all_rew[j][i])
+                sims_rew[j][i].append(all_rew[i])
                 sims_obs[j][i].append(all_obs[j][i])
                 sims_agent_info[j][i].append({k: v[i] for k, v in all_agent_info[j].items()})
+                sims_env_info[j][i].append(all_env_info[i])
                 if all_done[i]:
                     paths.append(dict(
                         observations=tensor_utils.stack_tensor_list(sims_obs[j][i]),
                         actions=tensor_utils.stack_tensor_list(sims_act[j][i]),
                         rewards=tensor_utils.stack_tensor_list(sims_rew[j][i]),
                         agent_infos=tensor_utils.stack_tensor_dict_list(sims_agent_info[j][i]),
-                        env_infos={},  # (have yet to see an env provide this)
+                        env_infos=tensor_utils.stack_tensor_dict_list(sims_env_info[j][i]),
                     ))
                     cum_length_complete_paths += len(sims_rew[j][i])
                     sims_act[j][i] = []
                     sims_obs[j][i] = []
                     sims_rew[j][i] = []
                     sims_agent_info[j][i] = []
+                    sims_env_info[j][i] = []
             if any(all_done):
                 continue_sampling = (cum_length_complete_paths < self.batch_size)
                 pbar.update(cum_length_complete_paths)
@@ -210,7 +245,7 @@ class PairwiseGpuSampler(BaseGpuSampler):
         [b.acquire() for b in step_blockers[j]]
         # Now the simulators are all waiting at the action of (j ^ 1)
         shareds.continue_sampling.value = False
-        j = j ^ 1
+        j = j ^ 1  # xor -- toggles
         [w.release() for w in act_waiters[j]]
         # Now the simulators check the while condition and exit.
         [b.acquire() for b in step_blockers[j]]  # (close the gate)
@@ -265,7 +300,8 @@ class PairwiseGpuSampler(BaseGpuSampler):
             shareds.obs[j][rank][:] = o
             shareds.rew[j][rank] = r
             shareds.done[j][rank] = d
-            # (have yet to see an environment provide env_info)
+            for k, v in env_info.items():
+                shareds.env_info[j][rank][k][:] = v
 
             step_blocker[j].release()
             j = j ^ 1  # xor -- toggles

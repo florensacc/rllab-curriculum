@@ -626,7 +626,7 @@ def to_local_command(params, python_command="python", script=osp.join(config.PRO
                      use_gpu=False):
     command = python_command + " " + script
     if use_gpu and not config.USE_TF:
-        command = "THEANO_FLAGS='device=gpu,dnn.enabled=auto' " + command
+        command = "THEANO_FLAGS='device=gpu,dnn.enabled=auto,floatX=float32' " + command
     for k, v in config.ENV.items():
         command = ("%s=%s " % (k, v)) + command
 

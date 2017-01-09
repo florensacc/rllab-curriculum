@@ -140,6 +140,9 @@ class FeedForwardMultiPolicyTest(FeedForwardMultiPolicy):
             hidden_b_init = tf.constant_initializer(0.)
             output_W_init = tf.constant_initializer(0.)
             output_b_init = tf.random_uniform_initializer(-3, -2)
+            # TH: Set the init values exactly for debugging purpose.
+            #output_b_init = [-1, 0, 1]
+            #output_b_init = (-10 + np.random.randn(20)).tolist()
             # modify output_b_init to change the initial particle distribution
         super(FeedForwardMultiPolicyTest, self).__init__(
             scope_name,
@@ -266,7 +269,10 @@ def test():
         observation_dim=1,
         action_lb=np.array([-10]), # bounds on the particles
         action_ub=np.array([10]),
-        fixed_observation=np.array([1]),
+        # TH: changed observation 1 --> 0 to suppress additional gradient coming
+        # from W*obs term.
+        #fixed_observation=np.array([1]),
+        fixed_observation=np.array([0]),
     ))
 
     es = MNNStrategy(

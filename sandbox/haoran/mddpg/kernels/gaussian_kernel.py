@@ -77,11 +77,14 @@ class DiagonalGaussianKernel(Kernel):
             tf.square(xs_weighted),
             2, keep_dims=True
         ) # N x K x 1, computes yj^2
+
+
         D = -0.5 * (
             r - # yj^2
             2 * tf.batch_matmul(xs_weighted, xs_weighted, adj_y=True) + # yj*yk
             tf.transpose(r,[0,2,1]) # yk^2
         )
+
         kappa = tf.exp(D)
         return kappa
 
@@ -96,14 +99,19 @@ class DiagonalGaussianKernel(Kernel):
 
         # tf hasn't implemented (N,1,K,d) - (N,K,1,d); need to do it one dim
         # at a time
-        K = int(xs.get_shape()[1])
-        diff = tf.pack(
-            [xs_cur[:,:,0,:] - xs_other[:,:,k,:] for k in range(K)],
-            # [xs_other[:,:,k,:] - xs_cur[:,:,0,:] for k in range(K)],
-            axis=2
-        ) # N x K x K x d: (x_j - x_k)
+        # TH: Do you have an outdated version of TF? This works on my machine:
+        diff = xs_cur - xs_other
+        #K = int(xs.get_shape()[1])
+        #diff = tf.pack(
+        #    [xs_cur[:,:,0,:] - xs_other[:,:,k,:] for k in range(K)],
+        #    # [xs_other[:,:,k,:] - xs_cur[:,:,0,:] for k in range(K)],
+        #    axis=2
+        #) # N x K x K x d: (x_j - x_k)
+
+
         kappa_grads = - kappa *  self.diag_kappa_grads * diff
         return kappa_grads
+
 
 from scipy.spatial import distance
 class SimpleAdaptiveDiagonalGaussianKernel(DiagonalGaussianKernel):
@@ -129,8 +137,13 @@ class SimpleAdaptiveDiagonalGaussianKernel(DiagonalGaussianKernel):
                 dim=1,
             ) # N x 1 x 1 x d
 
-    def update(self, algo, actor_feed):
-        xs = self.sess.run(algo.policy.output, actor_feed) # N x K x d
+    def update(self, algo, actor_feed, multiheaded=True, K=None):
+        # TODO(TH): hacky fix. To make this work on stochastic policies,
+        # we need to pass the number of particles
+        # in order to reshape the policy output back to N x K x d
+        xs = self.sess.run(algo.policy.output, actor_feed) #N x K x d or N*K x d
+        if not multiheaded:
+            xs = np.reshape(xs, (-1, K, self.dim))
         N, K, d = xs.shape
         assert self.dim == d
         assert K > 1, "cannot compute pairwise distance if K = 1"

@@ -237,3 +237,12 @@ class DDPG(OnlineAlgorithm):
             logger.record_tabular(key, value)
 
         return self.last_statistics
+
+    def get_epoch_snapshot(self, epoch):
+        return dict(
+            epoch=epoch,
+            env=self.env,
+            policy=self.policy,
+            es=self.exploration_strategy,
+            qf=self.qf,
+        )

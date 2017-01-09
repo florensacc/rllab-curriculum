@@ -1,3 +1,8 @@
+"""
+This script helps to conveniently plot the environment and Q values for
+multi-headed policies.
+"""
+
 from rllab.sampler.utils import rollout
 from rllab.misc import tensor_utils
 from rllab.envs.proxy_env import ProxyEnv
@@ -14,7 +19,7 @@ import matplotlib.pyplot as plt
 
 def rollout(sess,env, agent, exploration_strategy, qf, random=False,
     pause=False, max_path_length=np.inf, animated=False, speedup=1,
-    optimal=False):
+    optimal=False, head=-1):
     observations = []
     actions = []
     rewards = []
@@ -22,7 +27,11 @@ def rollout(sess,env, agent, exploration_strategy, qf, random=False,
     env_infos = []
     o = env.reset()
     exploration_strategy.reset()
-    agent.k = np.mod(agent.k + 1, agent.K)
+    if head == -1:
+        agent.k = np.mod(agent.k + 1, agent.K)
+    else:
+        assert head in range(agent.K), "The policy only has %d heads"%(agent.K)
+        agent.k = head
     path_length = 0
 
     fig = plt.figure()
@@ -131,6 +140,7 @@ if __name__ == "__main__":
         action='store_true')
     parser.add_argument('--optimal', default=False,
         action='store_true')
+    parser.add_argument('--head', default=-1, type=int)
     args = parser.parse_args()
 
     policy = None
@@ -157,6 +167,7 @@ if __name__ == "__main__":
                         animated=True,
                         speedup=args.speedup,
                         random=args.random,
+                        head=args.head,
                     )
 
                 # Hack for now. Not sure why rollout assumes that close is an

@@ -39,6 +39,7 @@ class OnlineAlgorithm(RLAlgorithm):
             max_path_length=1000,
             eval_samples=10000,
             scale_reward=1.,
+            scale_reward_annealer=None,
             render=False,
     ):
         """
@@ -72,6 +73,7 @@ class OnlineAlgorithm(RLAlgorithm):
         self.max_path_length = max_path_length
         self.n_eval_samples = eval_samples
         self.scale_reward = scale_reward
+        self.scale_reward_annealer = scale_reward_annealer
         self.render = render
 
         self.observation_dim = self.env.observation_space.flat_dim
@@ -90,6 +92,7 @@ class OnlineAlgorithm(RLAlgorithm):
         with self.sess.as_default():
             self._init_tensorflow_ops()
         self.es_path_returns = []
+        self.es_path_lengths = []
 
         #HT: in general, VectorizedSampler can significantly reduce
         # PolicyExecTime, but not EnvExecTime. The latter consumes more
@@ -120,6 +123,7 @@ class OnlineAlgorithm(RLAlgorithm):
             for epoch in gt.timed_for(
                 range(self.n_epochs),save_itrs=True
             ):
+                self.update_training_settings(epoch)
                 logger.push_prefix('Epoch #%d | ' % epoch)
                 for _ in range(self.epoch_length):
                     # sampling
@@ -149,6 +153,7 @@ class OnlineAlgorithm(RLAlgorithm):
                         observation = self.env.reset()
                         self.exploration_strategy.reset()
                         self.es_path_returns.append(path_return)
+                        self.es_path_lengths.append(path_length)
                         path_length = 0
                         path_return = 0
                     else:
@@ -162,8 +167,12 @@ class OnlineAlgorithm(RLAlgorithm):
                     gt.stamp('train: updates')
 
                 # testing ---------------------------------
+                train_info = dict(
+                    es_path_returns=self.es_path_returns,
+                    es_path_lengths=self.es_path_lengths,
+                )
                 if self.n_eval_samples > 0:
-                    self.evaluate(epoch, self.es_path_returns)
+                    self.evaluate(epoch, train_info)
                     self.es_path_returns = []
                 gt.stamp("test")
 
@@ -182,6 +191,7 @@ class OnlineAlgorithm(RLAlgorithm):
                 logger.record_tabular("time: train",train_time)
                 logger.record_tabular("time: eval",eval_time)
                 logger.record_tabular("time: total",total_time)
+                logger.record_tabular("scale_reward", self.scale_reward)
                 logger.dump_tabular(with_prefix=False)
                 logger.pop_prefix()
                 gt.stamp("logging")
@@ -208,7 +218,11 @@ class OnlineAlgorithm(RLAlgorithm):
                                            sampled_obs,
                                            sampled_actions,
                                            sampled_next_obs)
+
+
+        # TH: First train, then finalize. This can be suboptimal.
         self.sess.run(self._get_training_ops(), feed_dict=feed_dict)
+        self.sess.run(self._get_finalize_ops(), feed_dict=feed_dict)
 
     def get_epoch_snapshot(self, epoch):
         return dict(
@@ -260,3 +274,7 @@ class OnlineAlgorithm(RLAlgorithm):
         :return: Dictionary of statistics.
         """
         return
+
+    def update_training_settings(self, epoch):
+        if self.scale_reward_annealer is not None:
+            self.scale_reward = self.scale_reward_annealer.get_new_value(epoch)

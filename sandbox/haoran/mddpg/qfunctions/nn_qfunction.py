@@ -12,6 +12,7 @@ class NNCritic(NeuralNetwork):
             observation_dim,
             action_dim,
             action_input=None,
+            observation_input=None,
             reuse=False,
             **kwargs
     ):
@@ -20,6 +21,7 @@ class NNCritic(NeuralNetwork):
         self.observation_dim = observation_dim
         self.action_dim = action_dim
         self.action_input = action_input
+        self.observation_input = observation_input
         self.reuse = reuse
 
         with tf.variable_scope(self.scope_name, reuse=reuse) as variable_scope:
@@ -31,12 +33,16 @@ class NNCritic(NeuralNetwork):
                 )
             else:
                 self.actions_placeholder = action_input
-            self.observations_placeholder = tf.placeholder(
-                tf.float32,
-                shape=[None, observation_dim],
-                name='critic_observations',
-            )
-            self._output = self.create_network(self.actions_placeholder)
+            if observation_input is None:
+                self.observations_placeholder = tf.placeholder(
+                    tf.float32,
+                    shape=[None, observation_dim],
+                    name='critic_observations',
+                )
+            else:
+                self.observations_placeholder = observation_input
+            self._output = self.create_network(self.actions_placeholder,
+                                               self.observations_placeholder)
             self.variable_scope = variable_scope
 
     def get_weight_tied_copy(self, action_input):

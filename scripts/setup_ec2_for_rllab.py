@@ -24,18 +24,18 @@ ALL_REGION_AWS_KEY_NAMES = {}
 ALL_SUBNET_INFO = {}
 
 REGIONS = [
-   # "ap-northeast-1",
-   # "ap-northeast-2",
-   # "ap-south-1",
-   # "ap-southeast-1",
-   # "ap-southeast-2",
-   # "eu-central-1",
-   # "eu-west-1",
-   # "sa-east-1",
-    "us-east-1",
-    "us-east-2",
-    "us-west-1",
-    "us-west-2",
+   "ap-northeast-1",
+   "ap-northeast-2",
+   "ap-south-1",
+   "ap-southeast-1",
+   "ap-southeast-2",
+   "eu-central-1",
+   "eu-west-1",
+   "sa-east-1",
+   "us-east-1",
+   "us-east-2",
+   "us-west-1",
+   "us-west-2",
 ]
 
 CONFIG_TEMPLATE = Template("""
@@ -344,8 +344,9 @@ def setup_ec2():
         print(ALL_REGION_AWS_KEY_NAMES)
         print(ALL_REGION_AWS_SECURITY_GROUP_IDS)
 
-    ALL_SUBNET_INFO = get_subnets_info(REGIONS)  # this could be done at the same time than the above, keep it here for now
-    print(ALL_SUBNET_INFO)
+    subnets_info = get_subnets_info(REGIONS)  # this could be done at the same time than the above, keep it here for now
+    for key, value in subnets_info.items():
+        ALL_SUBNET_INFO[key] = value
 
 
 def get_subnets_info(regions):
@@ -373,7 +374,7 @@ def write_config():
     print("Writing config file...")
     content = CONFIG_TEMPLATE.substitute(
         all_region_aws_key_names=json.dumps(ALL_REGION_AWS_KEY_NAMES, indent=4),
-        all_subnet_info=json.dump(ALL_SUBNET_INFO, indent=4),  # CF
+        all_subnet_info=json.dumps(ALL_SUBNET_INFO, indent=4),  # CF
         all_region_aws_security_group_ids=json.dumps(ALL_REGION_AWS_SECURITY_GROUP_IDS, indent=4),
         s3_bucket_name=S3_BUCKET_NAME,
         security_group_name=SECURITY_GROUP_NAME,
@@ -391,8 +392,8 @@ def write_config():
 
 def setup():
     print("Using prefix: %s" % PREFIX)
-    #setup_s3()
-    #setup_iam()
+    setup_s3()
+    setup_iam()
     setup_ec2()
     write_config()
 

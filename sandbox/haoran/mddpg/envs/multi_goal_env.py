@@ -26,8 +26,8 @@ class MultiGoalEnv(Env, Serializable):
             [
                 [5, 0],
                 [-5, 0],
-                # [0, 5],
-                # [0, -5]
+                [0, 5],
+                [0, -5]
             ],
             dtype=np.float32
         )
@@ -168,6 +168,22 @@ class MultiGoalEnv(Env, Serializable):
 
     def get_param_values(self):
         return None
+
+    def log_stats(self, paths):
+        n_goal = len(self.goal_positions)
+        goal_reached = [False] * n_goal
+
+        for path in paths:
+            last_obs = path["observations"][-1]
+            for i, goal in enumerate(self.goal_positions):
+                if np.linalg.norm(last_obs - goal) < self.goal_threshold:
+                    goal_reached[i] = True
+
+        stats = {
+            "env:goal_reached": goal_reached.count(True)
+        }
+        return stats
+
 
 
 class PointDynamics(object):

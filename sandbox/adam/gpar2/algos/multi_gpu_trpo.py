@@ -112,8 +112,8 @@ class MultiGpuTRPO(MultiGpuNPO):
 
     def prepare_opt_inputs(self, my_data):
         all_input_values = tuple([my_data.obs, my_data.act, my_data.adv])
-        print('copy test:\n')
-        print('are they the same object: ', all_input_values[0] is my_data.obs)
+        # print('copy test:\n')
+        # print('are they the same object: ', all_input_values[0] is my_data.obs)
         agent_infos = my_data.agent_infos
         state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
         dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]

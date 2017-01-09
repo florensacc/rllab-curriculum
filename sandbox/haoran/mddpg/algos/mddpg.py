@@ -8,6 +8,7 @@ from sandbox.rocky.tf.misc.tensor_utils import flatten_tensor_variables
 from rllab.misc import logger
 from rllab.misc import special
 from rllab.misc.overrides import overrides
+from rllab.envs.proxy_env import ProxyEnv
 
 import time
 from collections import OrderedDict
@@ -84,7 +85,7 @@ class MDDPG(OnlineAlgorithm):
     @overrides
     def _init_tensorflow_ops(self):
         # Initialize variables for get_copy to work
-        self.sess.run(tf.initialize_all_variables())
+        self.sess.run(tf.global_variables_initializer())
         self.target_policy = self.policy.get_copy(
             scope_name=TARGET_PREFIX + self.policy.scope_name,
         )
@@ -108,6 +109,9 @@ class MDDPG(OnlineAlgorithm):
             [target_qf.output for target_qf in self.target_qf_list],
             axis=1,
         ) # N x K
+        # TH: It's a bit weird to set class attributes (kernel.kappa and
+        # kernel.kappa_grads) outside the class. Could we do this somehow
+        # differently?
         self.kernel.kappa = self.kernel.get_kappa(self.policy.output)
         self.kernel.kappa_grads = self.kernel.get_kappa_grads(
             self.policy.output)
@@ -124,7 +128,7 @@ class MDDPG(OnlineAlgorithm):
         if not self.only_train_critic:
             self._init_actor_ops()
         self._init_target_ops()
-        self.sess.run(tf.initialize_all_variables())
+        self.sess.run(tf.global_variables_initializer())
 
     def _init_critic_ops(self):
         self.all_target_qs = [
@@ -222,7 +226,9 @@ class MDDPG(OnlineAlgorithm):
         # using sum ensures that the gradient scale is close to DDPG
         # since kappa(x,x) = 1, but we may need to use different learning rates
         # for different numbers of heads
-        action_grads = tf.reduce_sum(
+        # TH: Changed this from sum to average for easier debugging.
+        #action_grads = tf.reduce_sum(
+        action_grads = tf.reduce_mean(
             kappa * qf_grads + self.alpha * kappa_grads,
             reduction_indices=1,
         ) # (N,k,d)
@@ -278,7 +284,11 @@ class MDDPG(OnlineAlgorithm):
                 self.actor_surrogate_loss,
                 var_list=all_dummy_params)
         ]
-        self.train_actor_op += [
+
+        # TH: Assign op needs to be run AFTER optimizer. To guarantee the right
+        # order, they need to be run with separate tf.run calls.
+        #self.train_actor_op += [
+        self.finalize_actor_op = [
             tf.assign(true_param, dummy_param)
             for true_param, dummy_param in zip(
                 all_true_params,
@@ -338,6 +348,9 @@ class MDDPG(OnlineAlgorithm):
             train_ops = basic_ops + extra_ops
         return train_ops
 
+    def _get_finalize_ops(self):
+        return [self.finalize_actor_op]
+
     @overrides
     def _update_feed_dict(self, rewards, terminals, obs, actions, next_obs):
         critic_feed = self._critic_feed_dict(rewards,
@@ -369,7 +382,7 @@ class MDDPG(OnlineAlgorithm):
         }
 
     @overrides
-    def evaluate(self, epoch, es_path_returns):
+    def evaluate(self, epoch, train_info):
         logger.log("Collecting samples for evaluation")
         paths = self.eval_sampler.obtain_samples(
             itr=epoch,
@@ -437,6 +450,7 @@ class MDDPG(OnlineAlgorithm):
             create_stats_ordered_dict('KappaSum',kappa_sum)
         )
 
+        es_path_returns = train_info["es_path_returns"]
         if len(es_path_returns) == 0 and epoch == 0:
             es_path_returns = [0]
         if len(es_path_returns) > 0:
@@ -445,6 +459,21 @@ class MDDPG(OnlineAlgorithm):
             train_returns = np.asarray(es_path_returns) / self.scale_reward
             self.last_statistics.update(create_stats_ordered_dict(
                 'TrainingReturns', train_returns))
+
+        es_path_lengths = train_info["es_path_lengths"]
+        if len(es_path_lengths) == 0 and epoch == 0:
+            es_path_lengths = [0]
+        if len(es_path_lengths) > 0:
+            # if eval is too often, training may not even have collected a full
+            # path
+            self.last_statistics.update(create_stats_ordered_dict(
+                'TrainingPathLengths', es_path_lengths))
+
+        true_env = self.env
+        while isinstance(true_env,ProxyEnv):
+            true_env = true_env._wrapped_env
+        env_stats = true_env.log_stats(paths)
+        self.last_statistics.update(env_stats)
 
         for key, value in self.last_statistics.items():
             logger.record_tabular(key, value)

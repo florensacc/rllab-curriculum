@@ -10,6 +10,7 @@ class NeuralNetwork(Parameterized, Serializable):
         super().__init__()
         Serializable.quick_init(self, locals())
         self.scope_name = scope_name
+        self._input = None
         self._output = None
         self._sess = None
 
@@ -26,6 +27,10 @@ class NeuralNetwork(Parameterized, Serializable):
     @property
     def output(self):
         return self._output
+
+    @property
+    def input(self):
+        return self._input
 
     @overrides
     def get_params_internal(self, **tags):

@@ -62,13 +62,10 @@ class BaseGpuSampler(Sampler):
         Return any shared objects to pass to workers (avoiding inheritance in
         order to limit which workers have each shared variable on an as-needed
         basis).
-
-        Must be a structure containing fields "all", "ranks" (a list), and
-        "master", which indicates which workers receive it (fields can be
-        None)...maybe later write a little utility to ensure these fields are
-        present.
+        Must be a tuple: first is par_objs for master, second is list of
+        par_objs for each rank.
         """
-        struct(all=None, ranks=[None] * (self.n_parallel), master=None)
+        return (None, [None] * (self.n_parallel))
 
     def initialize_worker(self, rank):
         """ Any set up for an individual worker once it is spawned """
@@ -82,6 +79,7 @@ class BaseGpuSampler(Sampler):
         self.initialize_worker_extra(rank)  # anything else to be done
 
     def initialize_worker_extra(self, rank):
+        """ Can be used by derivative classes """
         pass
 
     def start_worker(self):
@@ -98,7 +96,7 @@ class BaseGpuSampler(Sampler):
             w.start()
         par_objs_master.loop_ctrl = loop_ctrl  # (don't use these two fields)
         par_objs_master.workers = workers
-        return par_objs_master  # (don't attach to self yet)
+        return par_objs_master  # (don't attach to self yet, other GPU processes don't need it)
 
     def shutdown_worker(self):
         self.par_objs.loop_ctrl.shutdown.value = True

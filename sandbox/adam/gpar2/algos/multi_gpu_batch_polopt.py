@@ -130,13 +130,10 @@ class MultiGpuBatchPolopt(RLAlgorithm):
         Return any shared objects to pass to workers (avoiding inheritance in
         order to limit which workers have each shared variable on an as-needed
         basis).
-
-        Must be a structure containing fields "all", "ranks" (a list), and
-        "master", which indicates which workers receive it (fields can be
-        None)...maybe later write a little utility to ensure these fields are
-        present.
+        Must be a tuple: first is par_objs for master, second is list of
+        par_objs for each rank.
         """
-        return struct(all=None, ranks=[None] * (self.n_gpu - 1), master=None)
+        return (None, [None] * (self.n_gpu - 1))
 
     def use_gpu(self, gpu_num):
         gpu_str = "gpu" + str(gpu_num)
@@ -190,8 +187,8 @@ class MultiGpuBatchPolopt(RLAlgorithm):
     def optimizing_worker(self, rank, loop_ctrl, par_objs_rank):
         self.par_objs = par_objs_rank  # make par_objs accessible elsewhere in worker
         self.initialize_worker(rank)
-        self.init_opt()
-        self.optimizer.initialize_rank(rank)
+        self.init_opt(rank)
+        # self.optimizer.initialize_rank(rank)
         while True:
             loop_ctrl.barrier.wait()
             if not loop_ctrl.shutdown.value:
@@ -202,8 +199,8 @@ class MultiGpuBatchPolopt(RLAlgorithm):
     def train(self):
         gt.reset_root()
         self.start_worker()
-        self.init_opt()
-        self.optimizer.initialize_rank(self.n_gpu - 1)
+        self.init_opt(rank=self.n_gpu - 1)
+        # self.optimizer.initialize_rank(self.n_gpu - 1)
         gt.stamp('init')
         loop = gt.timed_loop('main')
         for itr in range(self.current_itr, self.n_itr):
