@@ -67,6 +67,8 @@
 
 # straight from 0.025 fails to use code; optimization still unstable
 
+# overfitting too much on the encoder end (decoder probably fine.?)
+
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -114,7 +116,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.07, 0.025]# 0.1]
+        return [0.04]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -124,7 +126,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def base_filters(self, ):
-        return [64]
+        return [24, 48]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -145,7 +147,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def i_nar(self):
-        return [4, ]
+        return [0, ]
 
     @variant(hide=False)
     def i_nr(self):
@@ -155,9 +157,9 @@ class VG(VariantGenerator):
     def i_context(self):
         # return [True, False]
         return [
-            # [],
+            [],
             # ["linear"],
-            ["gating"],
+            # ["gating"],
             # ["linear", "gating"]
         ]
 
@@ -175,8 +177,8 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def context_dim(self, base_filters):
-        return [base_filters]
-        return [32]
+        # return [base_filters]
+        # return [32]
         return [64]
 
     @variant(hide=False)
@@ -200,7 +202,7 @@ class VG(VariantGenerator):
         return [
             # [0,0], # 1min15s, 660k infer params
             # [0,0,0], # 1min40s, 1M infer params
-            [0,0,0,0],
+            [0,0,1,3],
             # [0,0,1,1,]
             # [1,]*7
         ]
@@ -215,7 +217,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nar(self, i_nar):
-        return [i_nar,]
+        return [6,]
 
     @variant(hide=False)
     def nr(self, unconditional):
@@ -325,7 +327,6 @@ for v in variants[i:i+1]:
                 base_filters=v["base_filters"],
                 enc_rep=v["rep"],
                 dec_rep=v["rep"],
-                enc_tie_weights=v["enc_tie_weights"],
             ),
         )
 
@@ -366,7 +367,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0107_TRF_adaptive_anneal_deepcond_debug2",
+            exp_prefix="0108_cifar_dc_regenc",
             seed=v["seed"],
             variant=v,
             mode="local",

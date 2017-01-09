@@ -64,10 +64,7 @@
 # deeper
 
 # deep cond
-
-# straight from 0.025 fails to use code; optimization still unstable
-
-
+# resume from 300 bits to 100 bits
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, Anneal
@@ -114,7 +111,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.07, 0.025]# 0.1]
+        return [0.025]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -256,7 +253,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 1
+i = 0
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -356,6 +353,7 @@ for v in variants[i:i+1]:
             adaptive_kl=True,
             ema_kl_decay=0.95,
             deep_cond=True,
+            resume_from="/home/peter/rllab-private/data/local/0107-TRF-adaptive-anneal-deepcond-debug2/0107_TRF_adaptive_anneal_deepcond_debug2_2017_01_07_17_42_35_0001/pa_mnist_ar_nr_cond__160000.ckpt",
             # resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
             # staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
@@ -366,7 +364,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0107_TRF_adaptive_anneal_deepcond_debug2",
+            exp_prefix="0108_TRF_adaptive_anneal_deepcond_debug2_resume",
             seed=v["seed"],
             variant=v,
             mode="local",

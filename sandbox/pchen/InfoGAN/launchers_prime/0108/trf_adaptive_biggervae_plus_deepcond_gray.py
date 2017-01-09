@@ -114,7 +114,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.07, 0.025]# 0.1]
+        return [0.08, ]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -201,6 +201,7 @@ class VG(VariantGenerator):
             # [0,0], # 1min15s, 660k infer params
             # [0,0,0], # 1min40s, 1M infer params
             [0,0,0,0],
+            [0,0,1,1,2],
             # [0,0,1,1,]
             # [1,]*7
         ]
@@ -310,6 +311,7 @@ for v in variants[i:i+1]:
             nr_cond_nins=v["ar_nr_cond_nins"],
             nr_extra_nins=v["ar_nr_extra_nins"],
             extra_compute=False,
+            grayscale=True,
         )
 
         model = RegularizedHelmholtzMachine(
@@ -356,6 +358,7 @@ for v in variants[i:i+1]:
             adaptive_kl=True,
             ema_kl_decay=0.95,
             deep_cond=True,
+            input_skip=True,
             # resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
             # staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
@@ -366,7 +369,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0107_TRF_adaptive_anneal_deepcond_debug2",
+            exp_prefix="0108_TRF_adaptive_anneal_deepcond_gray",
             seed=v["seed"],
             variant=v,
             mode="local",
