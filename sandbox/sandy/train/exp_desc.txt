@@ -1,0 +1,2 @@
+exp003.py: Exactly replicating Haoran's experiments on EC2 - same param settings
+exp004.py: Same as exp003, except with my AtariEnv instead of Haoran's

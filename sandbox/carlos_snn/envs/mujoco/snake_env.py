@@ -106,12 +106,8 @@ class SnakeEnv(MujocoEnv, Serializable):
     def plot_visitation(self, paths, mesh_density=50, maze=None, scaling=2, prefix=''):
         fig, ax = plt.subplots()
         # now we will grid the space and check how much of it the policy is covering
-        if self.ego_obs:
-            x_max = np.ceil(np.max(np.abs(np.concatenate([path["env_infos"]['com'][:, 0] for path in paths]))))
-            y_max = np.ceil(np.max(np.abs(np.concatenate([path["env_infos"]['com'][:, 1] for path in paths]))))
-        else:
-            x_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -3] for path in paths]))))
-            y_max = np.ceil(np.max(np.abs(np.concatenate([path["observations"][:, -2] for path in paths]))))
+        x_max = np.ceil(np.max(np.abs(np.concatenate([path["env_infos"]['com'][:, 0] for path in paths]))))
+        y_max = np.ceil(np.max(np.abs(np.concatenate([path["env_infos"]['com'][:, 1] for path in paths]))))
         furthest = max(x_max, y_max)
         print('THE FUTHEST IT WENT COMPONENT-WISE IS: x_max={}, y_max={}'.format(x_max, y_max))
         # if maze:
@@ -130,20 +126,17 @@ class SnakeEnv(MujocoEnv, Serializable):
             dict_visit = collections.OrderedDict()  # keys: latents, values: np.array with number of visitations
             num_latents = np.size(paths[0]["agent_infos"][selectors_name][0])
             # set all the labels for the latents and initialize the entries of dict_visit
+            size_grid = int(2 * furthest * mesh_density + 1)
             for i in range(num_latents):  # use integer to define the latents
-                dict_visit[i] = np.zeros((2 * furthest * mesh_density + 1, 2 * furthest * mesh_density + 1))
+                dict_visit[i] = np.zeros((size_grid, size_grid))
 
             # keep track of the overlap
             overlap = 0
             # now plot all the paths
             for path in paths:
                 lats = [np.nonzero(lat)[0][0] for lat in path['agent_infos'][selectors_name]]  # list of all lats by idx
-                # if self.ego_obs:
                 com_x = np.ceil(((np.array(path['env_infos']['com'][:, 0]) + furthest) * mesh_density)).astype(int)
                 com_y = np.ceil(((np.array(path['env_infos']['com'][:, 1]) + furthest) * mesh_density)).astype(int)
-                # else:
-                #     com_x = np.ceil(((np.array(path['observations'][:, -3]) + furthest) * mesh_density)).astype(int)
-                #     com_y = np.ceil(((np.array(path['observations'][:, -2]) + furthest) * mesh_density)).astype(int)
                 coms = list(zip(com_x, com_y))
                 for i, com in enumerate(coms):
                     dict_visit[lats[i]][com] += 1
@@ -152,7 +145,7 @@ class SnakeEnv(MujocoEnv, Serializable):
             num_colors = num_latents + 2  # +2 for the 0 and Repetitions NOT COUNTING THE WALLS
             cmap = plt.get_cmap('nipy_spectral', num_colors)  # add one color for the walls
             # create a matrix with entries corresponding to the latent that was there (or other if several/wall/nothing)
-            visitation_by_lat = np.zeros((2 * furthest * mesh_density + 1, 2 * furthest * mesh_density + 1))
+            visitation_by_lat = np.zeros((size_grid, size_grid))
             for i, visit in dict_visit.items():
                 lat_visit = np.where(visit == 0, visit, i + 1)  # transform the map into 0 or i+1
                 visitation_by_lat += lat_visit
@@ -190,7 +183,8 @@ class SnakeEnv(MujocoEnv, Serializable):
             # still log the total visitation
             visitation_all = reduce(np.add, [visit for visit in dict_visit.values()])
         else:
-            visitation_all = np.zeros((2 * furthest * mesh_density + 1, 2 * furthest * mesh_density + 1))
+            size_grid = int(2 * furthest * mesh_density + 1)
+            visitation_all = np.zeros((size_grid, size_grid))
             for path in paths:
                 com_x = np.ceil(((np.array(path['env_infos']['com'][:, 0]) + furthest) * mesh_density)).astype(int)
                 com_y = np.ceil(((np.array(path['env_infos']['com'][:, 1]) + furthest) * mesh_density)).astype(int)
