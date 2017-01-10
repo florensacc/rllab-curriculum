@@ -1937,6 +1937,203 @@ class RegularizedHelmholtzMachine(object):
                          # dropout(0.9).
                          flatten().
                          fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
+            elif self.network_type == "shared_spatial_code_dense_block":
+                cond_rep = network_args.get("cond_rep", 1)
+                from prettytensor import UnboundVariable
+                model_avg = network_args.get("model_avg", False)
+                with pt.defaults_scope(
+                        activation_fn=tf.nn.elu,
+                        custom_phase=UnboundVariable('custom_phase'),
+                        wnorm=self.wnorm,
+                        pixel_bias=True,
+                        model_avg=model_avg,
+                ):
+                    encoder = \
+                        (pt.template('input', self.book) # will be feature maps input
+                         )
+                    from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import resconv_v1, resdeconv_v1
+                    gen_base_filters = network_args.get("base_filters", 64)
+                    ac = network_args.get("ac", 0.1)
+                    fs = network_args.get("filter_size", 5)
+
+                    base_filters = network_args.get("enc_base_filters", gen_base_filters)
+                    nn = network_args.get("enc_nn", False)
+                    rep = network_args.get("enc_rep", 1)
+                    rate = network_args.get("enc_rate", 1)
+                    print("encoder nn %s" % nn)
+                    print("encoder fs %s" % fs)
+                    encoder = resconv_v1(encoder, fs, base_filters, stride=1, add_coeff=ac, origin_conv=True, nin=True) # 32
+                    ## ===
+                    xs = []
+                    for _ in range(rep):
+                        new_in = (
+                            encoder
+                            .concat(3, list(xs))
+                            .nl()
+                            .conv2d_mod(1, base_filters*4, )
+                        )
+                        new_x = (
+                            new_in
+                            .conv2d_mod(fs, base_filters, activation_fn=None)
+                        )
+                        xs.append(new_x)
+                    encoder = encoder.concat(3, list(xs)).nl()
+                    ## ===
+
+                    encoder = resconv_v1(
+                        encoder,
+                        fs,
+                        base_filters*2,
+                        stride=2,
+                        add_coeff=ac,
+                        nin=True
+                    ) #16
+
+                    ## ===
+                    xs = []
+                    for _ in range(rep):
+                        new_in = (
+                            encoder
+                                .concat(3, list(xs))
+                                .nl()
+                                .conv2d_mod(1, base_filters*4, )
+                        )
+                        new_x = (
+                            new_in
+                                .conv2d_mod(fs, base_filters*2, activation_fn=None)
+                        )
+                        xs.append(new_x)
+                    encoder = encoder.concat(3, list(xs)).nl()
+                    ## ===
+
+                    encoder = resconv_v1(
+                        encoder,
+                        fs,
+                        base_filters*2,
+                        stride=2,
+                        add_coeff=ac,
+                        nin=True
+                    ) #8
+
+                    ## ===
+                    xs = []
+                    for _ in range(rep+1):
+                        new_in = (
+                            encoder
+                                .concat(3, list(xs))
+                                .nl()
+                                .conv2d_mod(1, base_filters*4, )
+                        )
+                        new_x = (
+                            new_in
+                                .conv2d_mod(fs, base_filters*2, activation_fn=None)
+                        )
+                        xs.append(new_x)
+                    encoder = encoder.concat(3, list(xs)).nl()
+                    ## ===
+
+                    out_chn = self.inference_dist.dist_flat_dim // 8 // 8
+                    self.encoder_template = encoder.conv2d_mod(
+                        1, out_chn,
+                        activation_fn=None
+                    ).flatten()
+
+                    base_filters = network_args.get("dec_base_filters", gen_base_filters)
+                    res_keep_prob = network_args.get("dec_res_keep_prob", 1.)
+                    nn = network_args.get("dec_nn", False)
+                    rep = network_args.get("dec_rep", 1)
+
+                    in_chn = self.latent_dist.dim // 8 // 8
+                    print("decoder nn %s" % nn)
+                    decoder = (
+                        pt.template('input', self.book).
+                            reshape([-1, 8, 8, in_chn]).
+                            conv2d_mod(
+                            1, base_filters*2,
+                               )
+                    )
+                    #
+                    xs = []
+                    for _ in range(rep+1):
+                        new_in = (
+                            decoder
+                                .concat(3, list(xs))
+                                .nl()
+                                .conv2d_mod(1, base_filters*4, )
+                        )
+                        new_x = (
+                            new_in
+                                .conv2d_mod(fs, base_filters*2, activation_fn=None)
+                        )
+                        xs.append(new_x)
+                    decoder = decoder.concat(3, list(xs)).nl()
+                    #
+                    decoder = resdeconv_v1(
+                        decoder,
+                        fs,
+                        base_filters*2,
+                        out_wh=[16,16],
+                        keep_prob=res_keep_prob,
+                        nn=nn,
+                        nin=True,
+                        add_coeff=ac
+                    )
+                    #
+                    xs = []
+                    for _ in range(rep):
+                        new_in = (
+                            decoder
+                                .concat(3, list(xs))
+                                .nl()
+                                .conv2d_mod(1, base_filters*4, )
+                        )
+                        new_x = (
+                            new_in
+                                .conv2d_mod(fs, base_filters*2, activation_fn=None)
+                        )
+                        xs.append(new_x)
+                    decoder = decoder.concat(3, list(xs)).nl()
+                    #
+
+                    decoder = resdeconv_v1(
+                        decoder,
+                        fs,
+                        base_filters,
+                        out_wh=[32,32],
+                        keep_prob=res_keep_prob,
+                        nn=nn,
+                        add_coeff=ac,
+                        nin=True
+                    )
+                    #
+                    xs = []
+                    for _ in range(rep):
+                        new_in = (
+                            decoder
+                                .concat(3, list(xs))
+                                .nl()
+                                .conv2d_mod(1, base_filters*4, )
+                        )
+                        new_x = (
+                            new_in
+                                .conv2d_mod(fs, base_filters, activation_fn=None)
+                        )
+                        xs.append(new_x)
+                    decoder = decoder.concat(3, list(xs)).nl()
+                    #
+                    self.decoder_template = (
+                        decoder.
+                            conv2d_mod(fs, cond_rep, activation_fn=None)
+                    )
+                    self.reg_encoder_template = \
+                        (pt.template('input').
+                         reshape([self.batch_size] + list(image_shape)).
+                         custom_conv2d(5, 32, ).
+                         custom_conv2d(5, 64, ).
+                         custom_conv2d(5, 128, edges='VALID').
+                         # dropout(0.9).
+                         flatten().
+                         fully_connected(self.reg_latent_dist.dist_flat_dim, activation_fn=None))
             elif self.network_type == "pixelcnn_based_shared_spatial_code":
                 cond_rep = network_args.get("cond_rep", 1)
                 from prettytensor import UnboundVariable

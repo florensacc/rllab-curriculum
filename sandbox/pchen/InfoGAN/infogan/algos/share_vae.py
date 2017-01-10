@@ -62,6 +62,7 @@ class ShareVAE(object):
             resume_includes=None,
             adaptive_kl=False,
             ema_kl_decay=0.99,
+            min_kl_coeff=0.001,
             input_skip=False,
             deep_cond=False,
     ):
@@ -76,6 +77,7 @@ class ShareVAE(object):
         Parameters
         ----------
         """
+        self.min_kl_coeff = min_kl_coeff
         self.deep_cond = deep_cond
         self.input_skip = input_skip
         self.ema_kl_decay = ema_kl_decay
@@ -911,7 +913,7 @@ class ShareVAE(object):
                 cur_coeff = desired = 0.001
                 if ema_kl < self.min_kl:
                     cur_coeff = sess.run(self.kl_coeff)
-                    desired = max(cur_coeff * 0.9, 0.001)
+                    desired = max(cur_coeff * 0.9, self.min_kl_coeff)
                 elif ema_kl > self.min_kl * 1.3:
                     cur_coeff = sess.run(self.kl_coeff)
                     desired = min(cur_coeff * 1.1, 1.)

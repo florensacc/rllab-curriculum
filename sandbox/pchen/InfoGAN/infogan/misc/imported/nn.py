@@ -281,7 +281,7 @@ def gated_resnet(x, nonlinearity=concat_elu, conv=conv2d, context=None, **kwargs
     c1 = nonlinearity(c1)
     c2 = nin(c1, num_filters*2, nonlinearity=None, init_scale=0.1, **kwargs)
     if context is not None:
-        print("using context!")
+        # print("using context!")
         context = tf.nn.elu(nin(context, num_filters*2))
         c2 = c2 + context
     c3 = c2[:,:,:,:num_filters] * tf.nn.sigmoid(c2[:,:,:,num_filters:])
@@ -293,7 +293,7 @@ def aux_gated_resnet(x, u, nonlinearity=concat_elu, conv=conv2d, context=None, *
     c1 = conv(nonlinearity(x), num_filters, nonlinearity=None, **kwargs) + nin(nonlinearity(u), num_filters, nonlinearity=None, **kwargs)
     c2 = nin(nonlinearity(c1), num_filters*2, nonlinearity=None, init_scale=0.1, **kwargs)
     if context is not None:
-        print("using context!")
+        # print("using context!")
         context = tf.nn.elu(nin(context, num_filters*2))
         c2 = c2 + context
     c3 = c2[:,:,:,:num_filters] * tf.nn.sigmoid(c2[:,:,:,num_filters:])
