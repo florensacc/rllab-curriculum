@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 
 def rollout(sess,env, agent, exploration_strategy, qf, random=False,
     pause=False, max_path_length=np.inf, animated=False, speedup=1,
-    optimal=False, head=-1):
+    optimal=False, head=-1, plot_qf=True):
     observations = []
     actions = []
     rewards = []
@@ -86,33 +86,35 @@ def rollout(sess,env, agent, exploration_strategy, qf, random=False,
             break
         if animated:
             env.render()
-            # render the Q values
-            X,Y,Q = get_Q(o)
-            ax_qf.clear()
-            contours = ax_qf.contour(X,Y,Q, 20)
-            ax_qf.clabel(contours,inline=1,fontsize=10,fmt='%.0f')
+            if plot_qf:
+                # render the Q values
+                X,Y,Q = get_Q(o)
+                ax_qf.clear()
+                contours = ax_qf.contour(X,Y,Q, 20)
+                ax_qf.clabel(contours,inline=1,fontsize=10,fmt='%.0f')
 
-            # current action
-            a = a.ravel()
-            ax_qf.plot(a[0],a[1],'r*')
+                # current action
+                a = a.ravel()
+                ax_qf.plot(a[0],a[1],'r*')
 
-            # all actions
-            all_actions, agent_info = policy.get_action(o,k='all')
-            for k, action in enumerate(all_actions[0]):
-                x = action[0]
-                y = action[1]
-                ax_qf.plot(x,y,'*')
-                ax_qf.text(x,y,'%d'%(k))
+                # all actions
+                all_actions, agent_info = policy.get_action(o,k='all')
+                for k, action in enumerate(all_actions[0]):
+                    x = action[0]
+                    y = action[1]
+                    ax_qf.plot(x,y,'*')
+                    ax_qf.text(x,y,'%d'%(k))
 
 
-            plt.draw()
-            timestep = 0.05
-            plt.pause(timestep / speedup)
+                plt.draw()
+                timestep = 0.05
+                plt.pause(timestep / speedup)
             if pause:
                 input()
         o = next_o
+    input() # pause between heads
     if animated:
-        env.render(close=True)
+        env.render(close=False) # close=True causes the mujoco sim to fail
     plt.close(fig)
 
     return dict(
@@ -141,6 +143,7 @@ if __name__ == "__main__":
     parser.add_argument('--optimal', default=False,
         action='store_true')
     parser.add_argument('--head', default=-1, type=int)
+    parser.add_argument('--noqf', default=False, action='store_true')
     args = parser.parse_args()
 
     policy = None
@@ -168,6 +171,7 @@ if __name__ == "__main__":
                         speedup=args.speedup,
                         random=args.random,
                         head=args.head,
+                        plot_qf=not args.noqf,
                     )
 
                 # Hack for now. Not sure why rollout assumes that close is an

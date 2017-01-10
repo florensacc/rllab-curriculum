@@ -41,8 +41,10 @@ class NNCritic(NeuralNetwork):
                 )
             else:
                 self.observations_placeholder = observation_input
-            self._output = self.create_network(self.actions_placeholder,
-                                               self.observations_placeholder)
+            self._output = self.create_network(
+                self.actions_placeholder,
+                self.observations_placeholder,
+            )
             self.variable_scope = variable_scope
 
     def get_weight_tied_copy(self, action_input):
@@ -64,7 +66,7 @@ class NNCritic(NeuralNetwork):
             reuse=True,
         )
 
-    def create_network(self, action_input):
+    def create_network(self, action_input, observation_input):
         raise NotImplementedError
 
 class FeedForwardCritic(NNCritic):
@@ -112,9 +114,9 @@ class FeedForwardCritic(NNCritic):
             hidden_nonlinearity=self.hidden_nonlinearity,
         )
 
-    def create_network(self, action_input):
+    def create_network(self, action_input, observation_input):
         with tf.variable_scope("observation_mlp") as _:
-            observation_output = mlp(self.observations_placeholder,
+            observation_output = mlp(observation_input,
                                      self.observation_dim,
                                      self.observation_hidden_sizes,
                                      self.hidden_nonlinearity,

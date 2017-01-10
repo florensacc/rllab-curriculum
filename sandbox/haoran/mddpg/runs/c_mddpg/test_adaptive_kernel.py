@@ -77,7 +77,7 @@ class MixtureGaussianCritic(NNCritic):
             **kwargs
         )
 
-    def create_network(self, action_input):
+    def create_network(self, action_input, observation_input):
         # unnormalized density
         output = tf.log(tf.add_n([
             w * (1./tf.sqrt(2. * np.pi * tf.square(sigma)) *
