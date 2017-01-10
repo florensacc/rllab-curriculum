@@ -491,10 +491,10 @@ class MDDPG(OnlineAlgorithm, Serializable):
     def get_epoch_snapshot(self, epoch):
         return dict(
             epoch=epoch,
-            env=self.env,
-            policy=self.policy,
-            es=self.exploration_strategy,
-            qf=self.qf,
-            kernel=self.kernel,
+            # env=self.env,
+            # policy=self.policy,
+            # es=self.exploration_strategy,
+            # qf=self.qf,
+            # kernel=self.kernel,
             algo=self,
         )

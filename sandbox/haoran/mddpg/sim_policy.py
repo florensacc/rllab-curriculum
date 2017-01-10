@@ -112,7 +112,7 @@ def rollout(sess,env, agent, exploration_strategy, qf, random=False,
             if pause:
                 input()
         o = next_o
-    input() # pause between heads
+    input("Press Enter to continue...") # pause between heads
     if animated:
         env.render(close=False) # close=True causes the mujoco sim to fail
     plt.close(fig)
