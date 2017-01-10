@@ -120,7 +120,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.04]# 0.1]
+        return [0.1]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -131,7 +131,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def base_filters(self, ):
-        return [12]
+        return [18]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -230,7 +230,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def rep(self, unconditional):
-        return [4]
+        return [3,6]
 
     # @variant(hide=False)
     # def ar_nr_extra_nins(self, num_gpus):
@@ -263,7 +263,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 0
+i = 1
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -373,7 +373,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0108_cifar_dc_highgen_dense_scaled",
+            exp_prefix="0109_cifar_dc_dense_gray",
             seed=v["seed"],
             variant=v,
             mode="local",

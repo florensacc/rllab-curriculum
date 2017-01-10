@@ -69,10 +69,6 @@
 
 # overfitting too much on the encoder end (decoder probably fine.?)
 
-# more free bits
-
-# high reps problem hard to optimize? try dense net
-
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -107,7 +103,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def lr(self):
-        return [0.004, ] #0.001]
+        return [0.002*2, ] #0.001]
 
     @variant
     def seed(self):
@@ -120,18 +116,17 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.04]# 0.1]
+        return [0.01]# 0.1]
     #
     @variant(hide=False)
     def network(self):
-        yield "shared_spatial_code_dense_block"
-        # yield "pixelcnn_based_shared_spatial_code"
+        yield "pixelcnn_based_shared_spatial_code"
         # yield "pixelcnn_based_shared_spatial_code_tiny"
         # yield "dummy"
 
     @variant(hide=False)
     def base_filters(self, ):
-        return [12]
+        return [48]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -230,7 +225,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def rep(self, unconditional):
-        return [4]
+        return [2]
 
     # @variant(hide=False)
     # def ar_nr_extra_nins(self, num_gpus):
@@ -354,7 +349,6 @@ for v in variants[i:i+1]:
             anneal_after=v["anneal_after"],
             img_on=False,
             num_gpus=v["num_gpus"],
-            vis_ar=False,
             slow_kl=True,
             unconditional=v["unconditional"],
             # kl_coeff=0. if v["unconditional"] else 1,
@@ -362,7 +356,8 @@ for v in variants[i:i+1]:
             adaptive_kl=True,
             ema_kl_decay=0.95,
             deep_cond=True,
-            min_kl_coeff=0.00001,
+            resume_from="/home/peter/rllab-private/data/local/0108-cifar-dc-regenc/0108_cifar_dc_regenc_2017_01_08_23_35_56_0001/3039_saved/pa_mnist_ar_nr_cond__130000.ckpt",
+            vis_ar=False,
             # resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
             # staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
@@ -372,8 +367,8 @@ for v in variants[i:i+1]:
         )
 
         run_experiment_lite(
-            algo.train(),
-            exp_prefix="0108_cifar_dc_highgen_dense_scaled",
+            algo.vis(),
+            exp_prefix="0109_cifar_dc_regenc_resume",
             seed=v["seed"],
             variant=v,
             mode="local",

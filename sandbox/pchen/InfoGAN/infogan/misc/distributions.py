@@ -2308,16 +2308,18 @@ class CondPixelCNN(Distribution):
         )
 
     @functools.lru_cache(maxsize=None)
-    def sample_sym(self, n, unconditional=False):
+    def sample_sym(self, n, unconditional=False, deep_cond=False):
         x_var, context_var = \
             tf.placeholder(tf.float32, shape=[n,]+list(self._shape)), \
             tf.placeholder(tf.float32, shape=[n, ] + list(self._shape[:2]) + [self.nr_filters])
-        causal = self.infer_temp(x_var)
+        causal = self.infer_temp(x_var, context=context_var if deep_cond else None)
         if unconditional:
             context_var = context_var * 0.
         tgt_vec = self.cond_temp(causal, context_var)
         import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
-        return x_var, context_var, nn.sample_from_discretized_mix_logistic(tgt_vec, self.nr_logistic_mix) / 2 # convert back to 0.5 scale
+        return x_var, \
+               context_var, \
+               nn.sample_from_discretized_mix_logistic(tgt_vec, self.nr_logistic_mix) / 2 # convert back to 0.5 scale
 
     @functools.lru_cache(maxsize=None)
     def sample_one_step(self, x_var, info):

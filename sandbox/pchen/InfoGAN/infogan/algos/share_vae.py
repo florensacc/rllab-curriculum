@@ -1098,7 +1098,7 @@ class ShareVAE(object):
         bs_per_gpu = self.batch_size // self.num_gpus
 
         x_var, context_var, proposal_sym = dist.sample_sym(
-            bs_per_gpu, unconditional=self.unconditional
+            bs_per_gpu, unconditional=self.unconditional, deep_cond=self.deep_cond,
         )
         batch_imshp = [bs_per_gpu, ] + list(self.model.image_shape)
         h, w = self.model.image_shape[:2]

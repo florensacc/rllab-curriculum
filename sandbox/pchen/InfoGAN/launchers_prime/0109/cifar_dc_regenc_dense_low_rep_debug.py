@@ -107,7 +107,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def lr(self):
-        return [0.004, ] #0.001]
+        return [0.002*2, ] #0.001]
 
     @variant
     def seed(self):
@@ -230,7 +230,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def rep(self, unconditional):
-        return [4]
+        return [1]
 
     # @variant(hide=False)
     # def ar_nr_extra_nins(self, num_gpus):
@@ -373,7 +373,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0108_cifar_dc_highgen_dense_scaled",
+            exp_prefix="0108_cifar_dc_lowgen_dense",
             seed=v["seed"],
             variant=v,
             mode="local",
