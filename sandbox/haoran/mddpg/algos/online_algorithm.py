@@ -30,6 +30,7 @@ class OnlineAlgorithm(RLAlgorithm):
             policy,
             exploration_strategy,
             batch_size=64,
+            start_epoch=0,
             n_epochs=1000,
             epoch_length=1000,
             min_pool_size=10000,
@@ -65,6 +66,7 @@ class OnlineAlgorithm(RLAlgorithm):
         self.exploration_strategy = exploration_strategy
         self.replay_pool_size = replay_pool_size
         self.batch_size = batch_size
+        self.start_epoch = start_epoch
         self.n_epochs = n_epochs
         self.epoch_length = epoch_length
         self.min_pool_size = min_pool_size
@@ -121,7 +123,8 @@ class OnlineAlgorithm(RLAlgorithm):
             gt.reset()
             gt.set_def_unique(False)
             for epoch in gt.timed_for(
-                range(self.n_epochs),save_itrs=True
+                range(self.start_epoch, self.start_epoch + self.n_epochs),
+                save_itrs=True,
             ):
                 self.update_training_settings(epoch)
                 logger.push_prefix('Epoch #%d | ' % epoch)

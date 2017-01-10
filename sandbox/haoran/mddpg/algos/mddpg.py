@@ -14,11 +14,12 @@ import time
 from collections import OrderedDict
 import numpy as np
 import tensorflow as tf
+from rllab.core.serializable import Serializable
 
 TARGET_PREFIX = "target_"
 
 
-class MDDPG(OnlineAlgorithm):
+class MDDPG(OnlineAlgorithm, Serializable):
     """
     Multiheaded DDPG with Stein Variational Gradient Descent
     """
@@ -53,8 +54,16 @@ class MDDPG(OnlineAlgorithm):
         :param qf_learning_rate: Learning rate of the critic
         :param policy_learning_rate: Learning rate of the actor
         :param Q_weight_decay: How much to decay the weights for Q
+        :param alpha: weight on the repelling force in SVGD
+        :param qf_extra_training: train the Q function a few more times
+        :param only_train_critic:
+        :param only_train_actor:
+        :param resume: if you want to keep the params in qf and policy, use this
+            ,otherwise their parameters will be reinitialized during training by
+            _init_tensorflow_ops
         :return:
         """
+        Serializable.quick_init(self, locals())
         self.kernel = kernel
         self.qf = qf
         self.K = K
@@ -487,4 +496,5 @@ class MDDPG(OnlineAlgorithm):
             es=self.exploration_strategy,
             qf=self.qf,
             kernel=self.kernel,
+            algo=self,
         )
