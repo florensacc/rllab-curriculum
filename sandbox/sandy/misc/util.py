@@ -4,3 +4,8 @@ def get_time_stamp():
     now = datetime.datetime.now(dateutil.tz.tzlocal())
     timestamp = now.strftime('%Y%m%d_%H%M%S_%f')
     return timestamp
+
+def create_dir_if_needed(directory):
+    import os
+    if not os.path.exists(directory):
+        os.makedirs(directory)
