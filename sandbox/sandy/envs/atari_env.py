@@ -5,11 +5,12 @@
 import cv2
 import gym, gym.envs, gym.spaces
 import numpy as np
+from scipy.misc import imresize
+
 from rllab.envs.base import Step
-from rllab.envs.gym_env import GymEnv
 from rllab.misc.overrides import overrides
 from rllab.spaces.box import Box
-from scipy.misc import imresize
+from sandbox.sandy.envs.gym_env import GymEnv
 
 RESIZE_W = 42  # 84
 RESIZE_H = 42  # 84
@@ -20,7 +21,7 @@ FRAMESKIP = 4
 RGB2Y_COEFF = np.array([0.2126, 0.7152, 0.0722])  # Y = np.dot(rgb, RGB2Y_COEFF)
 
 class AtariEnv(GymEnv):
-    def __init__(self, env_name, record_video=True, video_schedule=None, \
+    def __init__(self, env_name, record_video=False, video_schedule=None, \
                  log_dir=None, record_log=True, force_reset=False):
         super().__init__(env_name, record_video=record_video, \
                          video_schedule=video_schedule, log_dir=log_dir, \
