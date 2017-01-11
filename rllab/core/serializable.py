@@ -22,6 +22,8 @@ class Serializable(object):
             kwargs = locals_[spec.kwonlyargs]
         else:
             kwargs = dict()
+        if spec.varkw is not None and spec.varkw in locals_:
+            kwargs = dict(kwargs, **locals_[spec.varkw])
         self.__args = tuple(in_order_args) + varargs
         self.__kwargs = kwargs
         setattr(self, "_serializable_initialized", True)

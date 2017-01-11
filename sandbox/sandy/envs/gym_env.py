@@ -1,9 +1,8 @@
 import gym
-import gym.wrappers
 import gym.envs
 import gym.spaces
+from gym import wrappers
 from gym.monitoring import monitor_manager
-from gym.wrappers.monitoring import _Monitor
 import os
 import os.path as osp
 from rllab.envs.base import Env, Step
@@ -70,12 +69,12 @@ class GymEnv(Env, Serializable):
             else:
                 if video_schedule is None:
                     video_schedule = CappedCubicVideoSchedule()
-            self.env = gym.wrappers.Monitor(self.env, log_dir, video_callable=video_schedule, force=True)
+            self.env = wrappers.Monitor(env, log_dir, video_callable=video_schedule, force=True)  # add 'force=True' if want overwrite dirs
             self.monitoring = True
 
         self._observation_space = convert_gym_space(env.observation_space)
         self._action_space = convert_gym_space(env.action_space)
-        self._horizon = env.spec.timestep_limit
+        self._horizon = env.spec.tags.get('wrapper_config.TimeLimit.max_episode_steps')
         self._log_dir = log_dir
         self._force_reset = force_reset
 
@@ -92,10 +91,12 @@ class GymEnv(Env, Serializable):
         return self._horizon
 
     def reset(self):
-        if self._force_reset and self.monitoring:
-            recorder = self.env._monitor.stats_recorder
-            if recorder is not None:
-                recorder.done = True
+        if self._force_reset:
+            if hasattr(self.env, '_monitor'):
+                if hasattr(self.env._monitor, 'stats_recorder'):
+                    recorder = self.env._monitor.stats_recorder
+                    if recorder is not None:
+                        recorder.done = True
         return self.env.reset()
 
     def step(self, action):
@@ -107,7 +108,7 @@ class GymEnv(Env, Serializable):
 
     def terminate(self):
         if self.monitoring:
-            self.env._close()
+            self.env._monitor.close()
             if self._log_dir is not None:
                 print("""
     ***************************

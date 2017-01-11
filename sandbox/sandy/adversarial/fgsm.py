@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import h5py
 import joblib
 import os
 import numpy as np
@@ -9,20 +10,24 @@ import theano
 
 from rllab.misc import ext
 from rllab.sampler import parallel_sampler
+from sandbox.sandy.misc.util import create_dir_if_needed, get_time_stamp
+
+SAVE_OUTPUT = True  # Save adversarial perturbations to time-stamped h5 file
+DEFAULT_OUTPUT_DIR = '/home/shhuang/src/rllab-private/data/local/rollouts'
 
 N = 10  # Number of trajectory rollouts to perform
 BATCH_SIZE = 50000  # Should be large enough to ensure that there are at least N trajs
-DATA_DIR = "/home/shhuang/src/rllab-private/data/local/experiment/"
-PARAMS_FNAME = 'params.pkl'
 
-FGSM_EPS = 0.0001  # Amount to change each pixel
-FGSM_RANDOM_SEED = 100001
+#FGSM_EPS = [0.0005, 0.001, 0.002, 0.004, 0.008, 0.016, 0.032, 0.064, 0.128]  # Amount to change each pixel (1.0 / 256 = 0.00390625)
+FGSM_EPS = [0.004]  # Amount to change each pixel (1.0 / 256 = 0.00390625)
+FGSM_RANDOM_SEED = 0
+
+OBS_MIN = -1  # minimum possible value for input x (NOTE: domain-specific)
+OBS_MAX = +1  # maximum possible value for input x (NOTE: domain-specific)
 
 def get_average_return(algo, n, seed=None):
     if seed is not None:
         # Set random seed, for reproducibility
-        #np.random.seed(seed)
-        #random.seed(seed)
         #ext.set_seed(seed)
         parallel_sampler.set_seed(seed)
         algo.env._wrapped_env.env._seed(seed)  # Set OpenAI AtariEnv seed
@@ -33,7 +38,7 @@ def get_average_return(algo, n, seed=None):
     avg_return = np.mean([sum(p['rewards']) for p in paths])
     return avg_return, paths
 
-def fgsm_perturbation(obs, algo, fgsm_eps):
+def fgsm_perturbation(obs, algo, fgsm_eps, obs_min, obs_max, output_h5=None):
     # Apply fast gradient sign method (FGSM):
     #     x + \epsilon * sign(\grad_x J(\theta, x, y))
     #     where \theta = policy params, x = obs, y = action
@@ -51,41 +56,81 @@ def fgsm_perturbation(obs, algo, fgsm_eps):
     # Can only adjust the last frame (not the earlier frames), so zero out
     # values in the earlier frames
     sign_grad_x[:-1,:] = 0
-    return obs + fgsm_eps * sign_grad_x
+    adv_obs = obs + fgsm_eps * sign_grad_x
 
-def load_model(data_folder):
+    # Clip pixels to be within range [obs_min, obs_max]
+    adv_obs = np.minimum(obs_max, np.maximum(obs_min, adv_obs))
+    if np.min(adv_obs) < -1 or np.max(adv_obs) > 1:
+        print("Min", np.min(adv_obs), "Max", np.max(adv_obs))
+
+    if output_h5 is not None:
+        output_f = h5py.File(output_h5, 'r+')
+        idx = len(output_f['rollouts'])
+        g = output_f['rollouts'].create_group(str(idx))
+        g['change_unscaled'] = sign_grad_x[-1,:]
+        g['change'] = fgsm_eps * sign_grad_x[-1,:]
+        g['orig_input'] = obs[-1,:]
+        g['adv_input'] = adv_obs[-1,:]
+        output_f.close()
+    
+    return adv_obs
+
+def load_model(params_file):
     # Load model from saved file
-    data = joblib.load(os.path.join(DATA_DIR, data_folder, PARAMS_FNAME))
+    print("LOADING MODEL")
+    data = joblib.load(params_file)
     algo = data['algo']
     algo.batch_size = BATCH_SIZE
+    algo.sampler.worker_batch_size = BATCH_SIZE
+    algo.n_parallel = 1
     algo.max_path_length = data['env'].horizon
 
     # Copying what happens at the start of algo.train()
-    algo.start_worker()
+    assert type(algo).__name__ in ['TRPO', 'ParallelTRPO'], "Algo type not supported"
+    if 'TRPO' == type(algo).__name__:
+        algo.start_worker()
+
     algo.init_opt()
+
+    if 'ParallelTRPO' in str(type(algo)):
+        algo.init_par_objs()
+
     return algo
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('data_folder', type=str)
+    parser.add_argument('params_file', type=str)
+    parser.add_argument('--output_dir', type=str, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument("--prefix", type=str, default='fgsm-pong')
     args = parser.parse_args()
 
     # Load model from saved file
-    algo = load_model(args.data_folder)
+    algo = load_model(args.params_file)
 
     # Run policy rollouts for N trajectories, get average return
-    avg_return, paths = get_average_return(algo, N, seed=FGSM_RANDOM_SEED)
-    print(avg_return)
+    #avg_return, paths = get_average_return(algo, N, seed=FGSM_RANDOM_SEED)
+    #print("Return:", avg_return)
 
-    # Run policy rollouts with FGSM adversary for N trials, get average return
-    if hasattr(algo.env, "_wrapped_env"):  # Means algo.env is a ProxyEnv
-        algo.env._wrapped_env.set_adversary_fn(lambda x: fgsm_perturbation(x, algo, FGSM_EPS))
-    else:
-        algo.env.set_adversary_fn(lambda x: fgsm_perturbation(x, algo, FGSM_EPS))
-    avg_return_adversary = get_average_return(algo, N, seed=FGSM_RANDOM_SEED)
-    print(avg_return_adversary)
+    for fgsm_eps in FGSM_EPS:
+        if SAVE_OUTPUT:
+            create_dir_if_needed(args.output_dir)
+            output_h5 = os.path.join(args.output_dir, \
+                                     args.prefix + '_' + get_time_stamp() + '.h5')
+            f = h5py.File(output_h5, 'w')
+            f.create_group('rollouts')
+            f['adv_type'] = 'fgsm'
+            f.create_group('adv_params')
+            f['adv_params']['eps'] = fgsm_eps
+            f.close()
 
-    # TODO: Visualize what the adversarial examples look like
+        # Run policy rollouts with FGSM adversary for N trials, get average return
+        if hasattr(algo.env, "_wrapped_env"):  # Means algo.env is a ProxyEnv
+            algo.env._wrapped_env.set_adversary_fn(lambda x: fgsm_perturbation(x, algo, fgsm_eps, OBS_MIN, OBS_MAX, output_h5=output_h5))
+        else:
+            algo.env.set_adversary_fn(lambda x: fgsm_perturbation(x, algo, fgsm_eps, OBS_MIN, OBS_MAX, output_h5=output_h5))
+        avg_return_adversary, _ = get_average_return(algo, N, seed=FGSM_RANDOM_SEED)
+        print("Adversary Return:", avg_return_adversary)
+        print("\tAdversary Params:", fgsm_eps)
 
 if __name__ == "__main__":
     main()

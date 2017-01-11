@@ -14,7 +14,9 @@ from sandbox.sandy.parallel_trpo.conjugate_gradient_optimizer import ParallelCon
 from sandbox.sandy.parallel_trpo.trpo import ParallelTRPO
 
 """ environment """
-from sandbox.sandy.envs.atari_env_haoran import AtariEnv
+#from sandbox.sandy.envs.atari_env_haoran import AtariEnv
+from sandbox.sandy.envs.atari_env import AtariEnv
+from rllab.envs.normalized_env import normalize
 
 """ others """
 from sandbox.sandy.misc.util import get_time_stamp
@@ -113,8 +115,8 @@ for v in variants:
     env_seed = 1 # deterministic env
     frame_skip = 4
     max_start_nullops = 30
-    img_width = 42
-    img_height = 42
+    img_width = 84
+    img_height = 84
     n_last_screens = 4
     obs_type = "image"
     record_image = False
@@ -148,6 +150,7 @@ for v in variants:
         config.AWS_SPOT_PRICE = str(info["price"] * price_multiplier)
         if config.AWS_REGION_NAME == "us-west-1":
              config.AWS_IMAGE_ID = "ami-271b4847"  # Use Haoran's AWS image with his docker iamge
+
         n_parallel = int(info["vCPU"] /2)
 
         # choose subnet
@@ -177,20 +180,21 @@ for v in variants:
         raise NotImplementedError
 
     # construct objects ----------------------------------
-    env = AtariEnv(
-        game=game,
-        seed=env_seed,
-        img_width=img_width,
-        img_height=img_height,
-        obs_type=obs_type,
-        record_ram=record_ram,
-        record_image=record_image,
-        record_rgb_image=record_rgb_image,
-        record_internal_state=record_internal_state,
-        frame_skip=frame_skip,
-        max_start_nullops=max_start_nullops,
-        correct_luminance=True,
-    )
+    env = normalize(AtariEnv('Pong-v3', force_reset=True))
+    #env = AtariEnv(
+    #    game=game,
+    #    seed=env_seed,
+    #    img_width=img_width,
+    #    img_height=img_height,
+    #    obs_type=obs_type,
+    #    record_ram=record_ram,
+    #    record_image=record_image,
+    #    record_rgb_image=record_rgb_image,
+    #    record_internal_state=record_internal_state,
+    #    frame_skip=frame_skip,
+    #    max_start_nullops=max_start_nullops,
+    #    correct_luminance=True,
+    #)
     policy = CategoricalConvPolicy(
         env_spec=env.spec,
         name="policy",
