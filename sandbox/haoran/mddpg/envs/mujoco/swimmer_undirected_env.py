@@ -6,6 +6,8 @@ from rllab.misc import logger
 from rllab.misc import autoargs
 import os
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import gc
 
@@ -78,6 +80,7 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
                 paths,
                 mesh_density=self.visitation_plot_config["mesh_density"],
                 prefix=self.visitation_plot_config["prefix"],
+                variant=self.visitation_plot_config["variant"],
                 save_to_file=True,
             )
         return stats
@@ -90,6 +93,7 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
             save_to_file=False,
             fig=None,
             ax=None,
+            variant=dict()
         ):
         """
         Specific to MDDPG.
@@ -156,8 +160,13 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
                 np.mod(epoch + 1, snapshot_gap) == 0 or \
                 epoch == 0:
                 log_dir = logger.get_snapshot_dir()
-                exp_name = log_dir.split('/')[-1] if log_dir else '?'
-                ax.set_title(prefix + 'visit: ' + exp_name)
+                title = variant["exp_name"] + "\n" + \
+                    "epoch: %d visit\n"%(epoch)
+                for key, value in variant.items():
+                    if key != "exp_name":
+                        title += "%s: %s \n"%(key, value)
+                ax.set_title(title, multialignment="left")
+                fig.tight_layout()
 
                 plt.savefig(os.path.join(
                     log_dir,

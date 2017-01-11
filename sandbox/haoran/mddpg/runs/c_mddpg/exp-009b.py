@@ -42,7 +42,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/c_mddpg/" + exp_index
-mode = "ec2"
+mode = "ec2_test"
 ec2_instance = "c4.4xlarge"
 subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3:latest" # needs psutils
@@ -75,49 +75,8 @@ class VG(VariantGenerator):
         return [0]
 
     @variant
-    def sigma(self):
-        return [1e-2]
-
-    @variant
     def max_path_length(self):
         return [300]
-
-    @variant
-    def policy_learning_rate(self):
-        return [1e-4]
-
-    @variant
-    def theta(self):
-        return [0.15]
-
-    @variant
-    def qf_extra_training(self):
-        return [0]
-
-    @variant
-    def switch_type(self):
-        return [
-            # "per_action",
-            "per_path"
-        ]
-
-    @variant
-    def q_target_type(self):
-        return [
-            # "mean",
-            "max"
-        ]
-    @variant
-    def exploration_strategy(self):
-        return [
-            # "gaussian",
-            "OU",
-        ]
-    @variant
-    def scale_reward_annealer_kwargs(self):
-        return [
-            dict(init_value=1., final_value=1., stop_iter=4),
-        ]
 
 variants = VG().variants()
 batch_tasks = []
@@ -130,16 +89,11 @@ for v in variants:
     env_name = v["env_name"]
     K = v["K"]
     adaptive_kernel = True
-    sigma = v["sigma"]
-    theta = v["theta"]
-    ou_sigma = 0.3
 
     shared_ddpg_kwargs = dict(
         alpha=v["alpha"],
         max_path_length=v["max_path_length"],
-        policy_learning_rate=v["policy_learning_rate"],
-        qf_extra_training=v["qf_extra_training"],
-        q_target_type = v["q_target_type"],
+        q_target_type="max"
     )
     if mode == "local_test" or mode == "local_docker_test":
         ddpg_kwargs = dict(
@@ -157,26 +111,29 @@ for v in variants:
             eval_samples=v["max_path_length"]*v["K"],
         )
     ddpg_kwargs.update(shared_ddpg_kwargs)
+    exp_name = "{exp_index}_{time}_{env_name}".format(
+        exp_index=exp_index,
+        time=get_time_stamp(),
+        env_name=env_name,
+    )
     if env_name == "hopper":
         env_kwargs = {
             "alive_coeff": 0.5
         }
     elif env_name == "swimmer_undirected":
+        plot_variant = copy.deepcopy(v)
+        plot_variant["exp_name"] = exp_name
         env_kwargs = {
             "visitation_plot_config": {
                 "mesh_density": 50,
                 "prefix": '',
+                "variant": plot_variant,
             }
         }
     else:
         env_kwargs = {}
 
     # other exp setup --------------------------------------
-    exp_name = "{exp_index}_{time}_{env_name}".format(
-        exp_index=exp_index,
-        time=get_time_stamp(),
-        env_name=env_name
-    )
     if ("ec2" in mode) and (len(exp_name) > 64):
         print("Should not use experiment name with length %d > 64.\nThe experiment name is %s.\n Exit now."%(len(exp_name),exp_name))
         sys.exit(1)
@@ -232,24 +189,13 @@ for v in variants:
         observation_hidden_sizes=(100,),
         embedded_hidden_sizes=(100,),
     )
-    if v["exploration_strategy"] == "OU":
-        substrategy = OUStrategy(
-            env_spec=env.spec,
-            theta=theta,
-            sigma=ou_sigma
-        )
-    elif v["exploration_strategy"] == "gaussian":
-        substrategy = GaussianStrategy(
-            env_spec=env.spec,
-            mu=0,
-            sigma=1.0,
-        )
-    else:
-        raise NotImplementedError
+    substrategy = OUStrategy(
+        env_spec=env.spec,
+    )
     es = MNNStrategy(
         K=K,
         substrategy=substrategy,
-        switch_type=v["switch_type"],
+        switch_type="per_path",
     )
     policy = FeedForwardMultiPolicy(
         "actor",
@@ -274,10 +220,6 @@ for v in variants:
             diag=diag_constructor.diag(),
         )
 
-    scale_reward_annealer = LinearAnnealer(
-        n_iter=ddpg_kwargs["n_epochs"],
-        **v["scale_reward_annealer_kwargs"]
-    )
     algorithm = MDDPG(
         env=env,
         exploration_strategy=es,
@@ -285,7 +227,6 @@ for v in variants:
         kernel=kernel,
         qf=qf,
         K=K,
-        scale_reward_annealer=scale_reward_annealer,
         **ddpg_kwargs
     )
 
