@@ -262,7 +262,7 @@ class GatherEnv(ProxyEnv, Serializable):
         info['inner_rewards'] = inner_rew
         info['gather_rewards'] = 0
         if done:
-            return Step(self.get_current_obs(), -10, done, **info)
+            return Step(self.get_current_obs(), -10, done, **info)  # give a -10 rew if the robot dies
         com = self.wrapped_env.get_body_com("torso")
         x, y = com[:2]
         reward = self.coef_inner_rew * inner_rew
