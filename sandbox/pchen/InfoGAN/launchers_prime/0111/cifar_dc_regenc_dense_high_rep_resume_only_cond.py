@@ -73,6 +73,8 @@
 
 # high reps problem hard to optimize? try dense net
 
+# try resuming w/ training only done on generative pipeline
+
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -107,7 +109,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def lr(self):
-        return [0.001, ] #0.001]
+        return [0.001, 0.003] #0.001]
 
     @variant
     def seed(self):
@@ -120,7 +122,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.04]# 0.1]
+        return [0.01]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -263,7 +265,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 0
+i = 1
 for v in variants[i:i+1]:
 
     # with skip_if_exception():
@@ -363,6 +365,8 @@ for v in variants[i:i+1]:
             ema_kl_decay=0.95,
             deep_cond=True,
             min_kl_coeff=0.00001,
+            freeze_encoder=True,
+            resume_from="/home/peter/rllab-private/data/local/0108-cifar-dc-highgen-dense-scaled/0108_cifar_dc_highgen_dense_scaled_2017_01_10_00_49_02_0001/3031/pa_mnist_ar_nr_cond__160000.ckpt",
             # resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
             # staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
@@ -373,7 +377,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0108_cifar_dc_highgen_dense_scaled",
+            exp_prefix="0111_cifar_dc_highgen_dense_scaled_resumed_encfreezed",
             seed=v["seed"],
             variant=v,
             mode="local",

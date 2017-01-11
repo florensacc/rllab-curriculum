@@ -73,6 +73,8 @@
 
 # high reps problem hard to optimize? try dense net
 
+#### NOT REALLY GRAYSCALE
+
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE

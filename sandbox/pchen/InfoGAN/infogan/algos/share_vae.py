@@ -65,6 +65,7 @@ class ShareVAE(object):
             min_kl_coeff=0.001,
             input_skip=False,
             deep_cond=False,
+            freeze_encoder=False,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -77,6 +78,7 @@ class ShareVAE(object):
         Parameters
         ----------
         """
+        self.freeze_encoder = freeze_encoder
         self.min_kl_coeff = min_kl_coeff
         self.deep_cond = deep_cond
         self.input_skip = input_skip
@@ -156,6 +158,7 @@ class ShareVAE(object):
         self.eval_log_vars = []
         self.sym_vars = {}
         self.ema = None
+        self.encoder_params = []
 
         bs_per_gpu = self.batch_size // self.num_gpus
         self.x_sample_holder = tf.placeholder(tf.float32, shape=(bs_per_gpu, 32, 32, 3))
@@ -235,9 +238,14 @@ class ShareVAE(object):
                     else:
                         encoder_feats = causal_feats
 
+                if self.freeze_encoder:
+                    prev_params = tf.trainable_variables()
                 z_var, log_p_z_given_x, z_dist_info = \
                     self.model.encode(encoder_feats, k=self.k if eval else 1)
                 logger.log("encoded")
+                if self.freeze_encoder:
+                    new_params = list(set(tf.trainable_variables()) - set(prev_params))
+                    self.encoder_params += new_params
 
                 if not self.noise:
                     z_var = z_dist_info["mean"]
@@ -386,6 +394,11 @@ class ShareVAE(object):
                 self.init_hook(locals())
                 if tower_grads is None:
                     tower_grads = self.optimizer.compute_gradients(surr_loss)
+                if self.freeze_encoder:
+                    tower_grads = [
+                        (grad, var) for grad, var in tower_grads
+                        if var not in self.encoder_params
+                    ]
                 grads.append(tower_grads)
                 logger.log("grads")
 

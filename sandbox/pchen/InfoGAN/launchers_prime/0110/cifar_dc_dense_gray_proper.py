@@ -107,7 +107,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def lr(self):
-        return [0.001, ] #0.001]
+        return [0.004, ] #0.001]
 
     @variant
     def seed(self):
@@ -120,7 +120,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.04]# 0.1]
+        return [0.1]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -131,7 +131,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def base_filters(self, ):
-        return [12]
+        return [18]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -207,7 +207,7 @@ class VG(VariantGenerator):
         return [
             # [0,0], # 1min15s, 660k infer params
             # [0,0,0], # 1min40s, 1M infer params
-            [0,0,1,3],
+            [0,0,1,2,3],
             # [0,0,1,1,]
             # [1,]*7
         ]
@@ -230,7 +230,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def rep(self, unconditional):
-        return [4]
+        return [3,]
 
     # @variant(hide=False)
     # def ar_nr_extra_nins(self, num_gpus):
@@ -317,6 +317,7 @@ for v in variants[i:i+1]:
             nr_cond_nins=v["ar_nr_cond_nins"],
             nr_extra_nins=v["ar_nr_extra_nins"],
             extra_compute=False,
+            grayscale=True,
         )
 
         model = RegularizedHelmholtzMachine(
@@ -373,7 +374,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.train(),
-            exp_prefix="0108_cifar_dc_highgen_dense_scaled",
+            exp_prefix="0110_cifar_dc_dense_gray_really",
             seed=v["seed"],
             variant=v,
             mode="local",
