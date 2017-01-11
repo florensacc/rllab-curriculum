@@ -1,10 +1,18 @@
 """
 Conservative version of MDDPG
 
-Test plotting the visitation map.
-Many params are changed, so be careful when copying. Make sure to have
-"sync_s3_png=True"
+Continue exp-009 with some changes
+* epoch_length: 1000 -> 2000
+* max_path_length: 300 -> 500 (so that smooth swimming gaits stand out)
+* no reward scaling
+* share layers between heads so that exps run faster
+* plot visitation along with training (the png files are small)
+* batch sampler gethers samples from multiple heads in parallel
+
+Especially, we try smaller alpha , larger K, and see if we could learn two
+    moving directions.
 """
+
 # imports -----------------------------------------------------
 import tensorflow as tf
 import joblib
@@ -20,7 +28,6 @@ from sandbox.rocky.tf.envs.base import TfEnv
 from rllab.envs.normalized_env import normalize
 from rllab.exploration_strategies.ou_strategy import OUStrategy
 from sandbox.haoran.mddpg.gaussian_strategy import GaussianStrategy
-from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 from sandbox.haoran.mddpg.qfunctions.interpolate_qfunction \
     import InterpolateQFunction, DataLoader
 from sandbox.haoran.mddpg.misc.annealer import LinearAnnealer
@@ -42,24 +49,23 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/c_mddpg/" + exp_index
-mode = "ec2_test"
-ec2_instance = "c4.4xlarge"
+mode = "ec2"
+ec2_instance = "c4.8xlarge"
 subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3:latest" # needs psutils
 config.AWS_IMAGE_ID = "ami-85d181e5" # with docker already pulled
 
-n_task_per_instance = 1
-n_parallel = 1 # only for local exp
+n_task_per_instance = 5
+n_parallel = 2 # only for local exp
 snapshot_mode = "gap"
-snapshot_gap = 2
+snapshot_gap = 50
 plot = False
-sync_s3_pkl = True
 
 # variant params ---------------------------------------------------
 class VG(VariantGenerator):
     @variant
     def zzseed(self):
-        return [0]
+        return [0,100,200,300,400]
 
     @variant
     def env_name(self):
@@ -68,15 +74,15 @@ class VG(VariantGenerator):
         ]
     @variant
     def K(self):
-        return [8]
+        return [1, 8, 16]
 
     @variant
     def alpha(self):
-        return [0]
+        return [0, 0.001, 0.01, 0.1]
 
     @variant
     def max_path_length(self):
-        return [300]
+        return [500]
 
 variants = VG().variants()
 batch_tasks = []
@@ -93,22 +99,20 @@ for v in variants:
     shared_ddpg_kwargs = dict(
         alpha=v["alpha"],
         max_path_length=v["max_path_length"],
-        q_target_type="max"
+        q_target_type="max",
+        eval_max_head_repeat=1,
+        batch_size=64,
     )
     if mode == "local_test" or mode == "local_docker_test":
         ddpg_kwargs = dict(
+            n_epochs=5,
             epoch_length=10,
             min_pool_size=100,
-            eval_samples=v["max_path_length"]*v["K"],
-            n_epochs=5,
-            batch_size=64,
         )
     else:
         ddpg_kwargs = dict(
-            epoch_length=1000,
-            batch_size=64,
-            n_epochs=10,
-            eval_samples=v["max_path_length"]*v["K"],
+            n_epochs=1000,
+            epoch_length=2000,
         )
     ddpg_kwargs.update(shared_ddpg_kwargs)
     exp_name = "{exp_index}_{time}_{env_name}".format(
@@ -202,8 +206,8 @@ for v in variants:
         env.observation_space.flat_dim,
         env.action_space.flat_dim,
         K=K,
-        shared_hidden_sizes=tuple(),
-        independent_hidden_sizes=(100,100),
+        shared_hidden_sizes=(100,),
+        independent_hidden_sizes=(100,),
     )
     if K > 1 and adaptive_kernel:
         kernel = SimpleAdaptiveDiagonalGaussianKernel(
@@ -213,7 +217,7 @@ for v in variants:
     else:
         diag_constructor = SimpleDiagonalConstructor(
             dim=env.action_space.flat_dim,
-            sigma=sigma,
+            sigma=0.01,
         )
         kernel = DiagonalGaussianKernel(
             "kernel",

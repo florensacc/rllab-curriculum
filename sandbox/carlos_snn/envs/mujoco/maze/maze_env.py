@@ -91,9 +91,9 @@ class MazeEnv(ProxyEnv, Serializable):
             M[1][c // 2] = 'r'
             M[c - 2][c // 2] = 'g'
             structure = M
-            print(self.__class__.MAZE_STRUCTURE)
+            # print(self.__class__.MAZE_STRUCTURE)
             self.__class__.MAZE_STRUCTURE = structure
-            print("the new one is", self.__class__.MAZE_STRUCTURE)
+            # print("the new one is", self.__class__.MAZE_STRUCTURE)
 
         elif self._maze_id == 2:  # spiral maze: need to use all the keys (only makes sense for length >=3)
             c = length + 4
@@ -107,7 +107,7 @@ class MazeEnv(ProxyEnv, Serializable):
             M[1][c // 2 - 2] = 'g'
             structure = M
             self.__class__.MAZE_STRUCTURE = structure
-            print(structure)
+            # print(structure)
 
         elif self._maze_id == 3:  # corridor with goals at the 2 extremes
             structure = [
@@ -116,7 +116,7 @@ class MazeEnv(ProxyEnv, Serializable):
                 [1] * (2 * length + 5),
             ]
             self.__class__.MAZE_STRUCTURE = structure
-            print(structure)
+            # print(structure)
 
         elif 4 <= self._maze_id <= 7:  # cross corridor, goal in
             c = 2 * length + 5
@@ -145,7 +145,7 @@ class MazeEnv(ProxyEnv, Serializable):
                 M[c - 2][c - 2] = 'g'
             structure = M
             self.__class__.MAZE_STRUCTURE = structure
-            print(structure)
+            # print(structure)
 
         elif self._maze_id == 8:  # reflexion of benchmark maze
             structure = [
@@ -156,7 +156,7 @@ class MazeEnv(ProxyEnv, Serializable):
                 [1, 1, 1, 1, 1],
             ]
             self.__class__.MAZE_STRUCTURE = structure
-            print(structure)
+            # print(structure)
 
         elif self._maze_id == 9:  # sym benchmark maze
             structure = [
@@ -167,7 +167,7 @@ class MazeEnv(ProxyEnv, Serializable):
                 [1, 1, 1, 1, 1],
             ]
             self.__class__.MAZE_STRUCTURE = structure
-            print(structure)
+            # print(structure)
 
         elif self._maze_id == 10:  # reflexion of sym of benchmark maze
             structure = [
@@ -178,7 +178,7 @@ class MazeEnv(ProxyEnv, Serializable):
                 [1, 1, 1, 1, 1],
             ]
             self.__class__.MAZE_STRUCTURE = structure
-            print(structure)
+            # print(structure)
 
         torso_x, torso_y = self._find_robot()
         self._init_torso_x = torso_x

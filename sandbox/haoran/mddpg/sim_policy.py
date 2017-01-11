@@ -75,6 +75,7 @@ def rollout(sess,env, agent, exploration_strategy, qf, random=False,
 
         agent_info = {}
         next_o, r, d, env_info = env.step(a)
+        # print('com x: ', env_info["com"][0])
 
         observations.append(env.observation_space.flatten(o))
         rewards.append(r)
@@ -112,7 +113,7 @@ def rollout(sess,env, agent, exploration_strategy, qf, random=False,
             if pause:
                 input()
         o = next_o
-    input() # pause between heads
+    input("Press Enter to continue...") # pause between heads
     if animated:
         env.render(close=False) # close=True causes the mujoco sim to fail
     plt.close(fig)
@@ -152,10 +153,17 @@ if __name__ == "__main__":
     while True:
         with tf.Session() as sess:
             data = joblib.load(args.file)
-            policy = data['policy']
-            env = data['env']
-            es = data['es']
-            qf = data['qf']
+            if "algo" in data:
+                algo = data["algo"]
+                policy = algo.policy
+                env = algo.env
+                es = algo.exploration_strategy
+                qf = algo.qf
+            else:
+                policy = data['policy']
+                env = data['env']
+                es = data['es']
+                qf = data['qf']
             while True:
                 try:
                     path = rollout(

@@ -41,6 +41,7 @@ class MazeEnv(ProxyEnv, Serializable):
             *args,
             **kwargs):
 
+        Serializable.quick_init(self, locals())
         self._n_bins = n_bins
         self._sensor_range = sensor_range
         self._sensor_span = sensor_span
@@ -109,7 +110,6 @@ class MazeEnv(ProxyEnv, Serializable):
 
         inner_env = model_cls(*args, file_path=file_path, **kwargs)
         ProxyEnv.__init__(self, inner_env)
-        Serializable.quick_init(self, locals())
 
     def get_current_obs(self):
         # The observation would include both information about the robot itself as well as the sensors around its

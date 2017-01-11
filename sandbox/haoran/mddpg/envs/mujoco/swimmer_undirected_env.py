@@ -6,6 +6,10 @@ from rllab.misc import logger
 from rllab.misc import autoargs
 import os
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
+# This helps to plot the visitation map on linux machines.
+# But it doesn't work if pyplot has been imported before this line.
 import matplotlib.pyplot as plt
 import gc
 
@@ -54,10 +58,10 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
             path["observations"][-1][-3] - path["observations"][0][-3]
             for path in paths
         ]
-        logger.record_tabular('AverageForwardProgress', np.mean(progs))
-        logger.record_tabular('MaxForwardProgress', np.max(progs))
-        logger.record_tabular('MinForwardProgress', np.min(progs))
-        logger.record_tabular('StdForwardProgress', np.std(progs))
+        logger.record_tabular('env: ForwardProgressAverage', np.mean(progs))
+        logger.record_tabular('env: ForwardProgressMax', np.max(progs))
+        logger.record_tabular('env: ForwardProgressMin', np.min(progs))
+        logger.record_tabular('env: ForwardProgressStd', np.std(progs))
 
     def log_stats(self, epoch, paths):
         # forward distance
@@ -66,18 +70,20 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
             # -3 refers to the x coordinate of the com of the torso
             for path in paths
         ]
-        stats = dict(
-            AverageForwardProgress=np.mean(progs),
-            MaxForwardProgress=np.max(progs),
-            MinForwardProgress=np.min(progs),
-            StdForwardProgress=np.std(progs),
-        )
+        stats = {
+            'env: ForwardProgressAverage': np.mean(progs),
+            'env: ForwardProgressMax': np.max(progs),
+            'env: ForwardProgressMin': np.min(progs),
+            'env: ForwardProgressStd': np.std(progs),
+            'env: ForwardProgressDiff': np.max(progs) - np.min(progs),
+        }
         if self.visitation_plot_config is not None:
             self.plot_visitation(
                 epoch,
                 paths,
                 mesh_density=self.visitation_plot_config["mesh_density"],
                 prefix=self.visitation_plot_config["prefix"],
+                variant=self.visitation_plot_config["variant"],
                 save_to_file=True,
             )
         return stats
@@ -88,6 +94,9 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
             mesh_density=50,
             prefix='',
             save_to_file=False,
+            fig=None,
+            ax=None,
+            variant=dict()
         ):
         """
         Specific to MDDPG.
@@ -96,8 +105,6 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
         from 0) visits it most often. Color 0 (black) is reserved for unvisited
         points.
         """
-        fig, ax = plt.subplots()
-
         assert "agent_infos" in paths[0] and \
             "num_heads" in paths[0]["agent_infos"] and \
             "heads" in paths[0]["agent_infos"]
@@ -134,7 +141,7 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
         colors = (visit_heads + 1) * has_visits
 
         # plot
-        if ax is None:
+        if fig is None or ax is None:
             fig, ax = plt.subplots()
         num_colors = num_heads + 1
         cmap = plt.get_cmap('nipy_spectral', num_colors)
@@ -156,12 +163,17 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
                 np.mod(epoch + 1, snapshot_gap) == 0 or \
                 epoch == 0:
                 log_dir = logger.get_snapshot_dir()
-                exp_name = log_dir.split('/')[-1] if log_dir else '?'
-                ax.set_title(prefix + 'visitation: ' + exp_name)
+                title = variant["exp_name"] + "\n" + \
+                    "epoch: %d visit\n"%(epoch)
+                for key, value in variant.items():
+                    if key != "exp_name":
+                        title += "%s: %s \n"%(key, value)
+                ax.set_title(title, multialignment="left")
+                fig.tight_layout()
 
                 plt.savefig(os.path.join(
                     log_dir,
-                    prefix + 'visitation_itr_%d.png'%(epoch),
+                    prefix + 'visit_itr_%d.png'%(epoch),
                 ))
                 plt.close()
 

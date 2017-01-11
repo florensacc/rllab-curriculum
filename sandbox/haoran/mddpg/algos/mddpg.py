@@ -4,6 +4,7 @@ from sandbox.haoran.mddpg.misc.rllab_util import split_paths
 from sandbox.haoran.mddpg.policies.mnn_policy import MNNPolicy, MNNStrategy
 from sandbox.haoran.mddpg.misc.simple_replay_pool import SimpleReplayPool
 from sandbox.rocky.tf.misc.tensor_utils import flatten_tensor_variables
+from sandbox.haoran.mddpg.misc.sampler import MNNParallelSampler
 
 from rllab.misc import logger
 from rllab.misc import special
@@ -14,11 +15,12 @@ import time
 from collections import OrderedDict
 import numpy as np
 import tensorflow as tf
+from rllab.core.serializable import Serializable
 
 TARGET_PREFIX = "target_"
 
 
-class MDDPG(OnlineAlgorithm):
+class MDDPG(OnlineAlgorithm, Serializable):
     """
     Multiheaded DDPG with Stein Variational Gradient Descent
     """
@@ -40,6 +42,7 @@ class MDDPG(OnlineAlgorithm):
             only_train_critic=False,
             only_train_actor=False,
             resume=False,
+            eval_max_head_repeat=1,
             **kwargs
     ):
         """
@@ -53,8 +56,16 @@ class MDDPG(OnlineAlgorithm):
         :param qf_learning_rate: Learning rate of the critic
         :param policy_learning_rate: Learning rate of the actor
         :param Q_weight_decay: How much to decay the weights for Q
+        :param alpha: weight on the repelling force in SVGD
+        :param qf_extra_training: train the Q function a few more times
+        :param only_train_critic:
+        :param only_train_actor:
+        :param resume: if you want to keep the params in qf and policy, use this
+            ,otherwise their parameters will be reinitialized during training by
+            _init_tensorflow_ops
         :return:
         """
+        Serializable.quick_init(self, locals())
         self.kernel = kernel
         self.qf = qf
         self.K = K
@@ -67,6 +78,7 @@ class MDDPG(OnlineAlgorithm):
         self.only_train_critic = only_train_critic
         self.only_train_actor = only_train_actor
         self.resume = resume
+        self.eval_max_head_repeat = eval_max_head_repeat
 
         assert not (only_train_actor and only_train_critic)
         assert isinstance(policy, MNNPolicy)
@@ -80,6 +92,8 @@ class MDDPG(OnlineAlgorithm):
         if resume:
             qf.set_param_values(qf_params)
             policy.set_param_values(policy_params)
+
+        self.eval_sampler = MNNParallelSampler(self)
 
 
     @overrides
@@ -386,8 +400,8 @@ class MDDPG(OnlineAlgorithm):
         logger.log("Collecting samples for evaluation")
         paths = self.eval_sampler.obtain_samples(
             itr=epoch,
-            batch_size=self.n_eval_samples,
             max_path_length=self.max_path_length,
+            max_head_repeat=self.eval_max_head_repeat,
         )
         rewards, terminals, obs, actions, next_obs = split_paths(paths)
         feed_dict = self._update_feed_dict(rewards, terminals, obs, actions,
@@ -482,9 +496,23 @@ class MDDPG(OnlineAlgorithm):
     def get_epoch_snapshot(self, epoch):
         return dict(
             epoch=epoch,
-            env=self.env,
-            policy=self.policy,
-            es=self.exploration_strategy,
-            qf=self.qf,
-            kernel=self.kernel,
+            # env=self.env,
+            # policy=self.policy,
+            # es=self.exploration_strategy,
+            # qf=self.qf,
+            # kernel=self.kernel,
+            algo=self,
         )
+
+    def __getstate__(self):
+        d = Serializable.__getstate__(self)
+        d.update({
+            "policy_params": self.policy.get_param_values(),
+            "qf_params": self.qf.get_param_values(),
+        })
+        return d
+
+    def __setstate__(self, d):
+        Serializable.__setstate__(self, d)
+        self.qf.set_param_values(d["qf_params"])
+        self.policy.set_param_values(d["policy_params"])
