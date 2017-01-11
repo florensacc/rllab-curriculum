@@ -38,7 +38,7 @@ mode = "ec2"  # "local_docker"
 ec2_instance = "c4.8xlarge"
 price_multiplier = 3
 subnet = "us-west-1a"
-config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
+config.DOCKER_IMAGE = "tsukuyomi2044/rllab3:theano" # needs psutils
 
 n_parallel = 2 # only for local exp
 snapshot_mode = "gap"
@@ -149,7 +149,8 @@ for v in variants:
         config.AWS_INSTANCE_TYPE = ec2_instance
         config.AWS_SPOT_PRICE = str(info["price"] * price_multiplier)
         if config.AWS_REGION_NAME == "us-west-1":
-            config.AWS_IMAGE_ID = "ami-85d181e5"  # Use Haoran's AWS image with his docker image
+             config.AWS_IMAGE_ID = "ami-271b4847"  # Use Haoran's AWS image with his docker iamge
+
         n_parallel = int(info["vCPU"] /2)
 
         # choose subnet
