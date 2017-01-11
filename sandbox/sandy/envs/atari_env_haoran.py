@@ -5,6 +5,7 @@ import numpy as np
 import cv2
 import copy
 import atari_py
+from scipy.misc import imresize
 
 from rllab import config
 from rllab.spaces.discrete import Discrete
@@ -21,6 +22,7 @@ class AtariEnv(Env,Serializable):
             img_width=84,
             img_height=84,
             crop_or_scale = 'scale',
+            #resize_with_scipy=False,
             obs_type="image",
             record_image=True, # image for training and counting
             record_rgb_image=False, # for visualization and debugging
@@ -64,6 +66,8 @@ class AtariEnv(Env,Serializable):
         if self.terminator is not None:
             self.terminator.set_env(self)
         self.crop_or_scale = crop_or_scale
+        #self.resize_with_scipy = resize_with_scipy  # TODO: change back
+        self.resize_with_scipy = False
         self.img_width = img_width
         self.img_height = img_height
         self._prior_reward = 0
@@ -99,6 +103,9 @@ class AtariEnv(Env,Serializable):
             ################################################
             ################################################
             """)
+
+        # adversary_fn - function handle for adversarial perturbation of observation
+        self.adversary_fn = None
 
         self.configure_ale()
         self.reset()
@@ -187,8 +194,11 @@ class AtariEnv(Env,Serializable):
             img = img[top_crop: 110 - bottom_crop, :]
             img = cv2.resize(img,(self.img_width,self.img_height))
         elif self.crop_or_scale == 'scale':
-            img = cv2.resize(img, (self.img_width, self.img_height),
-                             interpolation=cv2.INTER_LINEAR)
+            if self.resize_with_scipy:
+                img = imresize(img, (self.img_width, self.img_height), interp='bilinear')
+            else:
+                img = cv2.resize(img, (self.img_width, self.img_height),
+                                 interpolation=cv2.INTER_LINEAR)
         else:
             raise RuntimeError('crop_or_scale must be either crop or scale')
         return img
@@ -203,6 +213,9 @@ class AtariEnv(Env,Serializable):
             assert len(self.last_screens) == self.n_last_screens
             imgs = np.asarray(list(self.last_screens))
             imgs = (imgs / 255.0) * 2.0 - 1.0 # rescale to [-1,1]
+            if self.adversary_fn is not None:
+                # Adversarially perturb input
+                imgs = self.adversary_fn(imgs)
             return imgs
         elif self.obs_type == "ram":
             assert len(self.last_rams) == self.n_last_rams
@@ -211,6 +224,9 @@ class AtariEnv(Env,Serializable):
             return rams
         else:
             raise NotImplementedError
+
+    def set_adversary_fn(self, fn_handle):
+        self.adversary_fn = fn_handle
 
     @property
     def observation_space(self):

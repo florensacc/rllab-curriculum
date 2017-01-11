@@ -19,18 +19,40 @@ N = 10  # Number of trajectory rollouts to perform
 BATCH_SIZE = 50000  # Should be large enough to ensure that there are at least N trajs
 
 #FGSM_EPS = [0.0005, 0.001, 0.002, 0.004, 0.008, 0.016, 0.032, 0.064, 0.128]  # Amount to change each pixel (1.0 / 256 = 0.00390625)
-FGSM_EPS = [0.004]  # Amount to change each pixel (1.0 / 256 = 0.00390625)
+#FGSM_EPS = [0.004]  # Amount to change each pixel (1.0 / 256 = 0.00390625)
+FGSM_EPS = [0.008, 0.016, 0.032, 0.064, 0.128]
 FGSM_RANDOM_SEED = 0
 
 OBS_MIN = -1  # minimum possible value for input x (NOTE: domain-specific)
 OBS_MAX = +1  # maximum possible value for input x (NOTE: domain-specific)
 
 def get_average_return(algo, n, seed=None):
-    if seed is not None:
-        # Set random seed, for reproducibility
+    if seed is not None:  # Set random seed, for reproducibility
+        # Set random seed for policy rollouts
         #ext.set_seed(seed)
         parallel_sampler.set_seed(seed)
-        algo.env._wrapped_env.env._seed(seed)  # Set OpenAI AtariEnv seed
+
+        # Set random seed of Atari environment
+        if hasattr(algo.env, 'ale'):  # envs/atari_env_haoran.py
+            algo.env.set_seed(seed)
+        elif hasattr(algo.env, '_wrapped_env'):  # Means algo.env is a ProxyEnv
+            # Figure out which level contains ALE
+            # (New version of Monitor in OpenAI gym adds an extra level of wrapping)
+            if hasattr(algo.env._wrapped_env.env, 'ale'):
+                algo.env._wrapped_env.env._seed(seed) 
+            elif hasattr(algo.env._wrapped_env.env.env, 'ale'):
+                algo.env._wrapped_env.env.env._seed(seed)
+            else:
+                raise NotImplementedError
+        elif hasattr(algo.env, 'env'):  # envs/atari_env.py
+            if hasattr(algo.env.env, 'ale'):
+                algo.env.env._seed(seed)
+            elif hasattr(algo.env.env.env, 'ale'):
+                algo.env.env.env._seed(seed)
+            else:
+                raise NotImplementedError
+        else:
+            raise Exception("Invalid environment")
 
     paths = algo.sampler.obtain_samples(None)
     paths = paths[:n]
@@ -83,7 +105,10 @@ def load_model(params_file):
     algo.batch_size = BATCH_SIZE
     algo.sampler.worker_batch_size = BATCH_SIZE
     algo.n_parallel = 1
-    algo.max_path_length = data['env'].horizon
+    try:
+        algo.max_path_length = data['env'].horizon
+    except NotImplementedError:
+        algo.max_path_length = 50000
 
     # Copying what happens at the start of algo.train()
     assert type(algo).__name__ in ['TRPO', 'ParallelTRPO'], "Algo type not supported"
@@ -116,6 +141,7 @@ def main():
             create_dir_if_needed(args.output_dir)
             output_h5 = os.path.join(args.output_dir, \
                                      args.prefix + '_' + get_time_stamp() + '.h5')
+            print("Output h5 file:", output_h5)
             f = h5py.File(output_h5, 'w')
             f.create_group('rollouts')
             f['adv_type'] = 'fgsm'
