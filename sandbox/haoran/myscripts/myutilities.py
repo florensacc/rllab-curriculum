@@ -522,3 +522,10 @@ from rllab.misc.special import discount_cumsum
 def compute_return(path,gamma):
     path["returns"] = discount_cumsum(path["rewards"], gamma)
     return path["returns"]
+
+def get_true_env(env):
+    from rllab.envs.proxy_env import ProxyEnv
+    true_env = env
+    while isinstance(true_env, ProxyEnv):
+        true_env = true_env._wrapped_env
+    return true_env

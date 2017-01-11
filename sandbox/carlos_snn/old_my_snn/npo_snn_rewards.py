@@ -47,7 +47,6 @@ class BatchSampler_snn(BatchSampler):
         """
         :type algo: BatchPolopt
         """
-        print('initializing BatchSampler_snn with args: ', args, 'and kwargs:', kwargs)
         super(BatchSampler_snn, self).__init__(*args, **kwargs)  # this should be giving a self.algo
         self.bonus_evaluator = bonus_evaluator if bonus_evaluator else []
         self.reward_coef_bonus = reward_coef_bonus if reward_coef_bonus else [0] * len(self.bonus_evaluator)
@@ -251,7 +250,6 @@ class NPO_snn(NPO):
                         'reward_coef_bonus': reward_coef_bonus,
                         'reward_coef_mi': reward_coef_mi,
                         }
-        print('from NPO_snn', kwargs)
         super(NPO_snn, self).__init__(sampler_cls=sampler_cls, sampler_args=sampler_args, **kwargs)
 
     @overrides

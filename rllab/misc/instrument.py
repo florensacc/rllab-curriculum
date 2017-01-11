@@ -360,6 +360,7 @@ def run_experiment_lite(
         periodic_sync_interval=15,
         sync_all_data_node_to_s3=True,
         use_cloudpickle=False,
+        pre_commands=None,
         **kwargs):
     """
     Serialize the stubbed method call and run the experiment using the specified mode.
@@ -393,6 +394,7 @@ def run_experiment_lite(
         batch_tasks = [
             dict(
                 kwargs,
+                pre_commands=pre_commands,
                 stub_method_call=stub_method_call,
                 exp_name=exp_name,
                 log_dir=log_dir,
@@ -485,7 +487,7 @@ def run_experiment_lite(
             del task["remote_log_dir"]
             env = task.pop("env", None)
             command = to_docker_command(
-                task,
+                task,  # these are the params. Pre and Post command can be here
                 docker_image=docker_image,
                 script=script,
                 env=env,
@@ -629,6 +631,10 @@ def to_local_command(params, python_command="python", script=osp.join(config.PRO
         command = "THEANO_FLAGS='device=gpu,dnn.enabled=auto,floatX=float32' " + command
     for k, v in config.ENV.items():
         command = ("%s=%s " % (k, v)) + command
+    pre_commands = params.pop("pre_commands", None)
+    post_commands = params.pop("post_commands", None)
+    if pre_commands is not None or post_commands is not None:
+        print("Not executing the pre_commands: ", pre_commands, ", nor post_commands: ", post_commands)
 
     for k, v in params.items():
         if isinstance(v, dict):

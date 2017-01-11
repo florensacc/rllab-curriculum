@@ -54,19 +54,24 @@ class MNNPolicy(NNPolicy):
                 self.heads[k],
                 {self.observations_placeholder: [observation]}
             ), {
-                'heads': k
+                'heads': k,
+                'num_heads': self.K,
             }
         elif k == "all":
             return self.sess.run(
                 self.output,
                 {self.observations_placeholder: [observation]}
-            ), {'heads':-1}
+            ), {
+                'heads':-1,
+                'num_heads': self.K,
+            }
         elif (isinstance(k, int) or isinstance(k,np.int64)) and 0 <= k <= self.K:
             return self.sess.run(
                 self.heads[k],
                 {self.observations_placeholder: [observation]}
             ), {
-                'heads': k
+                'heads': k,
+                'num_heads': self.K,
             }
         else:
             raise NotImplementedError

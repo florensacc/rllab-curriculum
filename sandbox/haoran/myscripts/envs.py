@@ -47,16 +47,16 @@ class EnvChooser(object):
 
         elif env_name == "double_slit":
             from sandbox.haoran.mddpg.envs.double_slit_env import DoubleSlitEnv
-            env = DoubleSlitEnv()
+            env = DoubleSlitEnv(**kwargs)
 
         elif env_name == "double_slit_v2":
             from sandbox.haoran.mddpg.envs.double_slit_env_v2 import \
                 DoubleSlitEnvV2
-            env = DoubleSlitEnvV2()
+            env = DoubleSlitEnvV2(**kwargs)
         elif env_name == "multi_goal":
             from sandbox.haoran.mddpg.envs.multi_goal_env import \
                 MultiGoalEnv
-            env = MultiGoalEnv()
+            env = MultiGoalEnv(**kwargs)
         else:
             print("Unknown environment %s"%(env_name))
             raise NotImplementedError
