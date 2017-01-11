@@ -8,6 +8,8 @@ import os
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
+# This helps to plot the visitation map on linux machines.
+# But it doesn't work if pyplot has been imported before this line.
 import matplotlib.pyplot as plt
 import gc
 
@@ -68,12 +70,13 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
             # -3 refers to the x coordinate of the com of the torso
             for path in paths
         ]
-        stats = dict(
-            AverageForwardProgress=np.mean(progs),
-            MaxForwardProgress=np.max(progs),
-            MinForwardProgress=np.min(progs),
-            StdForwardProgress=np.std(progs),
-        )
+        stats = {
+            'env: ForwardProgressAverage': np.mean(progs),
+            'env: ForwardProgressMax': np.max(progs),
+            'env: ForwardProgressMin': np.min(progs),
+            'env: ForwardProgressStd': np.std(progs),
+            'env: ForwardProgressDiff': np.max(progs) - np.min(progs),
+        }
         if self.visitation_plot_config is not None:
             self.plot_visitation(
                 epoch,
