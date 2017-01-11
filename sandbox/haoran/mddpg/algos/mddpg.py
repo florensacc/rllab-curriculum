@@ -4,6 +4,7 @@ from sandbox.haoran.mddpg.misc.rllab_util import split_paths
 from sandbox.haoran.mddpg.policies.mnn_policy import MNNPolicy, MNNStrategy
 from sandbox.haoran.mddpg.misc.simple_replay_pool import SimpleReplayPool
 from sandbox.rocky.tf.misc.tensor_utils import flatten_tensor_variables
+from sandbox.haoran.mddpg.misc.sampler import MNNParallelSampler
 
 from rllab.misc import logger
 from rllab.misc import special
@@ -41,6 +42,7 @@ class MDDPG(OnlineAlgorithm, Serializable):
             only_train_critic=False,
             only_train_actor=False,
             resume=False,
+            eval_max_head_repeat=1,
             **kwargs
     ):
         """
@@ -76,6 +78,7 @@ class MDDPG(OnlineAlgorithm, Serializable):
         self.only_train_critic = only_train_critic
         self.only_train_actor = only_train_actor
         self.resume = resume
+        self.eval_max_head_repeat = eval_max_head_repeat
 
         assert not (only_train_actor and only_train_critic)
         assert isinstance(policy, MNNPolicy)
@@ -89,6 +92,8 @@ class MDDPG(OnlineAlgorithm, Serializable):
         if resume:
             qf.set_param_values(qf_params)
             policy.set_param_values(policy_params)
+
+        self.eval_sampler = MNNParallelSampler(self)
 
 
     @overrides
@@ -395,8 +400,8 @@ class MDDPG(OnlineAlgorithm, Serializable):
         logger.log("Collecting samples for evaluation")
         paths = self.eval_sampler.obtain_samples(
             itr=epoch,
-            batch_size=self.n_eval_samples,
             max_path_length=self.max_path_length,
+            max_head_repeat=self.eval_max_head_repeat,
         )
         rewards, terminals, obs, actions, next_obs = split_paths(paths)
         feed_dict = self._update_feed_dict(rewards, terminals, obs, actions,

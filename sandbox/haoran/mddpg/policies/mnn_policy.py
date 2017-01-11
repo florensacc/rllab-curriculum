@@ -89,7 +89,13 @@ class MNNPolicy(NNPolicy):
         ), {'heads': -np.ones(len(observations))}
 
     def reset(self):
-        self.k = np.random.randint(0,self.K)
+        """
+        Should use MNNStrategy to switch heads during training.
+        Warning: "pass" will make rllab.samplers.utils.rollout() unable to
+        switch heads between rollouts, which will make BatchSampler fail to
+        sample paths for different heads.
+        """
+        pass
 
 
 from rllab.exploration_strategies.base import ExplorationStrategy
