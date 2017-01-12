@@ -267,7 +267,7 @@ class OnlineAlgorithm(RLAlgorithm):
         return
 
     @abc.abstractmethod
-    def evaluate(self, epoch, es_path_returns):
+    def evaluate(self, epoch, train_info):
         """
         Perform evaluation for this algorithm.
 
