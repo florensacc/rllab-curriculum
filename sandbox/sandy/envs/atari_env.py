@@ -12,11 +12,11 @@ from rllab.misc.overrides import overrides
 from rllab.spaces.box import Box
 from sandbox.sandy.envs.gym_env import GymEnv
 
-RESIZE_W = 42  # 84
-RESIZE_H = 42  # 84
-N_FRAMES = 4
+DEFAULT_IMG_HEIGHT = 42
+DEFAULT_IMG_WIDTH = 42
+DEFAULT_N_FRAMES = 4
+DEFAULT_FRAMESKIP = 4
 SCALE = 255.0
-FRAMESKIP = 4
 
 RGB2Y_COEFF = np.array([0.2126, 0.7152, 0.0722])  # Y = np.dot(rgb, RGB2Y_COEFF)
 
@@ -25,20 +25,25 @@ class AtariEnv(GymEnv):
                  log_dir=None, record_log=True, force_reset=False, **kwargs):
         super().__init__(env_name, record_video=record_video, \
                          video_schedule=video_schedule, log_dir=log_dir, \
-                         record_log=record_log, force_reset=force_reset)
+                         record_log=record_log, force_reset=force_reset, **kwargs)
 
-        # Overwrite self._observation_space since preprocessing changes it
-        # and Theano requires axes to be in the order (batch size, # channels,
-        # # rows, # cols) instead of (batch size, # rows, # cols, # channels)
-        self._observation_space = Box(-1.,1.,(N_FRAMES,RESIZE_H,RESIZE_W))
-        self.update_last_frames(None)
         if 'seed' in kwargs:
             self.env.env.env._seed(kwargs['seed'])
+        self.img_height = kwargs.get('img_height', DEFAULT_IMG_HEIGHT)
+        self.img_width = kwargs.get("img_width", DEFAULT_IMG_WIDTH)
+        self.n_frames = kwargs.get("n_frames", DEFAULT_N_FRAMES)
+
+        frameskip = kwargs.get('frame_skip', DEFAULT_FRAMESKIP)
+        self.env.env.env.frameskip = frameskip
 
         # adversary_fn - function handle for adversarial perturbation of observation
         self.adversary_fn = None
 
-        self.env.env.env.frameskip = FRAMESKIP
+        # Overwrite self._observation_space since preprocessing changes it
+        # and Theano requires axes to be in the order (batch size, # channels,
+        # # rows, # cols) instead of (batch size, # rows, # cols, # channels)
+        self._observation_space = Box(-1.,1.,(self.n_frames,self.img_height,self.img_width))
+        self.update_last_frames(None)
 
     @property
     def observation(self):

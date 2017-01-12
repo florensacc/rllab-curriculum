@@ -20,7 +20,8 @@ BATCH_SIZE = 50000  # Should be large enough to ensure that there are at least N
 
 #FGSM_EPS = [0.0005, 0.001, 0.002, 0.004, 0.008, 0.016, 0.032, 0.064, 0.128]  # Amount to change each pixel (1.0 / 256 = 0.00390625)
 #FGSM_EPS = [0.004]  # Amount to change each pixel (1.0 / 256 = 0.00390625)
-FGSM_EPS = [0.008, 0.016, 0.032, 0.064, 0.128]
+#FGSM_EPS = [0.008, 0.016, 0.032, 0.064, 0.128]
+FGSM_EPS = [0.008]
 FGSM_RANDOM_SEED = 0
 
 OBS_MIN = -1  # minimum possible value for input x (NOTE: domain-specific)
@@ -42,6 +43,8 @@ def get_average_return(algo, n, seed=None):
                 algo.env._wrapped_env.env._seed(seed) 
             elif hasattr(algo.env._wrapped_env.env.env, 'ale'):
                 algo.env._wrapped_env.env.env._seed(seed)
+            elif hasattr(algo.env._wrapped_env.env.env.env, 'ale'):
+                algo.env._wrapped_env.env.env.env._seed(seed)
             else:
                 raise NotImplementedError
         elif hasattr(algo.env, 'env'):  # envs/atari_env.py
@@ -49,6 +52,8 @@ def get_average_return(algo, n, seed=None):
                 algo.env.env._seed(seed)
             elif hasattr(algo.env.env.env, 'ale'):
                 algo.env.env.env._seed(seed)
+            elif hasattr(algo.env.env.env.env, 'ale'):
+                algo.env.env.env.env._seed(seed)
             else:
                 raise NotImplementedError
         else:
