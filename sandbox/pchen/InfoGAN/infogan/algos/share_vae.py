@@ -1140,7 +1140,7 @@ class ShareVAE(object):
         from sandbox.pchen.InfoGAN.infogan.misc.imported import plotting
 
         # import IPython; IPython.embed()
-        
+
         # decompress
         originals = tuple(feed.items())[0][1][-bs_per_gpu:].reshape(batch_imshp)
         # context = sess.run(self.sym_vars["train"]["x_dist_info"], feed)

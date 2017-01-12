@@ -1884,6 +1884,7 @@ class PixelCNN(Distribution):
             nr_logistic_mix=10,
             nr_extra_nins=10,
             square=False,
+            no_downpass=False,
     ):
         Serializable.quick_init(self, locals())
 
@@ -1903,6 +1904,7 @@ class PixelCNN(Distribution):
         self.nr_logistic_mix = nr_logistic_mix
         self.nr_extra_nins = nr_extra_nins
         self.square = square
+        self.no_downpass = no_downpass
 
     @overrides
     def init_mode(self):
@@ -1957,27 +1959,28 @@ class PixelCNN(Distribution):
             # /////// down pass ////////
             u = u_list.pop()
             ul = ul_list.pop()
+            if not self.no_downpass:
+                for idx, nr_resnet in enumerate(self.nr_resnets[:0:-1]):
+                    for rep in range(nr_resnet+(0 if idx == 0 else 1)):
+                        u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
+                        ul = nn.aux_gated_resnet(ul, tf.concat(3,[nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
 
-            for idx, nr_resnet in enumerate(self.nr_resnets[:0:-1]):
-                for rep in range(nr_resnet+(0 if idx == 0 else 1)):
+                    u = nn.down_shifted_deconv2d(u, num_filters=self.nr_filters, stride=[2, 2])
+                    u = extra_nin(u)
+                    ul = nn.down_right_shifted_deconv2d(ul, num_filters=self.nr_filters, stride=[2, 2])
+                    ul = extra_nin(ul)
+
+                for rep in range(self.nr_resnets[0]+(1 if len(self.nr_resnets) > 1 else 0)):
                     u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
-                    ul = nn.aux_gated_resnet(ul, tf.concat(3,[nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
-
-                u = nn.down_shifted_deconv2d(u, num_filters=self.nr_filters, stride=[2, 2])
-                u = extra_nin(u)
-                ul = nn.down_right_shifted_deconv2d(ul, num_filters=self.nr_filters, stride=[2, 2])
-                ul = extra_nin(ul)
-
-            for rep in range(self.nr_resnets[0]+(1 if len(self.nr_resnets) > 1 else 0)):
-                u = nn.aux_gated_resnet(u, u_list.pop(), conv=nn.down_shifted_conv2d)
-                u = extra_nin(u)
+                    u = extra_nin(u)
                 ul = nn.aux_gated_resnet(ul, tf.concat(3, [nn.down_shift(u), ul_list.pop()]), conv=nn.down_right_shifted_conv2d)
                 ul = extra_nin(ul)
 
+                assert len(u_list) == 0
+                assert len(ul_list) == 0
+
             x_out = nn.nin(nn.concat_elu(ul), 10*self.nr_logistic_mix)
 
-        assert len(u_list) == 0
-        assert len(ul_list) == 0
 
         return x_out
 
@@ -2032,6 +2035,8 @@ class CondPixelCNN(Distribution):
             nr_extra_nins=0, # when this is a list, use repetively gated arch
             extra_compute=False,
             grayscale=False,
+            no_downpass=False,
+            no_vgrowth=False,
     ):
         Serializable.quick_init(self, locals())
 
@@ -2064,6 +2069,8 @@ class CondPixelCNN(Distribution):
         self.nr_extra_nins = nr_extra_nins
         self.extra_compute = extra_compute
         self.grayscale = grayscale
+        self.no_downpass = no_downpass
+        self.no_vgrowth = no_vgrowth
 
     @overrides
     def init_mode(self):
@@ -2085,6 +2092,8 @@ class CondPixelCNN(Distribution):
         import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
         import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
         assert not self.grayscale
+        assert not self.no_downpass
+        assert not self.no_vgrowth
         x = tf.reshape(
             x,
             [-1,] + list(self._shape)
@@ -2199,13 +2208,15 @@ class CondPixelCNN(Distribution):
             for rep in range(self.nr_resnets[0]):
                 for idx, extra in enumerate(self.nr_extra_nins):
                     if idx == 0:
-                        u_lists[idx].append(nn.gated_resnet(u_lists[idx][-1], conv=nn.down_shifted_conv2d))
+                        if not self.no_vgrowth:
+                            u_lists[idx].append(nn.gated_resnet(u_lists[idx][-1], conv=nn.down_shifted_conv2d))
                         assert not self.extra_compute
                         ul_lists[idx].append(nn.aux_gated_resnet(ul_lists[idx][-1], nn.down_shift(u_lists[idx][-1]), conv=nn.down_right_shifted_conv2d))
                     else:
-                        u_lists[idx].append(
-                            nn.aux_gated_resnet(u_lists[idx][-1], u_lists[idx-1][-1], conv=nn.down_right_shifted_conv2d)
-                        )
+                        if not self.no_vgrowth:
+                            u_lists[idx].append(
+                                nn.aux_gated_resnet(u_lists[idx][-1], u_lists[idx-1][-1], conv=nn.down_right_shifted_conv2d)
+                            )
                         ul_lists[idx].append(
                             nn.aux_gated_resnet(
                                 ul_lists[idx][-1],
@@ -2219,27 +2230,28 @@ class CondPixelCNN(Distribution):
             us = [u_lists[idx].pop() for idx in range(len(self.nr_extra_nins))]
             uls = [ul_lists[idx].pop() for idx in range(len(self.nr_extra_nins))]
 
-            for rep in range(self.nr_resnets[0]+(1 if len(self.nr_resnets) > 1 else 0)):
-                for idx, extra in enumerate(self.nr_extra_nins):
-                    if idx == 0:
-                        us[idx] = nn.aux_gated_resnet(us[idx], u_lists[idx].pop(), conv=nn.down_shifted_conv2d)
-                        us[idx] = extra_nin(us[idx], extra)
-                        uls[idx] = nn.aux_gated_resnet(uls[idx], tf.concat(3, [nn.down_shift(us[idx]), ul_lists[idx].pop()]), conv=nn.down_right_shifted_conv2d)
-                        uls[idx] = extra_nin(uls[idx], extra)
-                    else:
-                        us[idx] = nn.aux_gated_resnet(
-                            us[idx],
-                            tf.concat(3, [u_lists[idx].pop(), us[idx-1]]),
-                            conv=nn.down_shifted_conv2d
-                        )
-                        us[idx] = extra_nin(us[idx], extra)
-                        uls[idx] = nn.aux_gated_resnet(uls[idx], tf.concat(3, [nn.down_shift(us[idx]), ul_lists[idx].pop()]), conv=nn.down_right_shifted_conv2d)
-                        uls[idx] = extra_nin(uls[idx], extra)
+            if not self.no_downpass:
+                for rep in range(self.nr_resnets[0]+(1 if len(self.nr_resnets) > 1 else 0)):
+                    for idx, extra in enumerate(self.nr_extra_nins):
+                        if idx == 0:
+                            us[idx] = nn.aux_gated_resnet(us[idx], u_lists[idx].pop(), conv=nn.down_shifted_conv2d)
+                            us[idx] = extra_nin(us[idx], extra)
+                            uls[idx] = nn.aux_gated_resnet(uls[idx], tf.concat(3, [nn.down_shift(us[idx]), ul_lists[idx].pop()]), conv=nn.down_right_shifted_conv2d)
+                            uls[idx] = extra_nin(uls[idx], extra)
+                        else:
+                            us[idx] = nn.aux_gated_resnet(
+                                us[idx],
+                                tf.concat(3, [u_lists[idx].pop(), us[idx-1]]),
+                                conv=nn.down_shifted_conv2d
+                            )
+                            us[idx] = extra_nin(us[idx], extra)
+                            uls[idx] = nn.aux_gated_resnet(uls[idx], tf.concat(3, [nn.down_shift(us[idx]), ul_lists[idx].pop()]), conv=nn.down_right_shifted_conv2d)
+                            uls[idx] = extra_nin(uls[idx], extra)
 
-            for u_list in u_lists.values():
-                assert len(u_list) == 0
-            for ul_list in ul_lists.values():
-                assert len(ul_list) == 0
+                for u_list in u_lists.values():
+                    assert len(u_list) == 0
+                for ul_list in ul_lists.values():
+                    assert len(ul_list) == 0
 
             for idx in range(1, len(self.nr_extra_nins)):
                 uls[idx] = nn.aux_gated_resnet(uls[idx], uls[idx-1], conv=nn.nin)
