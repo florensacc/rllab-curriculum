@@ -7,13 +7,14 @@ import copy
 import atari_py
 from scipy.misc import imresize
 
+from gym.utils import seeding
 from rllab import config
 from rllab.spaces.discrete import Discrete
 from rllab.core.serializable import Serializable
 from rllab.envs.base import Env
 from sandbox.haoran.ale_python_interface import ALEInterface
 
-class AtariEnv(Env,Serializable):
+class AtariEnvMinimal(Env,Serializable):
     def __init__(self,
             game,
             seed=None,
@@ -21,23 +22,18 @@ class AtariEnv(Env,Serializable):
             max_start_nullops=0,
             img_width=84,
             img_height=84,
-            crop_or_scale = 'scale',
-            #resize_with_scipy=False,
+            resize_with_scipy=False,
             obs_type="image",
             record_image=True, # image for training and counting
             record_rgb_image=False, # for visualization and debugging
             record_ram=False,
             record_internal_state=True,
-            resetter=None,
-            avoid_life_lost=False,
             n_last_rams=1,
             n_last_screens=4,
             frame_skip=4,
-            terminator=None,
             legal_actions=[],
             rom_filename="",
             correct_luminance=True,
-            subsample_rgb_images=False,
             recorded_rgb_image_scale=1.0,
         ):
         """
@@ -56,25 +52,15 @@ class AtariEnv(Env,Serializable):
         self.record_image = record_image
         self.record_rgb_image = record_rgb_image
         self.recorded_rgb_image_scale = recorded_rgb_image_scale
-        self.subsample_rgb_images = subsample_rgb_images
         self.record_ram = record_ram
         self.record_internal_state = record_internal_state
-        self.resetter = resetter
-        if resetter is not None:
-            assert max_start_nullops == 0 # doing nothing when reset to a non-initial state can be dangerous in Montezuma's Revenge
-        self.terminator = terminator
-        if self.terminator is not None:
-            self.terminator.set_env(self)
-        self.crop_or_scale = crop_or_scale
-        #self.resize_with_scipy = resize_with_scipy  # TODO: change back
-        self.resize_with_scipy = False
+        self.resize_with_scipy = resize_with_scipy
         self.img_width = img_width
         self.img_height = img_height
         self._prior_reward = 0
         self.frame_skip = frame_skip
         self.n_last_screens = n_last_screens
         self.n_last_rams = n_last_rams
-        self.avoid_life_lost = avoid_life_lost
         self.legal_actions = legal_actions
         self.correct_luminance = correct_luminance
         if not correct_luminance:
@@ -155,7 +141,10 @@ class AtariEnv(Env,Serializable):
         self.ale.loadROM(str.encode(self.rom_filename))
 
     def set_seed(self,seed):
-        self.ale.setInt(b'random_seed', seed)
+        # Copied next two lines from gym.envs.atari.atari_env._seed
+        seed2 = seeding.hash_seed(seed + 1) % 2**31
+        self.ale.setInt(b'random_seed', seed2)
+        #self.ale.setInt(b'random_seed', seed)
 
     def current_screen(self):
         """
@@ -167,7 +156,11 @@ class AtariEnv(Env,Serializable):
         """
         # Max of two consecutive frames
         assert self.last_raw_screen is not None
-        rgb_img = np.maximum(self.ale.getScreenRGB(), self.last_raw_screen)
+
+        # NOTE: Testing whether this is necessary
+        #rgb_img = np.maximum(self.ale.getScreenRGB(), self.last_raw_screen)
+        rgb_img = self.ale.getScreenRGB()
+
         # Make sure the last raw screen is used only once
         self.last_raw_screen = None
         assert rgb_img.shape == (210, 160, 3)
@@ -182,25 +175,12 @@ class AtariEnv(Env,Serializable):
         if img.shape == (250, 160):
             raise RuntimeError("This ROM is for PAL. Please use ROMs for NTSC")
         assert img.shape == (210, 160)
-        if self.crop_or_scale == 'crop':
-            # Shrink (210, 160) -> (110, 84)
-            img = cv2.resize(img, (84, 110),
-                             interpolation=cv2.INTER_LINEAR)
-            assert img.shape == (110, 84)
-            # Crop (110, 84) -> (84, 84)
-            unused_height = 110 - 84
-            bottom_crop = 8
-            top_crop = unused_height - bottom_crop
-            img = img[top_crop: 110 - bottom_crop, :]
-            img = cv2.resize(img,(self.img_width,self.img_height))
-        elif self.crop_or_scale == 'scale':
-            if self.resize_with_scipy:
-                img = imresize(img, (self.img_width, self.img_height), interp='bilinear')
-            else:
-                img = cv2.resize(img, (self.img_width, self.img_height),
-                                 interpolation=cv2.INTER_LINEAR)
+
+        if self.resize_with_scipy:
+            img = imresize(img, (self.img_width, self.img_height), interp='bilinear')
         else:
-            raise RuntimeError('crop_or_scale must be either crop or scale')
+            img = cv2.resize(img, (self.img_width, self.img_height),
+                             interpolation=cv2.INTER_LINEAR)
         return img
 
     @property
@@ -255,21 +235,11 @@ class AtariEnv(Env,Serializable):
 
     @property
     def is_terminal(self):
-        if self.terminator is not None:
-            return self.terminator.is_terminal()
+        if self.ale.game_over():
+            # print("Terminate due to gameover")
+            return True
         else:
-            if self.avoid_life_lost:
-                if self.ale.game_over() or self.lives_lost:
-                    # print("Terminate due to life loss")
-                    return True
-                else:
-                    return False
-            else:
-                if self.ale.game_over():
-                    # print("Terminate due to gameover")
-                    return True
-                else:
-                    return False
+            return False
 
     @property
     def reward(self):
@@ -294,24 +264,8 @@ class AtariEnv(Env,Serializable):
                 rgb_img = cv2.resize(rgb_img, dsize=(0,0),fx=scale,fy=scale)
             env_info["rgb_images"] = rgb_img
 
-            if self.subsample_rgb_images:
-                full_height, full_width, channels = rgb_img.shape
-                subsampled_rgb_images = np.zeros((self.img_height, self.img_width, channels))
-                for channel in range(channels):
-                    subsampled_rgb_images[:, :, channel] = cv2.resize(
-                        rgb_img[:, :, channel],
-                        (self.img_width, self.img_height))
-                rgb_img = subsampled_rgb_images
-            env_info["rgb_images"] = rgb_img
-
         if self.record_internal_state:
             env_info["internal_states"] = self.ale.cloneState()
-
-        if self.resetter is not None:
-            env_info["is_terminals"] = self.is_terminal
-            env_info["ale_ids"] = hex(id(self.ale))
-            env_info["use_default_reset"] = self.cur_path_use_default_reset
-        env_info["lives_lost"] = self.lives_lost
 
         return env_info
 
@@ -335,14 +289,7 @@ class AtariEnv(Env,Serializable):
             # for example, Breakout's minimal action set is [0,1,3,4]
             rewards.append(self.ale.act(self.legal_actions[action]))
 
-            if self.start_lives > self.ale.lives():
-                self.lives_lost = True
-            else:
-                self.lives_lost = False
-
             if self.is_terminal:
-                if self.terminator is not None:
-                    rewards.append(self.terminator.get_terminal_reward())
                 break
         self._reward = sum(rewards)
         if self._prior_reward > 0:
@@ -358,16 +305,11 @@ class AtariEnv(Env,Serializable):
             if self.record_ram or self.obs_type == "ram":
                 self.last_rams.append(np.copy(self.ale.getRAM()))
 
-
         # cur_obs, cur_reward, next_state_is_terminal, cur_env_info
         return self.observation, self.reward, self.is_terminal, cur_env_info
 
     def reset(self):
-        if self.resetter is None:
-            self.ale.reset_game()
-            self.cur_path_use_default_reset = True
-        else:
-            self.cur_path_use_default_reset = self.resetter.reset(self)
+        self.ale.reset_game()
 
         # insert randomness to the initial state
         # for example, in Frostbite, the agent waits for a random number of time steps, and the temperature will decrease
@@ -391,8 +333,6 @@ class AtariEnv(Env,Serializable):
                 maxlen=self.n_last_rams
             )
 
-        self.start_lives = self.ale.lives()
-        self.lives_lost = False
         return self.observation
 
     def render(self,return_array=False):
@@ -401,14 +341,3 @@ class AtariEnv(Env,Serializable):
         cv2.waitKey(10)
         if return_array:
             return img
-
-    def get_param_values(self):
-        params = dict()
-        if self.resetter is not None:
-            params["resetter_params"] = self.resetter.get_param_values()
-        return params
-
-
-    def set_param_values(self,params):
-        if self.resetter is not None:
-            self.resetter.set_param_values(params["resetter_params"])

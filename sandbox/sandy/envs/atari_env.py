@@ -22,7 +22,7 @@ RGB2Y_COEFF = np.array([0.2126, 0.7152, 0.0722])  # Y = np.dot(rgb, RGB2Y_COEFF)
 
 class AtariEnv(GymEnv):
     def __init__(self, env_name, record_video=False, video_schedule=None, \
-                 log_dir=None, record_log=True, force_reset=False):
+                 log_dir=None, record_log=True, force_reset=False, **kwargs):
         super().__init__(env_name, record_video=record_video, \
                          video_schedule=video_schedule, log_dir=log_dir, \
                          record_log=record_log, force_reset=force_reset)
@@ -30,14 +30,15 @@ class AtariEnv(GymEnv):
         # Overwrite self._observation_space since preprocessing changes it
         # and Theano requires axes to be in the order (batch size, # channels,
         # # rows, # cols) instead of (batch size, # rows, # cols, # channels)
-        #self._observation_space = Box(0.,1.,(N_FRAMES,RESIZE_H,RESIZE_W))
         self._observation_space = Box(-1.,1.,(N_FRAMES,RESIZE_H,RESIZE_W))
         self.update_last_frames(None)
+        if 'seed' in kwargs:
+            self.env.env.env._seed(kwargs['seed'])
 
         # adversary_fn - function handle for adversarial perturbation of observation
         self.adversary_fn = None
 
-        self.env.frameskip = FRAMESKIP
+        self.env.env.env.frameskip = FRAMESKIP
 
     @property
     def observation(self):
@@ -52,26 +53,28 @@ class AtariEnv(GymEnv):
         self.adversary_fn = fn_handle
 
     def clear_last_frames(self):
-        self.last_frames = np.zeros(self.observation_space.shape)
+        self.last_frames = np.zeros(self.observation_space.shape, dtype=np.uint8)
 
     def update_last_frames(self, next_obs):
         if next_obs is None:
             self.clear_last_frames()
         else:
             next_obs = self.preprocess_obs(next_obs)
-            self.last_frames = np.r_[self.last_frames[1:,:,:], next_obs[np.newaxis,:]]
+            self.last_frames = np.r_[self.last_frames[1:,:,:], next_obs[np.newaxis,:,:]]
 
     def preprocess_obs(self, obs):
         # Preprocess Atari frames based on released DQN code from Nature paper:
         #     1) Convert RGB to grayscale (Y in YUV)
         #     2) Rescale image using 'bilinear' method
-        obs = np.dot(obs, RGB2Y_COEFF)  # Convert RGB to Y
-        obs = imresize(obs, self.observation_space.shape[1:], interp='bilinear')
+        obs_y = np.dot(obs, RGB2Y_COEFF)  # Convert RGB to Y
+        obs_y = obs_y.astype(np.uint8)  # This is important, otherwise imresize will rescale it to be uint8
+        obs_y = imresize(obs_y, self.observation_space.shape[1:], interp='bilinear')
+
         # Another option is to use cv2.resize but that makes items change size
         # and disappear temporarily
         #obs = cv2.resize(obs, self.observation_space.shape[1:][::-1], \
         #                 interpolation=cv2.INTER_LINEAR)
-        return obs
+        return obs_y
 
     @overrides
     def step(self, action):
@@ -90,8 +93,8 @@ class AtariEnv(GymEnv):
 
     @overrides
     def reset(self):
-        obs = super().reset()
-        #obs = self.env.reset()
+        obs = super().reset()  # self.env.reset()
         self.clear_last_frames()
         self.update_last_frames(obs)
+
         return self.observation
