@@ -3,10 +3,9 @@ parallel_sampler.initialize(n_parallel=2)
 parallel_sampler.set_seed(1)
 
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
-from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.carlos_snn.hallucinators.prior_hallucinator import PriorHallucinator
-from sandbox.carlos_snn.old_my_snn.s_mlp_policy import GaussianMLPPolicy_snn
-from sandbox.carlos_snn.old_my_snn.trpo_snn import TRPO_snn
+from sandbox.carlos_snn.policies.snn_mlp_policy import GaussianMLPPolicy_snn
+from sandbox.carlos_snn.algos.trpo_snn import TRPO_snn
 from sandbox.carlos_snn.regressors.latent_regressor import Latent_regressor
 
 # new things

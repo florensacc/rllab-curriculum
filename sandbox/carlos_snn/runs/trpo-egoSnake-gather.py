@@ -13,21 +13,13 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.config_personal import *
 import math
 
-# from rllab.envs.mujoco.swimmer_env import SwimmerEnv
-# from sandbox.carlos_snn.envs.mujoco.snake_env import SnakeEnv
-from sandbox.carlos_snn.envs.mujoco.maze.snake_maze_env import SnakeMazeEnv
 from sandbox.carlos_snn.envs.mujoco.gather.snake_gather_env import SnakeGatherEnv
-
-# from rllab.envs.mujoco.maze.ant_maze_env import AntMazeEnv
-# from sandbox.carlos_snn.envs.mujoco.swimmer_env import SwimmerEnv
-# from rllab.envs.mujoco.maze.swimmer_maze_env import SwimmerMazeEnv
-# from sandbox.carlos_snn.envs.mujoco.maze.swimmer_maze_env import SwimmerMazeEnv
-# from sandbox.carlos_snn.envs.mujoco.gather.gather_env import GatherEnv
+from rllab.envs.mujoco.gather.swimmer_gather_env import SwimmerGatherEnv
 
 stub(globals())
 
 # exp setup --------------------------------------------------------
-mode = "ec2"
+mode = "local"
 ec2_instance = "m4.10xlarge"
 # subnets =[
 #     "us-west-1b"
@@ -48,9 +40,15 @@ aws_config = dict(
 )
 
 for activity_range in [6, 10, 15]:
-    env = normalize(SnakeGatherEnv(activity_range=activity_range, sensor_range=activity_range,
-                                   sensor_span=math.pi * 2, ego_obs=True,
-                                   coef_inner_rew=1))
+    # env = normalize(SnakeGatherEnv(activity_range=activity_range, sensor_range=activity_range,
+    #                                sensor_span=math.pi * 2, ego_obs=True,
+    #                                coef_inner_rew=1))    ######################### How to crack up balls reward?
+
+    env = normalize(SwimmerGatherEnv(activity_range=activity_range, sensor_range=activity_range,
+                                     sensor_span=math.pi * 2,
+                                     # ego_obs=True, coef_inner_rew=1
+                                     ))
+
     policy = GaussianMLPPolicy(
         env_spec=env.spec,
         # The neural network policy should have two hidden layers, each with 32 hidden units.
@@ -63,7 +61,6 @@ for activity_range in [6, 10, 15]:
         env=env,
         policy=policy,
         baseline=baseline,
-        self_normalize=True,
         batch_size=5e5,
         whole_paths=True,
         max_path_length=5e3 * activity_range / 6.,  # correct for larger envs
@@ -76,8 +73,8 @@ for activity_range in [6, 10, 15]:
 
     for s in range(0, 50, 10):
         exp_prefix = 'trpo-egoSnake-gather'
-        exp_name = exp_prefix + '{}scale_{}pl_{}'.format(activity_range,
-                                                          int(5e3 * activity_range / 6.), s)
+        exp_name = exp_prefix + '_{}scale_{}pl_{}'.format(activity_range,
+                                                         int(5e3 * activity_range / 6.), s)
         run_experiment_lite(
             algo.train(),
             # where to launch the instances
@@ -96,4 +93,3 @@ for activity_range in [6, 10, 15]:
             exp_prefix=exp_prefix,
             exp_name=exp_name,
         )
-

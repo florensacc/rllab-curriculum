@@ -1,34 +1,20 @@
-from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
-from rllab.misc.instrument import stub, run_experiment_lite
-from rllab.misc.nb_utils import ExperimentDatabase
-from sandbox.carlos_snn.hallucinators.prior_hallucinator import PriorHallucinator
-from sandbox.carlos_snn.old_my_snn.s_mlp_policy import GaussianMLPPolicy_snn
-from sandbox.carlos_snn.policies.categorical_mlp_policy import CategoricalMLPPolicy
-from sandbox.carlos_snn.old_my_snn.trpo_snn import TRPO_snn
-from rllab.algos.trpo import TRPO
-from sandbox.carlos_snn.regressors.latent_regressor import Latent_regressor
-import sys
-import os
 import math
+import os
 
-# new things
-from sandbox.carlos_snn.bonus_evaluators.grid_bonus_evaluator import GridBonusEvaluator
-
-from sandbox.carlos_snn.envs.mujoco.maze.swimmer_maze_env import SwimmerMazeEnv
-from sandbox.carlos_snn.envs.mujoco.maze.snake_maze_env import SnakeMazeEnv
-from sandbox.carlos_snn.envs.mujoco.snake_env import SnakeEnv
-from sandbox.carlos_snn.envs.mujoco.gather.snake_gather_env import SnakeGatherEnv
-from sandbox.carlos_snn.envs.mujoco.gather.swimmer_gather_env import SwimmerGatherEnv
-
+from rllab.algos.trpo import TRPO
+from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
+from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.carlos_snn.envs.hierarchized_multiPol_env import hierarchize_multi
+from sandbox.carlos_snn.envs.mujoco.gather.snake_gather_env import SnakeGatherEnv
+from sandbox.carlos_snn.policies.categorical_mlp_policy import CategoricalMLPPolicy
 
 stub(globals())
 
 mesh_density = 5
 
 for i in [1, 2, 3]:
-    exp_dir = 'data_upload/egoSnake64-trpo/'.format(i)
+    exp_dir = 'data_upload/egoSnake64-trpo-set1/'.format(i)
     pkl_paths = []
     json_paths = []
     for dir in os.listdir(exp_dir):
@@ -58,11 +44,10 @@ for i in [1, 2, 3]:
                 # bonus_evaluators = [GridBonusEvaluator(mesh_density=mesh_density, visitation_bonus=1, snn_H_bonus=0)]
                 # reward_coef_bonus = [reward_coef]
 
-                algo = TRPO_snn(
+                algo = TRPO(
                     env=env,
                     policy=policy,
                     baseline=baseline,
-                    self_normalize=True,
                     log_deterministic=True,
                     reward_coef=reward_coef,
                     # bonus_evaluator=bonus_evaluators,
@@ -76,7 +61,7 @@ for i in [1, 2, 3]:
                 )
 
                 for s in [0, 100]:  # range(10, 110, 10):  # [10, 20, 30, 40, 50]:
-                    exp_prefix = 'hier-multi-egoSwimmer-Gather'
+                    exp_prefix = 'hier-multi-egoSnake-gather'
                     exp_name = exp_prefix + '_{}agg_{}pl_{}rewcoef_{}mesh_PREpostNIPS{}_{}'.format(
                         time_step_agg, int(5e3 / time_step_agg),
                         reward_coef, mesh_density, i, s)
