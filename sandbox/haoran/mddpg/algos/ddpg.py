@@ -124,6 +124,11 @@ class DDPG(OnlineAlgorithm):
             tf.assign(target, (self.tau * src + (1 - self.tau) * target))
             for target, src in zip(target_critic_vars, critic_vars)]
 
+    def _get_finalize_ops(self):
+        # returning an emptyr list will induce error in tensorflow,
+        # so return a useless operation
+        return [tf.constant(1)]
+
     @overrides
     def _init_training(self):
         super()._init_training()
@@ -166,7 +171,7 @@ class DDPG(OnlineAlgorithm):
         }
 
     @overrides
-    def evaluate(self, epoch, es_path_returns):
+    def evaluate(self, epoch, train_info):
         logger.log("Collecting samples for evaluation")
         paths = self.eval_sampler.obtain_samples(
             itr=epoch,
@@ -224,6 +229,7 @@ class DDPG(OnlineAlgorithm):
         self.last_statistics.update(create_stats_ordered_dict('Rewards', rewards))
         self.last_statistics.update(create_stats_ordered_dict('returns', returns))
 
+        es_path_returns = train_info["es_path_returns"]
         if len(es_path_returns) == 0 and epoch == 0:
             es_path_returns = [0]
         if len(es_path_returns) > 0:

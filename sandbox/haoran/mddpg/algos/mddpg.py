@@ -486,8 +486,9 @@ class MDDPG(OnlineAlgorithm, Serializable):
         true_env = self.env
         while isinstance(true_env,ProxyEnv):
             true_env = true_env._wrapped_env
-        env_stats = true_env.log_stats(epoch, paths)
-        self.last_statistics.update(env_stats)
+        if hasattr(true_env, "log_stats"):
+            env_stats = true_env.log_stats(epoch, paths)
+            self.last_statistics.update(env_stats)
 
         for key, value in self.last_statistics.items():
             logger.record_tabular(key, value)
