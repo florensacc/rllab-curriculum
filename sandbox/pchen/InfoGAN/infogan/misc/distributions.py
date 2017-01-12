@@ -2319,7 +2319,8 @@ class CondPixelCNN(Distribution):
         import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
         return x_var, \
                context_var, \
-               nn.sample_from_discretized_mix_logistic(tgt_vec, self.nr_logistic_mix) / 2 # convert back to 0.5 scale
+               nn.sample_from_discretized_mix_logistic(tgt_vec, self.nr_logistic_mix) / 2, \
+               tgt_vec
 
     @functools.lru_cache(maxsize=None)
     def sample_one_step(self, x_var, info):
