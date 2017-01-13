@@ -22,6 +22,7 @@ def rollout(env, agent, max_path_length=np.inf, reset_start_rollout=False, anima
     if animated:
         env.render()
     while path_length < max_path_length:
+        # print("obs {} is {}".format(path_length, o))
         a, agent_info = agent.get_action(o)
         next_o, r, d, env_info = env.step(a)
         observations.append(env.observation_space.flatten(o))
@@ -37,8 +38,8 @@ def rollout(env, agent, max_path_length=np.inf, reset_start_rollout=False, anima
             env.render()
             timestep = 0.05
             time.sleep(timestep / speedup)
-    if animated:
-        env.render(close=True)
+    # if animated:
+        # env.render(close=True)
 
     return dict(
         observations=tensor_utils.stack_tensor_list(observations),

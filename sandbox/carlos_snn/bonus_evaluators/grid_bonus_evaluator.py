@@ -59,8 +59,9 @@ class GridBonusEvaluator(object):
                 while i < len(com_xy):
                     start = i
                     ori = paths[k]['env_infos']['ori'][i - self.start_bonus_after]
-                    c, s = np.cos(ori), np.sin(ori)
-                    R = np.matrix('{} {}; {} {}'.format(c, -s, s, c))
+                    c = np.cos(ori)
+                    s = np.sin(ori)
+                    R = np.matrix('{} {}; {} {}'.format(c[0], -s[0], s[0], c[0]))
                     while i < len(com_xy) and i - start < self.switch_lat_every - self.start_bonus_after:
                         i += 1
                     com_xy[start:i] = np.dot(R, com_xy[start:i].T).T
@@ -118,7 +119,7 @@ class GridBonusEvaluator(object):
                 start = i
                 ori = path['env_infos']['ori'][i - self.start_bonus_after]
                 c, s = np.cos(ori), np.sin(ori)
-                R = np.matrix('{} {}; {} {}'.format(c, -s, s, c))
+                R = np.matrix('{} {}; {} {}'.format(c[0], -s[0], s[0], c[0]))
                 while i < len(com_xy) and i - start < self.switch_lat_every - self.start_bonus_after:
                     i += 1
                 com_xy[start:i] = np.dot(R, com_xy[start:i].T).T
@@ -157,7 +158,7 @@ class GridBonusEvaluator(object):
                 start = i
                 ori = path['env_infos']['ori'][i - self.start_bonus_after]
                 c, s = np.cos(ori), np.sin(ori)
-                R = np.matrix('{} {}; {} {}'.format(c, -s, s, c))
+                R = np.matrix('{} {}; {} {}'.format(c[0], -s[0], s[0], c[0]))
                 while i < len(com_xy) and i - start < self.switch_lat_every - self.start_bonus_after:
                     i += 1
                 com_xy[start:i] = np.dot(R, com_xy[start:i].T).T
@@ -198,7 +199,7 @@ class GridBonusEvaluator(object):
                 start = i
                 ori = path['env_infos']['ori'][i - self.start_bonus_after]
                 c, s = np.cos(ori), np.sin(ori)
-                R = np.matrix('{} {}; {} {}'.format(c, -s, s, c))
+                R = np.matrix('{} {}; {} {}'.format(c[0], -s[0], s[0], c[0]))
                 while i < len(com_xy) and i - start < self.switch_lat_every - self.start_bonus_after:
                     i += 1
                 com_xy[start:i] = np.dot(R, com_xy[start:i].T).T

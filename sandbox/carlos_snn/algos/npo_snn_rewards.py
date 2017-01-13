@@ -40,6 +40,7 @@ class BatchSampler_snn(BatchSampler):
                  logged_MI=None,  # a list of tuples specifying the (obs,actions) that are regressed to find the latents
                  hallucinator=None,
                  n_hallu=0,
+                 self_normalize=False, # this is for the hallucinated samples importance weight
                  # virtual_reset=False,
                  switch_lat_every=0,
                  **kwargs
@@ -55,6 +56,7 @@ class BatchSampler_snn(BatchSampler):
         self.logged_MI = logged_MI  # a list of tuples specifying the (obs,actions) that are regressed to find the latents
         self.hallucinator = hallucinator
         self.n_hallu = n_hallu
+        self.self_normalize = self_normalize
         # self.virtual_reset = virtual_reset
         self.switch_lat_every = switch_lat_every
 
@@ -179,7 +181,7 @@ class BatchSampler_snn(BatchSampler):
             if len(hallucinated) == 0:
                 return real_samples
             all_samples = [real_samples] + hallucinated
-            if self.algo.self.algo.normalize:
+            if self.self_normalize:
                 all_importance_weights = np.asarray([x["importance_weights"] for x in all_samples])
                 # It is important to use the mean instead of the sum. Otherwise, the computation of the weighted KL
                 # divergence will be incorrect
