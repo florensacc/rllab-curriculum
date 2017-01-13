@@ -108,8 +108,8 @@ def rollout(sess,env, agent, exploration_strategy, qf, random=False,
 
 
                 plt.draw()
-                timestep = 0.05
-                plt.pause(timestep / speedup)
+            timestep = 0.05
+            time.sleep(timestep / speedup)
             if pause:
                 input()
         o = next_o
