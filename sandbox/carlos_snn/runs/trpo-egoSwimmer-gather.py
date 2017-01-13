@@ -13,7 +13,8 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.config_personal import *
 import math
 
-from sandbox.carlos_snn.envs.mujoco.gather.snake_gather_env import SnakeGatherEnv
+# from sandbox.carlos_snn.envs.mujoco.gather.snake_gather_env import SnakeGatherEnv
+from rllab.envs.mujoco.gather.swimmer_gather_env import SwimmerGatherEnv
 
 stub(globals())
 
@@ -39,9 +40,11 @@ aws_config = dict(
 )
 
 for activity_range in [6, 10, 15]:
-    env = normalize(SnakeGatherEnv(activity_range=activity_range, sensor_range=activity_range,
-                                   sensor_span=math.pi * 2, ego_obs=True,
-                                   coef_inner_rew=1))    ######################### How to crack up balls reward?
+
+    env = normalize(SwimmerGatherEnv(activity_range=activity_range, sensor_range=activity_range,
+                                     sensor_span=math.pi * 2,
+                                     # ego_obs=True, coef_inner_rew=1
+                                     ))
 
     policy = GaussianMLPPolicy(
         env_spec=env.spec,
@@ -66,9 +69,9 @@ for activity_range in [6, 10, 15]:
     )
 
     for s in range(0, 50, 10):
-        exp_prefix = 'trpo-egoSnake-gather'
+        exp_prefix = 'trpo-egoSwimmer-gather'
         exp_name = exp_prefix + '_{}scale_{}pl_{}'.format(activity_range,
-                                                         int(5e3 * activity_range / 6.), s)
+                                                          int(5e3 * activity_range / 6.), s)
         run_experiment_lite(
             algo.train(),
             # where to launch the instances
