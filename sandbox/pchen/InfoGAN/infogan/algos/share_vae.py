@@ -1325,14 +1325,14 @@ class ShareVAE(object):
                                 eval_input: imgs[bi:bi+1, :]
                             }
                         )
-                    logli = np.mean(
+                    this_logli = np.mean(
                         np_logsumexp(
                             loglis_buffer[:, :end]
                         ) - np.log(end)
                     )
                     logger.log("k=%s, logli=%s, bits/dim=%s" % (
                         end,
-                        logli,
-                        logli / self.model.output_dist.effective_dim / np.log(2)
+                        this_logli,
+                        this_logli / self.model.output_dist.effective_dim / np.log(2)
                     ))
 
