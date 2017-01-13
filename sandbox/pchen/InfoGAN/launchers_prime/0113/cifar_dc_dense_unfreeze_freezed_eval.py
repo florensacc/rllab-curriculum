@@ -75,6 +75,8 @@
 
 # try resuming w/ training only done on generative pipeline
 
+## 2017-01-13 14:24:15.454571 PST | [0112_cifar_dc_dense_unfreeze_freezed_2017_01_12_09_35_54_0001] EVALcond_logp: -6273.6; vlb_sum: -6332.93; bits/dim: -2.97412; true_vlb_sum_k0: -6332.94; true_vlb_sum: -6332.94; kl: 0.019316; kl_sum: 59.3388; vlb: -2.0615; log_p_z: -1
+
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -141,7 +143,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def k(self, num_gpus):
-        return [1, ]
+        return [32, ]
 
     @variant(hide=False)
     def num_gpus(self):
@@ -368,7 +370,7 @@ for v in variants[i:i+1]:
             freeze_encoder=False,
             # resume_from="/home/peter/rllab-private/data/local/0108-cifar-dc-highgen-dense-scaled/0108_cifar_dc_highgen_dense_scaled_2017_01_10_00_49_02_0001/3031/pa_mnist_ar_nr_cond__160000.ckpt",
             # resume_from="/home/peter/rllab-private/data/local/0112-cifar-dc-dense-unfreeze-freezed/0112_cifar_dc_dense_unfreeze_freezed_2017_01_12_09_35_54_0001/pa_mnist_ar_nr_cond__10000.ckpt",
-            resume_from="/home/peter/rllab-private/data/local/0112-cifar-dc-dense-unfreeze-freezed/0112_cifar_dc_dense_unfreeze_freezed_2017_01_12_09_35_54_0001/pa_mnist_ar_nr_cond__90000.ckpt",
+            resume_from="/home/peter/rllab-private/data/local/0112-cifar-dc-dense-unfreeze-freezed/0112_cifar_dc_dense_unfreeze_freezed_2017_01_12_09_35_54_0001/pa_mnist_ar_nr_cond__210000.ckpt",
             # resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
             # staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
@@ -378,8 +380,8 @@ for v in variants[i:i+1]:
         )
 
         run_experiment_lite(
-            algo.vis(),
-            exp_prefix="0112_cifar_dc_dense_unfreezed_vis",
+            algo.eval(),
+            exp_prefix="0113_cifar_dc_dense_unfreezed_eval",
             seed=v["seed"],
             variant=v,
             mode="local",
