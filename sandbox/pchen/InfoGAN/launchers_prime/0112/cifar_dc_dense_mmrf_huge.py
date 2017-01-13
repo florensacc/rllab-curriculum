@@ -73,8 +73,8 @@
 
 # high reps problem hard to optimize? try dense net
 
-# try resuming w/ training only done on generative pipeline
-
+# try even smaller receptive field!!!
+# even smallerrr
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -99,7 +99,7 @@ timestamp = ""#now.strftime('%Y_%m_%d_%H_%M_%S')
 root_log_dir = "logs/res_comparison_wn_adamax"
 root_checkpoint_dir = "ckt/mnist_vae"
 # batch_size = 32 * 3
-batch_size = 32
+batch_size = 20*8
 # updates_per_epoch = 100
 
 stub(globals())
@@ -109,7 +109,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def lr(self):
-        return [0.003] #0.001]
+        return [0.002, ] #0.001]
 
     @variant
     def seed(self):
@@ -122,7 +122,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.01]# 0.1]
+        return [0.04]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -133,7 +133,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def base_filters(self, ):
-        return [12]
+        return [22]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -145,7 +145,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def num_gpus(self):
-        return [1]
+        return [8]
 
     # @variant(hide=False)
     # def nr(self, zdim, base_filters):
@@ -186,7 +186,7 @@ class VG(VariantGenerator):
     def context_dim(self, base_filters):
         # return [base_filters]
         # return [32]
-        return [64]
+        return [96]
 
     @variant(hide=False)
     def cond_rep(self, context_dim):
@@ -209,7 +209,7 @@ class VG(VariantGenerator):
         return [
             # [0,0], # 1min15s, 660k infer params
             # [0,0,0], # 1min40s, 1M infer params
-            [0,0,1,3],
+            [0,1,2,3,4],
             # [0,0,1,1,]
             # [1,]*7
         ]
@@ -228,7 +228,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def nr(self, unconditional):
-        return [2,]
+        return [8,]
 
     @variant(hide=False)
     def rep(self, unconditional):
@@ -319,6 +319,8 @@ for v in variants[i:i+1]:
             nr_cond_nins=v["ar_nr_cond_nins"],
             nr_extra_nins=v["ar_nr_extra_nins"],
             extra_compute=False,
+            no_downpass=True,
+            no_vgrowth=True,
         )
 
         model = RegularizedHelmholtzMachine(
@@ -362,12 +364,10 @@ for v in variants[i:i+1]:
             # kl_coeff=0. if v["unconditional"] else 1,
             # kl_coeff_spec=Anneal(start=0.001, end=1.0, length=60),
             adaptive_kl=True,
-            ema_kl_decay=0.95,
+            adaptive_kl_tol=0.05,
+            ema_kl_decay=0.9,
             deep_cond=True,
             min_kl_coeff=0.00001,
-            freeze_encoder=False,
-            # resume_from="/home/peter/rllab-private/data/local/0108-cifar-dc-highgen-dense-scaled/0108_cifar_dc_highgen_dense_scaled_2017_01_10_00_49_02_0001/3031/pa_mnist_ar_nr_cond__160000.ckpt",
-            resume_from="/home/peter/rllab-private/data/local/0112-cifar-dc-dense-unfreeze-freezed/0112_cifar_dc_dense_unfreeze_freezed_2017_01_12_09_35_54_0001/pa_mnist_ar_nr_cond__10000.ckpt",
             # resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
             # staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
@@ -377,8 +377,8 @@ for v in variants[i:i+1]:
         )
 
         run_experiment_lite(
-            algo.vis(),
-            exp_prefix="0112_cifar_dc_dense_unfreezed_vis",
+            algo.train(),
+            exp_prefix="0112_cifar_dc_dense_mmrf_huge",
             seed=v["seed"],
             variant=v,
             mode="local",

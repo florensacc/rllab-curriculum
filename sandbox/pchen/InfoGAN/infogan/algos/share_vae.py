@@ -61,6 +61,7 @@ class ShareVAE(object):
             unconditional=False,
             resume_includes=None,
             adaptive_kl=False,
+            adaptive_kl_tol=0.3,
             ema_kl_decay=0.99,
             min_kl_coeff=0.001,
             input_skip=False,
@@ -78,6 +79,7 @@ class ShareVAE(object):
         Parameters
         ----------
         """
+        self.adaptive_kl_tol = adaptive_kl_tol
         self.freeze_encoder = freeze_encoder
         self.min_kl_coeff = min_kl_coeff
         self.deep_cond = deep_cond
@@ -929,7 +931,7 @@ class ShareVAE(object):
                 if ema_kl < self.min_kl:
                     cur_coeff = sess.run(self.kl_coeff)
                     desired = max(cur_coeff * 0.9, self.min_kl_coeff)
-                elif ema_kl > self.min_kl * 1.3:
+                elif ema_kl > self.min_kl * (1. + self.adaptive_kl_tol):
                     cur_coeff = sess.run(self.kl_coeff)
                     desired = min(cur_coeff * 1.1, 1.)
                 if not np.allclose(cur_coeff, desired):

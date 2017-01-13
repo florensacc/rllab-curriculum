@@ -122,7 +122,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.04]# 0.1]
+        return [0.04, 0.06, 0.08]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -265,7 +265,7 @@ vg = VG()
 variants = vg.variants(randomized=False)
 
 print(len(variants))
-i = 0
+i = 2
 for v in variants[i:i+1]:
 
     # with skip_if_exception():

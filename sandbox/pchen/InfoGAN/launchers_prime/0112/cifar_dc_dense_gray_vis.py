@@ -73,8 +73,6 @@
 
 # high reps problem hard to optimize? try dense net
 
-# try resuming w/ training only done on generative pipeline
-
 
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
@@ -109,7 +107,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 class VG(VariantGenerator):
     @variant
     def lr(self):
-        return [0.003] #0.001]
+        return [0.004, ] #0.001]
 
     @variant
     def seed(self):
@@ -122,7 +120,7 @@ class VG(VariantGenerator):
 
     @variant
     def min_kl(self):
-        return [0.01]# 0.1]
+        return [0.1]# 0.1]
     #
     @variant(hide=False)
     def network(self):
@@ -133,7 +131,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def base_filters(self, ):
-        return [12]
+        return [18]
 
     @variant(hide=False)
     def dec_init_size(self, ):
@@ -209,7 +207,7 @@ class VG(VariantGenerator):
         return [
             # [0,0], # 1min15s, 660k infer params
             # [0,0,0], # 1min40s, 1M infer params
-            [0,0,1,3],
+            [0,0,1,2,3],
             # [0,0,1,1,]
             # [1,]*7
         ]
@@ -232,7 +230,7 @@ class VG(VariantGenerator):
 
     @variant(hide=False)
     def rep(self, unconditional):
-        return [4]
+        return [3,]
 
     # @variant(hide=False)
     # def ar_nr_extra_nins(self, num_gpus):
@@ -319,6 +317,7 @@ for v in variants[i:i+1]:
             nr_cond_nins=v["ar_nr_cond_nins"],
             nr_extra_nins=v["ar_nr_extra_nins"],
             extra_compute=False,
+            grayscale=True,
         )
 
         model = RegularizedHelmholtzMachine(
@@ -365,9 +364,7 @@ for v in variants[i:i+1]:
             ema_kl_decay=0.95,
             deep_cond=True,
             min_kl_coeff=0.00001,
-            freeze_encoder=False,
-            # resume_from="/home/peter/rllab-private/data/local/0108-cifar-dc-highgen-dense-scaled/0108_cifar_dc_highgen_dense_scaled_2017_01_10_00_49_02_0001/3031/pa_mnist_ar_nr_cond__160000.ckpt",
-            resume_from="/home/peter/rllab-private/data/local/0112-cifar-dc-dense-unfreeze-freezed/0112_cifar_dc_dense_unfreeze_freezed_2017_01_12_09_35_54_0001/pa_mnist_ar_nr_cond__10000.ckpt",
+            resume_from="/home/peter/rllab-private/data/local/0110-cifar-dc-dense-gray-really/0110_cifar_dc_dense_gray_really_2017_01_10_18_54_29_0001/pa_mnist_ar_nr_cond__240000.ckpt",
             # resume_from="data/local/1019-SRF-real-FAR-small-vae-share-lvae-play/1019_SRF_real_FAR_small_vae_share_lvae_play_2016_10_19_20_54_27_0001"
             # staged=True,
             # resume_from="/home/peter/rllab-private/data/local/play-0916-apcc-cifar-nml3/play_0916_apcc_cifar_nml3_2016_09_17_01_47_14_0001",
@@ -378,7 +375,7 @@ for v in variants[i:i+1]:
 
         run_experiment_lite(
             algo.vis(),
-            exp_prefix="0112_cifar_dc_dense_unfreezed_vis",
+            exp_prefix="0112_cifar_dc_dense_gray_really_vis",
             seed=v["seed"],
             variant=v,
             mode="local",
