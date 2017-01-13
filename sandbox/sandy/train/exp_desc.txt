@@ -15,3 +15,4 @@ exp010.py: Same params as exp003, but with my AtariEnv (fixed bug with imresize)
 exp011.py: Same params as exp003, but with my AtariEnv (fixed bug with setting frameskip)
 exp012.py: Same as exp011, but with 84x84 input images instead of 42x42
 exp013.py: Same as exp011, but with 44x44 input images instead of 42x42
+exp014.py: Same as exp013. Testing addition of persistent adv. examples to AtariEnv.
