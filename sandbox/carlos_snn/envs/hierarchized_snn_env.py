@@ -1,23 +1,20 @@
-import numpy as np
-from sandbox.carlos_snn.envs.mujoco.maze.maze_env import MazeEnv
-from sandbox.carlos_snn.envs.mujoco.maze.fast_maze_env import FastMazeEnv
-from rllab.envs.normalized_env import NormalizedEnv
-
-from rllab import spaces
-from rllab.core.serializable import Serializable
-from rllab.envs.proxy_env import ProxyEnv
-from rllab.spaces.box import Box
-from rllab.misc.overrides import overrides
-from rllab.envs.base import Step
-from rllab.misc import tensor_utils
-
-from sandbox.carlos_snn.sampler.utils import rollout
-from sandbox.carlos_snn.old_my_snn.hier_snn_mlp_policy import GaussianMLPPolicy_snn_hier
+import json
+import os
 
 import joblib
-import json
+import numpy as np
+
 from rllab import config
-import os
+from rllab import spaces
+from rllab.core.serializable import Serializable
+from rllab.envs.base import Step
+from rllab.envs.normalized_env import NormalizedEnv
+from rllab.envs.proxy_env import ProxyEnv
+from rllab.misc import tensor_utils
+from rllab.misc.overrides import overrides
+from sandbox.carlos_snn.algos.hier_snn_mlp_policy import GaussianMLPPolicy_snn_hier
+from sandbox.carlos_snn.envs.mujoco.maze.fast_maze_env import FastMazeEnv
+from sandbox.carlos_snn.sampler.utils import rollout
 
 
 class HierarchizedSnnEnv(ProxyEnv, Serializable):

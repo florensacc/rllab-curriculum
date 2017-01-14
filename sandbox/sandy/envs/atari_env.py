@@ -12,48 +12,65 @@ from rllab.misc.overrides import overrides
 from rllab.spaces.box import Box
 from sandbox.sandy.envs.gym_env import GymEnv
 
-RESIZE_W = 42  # 84
-RESIZE_H = 42  # 84
-N_FRAMES = 4
+DEFAULT_IMG_HEIGHT = 42
+DEFAULT_IMG_WIDTH = 42
+DEFAULT_N_FRAMES = 4
+DEFAULT_FRAMESKIP = 4
+DEFAULT_PERSISTENT = True
 SCALE = 255.0
-FRAMESKIP = 4
 
 RGB2Y_COEFF = np.array([0.2126, 0.7152, 0.0722])  # Y = np.dot(rgb, RGB2Y_COEFF)
 
 class AtariEnv(GymEnv):
     def __init__(self, env_name, record_video=False, video_schedule=None, \
                  log_dir=None, record_log=True, force_reset=False, **kwargs):
+        # persistent = True if the adversarial changes should stay in the history
+        #                   of N_FRAMES
+        # A persistent adversary attacks before the observation is stored in history
+        # A non-persistent adversary attacks after observation is stored in history.
+        # before it is fed through the policy neural net (this seems contrived)
+
         super().__init__(env_name, record_video=record_video, \
                          video_schedule=video_schedule, log_dir=log_dir, \
-                         record_log=record_log, force_reset=force_reset)
+                         record_log=record_log, force_reset=force_reset, **kwargs)
 
-        # Overwrite self._observation_space since preprocessing changes it
-        # and Theano requires axes to be in the order (batch size, # channels,
-        # # rows, # cols) instead of (batch size, # rows, # cols, # channels)
-        self._observation_space = Box(-1.,1.,(N_FRAMES,RESIZE_H,RESIZE_W))
-        self.update_last_frames(None)
         if 'seed' in kwargs:
             self.env.env.env._seed(kwargs['seed'])
+        self.img_height = kwargs.get('img_height', DEFAULT_IMG_HEIGHT)
+        self.img_width = kwargs.get("img_width", DEFAULT_IMG_WIDTH)
+        self.n_frames = kwargs.get("n_frames", DEFAULT_N_FRAMES)
+        self.persistent_adv = kwargs.get("persistent", DEFAULT_PERSISTENT)
+
+        frameskip = kwargs.get('frame_skip', DEFAULT_FRAMESKIP)
+        self.env.env.env.frameskip = frameskip
 
         # adversary_fn - function handle for adversarial perturbation of observation
         self.adversary_fn = None
 
-        self.env.env.env.frameskip = FRAMESKIP
+        # Overwrite self._observation_space since preprocessing changes it
+        # and Theano requires axes to be in the order (batch size, # channels,
+        # # rows, # cols) instead of (batch size, # rows, # cols, # channels)
+        self._observation_space = Box(-1.,1.,(self.n_frames,self.img_height,self.img_width))
+        self.update_last_frames(None)
 
     @property
     def observation(self):
-        imgs = np.asarray(list(self.last_frames))
-        imgs = (imgs / SCALE) * 2.0 - 1.0  # rescale to [-1,1]
-        if self.adversary_fn is not None:
-            # Adversarially perturb input
-            imgs = self.adversary_fn(imgs)
-        return imgs
+        if self.persistent_adv:
+            return self.last_adv_frames
+        else:
+            return np.r_[self.last_frames[:-1,:,:], self.last_adv_frames[-1,:,:][np.newaxis,:,:]]
 
     def set_adversary_fn(self, fn_handle):
         self.adversary_fn = fn_handle
 
     def clear_last_frames(self):
+        # last_frames: last N_FRAMES of resized, scaled observations
         self.last_frames = np.zeros(self.observation_space.shape, dtype=np.uint8)
+        self.last_frames = self.scale_obs(self.last_frames)
+
+        # last_adv_frames: last N_FRAMES of resized, scaled, *and* 
+        #                  adversarially perturbed observations
+        self.last_adv_frames = np.array(self.last_frames)
 
     def update_last_frames(self, next_obs):
         if next_obs is None:
@@ -61,6 +78,20 @@ class AtariEnv(GymEnv):
         else:
             next_obs = self.preprocess_obs(next_obs)
             self.last_frames = np.r_[self.last_frames[1:,:,:], next_obs[np.newaxis,:,:]]
+            self.last_adv_frames = np.r_[self.last_adv_frames[1:,:,:], next_obs[np.newaxis,:,:]]
+
+            if self.adversary_fn is not None:
+                # Compute adversarial perturbation for next_obs
+                if self.persistent_adv:
+                    # Compute perturbation where last (N_FRAMES-1) frames are adversarial
+                    next_adv_obs = self.adversary_fn(self.last_adv_frames)[-1,:,:]
+                else:
+                    # Compute perturbation where last (N_FRAMES-1) frames are *not* adversarial
+                    next_adv_obs = self.adversary_fn(self.last_frames)[-1,:,:]
+                self.last_adv_frames[-1,:,:] = next_adv_obs
+
+    def scale_obs(self, obs):
+        return (obs / SCALE) * 2.0 - 1.0  # rescale to [-1,1]
 
     def preprocess_obs(self, obs):
         # Preprocess Atari frames based on released DQN code from Nature paper:
@@ -74,6 +105,7 @@ class AtariEnv(GymEnv):
         # and disappear temporarily
         #obs = cv2.resize(obs, self.observation_space.shape[1:][::-1], \
         #                 interpolation=cv2.INTER_LINEAR)
+        obs_y = self.scale_obs(obs_y)
         return obs_y
 
     @overrides

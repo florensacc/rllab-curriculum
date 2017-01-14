@@ -18,8 +18,9 @@ def obs_to_rgb(obs):
     obs = obs[:,:,np.newaxis]*WHITE
     return np.uint8(obs)
 
-def visualize_adversary(adv_rollouts_f, output_dir, output_prefix, \
+def visualize_adversary(rollouts_file, output_dir, output_prefix, \
                         frames_per_sec=20, pad=5, writing=30, max_timestep=10000):
+    adv_rollouts_f = h5py.File(rollouts_file, 'r')
     obs_h, obs_w = adv_rollouts_f['rollouts']['0']['orig_input'].shape
     img_h = obs_h + pad*2
     img_w = obs_w*3 + pad*4
@@ -48,6 +49,8 @@ def visualize_adversary(adv_rollouts_f, output_dir, output_prefix, \
     for f in fnames:
         if f.endswith('.png') and output_prefix in f:
             os.remove(os.path.join(output_dir, f))
+    adv_rollouts_f.close()
+    return os.path.join(output_dir, output_prefix + '_video.mp4')
 
 def main():
     parser = argparse.ArgumentParser()
@@ -56,9 +59,7 @@ def main():
 
     output_dir, output_prefix = os.path.split(args.rollouts_file)
     output_prefix = output_prefix.split('.')[0]
-    adv_rollouts_f = h5py.File(args.rollouts_file, 'r')
-    visualize_adversary(adv_rollouts_f, output_dir, output_prefix)
-    adv_rollouts_f.close()
+    visualize_adversary(args.rollouts_file, output_dir, output_prefix)
 
 if __name__ == "__main__":
     main()
