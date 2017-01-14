@@ -28,15 +28,16 @@ def rollout(sess,env, agent, exploration_strategy, qf, random=False,
     o = env.reset()
     exploration_strategy.reset()
     if head == -1:
-        agent.k = np.mod(agent.k + 1, agent.K)
+        if exploration_strategy.switch_type == "per_path":
+            agent.k = np.mod(agent.k + 1, agent.K)
     else:
         assert head in range(agent.K), "The policy only has %d heads"%(agent.K)
         agent.k = head
     path_length = 0
 
-    fig = plt.figure()
+    fig = plt.figure(figsize=(12,12))
     ax_env = fig.add_subplot(211)
-    ax_qf = fig.add_subplot(212)
+    ax_qf = fig.add_subplot(111)
     true_env = env
     while isinstance(true_env,ProxyEnv):
         true_env = true_env._wrapped_env
@@ -69,6 +70,8 @@ def rollout(sess,env, agent, exploration_strategy, qf, random=False,
             if random:
                 a = exploration_strategy.get_action(0, o, policy)
             else:
+                if exploration_strategy.switch_type == "per_action":
+                    agent.k = np.random.randint(low=0, high=agent.K,size=1)
                 a, agent_info = agent.get_action(o)
             print("head: %d"%(agent.k))
         print('action: ', a)
@@ -92,7 +95,7 @@ def rollout(sess,env, agent, exploration_strategy, qf, random=False,
                 X,Y,Q = get_Q(o)
                 ax_qf.clear()
                 contours = ax_qf.contour(X,Y,Q, 20)
-                ax_qf.clabel(contours,inline=1,fontsize=10,fmt='%.0f')
+                ax_qf.clabel(contours,inline=1,fontsize=10,fmt='%.2f')
 
                 # current action
                 a = a.ravel()
@@ -108,6 +111,7 @@ def rollout(sess,env, agent, exploration_strategy, qf, random=False,
 
 
                 plt.draw()
+                plt.pause(0.0001) # prompts pyplot to show the window
             timestep = 0.05
             time.sleep(timestep / speedup)
             if pause:

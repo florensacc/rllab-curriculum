@@ -22,6 +22,11 @@ class EnvChooser(object):
                 import ReacherEnv
             env = ReacherEnv(**kwargs)
 
+        elif env_name == "multi_goal_reacher":
+            from sandbox.haoran.mddpg.envs.mujoco.multi_goal_reacher_env\
+                import MultiGoalReacherEnv
+            env = MultiGoalReacherEnv(**kwargs)
+
         elif env_name == "hopper":
             from rllab.envs.mujoco.hopper_env import HopperEnv
             env = HopperEnv(**kwargs)
