@@ -1885,6 +1885,7 @@ class PixelCNN(Distribution):
             nr_extra_nins=10,
             square=False,
             no_downpass=False,
+            no_vgrowth=False,
     ):
         Serializable.quick_init(self, locals())
 
@@ -1905,6 +1906,7 @@ class PixelCNN(Distribution):
         self.nr_extra_nins = nr_extra_nins
         self.square = square
         self.no_downpass = no_downpass
+        self.no_vgrowth = no_vgrowth
 
     @overrides
     def init_mode(self):
@@ -1945,15 +1947,18 @@ class PixelCNN(Distribution):
                        nn.right_shift(nn.down_right_shifted_conv2d(x, num_filters=self.nr_filters, filter_size=[2,1]))] # stream for up and to the left
 
             for rep in range(self.nr_resnets[0]):
-                u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
+                if not self.no_vgrowth:
+                    u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
                 ul_list.append(nn.aux_gated_resnet(ul_list[-1], nn.down_shift(u_list[-1]), conv=nn.down_right_shifted_conv2d))
 
             for nr_resnet in self.nr_resnets[1:]:
-                u_list.append(nn.down_shifted_conv2d(u_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
+                if not self.no_vgrowth:
+                    u_list.append(nn.down_shifted_conv2d(u_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
                 ul_list.append(nn.down_right_shifted_conv2d(ul_list[-1], num_filters=self.nr_filters, stride=[2, 2]))
 
                 for rep in range(nr_resnet):
-                    u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
+                    if not self.no_vgrowth:
+                        u_list.append(nn.gated_resnet(u_list[-1], conv=nn.down_shifted_conv2d))
                     ul_list.append(nn.aux_gated_resnet(ul_list[-1], nn.down_shift(u_list[-1]), conv=nn.down_right_shifted_conv2d))
 
             # /////// down pass ////////

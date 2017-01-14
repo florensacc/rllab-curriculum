@@ -22,7 +22,9 @@ pixelcnn = PixelCNN(
     nr_filters=10,
     nr_extra_nins=0,
     no_downpass=True,
+    no_vgrowth=True,
 )
+
 
 # init
 sess = tf.Session()
