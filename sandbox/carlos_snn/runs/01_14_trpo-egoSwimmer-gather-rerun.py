@@ -1,5 +1,7 @@
 '''
-train baseline
+01/14/2017
+Run in the setting of the main part of the paper, to check how does TRPO does!
+train baseline -- Add the coef inner rew of 1e-4 (before the order of maginitude of the inner rew was maybe too large)
 '''
 # from rllab.sampler import parallel_sampler
 # parallel_sampler.initialize(n_parallel=2)
@@ -13,13 +15,13 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.config_personal import *
 import math
 
-from sandbox.carlos_snn.envs.mujoco.gather.snake_gather_env import SnakeGatherEnv
+from sandbox.carlos_snn.envs.mujoco.gather.swimmer_gather_env import SwimmerGatherEnv
 
 stub(globals())
 
 # exp setup --------------------------------------------------------
 mode = "ec2"
-ec2_instance = "m4.10xlarge"
+ec2_instance = "m4.2xlarge"
 # subnets =[
 #     "us-west-1b"
 # ]
@@ -38,11 +40,9 @@ aws_config = dict(
     # security_group_ids=ALL_REGION_AWS_SECURITY_GROUP_IDS[subnet[:-1]],
 )
 
-for activity_range in [6, 10, 15]:
-    for coef_inner_rew in [0., 1e-3]:
-        env = normalize(SnakeGatherEnv(activity_range=activity_range, sensor_range=activity_range,
-                                       sensor_span=math.pi * 2, ego_obs=True,
-                                       coef_inner_rew=coef_inner_rew))    ######################### How to crack up balls reward?
+for activity_range in [6]:
+    for coef_inner_rew in [0, 1e-4]:
+        env = normalize(SwimmerGatherEnv(sensor_span=math.pi * 2, ego_obs=True, coef_inner_rew=coef_inner_rew))
 
         policy = GaussianMLPPolicy(
             env_spec=env.spec,
@@ -56,7 +56,7 @@ for activity_range in [6, 10, 15]:
             env=env,
             policy=policy,
             baseline=baseline,
-            batch_size=5e5,
+            batch_size=1e5,
             whole_paths=True,
             max_path_length=int(5e3 * activity_range / 6.),  # correct for larger envs
             n_itr=2000,
@@ -67,9 +67,8 @@ for activity_range in [6, 10, 15]:
         )
 
         for s in range(0, 50, 10):
-            exp_prefix = 'trpo-egoSnake-gather'
-            exp_name = exp_prefix + '{}in_{}scale_{}pl_{}'.format(''.join(str(coef_inner_rew).split('.')), activity_range,
-                                                             int(5e3 * activity_range / 6.), s)
+            exp_prefix = 'trpo-egoSwimmer-gather'
+            exp_name = exp_prefix + '{}in_{}pl_{}'.format(''.join(str(coef_inner_rew).split('.')), 5e3, s)
             run_experiment_lite(
                 algo.train(),
                 # where to launch the instances

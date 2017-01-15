@@ -1,4 +1,6 @@
 '''
+01/14/2017
+Rerun adjusting the goalReward
 train baseline
 '''
 # from rllab.sampler import parallel_sampler
@@ -13,26 +15,13 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.config_personal import *
 import math
 
-# from rllab.envs.mujoco.swimmer_env import SwimmerEnv
-# from sandbox.carlos_snn.envs.mujoco.snake_env import SnakeEnv
 from sandbox.carlos_snn.envs.mujoco.maze.snake_maze_env import SnakeMazeEnv
-# from rllab.envs.mujoco.maze.ant_maze_env import AntMazeEnv
-# from sandbox.carlos_snn.envs.mujoco.swimmer_env import SwimmerEnv
-# from rllab.envs.mujoco.maze.swimmer_maze_env import SwimmerMazeEnv
-# from sandbox.carlos_snn.envs.mujoco.maze.swimmer_maze_env import SwimmerMazeEnv
-# from sandbox.carlos_snn.envs.mujoco.gather.gather_env import GatherEnv
-from sandbox.carlos_snn.envs.mujoco.gather.gather_env import GatherEnv
 
 stub(globals())
 
-# env = normalize(SwimmerEnv(ego_obs=True))
-# env = normalize(SnakeMazeEnv(maze_id=3, sensor_span=2*math.pi))  #, ego_obs=True))
-# env = normalize(SnakeMazeEnv(maze_id=3, sensor_span=2*math.pi, ego_obs=True))
-# env = SwimmerMazeEnv(sensor_span=math.pi*2, ctrl_cost_coeff=1)
-
 # exp setup --------------------------------------------------------
 mode = "ec2"
-ec2_instance = "m4.4xlarge"
+ec2_instance = "c4.8xlarge"
 # subnets =[
 #     "us-west-1b"
 # ]
@@ -50,10 +39,11 @@ aws_config = dict(
     # security_group_ids=ALL_REGION_AWS_SECURITY_GROUP_IDS[subnet[:-1]],
 )
 
-for maze_size_scaling in [6, 10, 15]:
+goal_rew = 1e6
+for maze_size_scaling in [7, 9]:
     env = normalize(SnakeMazeEnv(maze_id=0, sensor_span=math.pi * 2, ego_obs=True,
                                  maze_size_scaling=maze_size_scaling,
-                                 coef_inner_rew=1, goal_rew=1e4))
+                                 coef_inner_rew=1, goal_rew=goal_rew))
 
     policy = GaussianMLPPolicy(
         env_spec=env.spec,
@@ -79,7 +69,7 @@ for maze_size_scaling in [6, 10, 15]:
 
     for s in range(0, 50, 10):
         exp_prefix = 'trpo-egoSnake-maze0'
-        exp_name = exp_prefix + '{}scale_{}pl__{}'.format(maze_size_scaling,
+        exp_name = exp_prefix + '_{}goalRew_{}scale_{}pl_{}'.format(goal_rew, maze_size_scaling,
                                                           int(1e4 * maze_size_scaling / 4.), s)
         run_experiment_lite(
             algo.train(),
