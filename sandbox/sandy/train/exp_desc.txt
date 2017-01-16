@@ -21,3 +21,5 @@ exp015.py: Same as exp013, but for Space Invaders instead of Pong.
 exp016.py: Same as exp015, but with 84x84 input images instead of 44x44 (to make
            it easier to see enemy lasers), and with smaller batch size of 25000
            instead of 100000 - otherwise EC2 machine crashes
+exp017.py: Same as exp016, but with Haoran's original AtariEnv instead of mine
+           (as a sanity check)
