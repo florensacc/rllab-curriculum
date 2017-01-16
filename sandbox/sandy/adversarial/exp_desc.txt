@@ -1,0 +1,3 @@
+exp000.py: Try out different FGSM adversaries (varied norm and epsilon),
+           for Pong agent trained with train/exp013
+exp001.py: Ended up being the same as exp000.py

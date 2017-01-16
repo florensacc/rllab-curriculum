@@ -8,7 +8,7 @@ COLORS = ['m', 'c', 'y', 'b', 'r']
 MARKERS = ['+', 'x', 'd', 'o', 's']
 SCATTER = False
 
-def plot_returns(h5_file, groups, x_key, y_key):
+def plot_returns(h5_file, groups, x_key, y_key, screen_print=False):
     # Structure of h5_file should be:
     #     y = f[group][x][y_key][()]
     # Note that group can be '/l-inf/fs3/' for example, if there are two or
@@ -33,6 +33,11 @@ def plot_returns(h5_file, groups, x_key, y_key):
                          MARKERS[i]+COLORS[i]+'-', ms=6)
         axes.append(a)
 
+        if screen_print:
+            print("Group:", g)
+            for p in points:
+                print("\t", p[0], "\t", p[1])
+
     if SCATTER:
         plt.legend(axes, groups, scatterpoints=1, loc='lower left', \
                    ncol=3, fontsize=14)
@@ -49,7 +54,7 @@ def main():
     parser.add_argument('returns_h5', type=str)
     args = parser.parse_args()
 
-    plot_returns(args.returns_h5, ['l-inf', 'l1', 'l2'], 'fgsm_eps', 'avg_return')
+    plot_returns(args.returns_h5, ['l-inf', 'l1', 'l2'], 'fgsm_eps', 'avg_return', screen_print=True)
 
 
 if __name__ == "__main__":
