@@ -1,0 +1,2 @@
+exp000.py: Run FGSM adversary with different norms (L1, L2, L-inf) and epsilons
+           on agent trained to play Pong.

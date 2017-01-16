@@ -66,6 +66,8 @@ class AtariEnv(GymEnv):
     def clear_last_frames(self):
         # last_frames: last N_FRAMES of resized, scaled observations
         self.last_frames = np.zeros(self.observation_space.shape, dtype=np.uint8)
+        self.last_frames = self.scale_obs(self.last_frames)
+
         # last_adv_frames: last N_FRAMES of resized, scaled, *and* 
         #                  adversarially perturbed observations
         self.last_adv_frames = np.array(self.last_frames)
@@ -88,6 +90,9 @@ class AtariEnv(GymEnv):
                     next_adv_obs = self.adversary_fn(self.last_frames)[-1,:,:]
                 self.last_adv_frames[-1,:,:] = next_adv_obs
 
+    def scale_obs(self, obs):
+        return (obs / SCALE) * 2.0 - 1.0  # rescale to [-1,1]
+
     def preprocess_obs(self, obs):
         # Preprocess Atari frames based on released DQN code from Nature paper:
         #     1) Convert RGB to grayscale (Y in YUV)
@@ -100,7 +105,7 @@ class AtariEnv(GymEnv):
         # and disappear temporarily
         #obs = cv2.resize(obs, self.observation_space.shape[1:][::-1], \
         #                 interpolation=cv2.INTER_LINEAR)
-        scaled_obs_y = (obs_y / SCALE) * 2.0 - 1.0  # rescale to [-1,1]
+        obs_y = self.scale_obs(obs_y)
         return obs_y
 
     @overrides

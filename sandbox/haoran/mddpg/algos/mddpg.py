@@ -43,6 +43,7 @@ class MDDPG(OnlineAlgorithm, Serializable):
             only_train_actor=False,
             resume=False,
             eval_max_head_repeat=1,
+            use_finalize_ops=True,
             **kwargs
     ):
         """
@@ -79,6 +80,7 @@ class MDDPG(OnlineAlgorithm, Serializable):
         self.only_train_actor = only_train_actor
         self.resume = resume
         self.eval_max_head_repeat = eval_max_head_repeat
+        self.use_finalize_ops = use_finalize_ops
 
         assert not (only_train_actor and only_train_critic)
         assert isinstance(policy, MNNPolicy)
@@ -301,14 +303,19 @@ class MDDPG(OnlineAlgorithm, Serializable):
 
         # TH: Assign op needs to be run AFTER optimizer. To guarantee the right
         # order, they need to be run with separate tf.run calls.
-        #self.train_actor_op += [
-        self.finalize_actor_op = [
+        assign_ops = [
             tf.assign(true_param, dummy_param)
             for true_param, dummy_param in zip(
                 all_true_params,
                 all_dummy_params,
             )
         ]
+
+        if self.use_finalize_ops:
+            self.finalize_actor_op = assign_ops
+        else:
+            self.train_actor_op += assign_ops
+            self.finalize_actor_op = []
 
     def _init_target_ops(self):
         if not self.only_train_critic:

@@ -12,6 +12,21 @@ class EnvChooser(object):
                 import SwimmerUndirectedEnv
             env = SwimmerUndirectedEnv(**kwargs)
 
+        elif env_name == "dragged_swimmer_undirected":
+            from sandbox.haoran.mddpg.envs.mujoco.dragged_swimmer_undirected_env \
+                import DraggedSwimmerUndirectedEnv
+            env = DraggedSwimmerUndirectedEnv(**kwargs)
+
+        elif env_name == "reacher":
+            from sandbox.haoran.mddpg.envs.mujoco.reacher_env\
+                import ReacherEnv
+            env = ReacherEnv(**kwargs)
+
+        elif env_name == "multi_goal_reacher":
+            from sandbox.haoran.mddpg.envs.mujoco.multi_goal_reacher_env\
+                import MultiGoalReacherEnv
+            env = MultiGoalReacherEnv(**kwargs)
+
         elif env_name == "hopper":
             from rllab.envs.mujoco.hopper_env import HopperEnv
             env = HopperEnv(**kwargs)
