@@ -7,6 +7,7 @@ Repeat exp-009f. Changes:
     rotating over heads
 * in the evaluation phase, use BatchSampler instead of MNNParallelSampler,
     since we want to switch a head each time step
+* run more random seeds
 """
 
 # imports -----------------------------------------------------
@@ -45,7 +46,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/c_mddpg/" + exp_index
-mode = "local_test"
+mode = "ec2"
 ec2_instance = "c4.2xlarge"
 subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3:latest" # needs psutils
@@ -61,7 +62,7 @@ plot = False
 class VG(VariantGenerator):
     @variant
     def zzseed(self):
-        return [0,100,200,300,400]
+        return [0,100,200,300,400,500,600,700,800,900]
 
     @variant
     def env_name(self):
@@ -74,7 +75,7 @@ class VG(VariantGenerator):
 
     @variant
     def alpha(self):
-        return [0.025, 0.05, 0.075]
+        return [0.025, 0.05]
 
     @variant
     def max_path_length(self):
@@ -115,11 +116,13 @@ for v in variants:
             n_epochs=5,
             epoch_length=10,
             min_pool_size=100,
+            eval_samples=100,
         )
     else:
         ddpg_kwargs = dict(
             n_epochs=500,
             epoch_length=2000,
+            eval_samples=1000,
         )
     ddpg_kwargs.update(shared_ddpg_kwargs)
     exp_name = "{exp_index}_{time}_{env_name}".format(
@@ -215,6 +218,7 @@ for v in variants:
         K=K,
         shared_hidden_sizes=(100,),
         independent_hidden_sizes=(100,),
+        randomized=(v["switch_type"] == "per_action"),
     )
     if K > 1 and adaptive_kernel:
         kernel = SimpleAdaptiveDiagonalGaussianKernel(

@@ -5,6 +5,7 @@ from sandbox.haoran.mddpg.policies.mnn_policy import MNNPolicy, MNNStrategy
 from sandbox.haoran.mddpg.misc.simple_replay_pool import SimpleReplayPool
 from sandbox.rocky.tf.misc.tensor_utils import flatten_tensor_variables
 from sandbox.haoran.mddpg.misc.sampler import MNNParallelSampler
+from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 
 from rllab.misc import logger
 from rllab.misc import special
@@ -95,7 +96,12 @@ class MDDPG(OnlineAlgorithm, Serializable):
             qf.set_param_values(qf_params)
             policy.set_param_values(policy_params)
 
-        self.eval_sampler = MNNParallelSampler(self)
+        if self.exploration_strategy.switch_type == "per_path":
+            self.eval_sampler = MNNParallelSampler(self)
+        elif self.exploration_strategy.switch_type == "per_action":
+            self.eval_sampler = BatchSampler(self)
+        else:
+            raise NotImplementedError
 
 
     @overrides
@@ -405,11 +411,21 @@ class MDDPG(OnlineAlgorithm, Serializable):
     @overrides
     def evaluate(self, epoch, train_info):
         logger.log("Collecting samples for evaluation")
-        paths = self.eval_sampler.obtain_samples(
-            itr=epoch,
-            max_path_length=self.max_path_length,
-            max_head_repeat=self.eval_max_head_repeat,
-        )
+        if isinstance(self.eval_sampler, MNNParallelSampler):
+            paths = self.eval_sampler.obtain_samples(
+                itr=epoch,
+                max_path_length=self.max_path_length,
+                max_head_repeat=self.eval_max_head_repeat,
+            )
+        elif isinstance(self.eval_sampler, BatchSampler):
+            paths = self.eval_sampler.obtain_samples(
+                itr=epoch,
+                max_path_length=self.max_path_length,
+                batch_size=self.n_eval_samples,
+            )
+        else:
+            raise NotImplementedError
+
         rewards, terminals, obs, actions, next_obs = split_paths(paths)
         feed_dict = self._update_feed_dict(rewards, terminals, obs, actions,
                                            next_obs)
