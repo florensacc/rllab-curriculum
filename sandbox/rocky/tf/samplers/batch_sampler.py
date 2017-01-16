@@ -2,6 +2,7 @@ from rllab.sampler.base import BaseSampler
 from rllab.sampler import parallel_sampler
 from rllab.sampler.stateful_pool import singleton_pool
 import tensorflow as tf
+from distutils.version import LooseVersion
 
 
 def worker_init_tf(G):
@@ -10,7 +11,12 @@ def worker_init_tf(G):
 
 
 def worker_init_tf_vars(G):
-    G.sess.run(tf.initialize_all_variables())
+    if LooseVersion(tf.__version__) >= '0.12.1':
+        # this suppresses annoying warning messages from tf
+        initializer = tf.global_variables_initializer
+    else:
+        initializer = tf.initialize_all_variables
+    G.sess.run(initializer())
 
 
 class BatchSampler(BaseSampler):

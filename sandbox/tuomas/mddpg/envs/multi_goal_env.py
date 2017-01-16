@@ -32,11 +32,12 @@ class MultiGoalEnv(Env, Serializable):
             dtype=np.float32
         )
         self.goal_threshold = 1.
-        self.goal_reward = 0
-        self.action_cost_coeff = 0
+        self.goal_reward = 100.
+        self.action_cost_coeff = 1.
+        self.goal_cost_coeff = 0.1
         self.xlim = (-7, 7)
         self.ylim = (-7, 7)
-        self.vel_bound = 1
+        self.vel_bound = 0.5
         self.reset()
         self.dynamic_plots = []
 
@@ -50,15 +51,15 @@ class MultiGoalEnv(Env, Serializable):
     @property
     def observation_space(self):
         return Box(
-            low=np.array((self.xlim[0],self.ylim[0])),
-            high=np.array((self.xlim[1],self.ylim[1])),
+            low=np.array((self.xlim[0]*1000,self.ylim[0]*1000)),
+            high=np.array((self.xlim[1]*1000,self.ylim[1]*1000)),
             shape=None
         )
 
     @property
     def action_space(self):
         return Box(
-            low= -self.vel_bound,
+            low=-self.vel_bound,
             high=self.vel_bound,
             shape=(self.dynamics.a_dim,)
         )
@@ -86,10 +87,18 @@ class MultiGoalEnv(Env, Serializable):
         return costs
 
     def step(self, action):
+        # Compute the action cost before clipping.
+        action_norm_sq = np.sum(action**2)
+        if action_norm_sq > self.vel_bound**2:
+            action_cost = self.action_cost_coeff * action_norm_sq**0.5
+            action /= np.sqrt(action_norm_sq)
+        else:
+            action_cost = 0.0
+
         a_lb, a_ub = self.action_space.bounds
         action = np.clip(action, a_lb, a_ub).ravel()
-            # need to ravel because sometimes the input action has
-            # shape (1,2) with tensorflow
+        # need to ravel because sometimes the input action has
+        # shape (1,2) with tensorflow
 
         next_obs = self.dynamics.forward(self.observation, action)
         o_lb, o_ub = self.observation_space.bounds
@@ -101,9 +110,11 @@ class MultiGoalEnv(Env, Serializable):
             np.linalg.norm(cur_position - goal_position)
             for goal_position in self.goal_positions
         ])
-        done =  dist_to_goal < self.goal_threshold
+        done = dist_to_goal < self.goal_threshold
         if done:
             reward += self.goal_reward
+
+        reward += - action_cost
 
         self.observation = np.copy(next_obs)
         return next_obs, reward, done, {}
@@ -120,7 +131,7 @@ class MultiGoalEnv(Env, Serializable):
         ])
 
         # penalize staying with the log barriers
-        costs = [action_cost, goal_cost]
+        costs = [action_cost, self.goal_cost_coeff * goal_cost]
         reward = -np.sum(costs)
         return reward
 
@@ -153,7 +164,7 @@ class MultiGoalEnv(Env, Serializable):
             for goal_x, goal_y in self.goal_positions
         ], axis=0)
         positions = np.vstack([X.ravel(), Y.ravel()]).transpose()
-        costs = goal_costs
+        costs = self.goal_cost_coeff * goal_costs
 
         contours = ax.contour(X,Y,costs,20)
         ax.clabel(contours,inline=1,fontsize=10,fmt='%.0f')

@@ -93,6 +93,7 @@ def mlp(input_layer,
         hidden_sizes,
         output_layer_size=None,
         nonlinearity=tf.nn.relu,
+        output_nonlinearity=tf.nn.tanh,
         W_initializer=None,
         b_initializer=None,
         reuse_variables=False,
@@ -132,6 +133,8 @@ def mlp(input_layer,
                                 W_initializer=W_initializer,
                                 b_initializer=b_initializer,
                                 reuse_variables=reuse_variables)
+            if output_nonlinearity is not None:
+                last_layer = output_nonlinearity(last_layer)
 
     return last_layer
 

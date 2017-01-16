@@ -127,7 +127,7 @@ class DDPG(OnlineAlgorithm):
     def _get_finalize_ops(self):
         # returning an emptyr list will induce error in tensorflow,
         # so return a useless operation
-        return [tf.constant(1)]
+        return []
 
     @overrides
     def _init_training(self):

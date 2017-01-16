@@ -14,22 +14,26 @@ import matplotlib.pyplot as plt
 import gc
 
 
-class SwimmerUndirectedEnv(MujocoEnv, Serializable):
-
-    FILE = 'swimmer.xml'
-
-    @autoargs.arg('ctrl_cost_coeff', type=float,
-                  help='cost coefficient for controls')
+class DraggedSwimmerUndirectedEnv(MujocoEnv, Serializable):
+    """
+    Swimmer with an extra dragging force along the x-axis
+    """
     def __init__(
             self,
             ctrl_cost_coeff=1e-2,
             visitation_plot_config=None,
-            prog_threshold=2.,
+            x_drag_limit=10,
+            file_path_prefix="",
             *args, **kwargs):
         self.ctrl_cost_coeff = ctrl_cost_coeff
         self.visitation_plot_config = visitation_plot_config
-        self.prog_threshold = prog_threshold
-        super(SwimmerUndirectedEnv, self).__init__(*args, **kwargs)
+        self.x_drag_limit = x_drag_limit
+        kwargs["file_path"] = os.path.join(
+            os.path.dirname(__file__),
+            "dragged_swimmer.xml",
+        )
+        super(DraggedSwimmerUndirectedEnv, self).__init__(*args, **kwargs)
+
         Serializable.quick_init(self, locals())
 
     def get_current_obs(self):
@@ -40,7 +44,11 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
         ]).reshape(-1)
 
     def step(self, action):
-        self.forward_dynamics(action)
+        # rescale dragging force to satisfy the limit
+        modified_action = np.copy(action)
+        modified_action[0,2] = modified_action[0,2] * self.x_drag_limit / 10.
+
+        self.forward_dynamics(modified_action)
         next_obs = self.get_current_obs()
         lb, ub = self.action_bounds
         scaling = (ub - lb) * 0.5
@@ -72,17 +80,12 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
             # -3 refers to the x coordinate of the com of the torso
             for path in paths
         ]
-        n_directions = [
-            np.max(progs) > self.prog_threshold,
-            np.min(progs) < - self.prog_threshold,
-        ].count(True)
         stats = {
             'env: ForwardProgressAverage': np.mean(progs),
             'env: ForwardProgressMax': np.max(progs),
             'env: ForwardProgressMin': np.min(progs),
             'env: ForwardProgressStd': np.std(progs),
             'env: ForwardProgressDiff': np.max(progs) - np.min(progs),
-            'env: n_directions': n_directions,
         }
         if self.visitation_plot_config is not None:
             self.plot_visitation(

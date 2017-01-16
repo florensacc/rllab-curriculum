@@ -16,28 +16,26 @@ import tensorflow as tf
 import time
 import matplotlib.pyplot as plt
 
+def rollout_alg(alg):
+    rollout(alg.sess, alg.env, alg.policy, None, alg.qf, animated=True)
 
-def rollout(sess,env, agent, exploration_strategy, qf, random=False,
-    pause=False, max_path_length=np.inf, animated=False, speedup=1,
-    optimal=False, head=-1, plot_qf=True):
+def rollout(sess, env, policy, exploration_strategy, qf, random=False,
+            pause=False, max_path_length=1, animated=False, speedup=10,
+            optimal=False, plot_qf=True):
     observations = []
     actions = []
     rewards = []
     agent_infos = []
     env_infos = []
     o = env.reset()
-    exploration_strategy.reset()
-    if head == -1:
-        if exploration_strategy.switch_type == "per_path":
-            agent.k = np.mod(agent.k + 1, agent.K)
-    else:
-        assert head in range(agent.K), "The policy only has %d heads"%(agent.K)
-        agent.k = head
+    if exploration_strategy is not None:
+        exploration_strategy.reset()
     path_length = 0
 
-    fig = plt.figure(figsize=(12,12))
+    fig = plt.figure()
+    #plt.axis('equal')
     ax_env = fig.add_subplot(211)
-    ax_qf = fig.add_subplot(111)
+    ax_qf = fig.add_subplot(212)
     true_env = env
     while isinstance(true_env,ProxyEnv):
         true_env = true_env._wrapped_env
@@ -47,8 +45,8 @@ def rollout(sess,env, agent, exploration_strategy, qf, random=False,
         env.render()
 
     def get_Q(o):
-        xx = np.arange(-1,1,0.05)
-        X,Y = np.meshgrid(xx,xx)
+        xx = np.arange(-1, 1, 0.05)
+        X, Y = np.meshgrid(xx, xx)
         all_actions = np.vstack([X.ravel(), Y.ravel()]).transpose()
         obs = np.array([o] * all_actions.shape[0])
         feed = {
@@ -56,11 +54,11 @@ def rollout(sess,env, agent, exploration_strategy, qf, random=False,
             qf.actions_placeholder: all_actions
         }
         Q = sess.run(qf.output, feed).reshape(X.shape)
-        return X,Y,Q
+        return X, Y, Q
 
     while path_length < max_path_length:
         if optimal:
-            X,Y,Q = get_Q(o)
+            X, Y, Q = get_Q(o)
             X = X.ravel()
             Y = Y.ravel()
             Q = Q.ravel()
@@ -70,10 +68,7 @@ def rollout(sess,env, agent, exploration_strategy, qf, random=False,
             if random:
                 a = exploration_strategy.get_action(0, o, policy)
             else:
-                if exploration_strategy.switch_type == "per_action":
-                    agent.k = np.random.randint(low=0, high=agent.K,size=1)
-                a, agent_info = agent.get_action(o)
-            print("head: %d"%(agent.k))
+                a, agent_info = policy.get_action(o)
         print('action: ', a)
 
         agent_info = {}
@@ -92,29 +87,34 @@ def rollout(sess,env, agent, exploration_strategy, qf, random=False,
             env.render()
             if plot_qf:
                 # render the Q values
-                X,Y,Q = get_Q(o)
+                X, Y, Q = get_Q(o)
                 ax_qf.clear()
-                contours = ax_qf.contour(X,Y,Q, 20)
-                ax_qf.clabel(contours,inline=1,fontsize=10,fmt='%.2f')
+                contours = ax_qf.contour(X, Y, Q, 20)
+                ax_qf.clabel(contours, inline=1, fontsize=10, fmt='%.0f')
 
                 # current action
                 a = a.ravel()
-                ax_qf.plot(a[0],a[1],'r*')
+                ax_qf.plot(a[0], a[1], 'r*')
+                plt.xlim((-1.1, 1.1))
+                plt.ylim((-1.1, 1.1))
+
 
                 # all actions
-                all_actions, agent_info = policy.get_action(o,k='all')
-                for k, action in enumerate(all_actions[0]):
+                all_actions = []
+                for i in range(50):
+                    action, _ = policy.get_action(o)
+                    all_actions.append(action.squeeze())
+
+                for k, action in enumerate(all_actions):
                     x = action[0]
                     y = action[1]
-                    ax_qf.plot(x,y,'*',markersize=20)
-                    ax_qf.text(x,y,'%d'%(k))
+                    ax_qf.plot(x, y, '*')
+                    #ax_qf.text(x, y, '%d'%(k))
 
-                ax_qf.set_xlim(np.min(X.ravel()) * 1.1, np.max(X.ravel()) * 1.1)
-                ax_qf.set_ylim(np.min(Y.ravel()) * 1.1, np.max(Y.ravel()) * 1.1)
+
                 plt.draw()
-                plt.pause(0.0001) # prompts pyplot to show the window
-            timestep = 0.05
-            time.sleep(timestep / speedup)
+                timestep = 0.05
+                plt.pause(timestep / speedup)
             if pause:
                 input()
         o = next_o
