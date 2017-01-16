@@ -14,12 +14,16 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
                  obs_dim,
                  action_dim,
                  hidden_dims,
-                 freeze_samples=True,
+                 W_initializer=None,
+                 output_nonlinearity=None,
+                 sample_dim=1,
+                 freeze_samples=False,
                  **kwargs):
         Serializable.quick_init(self, locals())
 
         self._obs_dim = obs_dim
         self._action_dim = action_dim
+        self._sample_dim = sample_dim
         self._rnd = np.random.RandomState()
         self._freeze = freeze_samples
 
@@ -33,10 +37,12 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
 
             self._output = mlp(
                 all_inputs,
-                obs_dim + 1,  # + 1 is for the random sample
+                obs_dim + self._sample_dim,  # + 1 is for the random sample
                 hidden_dims,
                 output_layer_size=action_dim,
-                nonlinearity=tf.nn.relu
+                nonlinearity=tf.nn.relu,
+                output_nonlinearity=output_nonlinearity,
+                W_initializer=W_initializer
             )
 
             self.variable_scope = variable_scope
@@ -49,7 +55,7 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
             )
             self._sample_pl = tf.placeholder(
                 tf.float32,
-                shape=[None, 1],
+                shape=[None, self._sample_dim],
                 name='actor_sample'
             )
 
@@ -68,8 +74,7 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
         return feed
 
     def get_action(self, observation):
-        action, _ = self.get_actions([observation])
-        return action
+        return self.get_actions([observation])
 
     def get_actions(self, observations):
         feed = self.get_feed_dict(observations)
@@ -86,12 +91,13 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
         if self._freeze:
             self._rnd.seed(0)
 
-        return self._rnd.randn(N, 1)
+        return self._rnd.randn(N, self._sample_dim)
 
 
 class DummyExplorationStrategy(ExplorationStrategy):
     def get_action(self, t, observation, policy, **kwargs):
-        return policy.get_action(observation)
+        action, _ = policy.get_action(observation)
+        return action
 
     def reset(self):
         pass
