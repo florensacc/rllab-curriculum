@@ -106,10 +106,11 @@ def rollout(sess,env, agent, exploration_strategy, qf, random=False,
                 for k, action in enumerate(all_actions[0]):
                     x = action[0]
                     y = action[1]
-                    ax_qf.plot(x,y,'*')
+                    ax_qf.plot(x,y,'*',markersize=20)
                     ax_qf.text(x,y,'%d'%(k))
 
-
+                ax_qf.set_xlim(np.min(X.ravel()) * 1.1, np.max(X.ravel()) * 1.1)
+                ax_qf.set_ylim(np.min(Y.ravel()) * 1.1, np.max(Y.ravel()) * 1.1)
                 plt.draw()
                 plt.pause(0.0001) # prompts pyplot to show the window
             timestep = 0.05

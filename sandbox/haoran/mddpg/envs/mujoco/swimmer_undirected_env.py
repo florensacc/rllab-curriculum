@@ -24,9 +24,11 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
             self,
             ctrl_cost_coeff=1e-2,
             visitation_plot_config=None,
+            prog_threshold=2.,
             *args, **kwargs):
         self.ctrl_cost_coeff = ctrl_cost_coeff
         self.visitation_plot_config = visitation_plot_config
+        self.prog_threshold = prog_threshold
         super(SwimmerUndirectedEnv, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
 
@@ -70,12 +72,17 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
             # -3 refers to the x coordinate of the com of the torso
             for path in paths
         ]
+        n_directions = [
+            np.max(progs) > self.prog_threshold,
+            np.min(progs) < - self.prog_threshold,
+        ].count(True)
         stats = {
             'env: ForwardProgressAverage': np.mean(progs),
             'env: ForwardProgressMax': np.max(progs),
             'env: ForwardProgressMin': np.min(progs),
             'env: ForwardProgressStd': np.std(progs),
             'env: ForwardProgressDiff': np.max(progs) - np.min(progs),
+            'env: n_directions': n_directions,
         }
         if self.visitation_plot_config is not None:
             self.plot_visitation(
