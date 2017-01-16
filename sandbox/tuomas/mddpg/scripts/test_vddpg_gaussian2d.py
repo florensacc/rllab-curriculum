@@ -23,22 +23,24 @@ class MultimodalGaussianEnv(Env):
         return self.observe(), 0, True, {}
 
     def observe(self):
-        if self._fixed_observations is not None:
-            n_cases = self._fixed_observations.shape[0]
-            i = np.random.randint(low=0, high=n_cases)
-            return self._fixed_observations[i]
+        return np.random.randn(1)
 
-        modes = self._n_modes
+        #if self._fixed_observations is not None:
+        #    n_cases = self._fixed_observations.shape[0]
+        #    i = np.random.randint(low=0, high=n_cases)
+        #    return self._fixed_observations[i]
 
-        weights = np.random.rand(modes)
-        weights = weights / weights.sum()
-        mus = np.random.randn(modes)*2 - 1
-        sigmas = np.random.rand(modes) + 0.5
+        #modes = self._n_modes
 
-        obs = np.stack((weights, mus, sigmas), axis=1) # one row per mode
-        obs = np.ndarray.flatten(obs) # (w_1, mu_1, sigma_1, w_2, ...)
+        #weights = np.random.rand(modes)
+        #weights = weights / weights.sum()
+        #mus = np.random.randn(modes)*2 - 1
+        #sigmas = np.random.rand(modes) + 0.5
 
-        return obs
+        #obs = np.stack((weights, mus, sigmas), axis=1) # one row per mode
+        #obs = np.ndarray.flatten(obs) # (w_1, mu_1, sigma_1, w_2, ...)
+
+        #return obs
 
     def reset(self):
         return self.observe()
@@ -53,14 +55,15 @@ class MultimodalGaussianEnv(Env):
 
     @property
     def observation_space(self):
-        dummy = np.array([0] * self._n_modes * 3)
+        #dummy = np.array([0] * self._n_modes * 3)
+        dummy = np.array([0])
         return spaces.Box(dummy, dummy)
 
 
 from sandbox.haoran.mddpg.qfunctions.nn_qfunction import NNCritic
 from rllab.core.serializable import Serializable
-class MixtureGaussianCritic(NNCritic):
-    """ Q(s,a) is a 1D mixture of Gaussian in a """
+class MixtureGaussian2DCritic(NNCritic):
+    """ Q(s,a) is a 2D mixture of Gaussian in a """
     def __init__(
             self,
             scope_name,
@@ -70,12 +73,11 @@ class MixtureGaussianCritic(NNCritic):
             reuse=False,
             **kwargs
     ):
-        assert observation_dim % 3 == 0
         Serializable.quick_init(self, locals())
-        super(MixtureGaussianCritic, self).__init__(
+        super(MixtureGaussian2DCritic, self).__init__(
             scope_name=scope_name,
             observation_dim=observation_dim,
-            action_dim=1,
+            action_dim=2,
             action_input=action_input,
             observation_input=observation_input,
             reuse=reuse,
@@ -83,22 +85,26 @@ class MixtureGaussianCritic(NNCritic):
         )
 
     def create_network(self, action_input, observation_input):
-        obs = tf.unstack(observation_input, axis=1)
-        weights = obs[0::3] # a list of [w_i^1, w_i^2,...], where
-        # i is the index of the mode, the superscript indexes the sample.
-        # So we assume that all observations have the same n_modes
-        mus = obs[1::3]
-        sigmas = obs[2::3]
+        # obs = tf.unstack(observation_input, axis=1)
+        weights = [1./2., 2./3.]
+        mus = [np.array((-2., 0.)), np.array((1., 1.))]
+        sigmas = [0.2, 1.0]
+        a = action_input
 
         # TODO: assume all samples in a batch are the same (use index 0).
         # unnormalized density
-        output = tf.log(tf.add_n([
-            w[0] * (1./tf.sqrt(2. * np.pi * tf.square(sigma[0])) *
-                tf.exp(-0.5/tf.square(sigma[0])*tf.square(action_input-mu[0])))
-            for w, mu, sigma in zip(weights, mus, sigmas)
-        ]))
-        return output
+        components = []
+        for w, mu, sigma in zip(weights, mus, sigmas):
+            mu = np.reshape(mu, (1, 2))
 
+            comp = (1./tf.sqrt(2. * np.pi * sigma**2)) * tf.exp(
+                -0.5 / sigma**2 * tf.reduce_sum(tf.square(a - mu), axis=1))
+
+            components.append(comp)
+
+        temp = 0.5
+        output = temp * tf.log(tf.add_n(components))
+        return output
 
     def get_weight_tied_copy(self, action_input, observation_input):
         """
@@ -121,51 +127,46 @@ from sandbox.tuomas.mddpg.algos.vddpg import VDDPG
 from rllab.misc.overrides import overrides
 import matplotlib.pyplot as plt
 class VDDPGTest(VDDPG):
+
+    def eval_critic(self, o):
+        xx = np.arange(-4, 4, 0.05)
+        X, Y = np.meshgrid(xx, xx)
+        all_actions = np.vstack([X.ravel(), Y.ravel()]).transpose()
+        obs = np.array([o] * all_actions.shape[0])
+
+        feed = {
+            self.qf.observations_placeholder: obs,
+            self.qf.actions_placeholder: all_actions
+        }
+        Q = self.sess.run(self.qf.output, feed).reshape(X.shape)
+        return X, Y, Q
+
     @overrides
     def evaluate(self, epoch, es_path_returns):
-        obs_single = self.pool.random_batch(1)['observations']
+        obs_single = self.pool.random_batch(1)['observations'].reshape((-1))
+        X, Y, Q = self.eval_critic(obs_single)
 
-        # Replicate observations to get more action samples
-        #obs = np.expand_dims(obs, axis=0)
-        obs = np.tile(obs_single, (100, 1))
-        #import pdb; pdb.set_trace()
-        feed_dict = self.policy.get_feed_dict(obs)
-
-
-
-        #feed_dict = {
-        #    self.policy.observations_placeholder: obs
-        #}
-        # xs is the list of particles (scalars)
-        xs = self.sess.run(self.policy.output, feed_dict).ravel()
         plt.clf()
-        xx = np.linspace(-8, 8, num=100)
-        yy = np.zeros_like(xx)
-        # fixed density kernel size
-        # q_sigma = 0.1
-        # adaptive density kernel size
-        q_sigma = 1./np.sqrt(self.kernel.diags[0])
-        for p in xs:
-            yy += (np.exp(-0.5/(q_sigma**2) * (xx-p)**2) *
-                1./np.sqrt(2. * np.pi * q_sigma ** 2))
-        yy /= len(xs)
-        plt.plot(xx,yy,'r-.')
+        plt.contour(X, Y, Q, 20)
+        plt.xlim((-5, 5))
+        plt.ylim((-5, 5))
 
-        ws = obs_single[0,0::3]
-        mus = obs_single[0,1::3]
-        sigmas = obs_single[0,2::3]
+        # sample and plot actions
+        all_actions = []
+        N = 250
+        all_obs = np.array([obs_single] * N)
+        all_actions = self.policy.get_actions(all_obs)[0]
+        #for i in range(N):
+        #    action, _ = self.policy.get_action(obs_single)
+        #    all_actions.append(action.squeeze())
 
-        yy_target = np.zeros_like(xx)
-        #for w, mu, sigma in zip(self.qf.weights, self.qf.mus, self.qf.sigmas):
-        for w, mu, sigma in zip(ws, mus, sigmas):
-            yy_target += (w * 1./np.sqrt(2. * np.pi * sigma**2) *
-                np.exp(-0.5/ (sigma**2) * (xx - mu) ** 2))
-        plt.plot(xx, yy_target, 'b-')
+        for k, action in enumerate(all_actions):
+            x = action[0]
+            y = action[1]
+            plt.plot(x, y, '*')
+            #ax_qf.text(x, y, '%d'%(k))
 
         plt.draw()
-        plt.legend(['q','p'])
-        plt.xlim([-8, 8])
-        plt.ylim([0,0.5])
         plt.pause(0.001)
 
 
@@ -185,59 +186,32 @@ def test():
     adaptive_kernel = True
 
     ddpg_kwargs = dict(
-        epoch_length=100,  # evaluate / plot per SVGD step
+        epoch_length=10,  # evaluate / plot per SVGD step
         min_pool_size=2,  # must be at least 2
         replay_pool_size=2,  # should only sample from recent experiences,
                         # note that the sample drawn can be one iteration older
-        eval_samples = 1,  # doesn't matter since we override evaluate()
+        eval_samples=1,  # doesn't matter since we override evaluate()
         n_epochs=100000,  # number of SVGD steps
         policy_learning_rate=FLAGS.learning_rate,  # note: this is higher than DDPG's 1e-4
-        batch_size=1,  # only need recent samples, though it's slow
+        qf_learning_rate=0.1,
+        batch_size=32,  # only need recent samples, though it's slow
         alpha=1,  # 1 is the SVGD default
-        only_train_actor=True
+        train_actor=True,
+        train_critic=False,
     )
     q_target_type = "none"  # do not update the critic
 
     # ----------------------------------------------------------------------
-    if FLAGS.fixed:
-        if FLAGS.modes == 1:
-            # near uniform
-            fixed_observations = np.array([
-                [1., 0., 100.],
-            ])
-        elif FLAGS.modes == 2:
-            # two modes, two cases
-            fixed_observations = np.array([
-                [1./3., -2., 1.,    2./3., 2., 1.],
-                [2./3., -2., 1.,    1./3., 2., 1.],
-            ])
-        elif FLAGS.modes == 3:
-            # three modes, three cases
-            fixed_observations = np.array([
-                [1./3., -4., 1.,    1./3., 0., 1.,    1./3., 4., 1.],
-                [1./2., -4., 1.,    1./4., 0., 1.,    1./4., 4., 1.],
-                [1./4., -4., 1.,    1./4., 0., 1.,    1./2., 4., 1.],
-            ])
-        else:
-            raise NotImplementedError
-    else:
-        fixed_observations = None
 
     env = TfEnv(MultimodalGaussianEnv(
         n_modes=FLAGS.modes,
-        action_lb=np.array([-10]), # bounds on the particles
-        action_ub=np.array([10]),
-        fixed_observations=fixed_observations
+        action_lb=np.array([-10, 10]),  # bounds on the particles
+        action_ub=np.array([10, 10]),
+        fixed_observations=True
     ))
 
-    #es = MNNStrategy(
-    #    K=K,
-    #    substrategy=OUStrategy(env_spec=env.spec),
-    #    switch_type="per_path"
-    #)
-
     es = DummyExplorationStrategy()
-    qf = MixtureGaussianCritic(
+    qf = MixtureGaussian2DCritic(
         "critic",
         observation_dim=env.observation_space.flat_dim,
         action_input=None,
@@ -249,6 +223,8 @@ def test():
         env.observation_space.flat_dim,
         env.action_space.flat_dim,
         hidden_dims=(128, 128),
+        sample_dim=2,
+        freeze_samples=False
     )
 
     if adaptive_kernel:

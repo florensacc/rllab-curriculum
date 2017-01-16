@@ -1,9 +1,20 @@
+from sandbox.haoran.mddpg.misc.rllab_util import split_paths
+from sandbox.haoran.mddpg.misc.data_processing import create_stats_ordered_dict
 from sandbox.haoran.mddpg.algos.online_algorithm import OnlineAlgorithm
 from sandbox.rocky.tf.misc.tensor_utils import flatten_tensor_variables
 from sandbox.tuomas.mddpg.policies.stochastic_policy import StochasticNNPolicy
+from sandbox.tuomas.mddpg.misc.sampler import ParallelSampler
+
+# for debugging
+from sandbox.tuomas.mddpg.misc.sim_policy import rollout, rollout_alg
 
 from rllab.misc.overrides import overrides
+from rllab.misc import logger
+from rllab.misc import special
+from rllab.core.serializable import Serializable
+from rllab.envs.proxy_env import ProxyEnv
 
+from collections import OrderedDict
 import numpy as np
 import tensorflow as tf
 
@@ -12,7 +23,7 @@ TARGET_PREFIX = "target_"
 
 class VDDPG(OnlineAlgorithm):
     """
-    Multiheaded DDPG with Stein Variational Gradient Descent using stochastic
+    Variational DDPG with Stein Variational Gradient Descent using stochastic
     net.
     """
 
@@ -23,6 +34,7 @@ class VDDPG(OnlineAlgorithm):
             policy,
             kernel,
             qf,
+            q_init,
             K,
             q_target_type="max",
             qf_learning_rate=1e-3,
@@ -30,8 +42,8 @@ class VDDPG(OnlineAlgorithm):
             Q_weight_decay=0.,
             alpha=1.,
             qf_extra_training=0,
-            only_train_critic=False,
-            only_train_actor=False,
+            train_critic=True,
+            train_actor=True,
             resume=False,
             **kwargs
     ):
@@ -49,30 +61,37 @@ class VDDPG(OnlineAlgorithm):
         :return:
         """
         self.kernel = kernel
-        self.qf = qf
+        self.qf = q_init
+        self.q_init = q_init
+        self.q_actual = qf
         self.K = K
         self.q_target_type = q_target_type
-        self.critic_learning_rate = qf_learning_rate
+        self.critic_lr = qf_learning_rate
+        self.critic_weight_decay = Q_weight_decay
         self.actor_learning_rate = policy_learning_rate
-        self.Q_weight_decay = Q_weight_decay
         self.alpha = alpha
         self.qf_extra_training = qf_extra_training
-        self.only_train_critic = only_train_critic
-        self.only_train_actor = only_train_actor
+        self.train_critic = train_critic
+        self.train_actor = train_actor
         self.resume = resume
 
-        assert not (only_train_actor and only_train_critic)
+        self.alpha_placeholder = tf.placeholder(tf.float32,
+                                                shape=(),
+                                                name='alpha')
+
+        assert train_actor or train_critic
         assert isinstance(policy, StochasticNNPolicy)
         #assert isinstance(exploration_strategy, MNNStrategy)
 
-        if resume:
-            qf_params = qf.get_param_values()
-            policy_params = policy.get_param_values()
+        #if resume:
+        #    qf_params = qf.get_param_values()
+        #    policy_params = policy.get_param_values()
         super().__init__(env, policy, exploration_strategy, **kwargs)
-        if resume:
-            qf.set_param_values(qf_params)
-            policy.set_param_values(policy_params)
+        #if resume:
+        #    qf.set_param_values(qf_params)
+        #    policy.set_param_values(policy_params)
 
+        self.eval_sampler = ParallelSampler(self)
 
     @overrides
     def _init_tensorflow_ops(self):
@@ -83,11 +102,17 @@ class VDDPG(OnlineAlgorithm):
 
         # Initialize variables for get_copy to work
         self.sess.run(tf.initialize_all_variables())
+
         self.target_policy = self.policy.get_copy(
             scope_name=TARGET_PREFIX + self.policy.scope_name,
         )
         self.dummy_policy = self.policy.get_copy(
             scope_name="dummy_" + self.policy.scope_name,
+        )
+
+        self.target_qf = self.qf.get_copy(
+            scope_name=TARGET_PREFIX + self.qf.scope_name,
+            action_input=self.target_policy.output
         )
 
         # TH: It's a bit weird to set class attributes (kernel.kappa and
@@ -105,11 +130,27 @@ class VDDPG(OnlineAlgorithm):
         self.target_policy.sess = self.sess
         self.dummy_policy.sess = self.sess
         # if not self.only_train_actor:
-        self._init_actor_ops()
+
+        self._init_ops()
+
         self.sess.run(tf.initialize_all_variables())
 
-    def _init_actor_ops(self):
+
+        ## Hacky policy output scaling
+        #params = self.dummy_policy.get_param_values()
+        #params = [100 * p for p in params]
+        #self.dummy_policy.set_param_values(params)
+
+
+    def _init_ops(self):
+        self._init_actor_ops(self.qf)
+        self._init_critic_ops()
+        self._init_target_ops()
+
+    def _init_actor_ops(self, critic):
         """
+        Note: critic is given as an argument so that we can have several critics
+
         SVGD
         For easy coding, we can run a session first to update the kernel.
             But it means we need to compute the actor outputs twice. A
@@ -121,13 +162,18 @@ class VDDPG(OnlineAlgorithm):
             specifying grad_ys.
         Need to write a test case.
         """
+        if not self.train_actor:
+            pass
+
         all_true_params = self.policy.get_params_internal()
         all_dummy_params = self.dummy_policy.get_params_internal()
         Da = self.env.action_space.flat_dim
 
-        critic_with_policy_input = self.qf.get_weight_tied_copy(
-            self.policy.output, self.qf.observations_placeholder)
-        grad_qf = tf.gradients(critic_with_policy_input.output,
+        self.critic_with_policy_input = critic.get_weight_tied_copy(
+            action_input=self.policy.output,
+            observation_input=self.policy.observations_placeholder,
+        )
+        grad_qf = tf.gradients(self.critic_with_policy_input.output,
                                self.policy.output)  # N*K x 1 x Da
         grad_qf = tf.reshape(grad_qf, [-1, self.K, 1, Da])  # N x K x 1 x Da
 
@@ -141,7 +187,7 @@ class VDDPG(OnlineAlgorithm):
 
         # Stein Variational Gradient!
         action_grads = tf.reduce_mean(
-            kappa * grad_qf + self.alpha * kappa_grads,
+            kappa * grad_qf + self.alpha_placeholder * kappa_grads,
             reduction_indices=1,
         ) # N x K x Da
         # The first two dims needs to be flattened to correctly propagate the
@@ -155,7 +201,7 @@ class VDDPG(OnlineAlgorithm):
             grad_ys=action_grads,
         )
 
-        self.actor_surrogate_loss = tf.reduce_sum(
+        self.actor_surrogate_loss = tf.reduce_mean(
             - flatten_tensor_variables(all_dummy_params) *
             flatten_tensor_variables(grads)
         )
@@ -175,22 +221,78 @@ class VDDPG(OnlineAlgorithm):
             )
         ]
 
+    def _init_critic_ops(self):
+        if not self.train_critic:
+            return
+
+        q_next = tf.reshape(self.target_qf.output, (-1, self.K))  # N x K
+        if self.q_target_type == 'mean':
+            q_next = tf.reduce_mean(q_next, reduction_indices=1, name='q_next')  # N
+        elif self.q_target_type == 'max':
+            q_next = tf.reduce_max(q_next, reduction_indices=1, name='q_next')  # N
+        else:
+            raise NotImplementedError
+        #self.q_next = q_next
+
+        self.ys = (
+            self.rewards_placeholder + (1 - self.terminals_placeholder) *
+            self.discount * q_next
+        )  # N
+
+        self.critic_loss = tf.reduce_mean(tf.square(self.ys - self.qf.output))
+
+        self.critic_reg = tf.reduce_sum(
+            tf.pack(
+                [tf.nn.l2_loss(v)
+                 for v in
+                 self.qf.get_params_internal(only_regularizable=True)]
+            ),
+            name='weights_norm'
+        )
+        self.critic_total_loss = (
+            self.critic_loss + self.critic_weight_decay * self.critic_reg)
+
+        self.train_critic_op = tf.train.AdamOptimizer(self.critic_lr).minimize(
+            self.critic_total_loss,
+            var_list=self.qf.get_params_internal()
+        )
+
+    def _init_target_ops(self):
+
+        if self.train_critic:
+            # Set target policy
+            actor_vars = self.policy.get_params_internal()
+            target_actor_vars = self.target_policy.get_params_internal()
+            assert len(actor_vars) == len(target_actor_vars)
+            self.update_target_actor_op = [
+                tf.assign(target, (self.tau * src + (1 - self.tau) * target))
+                for target, src in zip(target_actor_vars, actor_vars)]
+
+            # Set target Q-function
+            critic_vars = self.qf.get_params_internal()
+            target_vars = self.target_qf.get_params_internal()
+            self.update_target_critic_op = [
+                tf.assign(target, self.tau * src + (1 - self.tau) * target)
+                for target, src in zip(target_vars, critic_vars)
+            ]
+
     @overrides
     def _init_training(self):
         super()._init_training()
+        # TODO: target policy is not used
         self.target_policy.set_param_values(self.policy.get_param_values())
         self.dummy_policy.set_param_values(self.policy.get_param_values())
 
     @overrides
     def _get_training_ops(self):
-        if self.only_train_critic:
-            raise NotImplementedError
-        elif self.only_train_actor:
-            train_ops = [
-                self.train_actor_op,
-            ]
-        else:
-            raise NotImplementedError
+        train_ops = list()
+        if self.train_actor:
+            train_ops += self.train_actor_op
+        if self.train_critic:
+            train_ops += [self.train_critic_op,
+                          self.update_target_actor_op,
+                          self.update_target_critic_op]
+
         return train_ops
 
     def _get_finalize_ops(self):
@@ -198,20 +300,176 @@ class VDDPG(OnlineAlgorithm):
 
     @overrides
     def _update_feed_dict(self, rewards, terminals, obs, actions, next_obs):
-        actor_feed = self._actor_feed_dict(obs)
-        kernel_feed = self.kernel.update(self, actor_feed, multiheaded=False,
-                                         K=self.K)
-        return {**actor_feed, **kernel_feed}
+        feeds = dict()
+        if self.train_actor:
+            feeds.update(self._actor_feed_dict(obs))
+            feeds.update(
+                self.kernel.update(self, feeds, multiheaded=False, K=self.K)
+            )
+        if self.train_critic:
+            feeds.update(self._critic_feed_dict(
+                rewards, terminals, obs, actions, next_obs
+            ))
+
+
+        return feeds
 
     def _actor_feed_dict(self, obs):
         # Note that we want K samples for each observation. Therefore we
-        # first need to replicate
+        # first need to replicate the observations.
+        obs = self._replicate_obs(obs, self.K)
+
+        feed = self.policy.get_feed_dict(obs)
+        feed[self.critic_with_policy_input.observations_placeholder] = obs
+        feed[self.alpha_placeholder] = self.alpha
+        return feed
+
+    def _critic_feed_dict(self, rewards, terminals, obs, actions, next_obs):
+        # Again, we'll need to replicate next_obs.
+        next_obs = self._replicate_obs(next_obs, self.K)
+
+        feed = self.target_policy.get_feed_dict(next_obs)
+
+        feed.update({
+            self.rewards_placeholder: np.expand_dims(rewards, axis=1),
+            self.terminals_placeholder: np.expand_dims(terminals, axis=1),
+            self.qf.observations_placeholder: obs,
+            self.qf.actions_placeholder: actions,
+            self.target_qf.observations_placeholder: next_obs
+        })
+
+        return feed
+
+    def _replicate_obs(self, obs, K):
         Do = self.env.observation_space.flat_dim
 
         obs = np.expand_dims(obs, axis=1)  # N x 1 x Do
-        obs = np.tile(obs, (1, self.K, 1))  # N x K x Do
+        obs = np.tile(obs, (1, K, 1))  # N x K x Do
         obs = np.reshape(obs, (-1, Do))  # N*K x Do
 
-        feed = self.policy.get_feed_dict(obs)
-        feed[self.qf.observations_placeholder] = obs
-        return feed
+
+        return obs
+
+    @overrides
+    def evaluate(self, epoch, train_info):
+        logger.log("Collecting samples for evaluation")
+        paths = self.eval_sampler.obtain_samples(
+            n_paths=2,
+            max_path_length=self.max_path_length,
+        )
+        rewards, terminals, obs, actions, next_obs = split_paths(paths)
+        feed_dict = self._update_feed_dict(rewards, terminals, obs, actions,
+                                           next_obs)
+
+        rollout_alg(self)
+        #import pdb; pdb.set_trace()
+
+        # Compute statistics
+        (
+            policy_loss,
+            qf_loss,
+            policy_outputs,
+            target_policy_outputs,
+            qf_outputs,
+            target_qf_outputs,
+            ys,
+            kappa,  # N x K x K
+        ) = self.sess.run(
+            [
+                self.actor_surrogate_loss,
+                self.critic_loss,
+                self.policy.output,
+                self.target_policy.output,
+                self.qf.output,
+                self.target_qf.output,
+                self.ys,
+                self.kernel.kappa,
+            ],
+            feed_dict=feed_dict)
+        average_discounted_return = np.mean(
+            [special.discount_return(path["rewards"], self.discount)
+             for path in paths]
+        )
+        returns = np.asarray([sum(path["rewards"]) for path in paths])
+        rewards = np.hstack([path["rewards"] for path in paths])
+        #policy_vars = np.mean(np.var(policy_outputs, axis=1), axis=1)
+        kappa_sum = np.sum(kappa, axis=1).ravel()
+
+        # Log statistics
+        self.last_statistics.update(OrderedDict([
+            ('Epoch', epoch),
+            ('PolicySurrogateLoss', policy_loss),
+            #HT: why are the policy outputs info helpful?
+            ('PolicyMeanOutput', np.mean(policy_outputs)),
+            ('PolicyStdOutput', np.std(policy_outputs)),
+            ('TargetPolicyMeanOutput', np.mean(target_policy_outputs)),
+            ('TargetPolicyStdOutput', np.std(target_policy_outputs)),
+            ('CriticLoss', qf_loss),
+            ('AverageDiscountedReturn', average_discounted_return),
+        ]))
+        self.last_statistics.update(create_stats_ordered_dict('Ys', ys))
+        self.last_statistics.update(create_stats_ordered_dict('QfOutput',
+                                                              qf_outputs))
+        self.last_statistics.update(create_stats_ordered_dict('TargetQfOutput',
+                                                              target_qf_outputs))
+        self.last_statistics.update(create_stats_ordered_dict('Rewards', rewards))
+        self.last_statistics.update(create_stats_ordered_dict('returns', returns))
+        #self.last_statistics.update(
+        #    create_stats_ordered_dict('PolicyVars',policy_vars)
+        #)
+        self.last_statistics.update(
+            create_stats_ordered_dict('KappaSum',kappa_sum)
+        )
+
+        es_path_returns = train_info["es_path_returns"]
+        if len(es_path_returns) == 0 and epoch == 0:
+            es_path_returns = [0]
+        if len(es_path_returns) > 0:
+            # if eval is too often, training may not even have collected a full
+            # path
+            train_returns = np.asarray(es_path_returns) / self.scale_reward
+            self.last_statistics.update(create_stats_ordered_dict(
+                'TrainingReturns', train_returns))
+
+        es_path_lengths = train_info["es_path_lengths"]
+        if len(es_path_lengths) == 0 and epoch == 0:
+            es_path_lengths = [0]
+        if len(es_path_lengths) > 0:
+            # if eval is too often, training may not even have collected a full
+            # path
+            self.last_statistics.update(create_stats_ordered_dict(
+                'TrainingPathLengths', es_path_lengths))
+
+        true_env = self.env
+        while isinstance(true_env,ProxyEnv):
+            true_env = true_env._wrapped_env
+        if hasattr(true_env, "log_stats"):
+            env_stats = true_env.log_stats(epoch, paths)
+            self.last_statistics.update(env_stats)
+
+        for key, value in self.last_statistics.items():
+            logger.record_tabular(key, value)
+
+    def get_epoch_snapshot(self, epoch):
+        return dict(
+            epoch=epoch,
+            # env=self.env,
+            # policy=self.policy,
+            # es=self.exploration_strategy,
+            # qf=self.qf,
+            # kernel=self.kernel,
+            algo=self,
+        )
+
+    def __getstate__(self):
+        d = Serializable.__getstate__(self)
+        d.update({
+            "policy_params": self.policy.get_param_values(),
+            "qf_params": self.qf.get_param_values(),
+        })
+        return d
+
+    def __setstate__(self, d):
+        Serializable.__setstate__(self, d)
+        self.qf.set_param_values(d["qf_params"])
+        self.policy.set_param_values(d["policy_params"])
