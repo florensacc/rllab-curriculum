@@ -18,25 +18,112 @@ shaped_noise = ReshapeFlow(
 )
 
 # 4 checkerboard flows
-cur = shaped_noise
-for _ in range(4):
-    cur = ShearingFlow(
+# note: unbalanced receptive growth version
+def resnet_blocks_gen(blocks=4, filters=64):
+    def go(x):
+        chns = int_shape(x)[3]
+        x = nn.conv2d(filters)
+        for _ in range(blocks):
+            x = nn.gated_resnet(x)
+        temp = nn.conv2d(chns*2)
+        mu = temp[:,:,:,chns:]
+        logstd = tf.tanh(temp[:,:,:,:chns]) # might want learn scaling
+        return mu, logstd
+    return go
+def checkerboard_condition_fn_gen(bin=0, h_collapse=True):
+    id = bin % 2
+    def split_gen(bit):
+        def go(x):
+            shp = int_shape(x)
+            half = (
+                tf_go(x).
+                    transpose([0, 3, 1, 2]).
+                    reshape([shp[0], shp[3], shp[1]*shp[2]//2, 2]).
+                    transpose([0, 2, 1, 3]).
+                    value[:,:,:,bit]
+            )
+            if h_collapse:
+                return tf.reshape(
+                    half,
+                    [shp[0], shp[1], shp[2]//2, shp[3]]
+                )
+            else:
+                raise NotImplementedError
+    def merge(condition, effect):
+        shp = int_shape(condition)
+        if h_collapse:
+            vs = [
+                tf_go(x).
+                    transpose([0, 3, 1, 2]).
+                    reshape([shp[0], shp[3], shp[1], shp[2], 1]).
+                    value
+                for x in (
+                    [condition, effect]
+                    if id == 0 else [effect, condition]
+                )
+            ]
+            return (
+                tf_go(tf.concat(4, vs)).
+                    reshape([shp[0], shp[3], shp[1], shp[2]*2]).
+                    tranpose([0, 2, 3, 1]).
+                    value
+            )
+        else:
+            raise NotImplementedError
 
+    return split_gen(id), split_gen((id + 1) % 2), merge
+cur = shaped_noise
+for i in range(4):
+    cf, ef, merge = checkerboard_condition_fn_gen(i, True) # fixme: for now
+    cur = ShearingFlow(
+        cur,
+        nn_builder=resnet_blocks_gen(),
+        condition_fn=cf,
+        effect_fn=ef,
+        combine_fn=merge,
     )
 
-upsample = dict(
-    forward_fn=lambda x: tf_go(x).
-        reshape([-1, 16, 16, 3, 4]).
-        transpose([0, 3, 1, 2, 4]).
-        reshape([-1, 3, 32, 32]).
-        transpose([0, 2, 3, 1]).
-        value,
-    backward_fn=lambda x: tf_go(x).
-        transpose([0, 3, 1, 2]).
-        reshape([-1, 3, 16, 16, 2, 2]).
-        transpose([0, 2, 3, 1, 4, 5]).
-        reshape([-1, 16, 16, 12]).
-        value,
+# up-sample
+upsampled = ReshapeFlow(
+    cur,
+    forward_fn=lambda x: tf.depth_to_space(x, 2),
+    backward_fn=lambda x: tf.space_to_depth(x, 2),
 )
+
+#  then 3 channel-wise shearing (note, early noise is not extracted)
+def channel_condition_fn_gen(bin=0):
+    id = bin % 2
+    def split_gen(bit):
+        def go(x):
+            shp = int_shape(x)
+            cut = shp[3] // 2
+            return x[:,:,:,:cut] if bit == 0 else x[:,:,:,cut:]
+    def merge(condition, effect):
+        vs = [condition, effect]
+        if id != 0:
+            vs = reversed(vs)
+        return tf.concat(3, vs)
+    return split_gen(id), split_gen((id + 1) % 2), merge
+cur = upsampled
+for i in range(4):
+    cf, ef, merge = channel_condition_fn_gen(i, )
+    cur = ShearingFlow(
+        cur,
+        nn_builder=resnet_blocks_gen(),
+        condition_fn=cf,
+        effect_fn=ef,
+        combine_fn=merge,
+    )
+
+# another 3 checkerboard
+for i in range(3):
+    cf, ef, merge = checkerboard_condition_fn_gen(i, True) # fixme: for now
+    cur = ShearingFlow(
+        cur,
+        nn_builder=resnet_blocks_gen(),
+        condition_fn=cf,
+        effect_fn=ef,
+        combine_fn=merge,
+    )
 
 
