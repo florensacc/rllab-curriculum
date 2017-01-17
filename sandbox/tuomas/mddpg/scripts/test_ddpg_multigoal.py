@@ -12,7 +12,7 @@ from sandbox.tuomas.mddpg.policies.stochastic_policy import \
 
 from sandbox.tuomas.mddpg.critics.gaussian_critic import MixtureGaussian2DCritic
 
-#from sandbox.tuomas.mddpg.algos.vddpg import VDDPG
+from sandbox.tuomas.mddpg.algos.vddpg import VDDPG
 from rllab.misc.overrides import overrides
 import matplotlib.pyplot as plt
 
@@ -21,26 +21,12 @@ FLAGS = flags.FLAGS
 flags.DEFINE_float('actor_lr', 0.0001, 'Base learning rate for actor.')
 flags.DEFINE_float('critic_lr', 0.001, 'Base learning rate for critic.')
 flags.DEFINE_integer('path_length', 100, 'Maximum path length.')
-flags.DEFINE_integer('n_particles', 16, 'Number of particles.')
-flags.DEFINE_string('alg', 'vddpg', 'Algorithm.')
-flags.DEFINE_string('policy', 'stochastic',
-                    'Policy (DETERMINISTIC/stochastic')
+flags.DEFINE_integer('n_particles', 1, 'Number of particles.')
 
-if FLAGS.alg == 'ddpg':
-    from sandbox.tuomas.mddpg.algos.ddpg import DDPG as Alg
-elif FLAGS.alg == 'vddpg':
-    from sandbox.tuomas.mddpg.algos.vddpg import VDDPG as Alg
+from sandbox.haoran.mddpg.algos.ddpg import DDPG
 
-
-if FLAGS.policy == 'deterministic':
-    from sandbox.tuomas.mddpg.policies.nn_policy \
-        import FeedForwardPolicy as Policy
-elif FLAGS.policy == 'stochastic':
-    from sandbox.tuomas.mddpg.policies.stochastic_policy \
-        import StochasticNNPolicy as Policy
-
-
-class AlgTest(Alg):
+#class VDDPGTest(VDDPG):
+class VDDPGTest(DDPG):
     lim = 2
     plots_initialized = False
     eval_counter = 0
@@ -62,7 +48,8 @@ class AlgTest(Alg):
     @overrides
     def evaluate(self, epoch, es_path_returns):
         self.eval_counter += 1
-        n_paths = 5 # FLAGS.n_particles
+        n_paths = FLAGS.n_particles
+
 
         if not self.plots_initialized:
             env = self.env
@@ -119,7 +106,7 @@ class AlgTest(Alg):
             y = all_actions[:, 1]
             ax_critic.plot(x, y, '*')
 
-        ## Do rollouts.
+        # Do rollouts.
         #for line in self.h_paths:
         #    self.policy.reset()
         #    path = rollout(self.env, self.policy, FLAGS.path_length)
@@ -129,32 +116,47 @@ class AlgTest(Alg):
         if len(self.db.paths) >= n_paths:
             for i, line in enumerate(self.h_paths):
                 line.set_data(np.transpose(self.db.paths[-i-1][0]))
-                #print(self.db.paths[-i+1][0])
-        #import pdb; pdb.set_trace()
 
         plt.draw()
         plt.pause(0.001)
 
-        # TODO: hacky way to check if this is VDDPG instance without loading
-        # VDDPG class.
-        #if hasattr(self, 'alpha'):
-        #    if self.eval_counter % 25 == 0:
-        #        self.alpha /= 3
+
+
+
+
+
+        ## Switch to the actual q:
+        #if self.eval_counter == 100:
+        #    self.qf = self.q_actual
+        #    self._init_ops()
+
+        #    # Dump the current actor first.
+        #    params = self.dummy_policy.get_param_values()
+        #    self.sess.run(tf.initialize_all_variables())
+        #    self.dummy_policy.set_param_values(params)
+
+        #if self.eval_counter % 25 == 0:
+        #    self.alpha /= 3
+
+
+
         return
 
 # -------------------------------------------------------------------
 def test():
-    from sandbox.tuomas.mddpg.kernels.gaussian_kernel import \
+    from sandbox.haoran.mddpg.kernels.gaussian_kernel import \
         SimpleAdaptiveDiagonalGaussianKernel
     from sandbox.rocky.tf.envs.base import TfEnv
+    from sandbox.tuomas.mddpg.policies.stochastic_policy \
+        import StochasticNNPolicy
     from sandbox.haoran.mddpg.envs.multi_goal_env import MultiGoalEnv
-    #from sandbox.tuomas.mddpg.envs.multi_goal_env import MultiGoalEnv
     from sandbox.tuomas.mddpg.critics.nn_qfunction import FeedForwardCritic
+    from sandbox.haoran.mddpg.policies.nn_policy import FeedForwardPolicy
 
 
-    alg_kwargs = dict(
+    ddpg_kwargs = dict(
         epoch_length=100,  # evaluate / plot per SVGD step
-        min_pool_size=1000,#1000,  # must be at least 2
+        min_pool_size=1000,  # must be at least 2
         #replay_pool_size=2,  # should only sample from recent experiences,
                         # note that the sample drawn can be one iteration older
         eval_samples=1,  # doesn't matter since we override evaluate()
@@ -167,38 +169,11 @@ def test():
         batch_size=64,  # only need recent samples, though it's slow
         scale_reward=0.1
     )
-
-    policy_kwargs = dict(
-    )
-
-    if FLAGS.policy == 'deterministic':
-        policy_kwargs.update(dict(
-            observation_hidden_sizes=(100, 100)
-        ))
-
-    elif FLAGS.policy == 'stochastic':
-        policy_kwargs.update(dict(
-            sample_dim=2,
-            freeze_samples=False,
-            K=FLAGS.n_particles,
-            output_nonlinearity=tf.tanh,
-            hidden_dims=(100, 100),
-            W_initializer=None,
-        ))
-
-    if FLAGS.alg == 'vddpg':
-        alg_kwargs.update(dict(
-            train_actor=True,
-            train_critic=True,
-            q_target_type='max',
-            K=FLAGS.n_particles,
-            alpha=1.,
-        ))
-
     # ----------------------------------------------------------------------
     env = TfEnv(MultiGoalEnv())
 
-    # es = DummyExplorationStrategy()
+    #es = DummyExplorationStrategy()
+
     es = OUStrategy(env_spec=env.spec, mu=0, theta=0.15, sigma=0.3)
 
     qf = FeedForwardCritic(
@@ -209,7 +184,7 @@ def test():
         embedded_hidden_sizes=(100,),
     )
 
-    q_prior = MixtureGaussian2DCritic(
+    q_init = MixtureGaussian2DCritic(
         "critic",
         observation_dim=env.observation_space.flat_dim,
         action_input=None,
@@ -219,11 +194,12 @@ def test():
         sigmas=[1.0]
     )
 
-    policy = Policy(
-        scope_name='actor',
-        observation_dim=env.observation_space.flat_dim,
-        action_dim=env.action_space.flat_dim,
-        **policy_kwargs,
+    policy = FeedForwardPolicy(
+        'actor',
+        env.observation_space.flat_dim,
+        env.action_space.flat_dim,
+        observation_hidden_sizes=(100, 100),
+        output_nonlinearity=tf.tanh,
     )
 
     kernel = SimpleAdaptiveDiagonalGaussianKernel(
@@ -231,18 +207,12 @@ def test():
         dim=env.action_space.flat_dim,
     )
 
-    if FLAGS.alg == 'vddpg':
-       alg_kwargs.update(dict(
-            kernel=kernel,
-            q_prior=q_prior,
-        ))
-
-    algorithm = AlgTest(
+    algorithm = VDDPGTest(
         env=env,
         exploration_strategy=es,
         policy=policy,
         qf=qf,
-        **alg_kwargs
+        **ddpg_kwargs
     )
     algorithm.train()
 

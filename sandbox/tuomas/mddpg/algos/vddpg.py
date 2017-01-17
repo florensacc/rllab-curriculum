@@ -1,6 +1,6 @@
 from sandbox.haoran.mddpg.misc.rllab_util import split_paths
 from sandbox.haoran.mddpg.misc.data_processing import create_stats_ordered_dict
-from sandbox.haoran.mddpg.algos.online_algorithm import OnlineAlgorithm
+from sandbox.tuomas.mddpg.algos.online_algorithm import OnlineAlgorithm
 from sandbox.rocky.tf.misc.tensor_utils import flatten_tensor_variables
 from sandbox.tuomas.mddpg.policies.stochastic_policy import StochasticNNPolicy
 from sandbox.tuomas.mddpg.misc.sampler import ParallelSampler
@@ -34,7 +34,7 @@ class VDDPG(OnlineAlgorithm):
             policy,
             kernel,
             qf,
-            q_init,
+            q_prior,
             K,
             q_target_type="max",
             qf_learning_rate=1e-3,
@@ -61,9 +61,9 @@ class VDDPG(OnlineAlgorithm):
         :return:
         """
         self.kernel = kernel
-        self.qf = q_init
-        self.q_init = q_init
-        self.q_actual = qf
+        self.qf = qf
+        self.q_prior = q_prior
+        self.prior_coeff = 0.#1.
         self.K = K
         self.q_target_type = q_target_type
         self.critic_lr = qf_learning_rate
@@ -79,8 +79,11 @@ class VDDPG(OnlineAlgorithm):
                                                 shape=(),
                                                 name='alpha')
 
+        self.prior_coeff_placeholder = tf.placeholder(tf.float32,
+                                                      shape=(),
+                                                      name='prior_coeff')
         assert train_actor or train_critic
-        assert isinstance(policy, StochasticNNPolicy)
+        #assert isinstance(policy, StochasticNNPolicy)
         #assert isinstance(exploration_strategy, MNNStrategy)
 
         #if resume:
@@ -129,25 +132,18 @@ class VDDPG(OnlineAlgorithm):
         self.policy.sess = self.sess
         self.target_policy.sess = self.sess
         self.dummy_policy.sess = self.sess
-        # if not self.only_train_actor:
 
         self._init_ops()
 
         self.sess.run(tf.initialize_all_variables())
 
 
-        ## Hacky policy output scaling
-        #params = self.dummy_policy.get_param_values()
-        #params = [100 * p for p in params]
-        #self.dummy_policy.set_param_values(params)
-
-
     def _init_ops(self):
-        self._init_actor_ops(self.qf)
+        self._init_actor_ops()
         self._init_critic_ops()
         self._init_target_ops()
 
-    def _init_actor_ops(self, critic):
+    def _init_actor_ops(self):
         """
         Note: critic is given as an argument so that we can have several critics
 
@@ -169,13 +165,22 @@ class VDDPG(OnlineAlgorithm):
         all_dummy_params = self.dummy_policy.get_params_internal()
         Da = self.env.action_space.flat_dim
 
-        self.critic_with_policy_input = critic.get_weight_tied_copy(
+        self.critic_with_policy_input = self.qf.get_weight_tied_copy(
             action_input=self.policy.output,
             observation_input=self.policy.observations_placeholder,
         )
         grad_qf = tf.gradients(self.critic_with_policy_input.output,
                                self.policy.output)  # N*K x 1 x Da
         grad_qf = tf.reshape(grad_qf, [-1, self.K, 1, Da])  # N x K x 1 x Da
+
+
+        self.prior_with_policy_input = self.q_prior.get_weight_tied_copy(
+            action_input=self.policy.output,
+            observation_input=self.policy.observations_placeholder,
+        )
+        grad_prior = tf.gradients(self.prior_with_policy_input.output,
+                                  self.policy.output)  # N*K x 1 x Da
+        grad_prior = tf.reshape(grad_prior, [-1, self.K, 1, Da])  # N x K x 1 x Da
 
         kappa = tf.expand_dims(
             self.kernel.kappa,
@@ -186,8 +191,11 @@ class VDDPG(OnlineAlgorithm):
         kappa_grads = self.kernel.kappa_grads  # N x K x K x Da
 
         # Stein Variational Gradient!
+        p = self.prior_coeff_placeholder
         action_grads = tf.reduce_mean(
-            kappa * grad_qf + self.alpha_placeholder * kappa_grads,
+            #kappa * ((1.0 - p) * grad_qf + p * grad_prior)
+            kappa * grad_qf
+            + self.alpha_placeholder * kappa_grads,
             reduction_indices=1,
         ) # N x K x Da
         # The first two dims needs to be flattened to correctly propagate the
@@ -227,12 +235,13 @@ class VDDPG(OnlineAlgorithm):
 
         q_next = tf.reshape(self.target_qf.output, (-1, self.K))  # N x K
         if self.q_target_type == 'mean':
-            q_next = tf.reduce_mean(q_next, reduction_indices=1, name='q_next')  # N
+            q_next = tf.reduce_mean(q_next, reduction_indices=1, name='q_next',
+                                    keep_dims=True)  # N x 1
         elif self.q_target_type == 'max':
-            q_next = tf.reduce_max(q_next, reduction_indices=1, name='q_next')  # N
+            q_next = tf.reduce_max(q_next, reduction_indices=1, name='q_next',
+                                   keep_dims=True)  # N x 1
         else:
             raise NotImplementedError
-        #self.q_next = q_next
 
         self.ys = (
             self.rewards_placeholder + (1 - self.terminals_placeholder) *
@@ -270,16 +279,16 @@ class VDDPG(OnlineAlgorithm):
 
             # Set target Q-function
             critic_vars = self.qf.get_params_internal()
-            target_vars = self.target_qf.get_params_internal()
+            target_critic_vars = self.target_qf.get_params_internal()
             self.update_target_critic_op = [
                 tf.assign(target, self.tau * src + (1 - self.tau) * target)
-                for target, src in zip(target_vars, critic_vars)
+                for target, src in zip(target_critic_vars, critic_vars)
             ]
 
     @overrides
     def _init_training(self):
         super()._init_training()
-        # TODO: target policy is not used
+        self.target_qf.set_param_values(self.qf.get_param_values())
         self.target_policy.set_param_values(self.policy.get_param_values())
         self.dummy_policy.set_param_values(self.policy.get_param_values())
 
@@ -311,7 +320,6 @@ class VDDPG(OnlineAlgorithm):
                 rewards, terminals, obs, actions, next_obs
             ))
 
-
         return feeds
 
     def _actor_feed_dict(self, obs):
@@ -322,6 +330,7 @@ class VDDPG(OnlineAlgorithm):
         feed = self.policy.get_feed_dict(obs)
         feed[self.critic_with_policy_input.observations_placeholder] = obs
         feed[self.alpha_placeholder] = self.alpha
+        feed[self.prior_coeff_placeholder] = self.prior_coeff
         return feed
 
     def _critic_feed_dict(self, rewards, terminals, obs, actions, next_obs):
