@@ -45,6 +45,7 @@ class MDDPG(OnlineAlgorithm, Serializable):
             resume=False,
             eval_max_head_repeat=1,
             use_finalize_ops=True,
+            svgd_target="action",
             **kwargs
     ):
         """
@@ -82,6 +83,9 @@ class MDDPG(OnlineAlgorithm, Serializable):
         self.resume = resume
         self.eval_max_head_repeat = eval_max_head_repeat
         self.use_finalize_ops = use_finalize_ops
+        self.svgd_target = svgd_target
+        if svgd_target == "pre-action":
+            assert policy.output_nonlinearity == tf.nn.tanh
 
         assert not (only_train_actor and only_train_critic)
         assert isinstance(policy, MNNPolicy)
@@ -134,9 +138,16 @@ class MDDPG(OnlineAlgorithm, Serializable):
         # TH: It's a bit weird to set class attributes (kernel.kappa and
         # kernel.kappa_grads) outside the class. Could we do this somehow
         # differently?
-        self.kernel.kappa = self.kernel.get_kappa(self.policy.output)
-        self.kernel.kappa_grads = self.kernel.get_kappa_grads(
-            self.policy.output)
+        if self.svgd_target == "action":
+            self.kernel.kappa = self.kernel.get_kappa(self.policy.output)
+            self.kernel.kappa_grads = self.kernel.get_kappa_grads(
+                self.policy.output)
+        elif self.svgd_target == "pre-action":
+            self.kernel.kappa = self.kernel.get_kappa(self.policy.pre_output)
+            self.kernel.kappa_grads = self.kernel.get_kappa_grads(
+                self.policy.pre_output)
+        else:
+            raise NotImplementedError
 
         self.kernel.sess = self.sess
         self.qf.sess = self.sess
@@ -220,59 +231,131 @@ class MDDPG(OnlineAlgorithm, Serializable):
             self.qf.get_weight_tied_copy(self.policy.heads[j])
             for j in range(self.K)
         ]
-        tmp = tf.expand_dims(
-            tf.pack([
-                tf.gradients(
-                    self.critics_with_action_input[j].output,
-                    self.policy.heads[j],
-                )[0]
+        if self.svgd_target == "action":
+            tmp = tf.expand_dims(
+                tf.pack([
+                    tf.gradients(
+                        self.critics_with_action_input[j].output,
+                        self.policy.heads[j],
+                    )[0]
+                    for j in range(self.K)
+                ]),
+                dim=1,
+            )
+
+            qf_grads = tf.transpose(
+                # here the dimensions are (j,k,N,d)
+                tmp,
+                [2,0,1,3]
+                # then it becomse (N,j,k,d)
+            ) # \nabla_a Q(s,a)
+            kappa = tf.expand_dims(
+                self.kernel.kappa,
+                dim=3,
+            )
+            # grad w.r.t. left kernel inut
+            kappa_grads = self.kernel.kappa_grads
+
+            # sum (not avg) over j
+            # using sum ensures that the gradient scale is close to DDPG
+            # since kappa(x,x) = 1, but we may need to use different learning rates
+            # for different numbers of heads
+            # TH: Changed this from sum to average for easier debugging.
+            #action_grads = tf.reduce_sum(
+            action_grads = tf.reduce_mean(
+                kappa * qf_grads + self.alpha * kappa_grads,
+                reduction_indices=1,
+            ) # (N,k,d)
+            # ---------------------------------------------------------------
+
+            # propagate action grads to NN parameter grads
+            # this part computes sum_{i,k,l} (action_grads[i,k,l] *
+            #   d(action[i,k,l]) / d theta), where
+            # i: sample index
+            # k: head index
+            # l: action dimension index
+            # actually grads is not a 1D vector, but a list of tensors corresponding
+            # to weights and biases of different layers; but
+            #   np.concatenate([g.ravel() for g in grads])
+            # gives you the flat gradient
+
+
+            grads = tf.gradients(
+                self.policy.output,
+                all_true_params,
+                grad_ys=action_grads,
+            )
+        elif self.svgd_target == "pre-action":
+            # p(\xi) \propto_{\xi} exp(Q(s, f(\xi))) \prod_l (1-\tanh^2 \xi_l)
+            # head = tanh(pre_head)
+            log_ps = [
+                (
+                    self.critics_with_action_input[j].output
+                    + self.alpha * tf.reduce_sum(
+                        tf.log(1. - tf.square(self.policy.heads[j])),
+                        reduction_indices=1
+                    )
+                ) # length N vector
                 for j in range(self.K)
-            ]),
-            dim=1,
-        )
+            ]
+            #WARN: get nan if self.alpha = 0; reason unknown
+            
+            tmp = tf.expand_dims(
+                tf.pack([
+                    tf.gradients(
+                        log_ps[j],
+                        self.policy.pre_heads[j], # !
+                    )[0]
+                    for j in range(self.K)
+                ]),
+                dim=1,
+            )
 
-        qf_grads = tf.transpose(
-            # here the dimensions are (j,k,N,d)
-            tmp,
-            [2,0,1,3]
-            # then it becomse (N,j,k,d)
-        ) # \nabla_a Q(s,a)
-        kappa = tf.expand_dims(
-            self.kernel.kappa,
-            dim=3,
-        )
-        # grad w.r.t. left kernel inut
-        kappa_grads = self.kernel.kappa_grads
+            qf_grads = tf.transpose(
+                # here the dimensions are (j,k,N,d)
+                tmp,
+                [2,0,1,3]
+                # then it becomse (N,j,k,d)
+            ) # \nabla_a Q(s,a)
+            kappa = tf.expand_dims(
+                self.kernel.kappa,
+                dim=3,
+            )
+            # grad w.r.t. left kernel inut
+            kappa_grads = self.kernel.kappa_grads
 
-        # sum (not avg) over j
-        # using sum ensures that the gradient scale is close to DDPG
-        # since kappa(x,x) = 1, but we may need to use different learning rates
-        # for different numbers of heads
-        # TH: Changed this from sum to average for easier debugging.
-        #action_grads = tf.reduce_sum(
-        action_grads = tf.reduce_mean(
-            kappa * qf_grads + self.alpha * kappa_grads,
-            reduction_indices=1,
-        ) # (N,k,d)
-        # ---------------------------------------------------------------
+            # sum (not avg) over j
+            # using sum ensures that the gradient scale is close to DDPG
+            # since kappa(x,x) = 1, but we may need to use different learning rates
+            # for different numbers of heads
+            # TH: Changed this from sum to average for easier debugging.
+            #action_grads = tf.reduce_sum(
+            pre_action_grads = tf.reduce_mean(
+                kappa * qf_grads + self.alpha * kappa_grads,
+                reduction_indices=1,
+            ) # (N,k,d)
+            # ---------------------------------------------------------------
 
-        # propagate action grads to NN parameter grads
-        # this part computes sum_{i,k,l} (action_grads[i,k,l] *
-        #   d(action[i,k,l]) / d theta), where
-        # i: sample index
-        # k: head index
-        # l: action dimension index
-        # actually grads is not a 1D vector, but a list of tensors corresponding
-        # to weights and biases of different layers; but
-        #   np.concatenate([g.ravel() for g in grads])
-        # gives you the flat gradient
+            # propagate action grads to NN parameter grads
+            # this part computes sum_{i,k,l} (action_grads[i,k,l] *
+            #   d(action[i,k,l]) / d theta), where
+            # i: sample index
+            # k: head index
+            # l: action dimension index
+            # actually grads is not a 1D vector, but a list of tensors corresponding
+            # to weights and biases of different layers; but
+            #   np.concatenate([g.ravel() for g in grads])
+            # gives you the flat gradient
 
 
-        grads = tf.gradients(
-            self.policy.output,
-            all_true_params,
-            grad_ys=action_grads,
-        )
+            grads = tf.gradients(
+                self.policy.pre_output,
+                all_true_params,
+                grad_ys=pre_action_grads,
+            )
+
+        else:
+            raise NotImplementedError
 
         # In case you doubt, flat grads is essentially the same as below
         # flat_grads = np.zeros_like(self.policy.get_param_values())
