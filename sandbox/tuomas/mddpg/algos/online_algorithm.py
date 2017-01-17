@@ -21,6 +21,7 @@ from sandbox.haoran.myscripts import tf_utils
 # DEBUG class
 class DB:
     def __init__(self):
+        self._max_paths = 100
         self.paths = []
         self._reset()
 
@@ -36,6 +37,9 @@ class DB:
         self.paths.append(path)
 
         self._reset()
+
+        if len(self.paths) > self._max_paths:
+            self.paths.pop(0)
 
     def _reset(self):
         self.obs_list = []

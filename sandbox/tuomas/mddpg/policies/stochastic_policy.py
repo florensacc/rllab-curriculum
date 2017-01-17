@@ -19,6 +19,7 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
                  sample_dim=1,
                  freeze_samples=False,
                  K=1,
+                 output_scale=1.0,
                  **kwargs):
         Serializable.quick_init(self, locals())
 
@@ -36,7 +37,7 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
             all_inputs = tf.concat(concat_dim=1,
                                    values=(self._obs_pl, self._sample_pl))
 
-            self._output = mlp(
+            self._output = output_scale * mlp(
                 all_inputs,
                 observation_dim + self._sample_dim,
                 hidden_dims,
