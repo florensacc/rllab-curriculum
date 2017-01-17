@@ -14,11 +14,19 @@ class MNNPolicy(NNPolicy):
         observation_dim,
         action_dim,
         K,
+        randomized=False,
         **kwargs
     ):
+        """
+        :param randomized: use this if you want the policy to always
+            randomly switch a head at each time step, except if it
+            is told to use a head explicitly. This is used in conjunction
+            with MNNStrategy.switch_type = "per_action"
+        """
         Serializable.quick_init(self, locals())
         self.K = K
         self.k = np.random.randint(0,K)
+        self.randomized = randomized
         super(MNNPolicy, self).__init__(
             scope_name, observation_dim, action_dim)
 
@@ -48,6 +56,8 @@ class MNNPolicy(NNPolicy):
         An exploration strategy may overwrite this method and specify particular
             heads.
         """
+        if self.randomized:
+            k = np.random.randint(low=0, high=self.K)
         if k is None:
             k = self.k
             return self.sess.run(
@@ -118,13 +128,13 @@ class MNNStrategy(ExplorationStrategy):
         action, _ = policy.get_action(observation, self.k)
         action_modified = self.substrategy.get_modified_action(t, action)
         if self.switch_type == "per_action":
-            self.k = np.mod(self.k + 1, self.K)
+            self.k = np.random.randint(low=0, high=self.K)
             # print("{} switches to head {}".format(policy.scope_name, self.k))
         return action_modified
 
     def reset(self):
         if self.switch_type == "per_path":
-            self.k = np.mod(self.k + 1, self.K)
+            self.k = np.random.randint(low=0, high=self.K)
         self.substrategy.reset()
 
 class FeedForwardMultiPolicy(MNNPolicy):
@@ -142,6 +152,7 @@ class FeedForwardMultiPolicy(MNNPolicy):
         output_b_init=None,
         hidden_nonlinearity=tf.nn.relu,
         output_nonlinearity=tf.nn.tanh,
+        **kwargs
     ):
         Serializable.quick_init(self, locals())
         self.shared_hidden_sizes = shared_hidden_sizes
@@ -159,6 +170,7 @@ class FeedForwardMultiPolicy(MNNPolicy):
             observation_dim,
             action_dim,
             K,
+            **kwargs
         )
     def create_shared_variables(self):
         shared_layer = mlp(

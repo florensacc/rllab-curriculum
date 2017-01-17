@@ -16,7 +16,7 @@ def obs_to_rgb(obs):
     # Assumes obs is scaled to be from -1 to 1
     obs = (obs + 1.0) / 2.0
     obs = obs[:,:,np.newaxis]*WHITE
-    return np.uint8(obs)
+    return np.uint8(np.around(obs))
 
 def visualize_adversary(rollouts_file, output_dir, output_prefix, \
                         frames_per_sec=20, pad=5, writing=30, max_timestep=10000):

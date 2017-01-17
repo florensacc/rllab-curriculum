@@ -31,12 +31,20 @@ def set_seed(algo, seed):
     else:
         raise Exception("Invalid environment")
 
-def get_average_return(algo, seed=None):
+def get_average_return(algo, seed=None, N=10):
     # Note that batch size is set during load_model
     if seed is not None:  # Set random seed, for reproducibility
         set_seed(algo, seed)
 
-    paths = algo.sampler.obtain_samples(None)
+    #paths = algo.sampler.obtain_samples(None)
+    paths = []
+    curr_seed = seed + 1
+    while len(paths) < N:
+        new_paths = algo.sampler.obtain_samples(n_samples=1)  # Returns single path
+        paths.append(new_paths[0])
+        set_seed(algo, curr_seed)
+        curr_seed += 1
+
     avg_return = np.mean([sum(p['rewards']) for p in paths])
     return avg_return, paths
 
