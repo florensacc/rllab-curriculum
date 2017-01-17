@@ -2365,3 +2365,139 @@ class CondPixelCNN(Distribution):
 
     def activate_dist(self, flat):
         return dict(context=flat)
+
+
+class ShearingFlow(Distribution):
+    def __init__(
+            self,
+            shape,
+            base_dist,
+            nn_builder,
+            condition_set,
+            effect_set,
+    ):
+        # fix me later about how to serailzie fn?
+        # Serializable.quick_init(self, locals())
+
+        global G_IDX
+        G_IDX += 1
+        self._name = "Shearing_%s" % (G_IDX)
+        self._shape = shape
+        self._base_dist = base_dist
+        self._nn_template = tf.make_template(self._name, nn_builder)
+        self._condition_set = condition_set
+        self._effect_set = effect_set
+
+
+    @overrides
+    def init_mode(self):
+        if self._wnorm:
+            self._custom_phase = CustomPhase.init
+            self._base_dist.init_mode()
+
+    @overrides
+    def train_mode(self):
+        if self._wnorm:
+            self._custom_phase = CustomPhase.train
+            self._base_dist.train_mode()
+
+    @property
+    def dim(self):
+        return np.prod(self._shape)
+
+    @property
+    def effective_dim(self):
+        return self.dim
+
+    def infer(self, x_var):
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+
+        counters = {}
+        with scopes.arg_scope(
+                [nn.down_shifted_conv2d, nn.down_right_shifted_conv2d, nn.down_shifted_deconv2d, nn.down_right_shifted_deconv2d, nn.nin],
+                counters=counters, init=self._custom_phase == CustomPhase.init, ema=None
+        ):
+        flat_iaf = self._iaf_template.construct(
+            **in_dict
+        ).tensor
+        iaf_mu, iaf_logstd = flat_iaf[:, :self._dim], flat_iaf[:, self._dim:]
+        if self._clip:
+            iaf_mu = tf.clip_by_value(
+                iaf_mu,
+                -5,
+                5
+            )
+            iaf_logstd = tf.clip_by_value(
+                iaf_logstd,
+                -4,
+                4,
+            )
+        if self._squash:
+            iaf_mu = tf.tanh(iaf_mu)*2.7
+            iaf_logstd = tf.tanh(iaf_logstd)*1.5
+        if self._mean_only:
+            # TODO: fixme! wasteful impl
+            iaf_logstd = tf.zeros_like(iaf_mu)
+        return iaf_mu, (iaf_logstd)
+
+    def logli(self, x_var, dist_info):
+        iaf_mu, iaf_logstd = self.infer(x_var)
+        z = x_var / tf.exp(iaf_logstd) - iaf_mu
+        if self._reverse:
+            z = tf.reverse(z, [False, True])
+        return self._base_dist.logli(z, dist_info) - \
+               tf.reduce_sum(iaf_logstd, reduction_indices=1)
+
+    def logli_init_prior(self, x_var):
+        return self._base_dist.logli_init_prior(x_var)
+
+    def prior_dist_info(self, batch_size):
+        return self._base_dist.prior_dist_info(batch_size)
+
+    def sample_logli(self, info):
+        return self.sample_n(info=info)
+
+    def sample_n(self, n=100, info=None):
+        print("warning, ar sample invoked")
+        try:
+            z, logpz = self._base_dist.sample_n(n=n, info=info)
+        except AttributeError:
+            if info:
+                z, logpz = self._base_dist.sample_logli(info)
+            else:
+                z = self._base_dist.sample_prior(batch_size=n)
+                logpz = self._base_dist.logli_prior(z)
+        if self._reverse:
+            z = tf.reverse(z, [False, True])
+        go = z # place holder
+        for i in range(self._dim):
+            iaf_mu, iaf_logstd = self.infer(go)
+
+            go = iaf_mu + tf.exp(iaf_logstd)*z
+        return go, logpz - tf.reduce_sum(iaf_logstd, reduction_indices=1)
+
+        # def accm(go, _):
+        #     iaf_mu, iaf_logstd = self.infer(go)
+        #     go = iaf_mu + tf.exp(iaf_logstd)*z
+        #     return go
+        # go = tf.foldl(
+        #     fn=accm,
+        #     elems=np.arange(self._dim, dtype=np.int32),
+        #     initializer=z,
+        # )
+        # return go, 0. # fixme
+
+    @property
+    def dist_info_keys(self):
+        return self._base_dist.dist_info_keys
+
+    @property
+    def dist_flat_dim(self):
+        return self._base_dist.dist_flat_dim
+
+    def activate_dist(self, flat):
+        return self._base_dist.activate_dist(flat)
+
+    def nonreparam_logli(self, x_var, dist_info):
+        raise "not defined"

@@ -1234,6 +1234,7 @@ class ShareVAE(object):
         # plotting.plt.close('all')
         # # import ipdb; ipdb.set_trace()
 
+        import IPython; IPython.embed()
 
         # beam-search decompression
         try:
@@ -1281,6 +1282,24 @@ class ShareVAE(object):
             import IPython; IPython.embed()
 
         import IPython; IPython.embed()
+
+        count = 2
+        imgss = []
+        for _ in range(count):
+            cur_zeros = np.zeros(batch_imshp)
+            for yi in range(h):
+                for xi in range(w):
+                    proposal_zeros = sess.run(proposal_sym, {
+                        x_var: cur_zeros,
+                        context_var: context['context'],
+                    })
+                    cur_zeros[:, yi, xi, :] = proposal_zeros[:, yi, xi, :].copy()
+                print(yi)
+            imgss.append(cur_zeros)
+        img_tile = plotting.img_tile(np.concatenate(imgss), aspect_ratio=1.0, border_color=1.0, stretch=True)
+        img = plotting.plot_img(img_tile, title=None, )
+        plotting.plt.savefig("%s/sample_summary_big.png" % self.checkpoint_dir)
+        plotting.plt.close('all')
 
     def eval(self, k=128*80, init=True):
         # logprob evaluation
