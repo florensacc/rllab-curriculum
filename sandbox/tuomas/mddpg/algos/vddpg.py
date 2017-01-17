@@ -13,6 +13,7 @@ from rllab.misc import logger
 from rllab.misc import special
 from rllab.core.serializable import Serializable
 from rllab.envs.proxy_env import ProxyEnv
+from rllab.core.serializable import Serializable
 
 from collections import OrderedDict
 import numpy as np
@@ -21,7 +22,7 @@ import tensorflow as tf
 TARGET_PREFIX = "target_"
 
 
-class VDDPG(OnlineAlgorithm):
+class VDDPG(OnlineAlgorithm, Serializable):
     """
     Variational DDPG with Stein Variational Gradient Descent using stochastic
     net.
@@ -45,6 +46,7 @@ class VDDPG(OnlineAlgorithm):
             train_critic=True,
             train_actor=True,
             resume=False,
+            n_eval_paths=2,
             **kwargs
     ):
         """
@@ -60,6 +62,7 @@ class VDDPG(OnlineAlgorithm):
         :param Q_weight_decay: How much to decay the weights for Q
         :return:
         """
+        Serializable.quick_init(self, locals())
         self.kernel = kernel
         self.qf = qf
         self.q_prior = q_prior
@@ -95,6 +98,7 @@ class VDDPG(OnlineAlgorithm):
         #    policy.set_param_values(policy_params)
 
         self.eval_sampler = ParallelSampler(self)
+        self.n_eval_paths = n_eval_paths
 
     @overrides
     def _init_tensorflow_ops(self):
@@ -173,14 +177,14 @@ class VDDPG(OnlineAlgorithm):
                                self.policy.output)  # N*K x 1 x Da
         grad_qf = tf.reshape(grad_qf, [-1, self.K, 1, Da])  # N x K x 1 x Da
 
-
-        self.prior_with_policy_input = self.q_prior.get_weight_tied_copy(
-            action_input=self.policy.output,
-            observation_input=self.policy.observations_placeholder,
-        )
-        grad_prior = tf.gradients(self.prior_with_policy_input.output,
-                                  self.policy.output)  # N*K x 1 x Da
-        grad_prior = tf.reshape(grad_prior, [-1, self.K, 1, Da])  # N x K x 1 x Da
+        if self.q_prior is not None:
+            self.prior_with_policy_input = self.q_prior.get_weight_tied_copy(
+                action_input=self.policy.output,
+                observation_input=self.policy.observations_placeholder,
+            )
+            grad_prior = tf.gradients(self.prior_with_policy_input.output,
+                                      self.policy.output)  # N*K x 1 x Da
+            grad_prior = tf.reshape(grad_prior, [-1, self.K, 1, Da])  # N x K x 1 x Da
 
         kappa = tf.expand_dims(
             self.kernel.kappa,
@@ -191,13 +195,19 @@ class VDDPG(OnlineAlgorithm):
         kappa_grads = self.kernel.kappa_grads  # N x K x K x Da
 
         # Stein Variational Gradient!
-        p = self.prior_coeff_placeholder
-        action_grads = tf.reduce_mean(
-            #kappa * ((1.0 - p) * grad_qf + p * grad_prior)
-            kappa * grad_qf
-            + self.alpha_placeholder * kappa_grads,
-            reduction_indices=1,
-        ) # N x K x Da
+        if self.q_prior is not None:
+            p = self.prior_coeff_placeholder
+            action_grads = tf.reduce_mean(
+                kappa * ((1.0 - p) * grad_qf + p * grad_prior)
+                + self.alpha_placeholder * kappa_grads,
+                reduction_indices=1,
+            ) # N x K x Da
+        else:
+            action_grads = tf.reduce_mean(
+                kappa * grad_qf
+                + self.alpha_placeholder * kappa_grads,
+                reduction_indices=1,
+            ) # N x K x Da
         # The first two dims needs to be flattened to correctly propagate the
         # gradients to the policy network.
         action_grads = tf.reshape(action_grads, (-1, Da))
@@ -363,14 +373,14 @@ class VDDPG(OnlineAlgorithm):
     def evaluate(self, epoch, train_info):
         logger.log("Collecting samples for evaluation")
         paths = self.eval_sampler.obtain_samples(
-            n_paths=2,
+            n_paths=self.n_eval_paths,
             max_path_length=self.max_path_length,
         )
         rewards, terminals, obs, actions, next_obs = split_paths(paths)
         feed_dict = self._update_feed_dict(rewards, terminals, obs, actions,
                                            next_obs)
 
-        rollout_alg(self)
+        # rollout_alg(self)
         #import pdb; pdb.set_trace()
 
         # Compute statistics
@@ -401,31 +411,37 @@ class VDDPG(OnlineAlgorithm):
         )
         returns = np.asarray([sum(path["rewards"]) for path in paths])
         rewards = np.hstack([path["rewards"] for path in paths])
-        #policy_vars = np.mean(np.var(policy_outputs, axis=1), axis=1)
+        Da = self.env.action_space.flat_dim
+        policy_vars = np.mean(
+            np.var(
+                policy_outputs.reshape((-1, self.K, Da)),
+                axis=1
+            ), axis=1
+        )
         kappa_sum = np.sum(kappa, axis=1).ravel()
 
         # Log statistics
         self.last_statistics.update(OrderedDict([
             ('Epoch', epoch),
-            ('PolicySurrogateLoss', policy_loss),
+            # ('PolicySurrogateLoss', policy_loss),
             #HT: why are the policy outputs info helpful?
-            ('PolicyMeanOutput', np.mean(policy_outputs)),
-            ('PolicyStdOutput', np.std(policy_outputs)),
-            ('TargetPolicyMeanOutput', np.mean(target_policy_outputs)),
-            ('TargetPolicyStdOutput', np.std(target_policy_outputs)),
+            # ('PolicyMeanOutput', np.mean(policy_outputs)),
+            # ('PolicyStdOutput', np.std(policy_outputs)),
+            # ('TargetPolicyMeanOutput', np.mean(target_policy_outputs)),
+            # ('TargetPolicyStdOutput', np.std(target_policy_outputs)),
             ('CriticLoss', qf_loss),
             ('AverageDiscountedReturn', average_discounted_return),
         ]))
-        self.last_statistics.update(create_stats_ordered_dict('Ys', ys))
+        # self.last_statistics.update(create_stats_ordered_dict('Ys', ys))
         self.last_statistics.update(create_stats_ordered_dict('QfOutput',
                                                               qf_outputs))
-        self.last_statistics.update(create_stats_ordered_dict('TargetQfOutput',
-                                                              target_qf_outputs))
-        self.last_statistics.update(create_stats_ordered_dict('Rewards', rewards))
+        # self.last_statistics.update(create_stats_ordered_dict('TargetQfOutput',
+        #                                                       target_qf_outputs))
+        # self.last_statistics.update(create_stats_ordered_dict('Rewards', rewards))
         self.last_statistics.update(create_stats_ordered_dict('returns', returns))
-        #self.last_statistics.update(
-        #    create_stats_ordered_dict('PolicyVars',policy_vars)
-        #)
+        self.last_statistics.update(
+           create_stats_ordered_dict('PolicyVars',policy_vars)
+        )
         self.last_statistics.update(
             create_stats_ordered_dict('KappaSum',kappa_sum)
         )
