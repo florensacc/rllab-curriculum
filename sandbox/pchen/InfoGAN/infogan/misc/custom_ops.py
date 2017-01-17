@@ -1705,3 +1705,14 @@ def temp_restore(sess, ema):
         #     [tf.assign(var, avg) for var, avg in zip(ema_keys, old_vals)]
         # )
 
+class tf_go(object):
+    def __init__(self, x):
+        self.value = x
+
+    def __getattr__(self, name):
+        # who cares?
+        def go(*args, **kwargs):
+            tf_val = eval("tf.%s" % name)(*([self.value]+(args if args else [])), **kwargs)
+            return tf_go(tf_val)
+        return go
+

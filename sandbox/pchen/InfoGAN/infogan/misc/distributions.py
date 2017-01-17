@@ -11,6 +11,8 @@ from rllab.misc.ext import AttrDict
 from rllab.misc.overrides import overrides
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import CustomPhase, resconv_v1_customconv, plstmconv_v1, int_shape, \
     universal_int_shape, get_linear_ar_mask
+import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
+import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
 
 TINY = 1e-8
 
@@ -2370,11 +2372,11 @@ class CondPixelCNN(Distribution):
 class ShearingFlow(Distribution):
     def __init__(
             self,
-            shape,
             base_dist,
             nn_builder,
-            condition_set,
-            effect_set,
+            condition_fn,
+            effect_fn,
+            combine_fn,
     ):
         # fix me later about how to serailzie fn?
         # Serializable.quick_init(self, locals())
@@ -2382,72 +2384,56 @@ class ShearingFlow(Distribution):
         global G_IDX
         G_IDX += 1
         self._name = "Shearing_%s" % (G_IDX)
-        self._shape = shape
         self._base_dist = base_dist
         self._nn_template = tf.make_template(self._name, nn_builder)
-        self._condition_set = condition_set
-        self._effect_set = effect_set
+        self._condition_set = condition_fn
+        self._effect_set = effect_fn
+        self._combine = combine_fn
+
+        self.train_mode()
 
 
     @overrides
     def init_mode(self):
-        if self._wnorm:
-            self._custom_phase = CustomPhase.init
-            self._base_dist.init_mode()
+        self._custom_phase = CustomPhase.init
+        self._base_dist.init_mode()
 
     @overrides
     def train_mode(self):
-        if self._wnorm:
-            self._custom_phase = CustomPhase.train
-            self._base_dist.train_mode()
+        self._custom_phase = CustomPhase.train
+        self._base_dist.train_mode()
 
     @property
     def dim(self):
-        return np.prod(self._shape)
+        return self._base_dist.dim
 
     @property
     def effective_dim(self):
-        return self.dim
+        return self._base_dist.effective_dim
 
-    def infer(self, x_var):
-        import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
-        import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+    def infer(self, x_var, dist_info):
+        condition = self._condition_set(x_var)
+        effect = self._effect_set(x_var)
 
         counters = {}
-        with scopes.arg_scope(
-                [nn.down_shifted_conv2d, nn.down_right_shifted_conv2d, nn.down_shifted_deconv2d, nn.down_right_shifted_deconv2d, nn.nin],
-                counters=counters, init=self._custom_phase == CustomPhase.init, ema=None
+        with scopes.default_arg_scope(
+                counters=counters, init=self._custom_phase == CustomPhase.init,
+                ema=None
         ):
-        flat_iaf = self._iaf_template.construct(
-            **in_dict
-        ).tensor
-        iaf_mu, iaf_logstd = flat_iaf[:, :self._dim], flat_iaf[:, self._dim:]
-        if self._clip:
-            iaf_mu = tf.clip_by_value(
-                iaf_mu,
-                -5,
-                5
-            )
-            iaf_logstd = tf.clip_by_value(
-                iaf_logstd,
-                -4,
-                4,
-            )
-        if self._squash:
-            iaf_mu = tf.tanh(iaf_mu)*2.7
-            iaf_logstd = tf.tanh(iaf_logstd)*1.5
-        if self._mean_only:
-            # TODO: fixme! wasteful impl
-            iaf_logstd = tf.zeros_like(iaf_mu)
-        return iaf_mu, (iaf_logstd)
+            mu, logstd = self._nn_template(condition)
+
+        return condition, effect, mu, logstd
 
     def logli(self, x_var, dist_info):
-        iaf_mu, iaf_logstd = self.infer(x_var)
-        z = x_var / tf.exp(iaf_logstd) - iaf_mu
-        if self._reverse:
-            z = tf.reverse(z, [False, True])
-        return self._base_dist.logli(z, dist_info) - \
-               tf.reduce_sum(iaf_logstd, reduction_indices=1)
+        condition, effect, mu, logstd = self.infer(x_var, dist_info)
+        effect_shp = nn.int_shape(effect)
+        eps = self._combine(condition, effect*tf.exp(logstd) + mu)
+
+        return self._base_dist.logli(eps, dist_info) + \
+               tf.reduce_sum(
+                   tf.reshape(logstd, [-1, np.prod(effect_shp[1:])]),
+                   reduction_indices=1
+               )
 
     def logli_init_prior(self, x_var):
         return self._base_dist.logli_init_prior(x_var)
@@ -2455,38 +2441,17 @@ class ShearingFlow(Distribution):
     def prior_dist_info(self, batch_size):
         return self._base_dist.prior_dist_info(batch_size)
 
-    def sample_logli(self, info):
-        return self.sample_n(info=info)
+    def sample_logli(self, dist_info):
+        eps, logpeps = self._base_dist.sample_logli(dist_info)
+        condition, effect, mu, logstd = self.infer(eps, dist_info)
+        effect_shp = nn.int_shape(effect)
+        x = self._combine(condition, (effect - mu) / tf.exp(logstd))
 
-    def sample_n(self, n=100, info=None):
-        print("warning, ar sample invoked")
-        try:
-            z, logpz = self._base_dist.sample_n(n=n, info=info)
-        except AttributeError:
-            if info:
-                z, logpz = self._base_dist.sample_logli(info)
-            else:
-                z = self._base_dist.sample_prior(batch_size=n)
-                logpz = self._base_dist.logli_prior(z)
-        if self._reverse:
-            z = tf.reverse(z, [False, True])
-        go = z # place holder
-        for i in range(self._dim):
-            iaf_mu, iaf_logstd = self.infer(go)
-
-            go = iaf_mu + tf.exp(iaf_logstd)*z
-        return go, logpz - tf.reduce_sum(iaf_logstd, reduction_indices=1)
-
-        # def accm(go, _):
-        #     iaf_mu, iaf_logstd = self.infer(go)
-        #     go = iaf_mu + tf.exp(iaf_logstd)*z
-        #     return go
-        # go = tf.foldl(
-        #     fn=accm,
-        #     elems=np.arange(self._dim, dtype=np.int32),
-        #     initializer=z,
-        # )
-        # return go, 0. # fixme
+        return x, logpeps + \
+                tf.reduce_sum(
+                    tf.reshape(logstd, [-1, np.prod(effect_shp[1:])]),
+                    reduction_indices=1
+                )
 
     @property
     def dist_info_keys(self):
@@ -2501,3 +2466,64 @@ class ShearingFlow(Distribution):
 
     def nonreparam_logli(self, x_var, dist_info):
         raise "not defined"
+
+class ReshapeFlow(Distribution):
+    def __init__(
+            self,
+            base_dist,
+            forward_fn,
+            backward_fn,
+    ):
+        global G_IDX
+        G_IDX += 1
+        self._name = "reshape_%s" % (G_IDX)
+        self._base_dist = base_dist
+        self._forward = forward_fn
+        self._backward = backward_fn
+
+        self.train_mode()
+
+    @overrides
+    def init_mode(self):
+        self._custom_phase = CustomPhase.init
+        self._base_dist.init_mode()
+
+    @overrides
+    def train_mode(self):
+        self._custom_phase = CustomPhase.train
+        self._base_dist.train_mode()
+
+    @property
+    def dim(self):
+        return self._base_dist.dim
+
+    @property
+    def effective_dim(self):
+        return self._base_dist.effective_dim
+
+    def logli(self, x_var, dist_info):
+        eps = self._backward(x_var)
+        return self._base_dist.logli(eps, dist_info)
+
+    def sample_logli(self, dist_info):
+        eps, logpeps = self._base_dist.sample_logli(dist_info)
+        x = self._forward(eps)
+        return x, logpeps
+
+    def prior_dist_info(self, batch_size):
+        return self._base_dist.prior_dist_info(batch_size)
+
+    @property
+    def dist_info_keys(self):
+        return self._base_dist.dist_info_keys
+
+    @property
+    def dist_flat_dim(self):
+        return self._base_dist.dist_flat_dim
+
+    def activate_dist(self, flat):
+        return self._base_dist.activate_dist(flat)
+
+    def nonreparam_logli(self, x_var, dist_info):
+        raise "not defined"
+
