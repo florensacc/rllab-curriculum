@@ -15,9 +15,13 @@ from sandbox.dave.rllab.envs.mujoco.pr2_env_lego import Pr2EnvLego
 from rllab.envs.normalized_env import normalize
 import os.path as osp
 
-from sandbox.dave.rllab.goal_generators.pr2_goal_generators import PR2CrownGoalGeneratorSmall #PR2BoxGoalGeneratorSmall #PR2FixedGoalGenerator #PR2CrownGoalGeneratorSmall #PR2TestGoalGenerator
-from sandbox.dave.rllab.lego_generators.pr2_lego_generators import PR2LegoBoxBlockGeneratorSmall #PR2LegoFixedBlockGenerator #PR2TestGoalGenerator
-from sandbox.dave.rllab.policies.pretrain_gaussian_mlp_policy import PretrainGaussianMLPPolicy
+from sandbox.dave.rllab.goal_generators.pr2_goal_generators import PR2FixedGoalGenerator  #PR2BoxGoalGeneratorSmall #PR2FixedGoalGenerator #PR2CrownGoalGeneratorSmall #PR2TestGoalGenerator
+from sandbox.dave.rllab.lego_generators.pr2_lego_generators import PR2LegoFixedBlockGenerator #PR2LegoFixedBlockGenerator #PR2TestGoalGenerator
+# from sandbox.dave.rllab.policies.pretrain_gaussian_mlp_policy import PretrainGaussianMLPPolicy
+from sandbox.dave.rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
+# from sandbox.dave.rllab.policies.gaussian_mlp_policy_tanh import GaussianMLPPolicy
+# from sandbox.dave.rllab.envs.mujoco.pr2_env_reach import Pr2EnvLego
+# from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_position import Pr2EnvLego
 from rllab.sampler.utils import rollout
 
 filename = str(uuid.uuid4())
@@ -96,8 +100,10 @@ if __name__ == "__main__":
     # To test something on the robot, this would be the best.
     #pkl_file = "data/s3/train139/train139_2016_09_01_15_59_53_0001/params.pkl"
 
-    # pkl_file = "/home/ignasi/GitRepos/rllab-private/data/local/train-Lego/state/fixed_block_fixed_block_left_down_lego_pixel_penalty_p0005_d_06_reward_distance_15/params.pkl"
-    pkl_file = "/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/state/fixed_block_crown_goal_lego_pixel_penalty_p0005_d_06_reward_distance_1/params.pkl"
+    pkl_file = "/home/ignasi/GitRepos/rllab-private/data/local/train-Lego/RSS/torque-control/random_param_torque_eve_fixed1/params.pkl"
+    # pkl_file = "/home/ignasi/GitRepos/rllab-private/data/local/train-Lego/RSS/reach-constant-output/reach_constant_output1/params.pkl"
+    # json_path = "/home/ignasi/data/data_ported/no_weight_wrist31/params.json"
+    # npz_path = "/home/ignasi/data/data_ported/no_weight_wrist31/params.npz"
     #pkl_file = "upload/fine_tune/train139/params.pkl"
 
 
@@ -138,8 +144,8 @@ if __name__ == "__main__":
     #pkl_file = '/home/davheld/repos/rllab-goals/data/local/experiment/experiment_2016_08_01_14_32_27_0001/params.pkl'
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--file', type=str, default=pkl_file,
-                        help='path to the snapshot file')
+    # parser.add_argument('--file', type=str, default=pkl_file,
+    #                     help='path to the snapshot file')
     parser.add_argument('--max_length', type=int, default=200,
                         help='Max length of rollout')
     parser.add_argument('--speedup', type=int, default=1,
@@ -148,12 +154,12 @@ if __name__ == "__main__":
                         help='Number of test goals')
     args = parser.parse_args()
 
-    policy, train_env = get_policy(args.file)
+    # policy, train_env = get_policy(args.file)
 
     # Add one to account for the goal created during environment initialization.
     # TODO - fix this hack.
-    test_goal_generator = PR2CrownGoalGeneratorSmall() #PR2TestGoalGenerator()  #PR2TestGoalGenerator(
-    test_lego_generator = PR2LegoBoxBlockGeneratorSmall()
+    test_goal_generator = PR2FixedGoalGenerator() #PR2TestGoalGenerator()  #PR2TestGoalGenerator(
+    test_lego_generator = PR2LegoFixedBlockGenerator()
 
     # env = normalize(Pr2Env(
     #     goal_generator=test_goal_generator,
@@ -193,12 +199,26 @@ if __name__ == "__main__":
         allow_random_vel_restarts=False,
         distance_thresh=0.01,  # 1 cm
         qvel_init_std=0.01,
-        pos_normal_sample=False, # Uniform sampling
+        pos_normal_sample=True, # Uniform sampling
         pos_normal_sample_std=0.01,
-        model="pr2_legofree.xml",
+        # model="pr2_legofree.xml",
         use_vision=True,
+        # number_actions=5
         # use_depth=True,
     ))
+
+    policy = GaussianMLPPolicy(
+        env_spec=env.spec,
+        # The neural network policy should have n hidden layers, each with k hidden units.
+        hidden_sizes=(64, 64, 64),
+        # output_gain=1,
+        init_std=1,
+        # pkl_path="/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/state/random_random_pixel_penalty_p0005_d_06_reward_distance_1_angle_02_crown_normal_sample_001_50000/params.pkl"
+        # json_path=json_path,
+        # npz_path=npz_path,
+        pkl_path=pkl_file,
+        )
+
 
     # policy = ScaledGaussianMLPPolicy(
     #     env_spec=env.spec,

@@ -59,13 +59,17 @@ class MujocoEnv(Env):
         self.viewer = None
         self.viewer_bot = None
         self.init_qpos = self.model.data.qpos
-        self.init_qvel = self.model.data.qvel
-        self.init_qacc = self.model.data.qacc
-        self.init_ctrl = self.model.data.ctrl
+        self.init_qvel = np.zeros_like(self.model.data.qvel)
+        self.init_qacc = np.zeros_like(self.model.data.qacc)
+        self.init_ctrl = np.zeros_like(self.model.data.ctrl)
         self.qpos_dim = self.init_qpos.size
         self.qvel_dim = self.init_qvel.size
         self.ctrl_dim = self.init_ctrl.size
         self.action_noise = action_noise
+        self.dilate_time = 1
+        # self.Kp = np.array([500, 500, 500, 1000, 500, 500, 100])
+        # self.Kv = np.array([1, 5, 50, 10, 50, 50, 10])
+
         if "frame_skip" in self.model.numeric_names:
             frame_skip_id = self.model.numeric_names.index("frame_skip")
             addr = self.model.numeric_adr.flat[frame_skip_id]
@@ -161,10 +165,12 @@ class MujocoEnv(Env):
         noise = 0.5 * (ub - lb) * noise
         return action + noise
 
-    def forward_dynamics(self, action):
+    def forward_dynamics(self, action, qvel=None, qpos=None, position_ctrl=False):
         self.model.data.ctrl = self.inject_action_noise(action)
-        for _ in range(self.frame_skip):
+        for _ in range(self.dilate_time * self.frame_skip):
             self.model.step()
+            if qvel is not None:
+                self.model.data.qvel = qvel
         self.model.forward()
         new_com = self.model.data.com_subtree[0]
         self.dcom = new_com - self.current_com

@@ -69,6 +69,14 @@ class ElemwiseDiffLayer(L.MergeLayer):
                 output = input
         return output
 
+class MultiplyScalarLayer(L.Layer):
+    def __init__(self, l_incoming, scalar, name=None):
+        super(MultiplyScalarLayer, self).__init__(l_incoming, name)
+        self.scalar = scalar
+
+    def get_output_for(self, input, **kwargs):
+        return self.scalar * input
+
 class FlattenLayer(L.Layer):
     """
     A layer that flattens its input. The leading ``outdim-1`` dimensions of

@@ -15,7 +15,7 @@ import pdb
 np.set_printoptions(threshold=np.nan, linewidth=np.nan)
 class Pr2EnvLego(MujocoEnv, Serializable):
 
-    FILE = 'pr2_legofree.xml'
+    FILE = 'pr2_legofree_position.xml'
 
     def __init__(
             self,
@@ -23,7 +23,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             lego_generator=None,
             action_penalty_weight= 0.001, #originally was 0.001 #there is one with 0.0005
             distance_thresh=0.01,  # 1 cm
-            model='pr2_legofree.xml', #'pr2_1arm.xml',
+            model='pr2_legofree_position.xml', #'pr2_1arm.xml',
             max_action=float("inf"),
             allow_random_restarts=True,   #same position: True
             allow_random_vel_restarts=True,
@@ -71,6 +71,11 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.discount = 0.95
         self.depth = np.zeros([99, 99, 3])  #TODO: Hacky
         self.model = model
+        self.position_controller = True
+        self.roll_joints = [2, 4]
+        self.action = np.zeros((7,))
+        self.counter = 0
+        self.first_action = True
 
         super(Pr2EnvLego, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
@@ -99,7 +104,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
                 #                                 # since we already have the vec to the goal.
                 self.model.data.qvel.flat[idxvel],  # Do not include the velocity of the target (should be 0).
                 self.get_tip_position(),
-                # self.get_vec_tip_to_lego(),
+                self.get_vec_tip_to_lego(),
                 np.reshape(self.depth, -1),
             ]).reshape(-1)
         else:
@@ -114,8 +119,8 @@ class Pr2EnvLego(MujocoEnv, Serializable):
                 vec_to_goal,
             ]).reshape(-1)
 
+
     def get_tip_position(self):
-        #return self.get_body_com("l_gripper_r_finger_tip_link")
         return self.model.data.site_xpos[0]
 
     def get_lego_position(self):
@@ -139,7 +144,6 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         vec_to_goal = self.get_vec_to_goal()
         return np.dot(vec_to_goal[:2], vec_tip_to_lego[:2]) / (
             np.linalg.norm(vec_to_goal[:2]) * np.linalg.norm(vec_tip_to_lego[:2]))
-
 
     # def get_reward_occlusion(self):
     #     _image, height, width = self.viewer.get_image()
@@ -295,23 +299,39 @@ class Pr2EnvLego(MujocoEnv, Serializable):
     #     return np.concatenate([lego_position, quaternion])
 
     def step(self, action):
+        #action /= 10
+
         # Limit actions to the specified range.
         if self.use_depth and self.use_vision:
             self.depth = self.viewer.get_depth_map().astype(np.float32)
-        action_limit = self.action_limit * self.action_space.ones()
-        action = np.maximum(action, -action_limit)
-        action = np.minimum(action, action_limit)
+        # action_limit = self.action_limit * self.action_space.ones()
+        # action = np.maximum(action, -action_limit)
+        # action = np.minimum(action, action_limit)
+        # action = np.zeros_like(action)  #TODO: CHANGE THIIIIIIIS
+        if self.position_controller:
+            for idx in self.roll_joints:
+                theta_pos = self.model.data.qpos[idx]
+                theta_action = action[idx] + np.pi
+                diff = (theta_action - theta_pos) // (2 * np.pi)
+                theta_action -= (np.pi + diff * 2 * np.pi)
+                action[idx] = theta_action
         vec_tip_to_lego = self.get_vec_tip_to_lego()
         distance_tip_to_lego_previous = np.linalg.norm(vec_tip_to_lego)
-        reward_tip_previous = - self.distance_tip_lego_penalty_weight * distance_tip_to_lego_previous
         cos_angle_previous = self.get_cos_vecs()
-        reward_angle_previous = - self.angle_penalty_weight * cos_angle_previous
 
-        # import pdb; pdb.set_trace()
-        # action = np.zeros_like(action)
-        self.forward_dynamics(action)
+        # Simulat2e this action and get the resulting state.
+        if self.counter == 3 or self.first_action or np.sum(np.square(action - self.action)) < 0.25:
+            self.action = action
+            self.counter = 0
+            if self.first_action:
+                self.first_action = False
 
-        # Simulate this action and get the resulting state.
+        if self.counter:
+            self.counter += 1
+
+        self.action[7:] = 0
+        self.forward_dynamics(self.action)
+
         # image_pos = np.zeros(3)
         # a = self.get_lego_from_image()
         # if a is not None:
@@ -331,8 +351,8 @@ class Pr2EnvLego(MujocoEnv, Serializable):
 
         # Penalize the robot for large actions.f
         # reward_occlusion = self.occlusion_weight * self.get_reward_occlusion()
-        reward_ctrl = - self.action_penalty_weight * np.square(action).sum()
-        reward = reward_dist + reward_ctrl + reward_tip + reward_angle
+        # reward_ctrl = - self.action_penalty_weight * np.square(action).sum()
+        reward = reward_tip - 0.001 * np.sum(np.square(self.model.data.qvel))#reward_ctrl#+ reward_occlusion
         state = self._state
         # print(reward_occlusion, reward_angle, reward_tip, reward_dist, )
         notdone = np.isfinite(state).all()
@@ -366,10 +386,9 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         #self.viewer.cam.lookat[2] = self.model.stat.center[2]
         if self.use_vision:
             self.viewer.cam.camid = -1
-            # self.viewer.cam.distance = self.model.stat.extent * 1.5
+            self.viewer.cam.distance = self.model.stat.extent * 1.5
         else:
             self.viewer.cam.camid = -1
-            self.viewer.cam.distance = self.model.stat.extent * 1.5
         #self.viewer.cam.trackbodyid = -1   # 39
         #self.viewer.cam.elevation = 0
         #self.viewer.cam.azimuth = 0
@@ -380,7 +399,6 @@ class Pr2EnvLego(MujocoEnv, Serializable):
     def reset_mujoco(self, qpos=None, qvel=None):
         goal_dims = 3 # self.goal_dims
         lego_dims = 6
-        self.first_time = True
         if self.allow_random_restarts or self.first_time:
             if self.pos_normal_sample:
                 # Sample a new random initial robot position from a normal distribution.
@@ -397,12 +415,9 @@ class Pr2EnvLego(MujocoEnv, Serializable):
                 if self.model.jnt_limited[idx] == 1:
                     qpos[idx] = max(jnt_range[0], qpos[idx])
                     qpos[idx] = min(jnt_range[1], qpos[idx])
-                    if idx == 1:
+                    if idx == 1 or idx == 2:
                         qpos[idx] = max(jnt_range[0], qpos[idx])
-                        qpos[idx] = min(jnt_range[0]*0.25 + jnt_range[1]*0.75, qpos[idx])
-                    if idx == 3:
-                        qpos[idx] = max(jnt_range[0], qpos[idx])
-                        qpos[idx] = min(jnt_range[0] * 0.3 + 0.7 * jnt_range[1], qpos[idx])
+                        qpos[idx] = min((jnt_range[1]+jnt_range[0])/2, qpos[idx])
 
         elif qpos is None:
             # Use current position as new position.
@@ -410,6 +425,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             qpos = list(qpos_curr)
         # Generate a new goal.
         lego_position = self.get_lego_position()
+
         if self._lego_generator is not None:
             self.lego = self._lego_generator.generate_goal(lego_position)
             qpos[-goal_dims - lego_dims - 1:-goal_dims] = self.lego[:, None]
@@ -437,7 +453,6 @@ class Pr2EnvLego(MujocoEnv, Serializable):
 
         #The position of a free body has 7 components (3 space and 4 for quaternions)
 
-        self.init_qpos = qpos
         self.model.data.qpos = qpos
         self.model.data.qvel = qvel
         self.model.data.qacc = self.init_qacc
@@ -446,26 +461,16 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         if self._action_limiter is not None:
             self.action_limit = self._action_limiter.get_action_limit()
 
-        # self.first_time = False
+        self.first_time = False
+        self.first_action = True
 
+        #Apply a force in the Lego block
         xfrc = np.zeros(self.model.data.xfrc_applied.shape)
-        xfrc[-2, 2] = -0.981
+        weight = 0.1
+        xfrc[-2, 2] = -9.81 * weight
         xfrc[13, 2] = - 9.81 * 0.0917
         self.model.data.xfrc_applied = xfrc
-        import copy
-        damping = copy.copy(self.model.data.dof_damping)
-        armature = copy.copy(self.model.data.dof_armature )
-        frictionloss = copy.copy(self.model.data.dof_frictionloss)
-
-        damping = np.maximum(0, np.random.multivariate_normal(damping, 0.1 * np.eye(7)))
-        armature = np.maximum(0, np.random.multivariate_normal(armature, 0.1 * np.eye(7)))
-        frictionloss = np.maximum(0, np.random.multivariate_normal(frictionloss, 0.1 * np.eye(7)))
-        self.model.data.dof_damping = damping[:, None]
-        self.model.data.dof_frictionloss = frictionloss[:, None]
-        self.model.data.dof_armature = armature[:, None]
-        # #Viewer
-
-
+        #Viewer
 
         if self.viewer is None and self.use_vision:
             self.viewer = MjViewer(visible=True, go_fast=False)
@@ -473,7 +478,6 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             self.viewer.set_model(self.model)
             self.viewer_setup()
 
-        self.first_time = False
 
         # Choose an action limit from the range of action limits.
         #self.action_limit = np.random.uniform(self.min_action_limit, self.max_action_limit)
@@ -527,6 +531,8 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         logger.record_tabular('RewardDistanceLegoGoal', np.mean([np.sum(r) for r in distances_to_goal]))
         distances_to_goal = [path["env_infos"]["reward_tip"] for path in paths]
         logger.record_tabular('RewardDistanceLegoTip', np.mean([np.sum(r) for r in distances_to_goal]))
+        distances_to_goal = [path["env_infos"]["reward_tip"] for path in paths]
+        logger.record_tabular('RewardFinalDistanceLegoTip', np.mean([r[-1] for r in distances_to_goal]))
         distances_to_goal = [path["env_infos"]["reward_angle"] for path in paths]
         logger.record_tabular('RewardAngle', np.mean([np.sum(r) for r in distances_to_goal]))
         # distances_to_goal = [path["env_infos"]["reward_occlusion"] for path in paths]

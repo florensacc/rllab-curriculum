@@ -26,7 +26,7 @@ env = normalize(Pr2EnvLego(
     lego_generator=PR2LegoFixedBlockGenerator(),
     action_limiter=action_limiter,
     max_action=1,
-    pos_normal_sample=False,
+    pos_normal_sample=True,
     qvel_init_std=0.01,
     use_depth=True,
     use_vision=True,
@@ -54,14 +54,14 @@ algo = TRPO(
     policy=policy,
     baseline=baseline,
     batch_size=5000,
-    max_path_length=100,  #100
-    n_itr=50, #50000
+    max_path_length=10,  #100
+    n_itr=50000,
     discount=0.95,
     gae_lambda=0.98,
     step_size=0.01,
     goal_generator=train_goal_generator,
     action_limiter=action_limiter,
-    optimizer_args={'num_slices': 500, 'subsample_factor': 0.2},
+    optimizer_args={'num_slices': 500, 'subsample_factor': 0.1},
     # sampler_cls=PairwiseGpuSampler,
     # sampler_args={'n_parallel': 5}
     # Uncomment both lines (this and the plot parameter below) to enable plotting
@@ -78,10 +78,10 @@ run_experiment_lite(
     snapshot_mode="last",
     # Specifies the seed for the experiment. If this is not provided, a random seed
     # will be used
-    python_command="python -m cProfile -o profiler_gpu_mod.prof",
+    # python_command="python",
     seed=1,
     # log_dir="data/local/train-Lego/trial_pretraining",
-    exp_prefix="train-Lego/depth",
-    exp_name="multiple_gpu",
+    exp_prefix="train-Lego/RSS",
+    exp_name="everything_fixed_depth",
     # plot=True,
 )

@@ -6,10 +6,9 @@ import numpy as np
 
 from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
-from rllab.core.network import MLP, ConvNetwork
-from sandbox.dave.rllab.core.alexnet import AlexNet, VanillaConvNet
-from sandbox.dave.rllab.core.dilatated_vgg import DilatedVGG
+from sandbox.dave.rllab.core.network import MLPtanh, MLP
 from sandbox.dave.rllab.spaces import Box
+
 from sandbox.dave.rllab.core.lasagne_layers import *
 from rllab.core.serializable import Serializable
 from rllab.policies.base import StochasticPolicy
@@ -19,7 +18,10 @@ from rllab.misc import ext
 from rllab.distributions.diagonal_gaussian import DiagonalGaussian
 import theano.tensor as TT
 
-class DepthGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
+
+
+
+class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
     def __init__(
             self,
             env_spec,
@@ -32,15 +34,17 @@ class DepthGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             min_std=1e-6,
             std_hidden_nonlinearity=NL.tanh,
             hidden_nonlinearity=NL.tanh,
-            output_nonlinearity=None,
+            output_nonlinearity=NL.tanh,
             mean_network=None,
             std_network=None,
             output_gain=1.0,
             num_relu=0,
+            seed=0,
             pkl_path=None,
             json_path=None,
             npz_path=None,
-            seed=0,
+            trainable=True,
+            beta=0.1,
     ):
         """
         :param env_spec:
@@ -64,37 +68,30 @@ class DepthGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
         self.pkl_path = pkl_path
         self.json_path = json_path
         self.npz_path = npz_path
+        self.trainable = trainable
+        self.beta = beta
 
         obs_dim = env_spec.observation_space.flat_dim
         action_dim = env_spec.action_space.flat_dim
+
         l_input = L.InputLayer(shape=(None,) + (obs_dim,), name="input_layer")
+        l_joint_angles = CropLayer(l_input, start_index=None, end_index=7)
         # create network
         if mean_network is None:
-            l_obs_robot = CropLayer(l_input, start_index=None, end_index=20)
-            l_image = CropLayer(l_input, start_index=20, end_index=None)
-            l_image = L.ReshapeLayer(l_image, (-1, 3, 99, 99))
-            conv_network = AlexNet(l_image)
-            # conv_network = DilatedVGG(l_image)
-            # import pdb; pdb.set_trace()
-            # conv_network = ConvNetwork(input_shape = (3, 227, 227), output_dim=10, hidden_sizes = (64, 64),
-            #                             conv_filters = (32,), conv_filter_sizes = ((3, 3),), conv_strides = (1,),
-            #                            conv_pads = (0,))
-            # l_input = L.ConcatLayer([l_obs_robot, conv_network.input_layer])
-
-            l_conv_out = conv_network.output_layer
-            l_input_mean = L.ConcatLayer([l_obs_robot, l_conv_out])
-            mean_network = MLP(
-                input_layer=l_input_mean,
+            mean_network = MLPtanh(
+                input_layer=l_input,
                 output_dim=action_dim,
                 hidden_sizes=hidden_sizes,
                 hidden_nonlinearity=hidden_nonlinearity,
                 output_nonlinearity=output_nonlinearity,
+                # output_gain=output_gain,
+                # num_relu=num_relu
             )
 
+        self._mean_network = mean_network
         layers_mean = mean_network.layers
         l_mean = mean_network.output_layer
-        obs_var = l_input.input_var
-
+        obs_var = mean_network.input_layer.input_var
 
         if std_network is not None:
             l_log_std = std_network.output_layer
@@ -102,7 +99,7 @@ class DepthGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             if adaptive_std:
                 std_network = MLP(
                     input_shape=(obs_dim,),
-                    input_layer=l_input,
+                    input_layer=mean_network.input_layer,
                     output_dim=action_dim,
                     hidden_sizes=std_hidden_sizes,
                     hidden_nonlinearity=std_hidden_nonlinearity,
@@ -112,7 +109,7 @@ class DepthGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 layers_log_std = std_network.layers
             else:
                 l_log_std = ParamLayer(
-                    incoming=l_input,
+                    mean_network.input_layer,
                     num_units=action_dim,
                     param=lasagne.init.Constant(np.log(init_std)),
                     name="output_log_std",
@@ -120,77 +117,75 @@ class DepthGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 )
                 layers_log_std = [l_log_std]
 
+
+
         self.min_std = min_std
 
-        self._layers_old = conv_network.layers  #this returns a list with the old layers
+        self._layers_old = layers_mean + layers_log_std  # this returns a list with the old layers
 
-        if self.pkl_path is not None:
-            data = joblib.load(self.pkl_path)
-            warm_params = data['policy'].get_params_internal()
-            self.set_params_old(warm_params)
-
-        elif self.npz_path is not None:
-            warm_params = dict(np.load(self.npz_path))
-            self.set_params_old(warm_params)
-
-        for i, (name, layer) in enumerate(conv_network.layers.items()):
-            if 'conv' in name:
-                try:
-                    layer.params[layer.W].remove("trainable")
-                    layer.params[layer.b].remove("trainable")
-
-                except AttributeError:
-                    pass
         mean_var, log_std_var = L.get_output([l_mean, l_log_std])
 
         if self.min_std is not None:
             log_std_var = TT.maximum(log_std_var, np.log(min_std))
 
-        self._mean_var, self._log_std_var, self._obs_var = mean_var, log_std_var, obs_var
+        self._mean_var, self._log_std_var = mean_var, log_std_var
+
         self._l_mean = l_mean
         self._l_log_std = l_log_std
 
         self._dist = DiagonalGaussian(action_dim)
 
         LasagnePowered.__init__(self, [l_mean, l_log_std])
-        super(DepthGaussianMLPPolicy, self).__init__(env_spec)
+        super(GaussianMLPPolicy, self).__init__(env_spec)
+
         self._f_dist = ext.compile_function(
             inputs=[obs_var],
             outputs=[mean_var, log_std_var],
         )
-    @overrides
-    def get_params_internal(self, **tags):
-        return L.get_all_params(
-            L.concat(self._output_layers),
-            trainable=True,
-            #**tags
-        )#, key=lambda x: x.name)
+
+        if self.pkl_path is not None:
+            data = joblib.load(self.pkl_path)
+            warm_params = data['policy'].get_params_internal()
+            self.set_params_old(warm_params)
+
+        elif self.json_path and self.npz_path:
+            warm_params = dict(np.load(self.npz_path))
+            self.set_params_old(warm_params)
+
+        if not self.trainable:
+            for i, (name, layer) in enumerate(mean_network.layers.items()):
+                try:
+                        layer.params[layer.W].remove("trainable")
+                        layer.params[layer.b].remove("trainable")
+                except:
+                    layer.params[layer.param].remove("trainable")
 
     def get_params_old(self):
         params = []
-        names = []
-        for name, value in self._layers_old.items():
-            params += value.get_params()
-            names.append(name)
-        return params, names
+        for layer in self._layers_old:
+            params += layer.get_params()
+        return params
 
-    # another way will be to do as in parametrized.py and flatten_tensors (in numpy). But with this I check names
     def set_params_old(self, snn_params):
-        local_params, names = self.get_params_old()
-        if type(snn_params) is dict:
+        if type(snn_params) is dict:  # if the snn_params are a dict with the param name as key and a numpy array as value
             params_value_by_name = snn_params
+        elif type(snn_params) is list:
+            params_value_by_name = {}
+            for param in snn_params:
+                params_value_by_name[param.name] = param.get_value()
         else:
-            raise TypeError
-
+            params_value_by_name = {}
+            print("The snn_params was not understood!")
+        local_params = self.get_params_old()
         for param in local_params:
-            if 'conv' in param.name:
-                param.set_value(params_value_by_name[param.name])
-
+            param.set_value(params_value_by_name[param.name])
 
     def dist_info_sym(self, obs_var, state_info_vars=None):
         mean_var, log_std_var = L.get_output([self._l_mean, self._l_log_std], obs_var)
         if self.min_std is not None:
             log_std_var = TT.maximum(log_std_var, np.log(self.min_std))
+        # state = CropLayer(obs_var, start_index=None, end_index=7)
+        # TT.set_subtensor(joint_angles_var, obs_var[:, 7])
         return dict(mean=mean_var, log_std=log_std_var)
 
     @overrides
@@ -199,6 +194,7 @@ class DepthGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
         mean, log_std = [x[0] for x in self._f_dist([flat_obs])]
         rnd = np.random.normal(size=mean.shape)
         action = rnd * np.exp(log_std) + mean
+        action = 0.03 * np.tanh(action) + flat_obs[:7]
         return action, dict(mean=mean, log_std=log_std)
 
     def get_actions(self, observations):
@@ -206,7 +202,7 @@ class DepthGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
         means, log_stds = self._f_dist(flat_obs)
         rnd = np.random.normal(size=means.shape)
         actions = rnd * np.exp(log_stds) + means
-        return actions, dict(mean=means, log_std=log_stds)
+        return actions, dict(mean=means, log_std=log_stds, state=observations[:7])
 
     def get_reparam_action_sym(self, obs_var, action_var, old_dist_info_vars):
         """
