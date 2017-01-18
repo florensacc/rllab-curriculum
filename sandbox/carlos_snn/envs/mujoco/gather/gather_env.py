@@ -259,12 +259,12 @@ class GatherEnv(ProxyEnv, Serializable):
 
     def step(self, action):
         _, inner_rew, done, info = self.wrapped_env.step(action)
-        if done:
-            return Step(self.get_current_obs(), -10, done, **info)
-        com = self.wrapped_env.get_body_com("torso")
-        x, y = com[:2]
         info['inner_rewards'] = inner_rew
         info['gather_rewards'] = 0
+        if done:
+            return Step(self.get_current_obs(), -10, done, **info)  # give a -10 rew if the robot dies
+        com = self.wrapped_env.get_body_com("torso")
+        x, y = com[:2]
         reward = self.coef_inner_rew * inner_rew
         new_objs = []
         for obj in self.objects:

@@ -264,10 +264,10 @@ def get_plot_instruction(
         smooth_curve=False,
         custom_filter=None,
         legend_post_processor=None,
-        legend_sort_processor=None,
         normalize_error=False,
         custom_series_splitter=None,
         xlim=None, ylim=None,
+        show_exp_count=False,
 ):
     print(plot_key, split_key, group_key, filters)
     if filter_nan:
@@ -277,8 +277,6 @@ def get_plot_instruction(
         selector = core.Selector(exps_data)
     if legend_post_processor is None:
         legend_post_processor = lambda x: x
-    if legend_sort_processor is None:
-        legend_sort_processor = lambda x: x
     if filters is None:
         filters = dict()
     for k, v in filters.items():
@@ -318,18 +316,13 @@ def get_plot_instruction(
                 vs = sorted([x.params["exp_name"] for x in split_selector.extract()])
                 group_selectors = [split_selector.where(group_key, v) for v in vs]
                 group_legends = [summary_name(x.extract()[0], split_selector) for x in group_selectors]
-        # group_selectors = [split_selector]
-        # group_legends = [split_legend]
-
-        # reorder the legends
-        # group_legends_for_sort = [str(legend_sort_processor(x)) for x in group_legends]
-        # orders = np.argsort(group_legends_for_sort)
-        # group_selectors = [group_selectors[i] for i in orders]
-        # group_legends = [group_legends[i] for i in orders]
 
         to_plot = []
         for group_selector, group_legend in zip(group_selectors, group_legends):
             filtered_data = group_selector.extract()
+            if show_exp_count:
+                group_legend += " (%d)"%(len(filtered_data))
+
             if len(filtered_data) > 0:
 
                 if only_show_best or only_show_best_final or only_show_best_sofar:
@@ -617,6 +610,7 @@ def plot_div():
     only_show_best = args.get("only_show_best", "") == 'True'
     only_show_best_final = args.get("only_show_best_final", "") == 'True'
     only_show_best_sofar = args.get("only_show_best_sofar", "") == 'True'
+    show_exp_count = args.get("show_exp_count", "") == 'True'
     normalize_error = args.get("normalize_error", "") == 'True'
     filter_nan = args.get("filter_nan", "") == 'True'
     smooth_curve = args.get("smooth_curve", "") == 'True'
@@ -634,11 +628,6 @@ def plot_div():
         legend_post_processor = eval(legend_post_processor)
     else:
         legend_post_processor = None
-    legend_sort_processor = args.get("legend_sort_processor", None)
-    if legend_sort_processor is not None and len(legend_sort_processor.strip()) > 0:
-        legend_sort_processor = eval(legend_sort_processor)
-    else:
-        legend_sort_processor = None
     if custom_series_splitter is not None and len(custom_series_splitter.strip()) > 0:
         custom_series_splitter = eval(custom_series_splitter)
     else:
@@ -667,10 +656,10 @@ def plot_div():
         smooth_curve=smooth_curve,
         custom_filter=custom_filter,
         legend_post_processor=legend_post_processor,
-        legend_sort_processor=legend_sort_processor,
         normalize_error=normalize_error,
         custom_series_splitter=custom_series_splitter,
         xlim=[xlb, xub], ylim=[ylb, yub],
+        show_exp_count=show_exp_count,
     )
     # print plot_div
     return plot_div

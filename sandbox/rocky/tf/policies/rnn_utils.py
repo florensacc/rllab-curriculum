@@ -1,4 +1,4 @@
-from sandbox.rocky.tf.core.network import GRUNetwork, LSTMNetwork
+from sandbox.rocky.tf.core.network import GRUNetwork, LSTMNetwork, TfRNNNetwork
 import sandbox.rocky.tf.core.layers as L
 from enum import Enum
 
@@ -11,6 +11,7 @@ class NetworkType(Enum):
     TF_BASIC_LSTM = "tf_basic_lstm"
     LSTM = "lstm"
     LSTM_PEEPHOLE = "lstm_peephole"
+    TF_RNN = "tf_rnn"
 
 
 def create_recurrent_network(network_type, W_x_init=L.XavierUniformInitializer(), W_h_init=L.OrthogonalInitializer(),
@@ -88,6 +89,10 @@ def create_recurrent_network(network_type, W_x_init=L.XavierUniformInitializer()
                 layer_normalization=layer_normalization,
                 weight_normalization=weight_normalization,
             ),
+            **kwargs
+        )
+    elif network_type == NetworkType.TF_RNN:
+        return TfRNNNetwork(
             **kwargs
         )
     else:

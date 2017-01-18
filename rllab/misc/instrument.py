@@ -360,6 +360,7 @@ def run_experiment_lite(
         periodic_sync_interval=15,
         sync_all_data_node_to_s3=True,
         use_cloudpickle=False,
+        pre_commands=None,
         **kwargs):
     """
     Serialize the stubbed method call and run the experiment using the specified mode.
@@ -393,6 +394,7 @@ def run_experiment_lite(
         batch_tasks = [
             dict(
                 kwargs,
+                pre_commands=pre_commands,
                 stub_method_call=stub_method_call,
                 exp_name=exp_name,
                 log_dir=log_dir,
@@ -485,7 +487,7 @@ def run_experiment_lite(
             del task["remote_log_dir"]
             env = task.pop("env", None)
             command = to_docker_command(
-                task,
+                task,  # these are the params. Pre and Post command can be here
                 docker_image=docker_image,
                 script=script,
                 env=env,
@@ -626,9 +628,13 @@ def to_local_command(params, python_command="python", script=osp.join(config.PRO
                      use_gpu=False):
     command = python_command + " " + script
     if use_gpu and not config.USE_TF:
-        command = "THEANO_FLAGS='device=gpu,dnn.enabled=auto' " + command
+        command = "THEANO_FLAGS='device=gpu,dnn.enabled=auto,floatX=float32' " + command
     for k, v in config.ENV.items():
         command = ("%s=%s " % (k, v)) + command
+    pre_commands = params.pop("pre_commands", None)
+    post_commands = params.pop("post_commands", None)
+    if pre_commands is not None or post_commands is not None:
+        print("Not executing the pre_commands: ", pre_commands, ", nor post_commands: ", post_commands)
 
     for k, v in params.items():
         if isinstance(v, dict):
@@ -645,6 +651,7 @@ def to_local_command(params, python_command="python", script=osp.join(config.PRO
 
 def to_docker_command(params, docker_image, python_command="python", script='scripts/run_experiment_lite.py',
                       pre_commands=None, use_tty=False,
+                      mujoco_path=None,
                       post_commands=None, dry=False, use_gpu=False, env=None, local_code_dir=None):
     """
     :param params: The parameters for the experiment. If logging directory parameters are provided, we will create
@@ -659,6 +666,8 @@ def to_docker_command(params, docker_image, python_command="python", script='scr
         pre_commands = params.pop("pre_commands", None)
     if post_commands is None:
         post_commands = params.pop("post_commands", None)
+    if mujoco_path is None:
+        mujoco_path = config.MUJOCO_KEY_PATH
     # script = 'rllab/' + script
     # if not dry:
 
@@ -680,7 +689,7 @@ def to_docker_command(params, docker_image, python_command="python", script='scr
         for k, v in env.items():
             command_prefix += " -e \"{k}={v}\"".format(k=k, v=v)
     command_prefix += " -v {local_mujoco_key_dir}:{docker_mujoco_key_dir}".format(
-        local_mujoco_key_dir=config.MUJOCO_KEY_PATH, docker_mujoco_key_dir='/root/.mujoco')
+        local_mujoco_key_dir=mujoco_path, docker_mujoco_key_dir='/root/.mujoco')
     command_prefix += " -v {local_log_dir}:{docker_log_dir}".format(
         local_log_dir=log_dir,
         docker_log_dir=docker_log_dir
@@ -767,11 +776,17 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
     sio.write("""
         docker --config /home/ubuntu/.docker pull {docker_image}
     """.format(docker_image=docker_image))
+    sio.write("""
+        export AWS_DEFAULT_REGION={aws_region}
+    """.format(aws_region=config.AWS_REGION_NAME))
     if config.FAST_CODE_SYNC:
+        # sio.write("""
+        #     aws s3 cp {code_full_path} /tmp/rllab_code.tar.gz --region {aws_region}
+        # """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR,
+        #            aws_region=config.AWS_REGION_NAME))
         sio.write("""
-            aws s3 cp {code_full_path} /tmp/rllab_code.tar.gz --region {aws_region}
-        """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR,
-                   aws_region=config.AWS_REGION_NAME))
+            aws s3 cp {code_full_path} /tmp/rllab_code.tar.gz
+        """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR))
         sio.write("""
             mkdir -p {local_code_path}
         """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR,
@@ -781,14 +796,20 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
         """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR,
                    aws_region=config.AWS_REGION_NAME))
     else:
+        # sio.write("""
+        #     aws s3 cp --recursive {code_full_path} {local_code_path} --region {aws_region}
+        # """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR,
+        #            aws_region=config.AWS_REGION_NAME))
         sio.write("""
-            aws s3 cp --recursive {code_full_path} {local_code_path} --region {aws_region}
-        """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR,
-                   aws_region=config.AWS_REGION_NAME))
+            aws s3 cp --recursive {code_full_path} {local_code_path}
+        """.format(code_full_path=code_full_path, local_code_path=config.DOCKER_CODE_DIR))
     s3_mujoco_key_path = config.AWS_CODE_SYNC_S3_PATH + '/.mujoco/'
+    # sio.write("""
+    #     aws s3 cp --recursive {} {} --region {}
+    # """.format(s3_mujoco_key_path, config.MUJOCO_KEY_PATH, config.AWS_REGION_NAME))
     sio.write("""
-        aws s3 cp --recursive {} {} --region {}
-    """.format(s3_mujoco_key_path, config.MUJOCO_KEY_PATH, config.AWS_REGION_NAME))
+        aws s3 cp --recursive {} {}
+    """.format(s3_mujoco_key_path, config.MUJOCO_KEY_PATH))
     sio.write("""
         cd {local_code_path}
     """.format(local_code_path=config.DOCKER_CODE_DIR))
@@ -808,40 +829,67 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
             include_png = " --include '*.png' " if sync_s3_png else " "
             include_pkl = " --include '*.pkl' " if sync_s3_pkl else " "
             include_log = " --include '*.log' " if sync_s3_log else " "
+            # sio.write("""
+            #     while /bin/true; do
+            #         aws s3 sync --exclude '*' {include_png} {include_pkl} {include_log}--include '*.csv' --include '*.json' {log_dir} {remote_log_dir} --region {aws_region}
+            #         sleep {periodic_sync_interval}
+            #     done & echo sync initiated""".format(include_png=include_png, include_pkl=include_pkl, include_log=include_log,
+            #                                          log_dir=log_dir, remote_log_dir=remote_log_dir,
+            #                                          aws_region=config.AWS_REGION_NAME,
+            #                                          periodic_sync_interval=periodic_sync_interval))
             sio.write("""
                 while /bin/true; do
-                    aws s3 sync --exclude '*' {include_png} {include_pkl} {include_log}--include '*.csv' --include '*.json' {log_dir} {remote_log_dir} --region {aws_region}
+                    aws s3 sync --exclude '*' {include_png} {include_pkl} {include_log}--include '*.csv' --include '*.json' {log_dir} {remote_log_dir}
                     sleep {periodic_sync_interval}
                 done & echo sync initiated""".format(include_png=include_png, include_pkl=include_pkl, include_log=include_log,
                                                      log_dir=log_dir, remote_log_dir=remote_log_dir,
-                                                     aws_region=config.AWS_REGION_NAME,
                                                      periodic_sync_interval=periodic_sync_interval))
             if sync_log_on_termination:
+                # sio.write("""
+                #     while /bin/true; do
+                #         if [ -z $(curl -Is http://169.254.169.254/latest/meta-data/spot/termination-time | head -1 | grep 404 | cut -d \  -f 2) ]
+                #           then
+                #             logger "Running shutdown hook."
+                #             aws s3 cp /home/ubuntu/user_data.log {remote_log_dir}/stdout.log --region {aws_region}
+                #             aws s3 cp --recursive {log_dir} {remote_log_dir} --region {aws_region}
+                #             break
+                #           else
+                #             # Spot instance not yet marked for termination.
+                #             sleep 5
+                #         fi
+                #     done & echo log sync initiated
+                # """.format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
                 sio.write("""
                     while /bin/true; do
                         if [ -z $(curl -Is http://169.254.169.254/latest/meta-data/spot/termination-time | head -1 | grep 404 | cut -d \  -f 2) ]
                           then
                             logger "Running shutdown hook."
-                            aws s3 cp /home/ubuntu/user_data.log {remote_log_dir}/stdout.log --region {aws_region}
-                            aws s3 cp --recursive {log_dir} {remote_log_dir} --region {aws_region}
+                            aws s3 cp /home/ubuntu/user_data.log {remote_log_dir}/stdout.log
+                            aws s3 cp --recursive {log_dir} {remote_log_dir}
                             break
                           else
                             # Spot instance not yet marked for termination.
                             sleep 5
                         fi
                     done & echo log sync initiated
-                """.format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
+                """.format(log_dir=log_dir, remote_log_dir=remote_log_dir))
         sio.write("""
             {command}
         """.format(command=to_docker_command(params, docker_image, python_command=python_command, script=script,
                                              use_gpu=use_gpu, env=env,
                                              local_code_dir=config.DOCKER_CODE_DIR)))
+        # sio.write("""
+        #     aws s3 cp --recursive {log_dir} {remote_log_dir} --region {aws_region}
+        # """.format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
         sio.write("""
-            aws s3 cp --recursive {log_dir} {remote_log_dir} --region {aws_region}
-        """.format(log_dir=log_dir, remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
+            aws s3 cp --recursive {log_dir} {remote_log_dir}
+        """.format(log_dir=log_dir, remote_log_dir=remote_log_dir))
+        # sio.write("""
+        #     aws s3 cp /home/ubuntu/user_data.log {remote_log_dir}/stdout.log --region {aws_region}
+        # """.format(remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
         sio.write("""
-            aws s3 cp /home/ubuntu/user_data.log {remote_log_dir}/stdout.log --region {aws_region}
-        """.format(remote_log_dir=remote_log_dir, aws_region=config.AWS_REGION_NAME))
+            aws s3 cp /home/ubuntu/user_data.log {remote_log_dir}/stdout.log
+        """.format(remote_log_dir=remote_log_dir))
 
     if terminate_machine:
         sio.write("""

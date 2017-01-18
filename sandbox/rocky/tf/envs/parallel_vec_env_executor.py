@@ -1,8 +1,6 @@
-
-
 import numpy as np
 import pickle as pickle
-from sandbox.rocky.tf.misc import tensor_utils
+from rllab.misc import tensor_utils
 from rllab.misc import logger
 
 from rllab.sampler.stateful_pool import singleton_pool
@@ -76,14 +74,14 @@ def worker_collect_env_time(G):
 
 
 class ParallelVecEnvExecutor(object):
-    def __init__(self, env, n, max_path_length, scope=None):
+    def __init__(self, env, n_envs, scope=None):
         if scope is None:
             # initialize random scope
             scope = str(uuid.uuid4())
 
-        envs_per_worker = int(np.ceil(n * 1.0 / singleton_pool.n_parallel))
+        envs_per_worker = int(np.ceil(n_envs * 1.0 / singleton_pool.n_parallel))
         alloc_env_ids = []
-        rest_alloc = n
+        rest_alloc = n_envs
         start_id = 0
         for _ in range(singleton_pool.n_parallel):
             n_allocs = min(envs_per_worker, rest_alloc)
@@ -96,12 +94,11 @@ class ParallelVecEnvExecutor(object):
         self._alloc_env_ids = alloc_env_ids
         self._action_space = env.action_space
         self._observation_space = env.observation_space
-        self._num_envs = n
+        self._n_envs = n_envs
         self.scope = scope
-        self.ts = np.zeros(n, dtype='int')
-        self.max_path_length = max_path_length
+        self.ts = np.zeros(n_envs, dtype='int')
 
-    def step(self, action_n):
+    def step(self, action_n, max_path_length):
         results = singleton_pool.run_each(
             worker_run_step,
             [(action_n, self.scope) for _ in self._alloc_env_ids],
@@ -114,7 +111,7 @@ class ParallelVecEnvExecutor(object):
         dones = np.concatenate(dones)
         env_infos = tensor_utils.split_tensor_dict_list(tensor_utils.concat_tensor_dict_list(env_infos))
         if env_infos is None:
-            env_infos = [dict() for _ in range(self.num_envs)]
+            env_infos = [dict() for _ in range(self.n_envs)]
 
         items = list(zip(ids, obs, rewards, dones, env_infos))
         items = sorted(items, key=lambda x: x[0])
@@ -126,13 +123,8 @@ class ParallelVecEnvExecutor(object):
         dones = np.asarray(dones)
 
         self.ts += 1
-        dones[self.ts >= self.max_path_length] = True
+        dones[self.ts >= max_path_length] = True
 
-        reset_obs = self._run_reset(dones)
-        for (i, done) in enumerate(dones):
-            if done:
-                obs[i] = reset_obs[i]
-                self.ts[i] = 0
         return obs, rewards, dones, tensor_utils.stack_tensor_dict_list(list(env_infos))
 
     def _run_reset(self, dones):
@@ -148,21 +140,20 @@ class ParallelVecEnvExecutor(object):
         done_ids, = np.where(dones)
         done_flat_obs = sorted_obs[done_ids]
         done_unflat_obs = self.observation_space.unflatten_n(done_flat_obs)
-        all_obs = [None] * self.num_envs
         done_cursor = 0
         for idx, done in enumerate(dones):
             if done:
-                all_obs[idx] = done_unflat_obs[done_cursor]
                 done_cursor += 1
-        return all_obs
+                self.ts[idx] = 0
+        return done_unflat_obs
 
-    def reset(self):
-        dones = np.asarray([True] * self.num_envs)
+    def reset(self, dones):
+        dones = np.cast['bool'](dones)
         return self._run_reset(dones)
 
     @property
-    def num_envs(self):
-        return self._num_envs
+    def n_envs(self):
+        return self._n_envs
 
     @property
     def action_space(self):

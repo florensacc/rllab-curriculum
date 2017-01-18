@@ -36,15 +36,17 @@ for csv_file in csv_files:
 
     # compute total samples
     assert "NumSamples" in data.keys()
-    data["TotalSamples"] = np.cumsum(data["NumSamples"])
+    num_samples = data["NumSamples"]
+    num_samples[num_samples=='nan'] = 0
+    data["TotalSamples"] = np.cumsum(num_samples)
     if "TotalSamples" not in fieldnames:
         fieldnames.append("TotalSamples")
-                
+
     with open(csv_file,"w") as f:
         writer = csv.DictWriter(f, fieldnames)
         writer.writeheader()
         T = len(data["NumSamples"])
         for t in range(T):
             row = {key: data[key][t] for key in fieldnames}
-            writer.writerow(row)    
+            writer.writerow(row)
     print("Modified %s"%(csv_file))

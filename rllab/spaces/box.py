@@ -29,6 +29,9 @@ class Box(Space):
     def sample(self):
         return np.random.uniform(low=self.low, high=self.high, size=self.low.shape)
 
+    def sample_n(self, n):
+        return np.random.uniform(low=self.low, high=self.high, size=(n,) + self.low.shape)
+
     def contains(self, x):
         return x.shape == self.shape and (x >= self.low).all() and (x <= self.high).all()
 

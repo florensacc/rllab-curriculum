@@ -200,7 +200,7 @@ def set_seed(seed):
     global seed_
     seed_ = seed
     import lasagne
-    # import random
+    import random
     random.seed(seed)
     np.random.seed(seed)
     lasagne.random.set_rng(np.random.RandomState(seed))
@@ -217,16 +217,19 @@ def set_seed(seed):
     ))
 
 
+
 @contextlib.contextmanager
 def using_seed(seed):
-    # import random
-    rand_state = random.getstate()
-    np_rand_state = np.random.get_state()
-    random.seed(seed)
-    np.random.seed(seed)
-    yield
-    random.setstate(rand_state)
-    np.random.set_state(np_rand_state)
+    if seed is None:
+        yield
+    else:
+        rand_state = random.getstate()
+        np_rand_state = np.random.get_state()
+        random.seed(seed)
+        np.random.seed(seed)
+        yield
+        random.setstate(rand_state)
+        np.random.set_state(np_rand_state)
 
 
 def get_seed():
