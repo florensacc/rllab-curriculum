@@ -19,7 +19,50 @@ from rllab import spaces
 import tensorflow as tf
 import numpy as np
 
-scale = 1./3.
+# params ------------------------------------------
+scale = 1.
+alpha = 1.
+K = 40 # number of particles
+adaptive_kernel = True
+
+use_tanh = True
+svgd_target = "action"
+q_estimate_mode = "fixed_kernel"
+
+# problem ------------------------------------------
+mode = 2
+
+if mode == 0:
+    # high prob on boundary
+    weights = np.array([1./3., 2./3.],np.float32)
+    mus = np.array([-1.2, 1.2],np.float32) * scale
+    sigmas = np.array([0.3, 0.3],np.float32) * scale
+
+    xmin = -1. * scale
+    xmax = 1. * scale
+    ymin = 0. * scale
+    ymax = 2.5 * 1./scale
+
+elif mode == 1:
+    # standard two modes
+    weights = np.array([1./3., 2./3.],np.float32)
+    mus = np.array([-0.5, 0.5],np.float32) * scale
+    sigmas = np.array([0.3, 0.3],np.float32) * scale
+    xmin = -1. * scale
+    xmax = 1. * scale
+    ymin = 0. * scale
+    ymax = 1. * 1./scale
+
+elif mode == 2:
+    weights = np.array([1./3., 2./3.],np.float32)
+    mus = np.array([-1., 1.],np.float32) * scale
+    sigmas = np.array([0.3, 0.3],np.float32) * scale
+    xmin = -1. * scale
+    xmax = 1. * scale
+    ymin = 0. * scale
+    ymax = 2. * 1./scale
+else:
+    raise NotImplementedError
 
 class OneStepEnv(Env):
     def __init__(self, observation_dim,
@@ -81,7 +124,7 @@ class MixtureGaussianCritic(NNCritic):
 
     def create_network(self, action_input, observation_input):
         # unnormalized density
-        output = tf.log(tf.add_n([
+        output = 1./alpha * tf.log(tf.add_n([
             w * (1./tf.sqrt(2. * np.pi * tf.square(sigma)) *
                 tf.exp(-0.5/tf.square(sigma) * tf.square(action_input-mu)))
             for w, mu, sigma in zip(self.weights, self.mus, self.sigmas)
@@ -141,7 +184,7 @@ class FeedForwardMultiPolicyTest(FeedForwardMultiPolicy):
             hidden_W_init = tf.constant_initializer(0.)
             hidden_b_init = tf.constant_initializer(0.)
             output_W_init = tf.constant_initializer(0.)
-            output_b_init = tf.random_uniform_initializer(-3, -2)
+            output_b_init = tf.random_uniform_initializer(xmin, xmax)
             # TH: Set the init values exactly for debugging purpose.
             #output_b_init = [-1, 0, 1]
             #output_b_init = (-10 + np.random.randn(20)).tolist()
@@ -196,33 +239,86 @@ class MDDPGTest(MDDPG):
         }
         # xs is the list of particles (scalars)
         xs = self.sess.run(self.policy.output, feed_dict).ravel()
+        lb, ub = self.env.action_space.bounds
+        np.clip(xs, lb[0], ub[0])
         plt.clf()
-        xx = np.linspace(-5, 5, num=100)
-        yy = np.zeros_like(xx)
-        # fixed density kernel size
-        # q_sigma = 0.1
-        # adaptive density kernel size
-        q_sigma = 1./np.sqrt(self.kernel.diags[0])
-        for p in xs:
-            yy += (np.exp(-0.5/(q_sigma**2) * (xx-p)**2) *
-                1./np.sqrt(2. * np.pi * q_sigma ** 2))
-        yy /= len(xs)
-        plt.plot(xx,yy,'r-.')
+        q_xx = np.linspace(xmin, xmax, num=20)
+        qq = np.zeros_like(q_xx)
+        q_delta = q_xx[1] - q_xx[0]
 
-        ws = self.qf.weights
-        mus = self.qf.mus
-        sigmas = self.qf.sigmas
-        yy_target = np.zeros_like(xx)
+        if q_estimate_mode == "adaptive_kernel":
+            # adaptive density kernel size
+            q_sigma = 1./np.sqrt(self.kernel.diags[0])
+            for p in xs:
+                qq += np.exp(-0.5/(q_sigma**2) * (q_xx-p)**2)
+        elif q_estimate_mode == "fixed_kernel":
+            # fixed density kernel size
+            q_sigma = 0.1
+            for p in xs:
+                qq += np.exp(-0.5/(q_sigma**2) * (q_xx-p)**2)
+        elif q_estimate_mode == "empirical":
+            # sample estimate of q
+            for i in range(len(qq) - 1):
+                qq[i] =  len(np.where((xs >= q_xx[i]) * (xs < q_xx[i+1]))[0]) / len(xs)
+        else:
+            raise NotImplementedError
+        q_integral = np.sum(qq) * q_delta
+        qq = qq / q_integral
+        plt.plot(q_xx,qq,'r-.')
+
+        # plot the target distribution p
+        p_xx = np.linspace(xmin, xmax, num=100)
+        p_delta = p_xx[1] - p_xx[0]
+        pp = np.zeros_like(p_xx)
         for w, mu, sigma in zip(self.qf.weights, self.qf.mus, self.qf.sigmas):
-            yy_target += (w * 1./np.sqrt(2. * np.pi * sigma**2) *
-                np.exp(-0.5/ (sigma**2) * (xx - mu) ** 2))
-        plt.plot(xx, yy_target, 'b-')
+            pp += (w * 1./np.sqrt(2. * np.pi * sigma**2) *
+                np.exp(-0.5/ (sigma**2) * (p_xx - mu) ** 2))
+        pp = np.power(pp, 1./alpha)
+        p_integral = np.sum(pp) * p_delta
+        pp = pp / p_integral
+        plt.plot(p_xx, pp, 'b-')
 
+        plt.plot(xs, ymin * np.ones_like(xs), 'r*')
+
+        plt.legend(['q','p','x'],
+            bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
         plt.draw()
-        plt.legend(['q','p'])
-        plt.xlim([-3 * scale, 3 * scale])
-        plt.ylim([0,0.3 * 1./ scale])
+        plt.xlim([xmin, xmax])
+        plt.ylim([ymin, ymax])
         plt.pause(0.001)
+        # else:
+        #     raise NotImplementedError
+        #     # xs is the list of particles (scalars)
+        #     xs = self.sess.run(self.policy.pre_output, feed_dict).ravel()
+        #     plt.clf()
+        #     xx = np.linspace(-5, 5, num=100)
+        #     yy = np.zeros_like(xx)
+        #     # fixed density kernel size
+        #     # q_sigma = 0.1
+        #     # adaptive density kernel size
+        #     q_sigma = 1./np.sqrt(self.kernel.diags[0])
+        #     for p in xs:
+        #         yy += (np.exp(-0.5/(q_sigma**2) * (xx-p)**2) *
+        #             1./np.sqrt(2. * np.pi * q_sigma ** 2))
+        #     yy /= len(xs)
+        #     plt.plot(xx,yy,'r-.')
+        #
+        #     ws = self.qf.weights
+        #     mus = self.qf.mus
+        #     sigmas = self.qf.sigmas
+        #     yy_target = np.zeros_like(xx)
+        #     for w, mu, sigma in zip(self.qf.weights, self.qf.mus, self.qf.sigmas):
+        #         yy_target += (w * 1./np.sqrt(2. * np.pi * sigma**2) *
+        #             np.exp(-0.5/ (sigma**2) * (np.tanh(xx) - mu) ** 2))
+        #     yy_target = np.power(yy_target, self.alpha) * (1. - np.tanh(xx) ** 2)
+        #     yy_target = yy_target / np.sum(yy_target)
+        #     plt.plot(xx, yy_target, 'b-')
+        #
+        #     plt.draw()
+        #     plt.legend(['q','p'])
+        #     plt.xlim([-3 * scale, 3 * scale])
+        #     plt.ylim([0,0.3 * 1./ scale])
+        #     plt.pause(0.001)
 
 
 # -------------------------------------------------------------------
@@ -234,24 +330,6 @@ def test():
     from sandbox.rocky.tf.envs.base import TfEnv
     from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 
-    K = 20 # number of particles
-
-    adaptive_kernel = True
-
-    # three modes
-    # weights = np.array([1./4., 1./2., 1./4.],np.float32)
-    # mus = np.array([-2., 0., 2.],np.float32)
-    # sigmas = np.array([0.3, 0.3, 0.3],np.float32)
-
-    # two modes
-    weights = np.array([1./3., 2./3.],np.float32)
-    mus = np.array([-2., 2.],np.float32) * scale
-    sigmas = np.array([1., 1.],np.float32) * scale
-
-    # one mode
-    # weights = np.array([1.],np.float32)
-    # mus = np.array([0.],np.float32)
-    # sigmas = np.array([1.],np.float32)
 
     ddpg_kwargs = dict(
         epoch_length = 1, # evaluate / plot per SVGD step
@@ -263,15 +341,15 @@ def test():
         policy_learning_rate=0.1, # note: this is higher than DDPG's 1e-4
         batch_size=1, # only need recent samples, though it's slow
         alpha=1, # 1 is the SVGD default
-        svgd_target="pre-action",
+        svgd_target=svgd_target,
     )
     q_target_type = "none" # do not update the critic
 
     # ----------------------------------------------------------------------
     env = TfEnv(OneStepEnv(
         observation_dim=1,
-        action_lb=np.array([-10]), # bounds on the particles
-        action_ub=np.array([10]),
+        action_lb=np.array([xmin]), # bounds on the particles
+        action_ub=np.array([xmax]),
         # TH: changed observation 1 --> 0 to suppress additional gradient coming
         # from W*obs term.
         #fixed_observation=np.array([1]),
@@ -299,7 +377,9 @@ def test():
         K=K,
         shared_hidden_sizes=tuple(),
         independent_hidden_sizes=(10,),
-        output_nonlinearity=tf.nn.tanh,
+        output_nonlinearity=(
+            tf.nn.tanh if use_tanh else tf.identity
+        ),
         scalar_network=True,
     )
     if adaptive_kernel:

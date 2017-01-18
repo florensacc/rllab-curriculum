@@ -108,7 +108,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
         K = self.K
 
         # Initialize variables for get_copy to work
-        self.sess.run(tf.initialize_all_variables())
+        self.sess.run(tf.global_variables_initializer())
 
         self.target_policy = self.policy.get_copy(
             scope_name=TARGET_PREFIX + self.policy.scope_name,
@@ -139,7 +139,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         self._init_ops()
 
-        self.sess.run(tf.initialize_all_variables())
+        self.sess.run(tf.global_variables_initializer())
 
 
     def _init_ops(self):
