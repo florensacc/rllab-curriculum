@@ -135,10 +135,11 @@ for i in range(3):
 
 dist = cur
 
+device = "/gpu:0"
 # get a large batch to do weight norm init
 logger.log("Data init start")
-init_batch = (dataset.train.next_batch(128)[0]).reshape([-1, 32, 32, 3])
-with tf.device("/gpu:0"):
+init_batch = (dataset.train.next_batch(512)[0]).reshape([-1, 32, 32, 3])
+with tf.device("/cpu:0"):
     init_placeholder = tf.placeholder(tf.float32, shape=init_batch.shape)
     dist.init_mode()
     init_logli = dist.logli_prior(init_placeholder)
@@ -148,9 +149,10 @@ with tf.device("/gpu:0"):
 logger.log("Train graph start")
 batch_size = 64
 
-optimizer = AdamaxOptimizer()
+optimizer = AdamaxOptimizer(learning_rate=1e-3)
 
-with tf.device("/gpu:0"):
+with tf.device(device):
+    dist.train_mode()
     train_placeholder = tf.placeholder(tf.float32, shape=(batch_size,)+dataset.image_shape)
     train_logli = dist.logli_prior(train_placeholder)
     loss = -tf.reduce_mean(train_logli)
@@ -164,12 +166,21 @@ with sess.as_default():
     sess.run(init, {init_placeholder: init_batch})
     logger.log("Data init finished")
     logprobs = []
-    for iter in range(100000):
-        if (iter+1) % 10 == 0:
+    for iter in range(1000000):
+        if (iter+1) % 200 == 0:
             logger.log("%s bits/dim" % (
-                (np.mean(logprobs)/32/32/3 - np.log(256.))*np.log(2)
+                (np.mean(logprobs)/32/32/3 - np.log(256.))/np.log(2)
             ))
             logprobs = []
+        if (iter+1) % 1000 == 0:
+            test_logprobs = []
+            for _ in range(100):
+                batch = dataset.validation.next_batch(batch_size)[0].reshape([-1, 32, 32, 3])
+                logprob = sess.run(train_logli, feed_dict={train_placeholder: batch})
+                test_logprobs.append(logprob)
+            logger.log("TEST %s bits/dim" % (
+                (np.mean(test_logprobs)/32/32/3 - np.log(256.))/np.log(2)
+            ))
 
         batch = dataset.train.next_batch(batch_size)[0].reshape([-1, 32, 32, 3])
         logprob, _ = sess.run([train_logli, trainer], feed_dict={train_placeholder: batch})
