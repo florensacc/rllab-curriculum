@@ -4,6 +4,8 @@
 # eval seems to take up some cycles -> trim it down a lot
 # code seems killed -> much more generous freebits
 
+# kl never exceeds 0.02
+
 from rllab.misc.instrument import run_experiment_lite, stub
 from sandbox.pchen.InfoGAN.infogan.algos.share_vae import ShareVAE
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer
