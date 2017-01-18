@@ -1706,13 +1706,22 @@ def temp_restore(sess, ema):
         # )
 
 class tf_go(object):
-    def __init__(self, x):
+    def __init__(self, x, debug=False):
         self.value = x
+        self.debug = debug
 
     def __getattr__(self, name):
         # who cares?
         def go(*args, **kwargs):
-            tf_val = eval("tf.%s" % name)(*([self.value]+(args if args else [])), **kwargs)
-            return tf_go(tf_val)
+            try:
+                if self.debug:
+                    print("Calling %s on %s" % (name, self.value))
+                method = eval("tf.%s" % name)
+                tf_val = method(*([self.value]+(list(args) if args else [])), **kwargs)
+                return tf_go(tf_val)
+            except:
+                print("Exception while calling %s on %s" % (name, self.value))
+                raise
         return go
+
 

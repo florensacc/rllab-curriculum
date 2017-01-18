@@ -2384,11 +2384,17 @@ class ShearingFlow(Distribution):
         global G_IDX
         G_IDX += 1
         self._name = "Shearing_%s" % (G_IDX)
+        assert base_dist
+        assert nn_builder
+        assert condition_fn
+        assert effect_fn
+        assert combine_fn
         self._base_dist = base_dist
         self._nn_template = tf.make_template(self._name, nn_builder)
         self._condition_set = condition_fn
         self._effect_set = effect_fn
         self._combine = combine_fn
+
 
         self.train_mode()
 
