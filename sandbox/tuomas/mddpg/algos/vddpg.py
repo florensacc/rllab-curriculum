@@ -47,6 +47,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             train_actor=True,
             resume=False,
             n_eval_paths=2,
+            svgd_target="action",
             **kwargs
     ):
         """
@@ -85,6 +86,11 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.prior_coeff_placeholder = tf.placeholder(tf.float32,
                                                       shape=(),
                                                       name='prior_coeff')
+        self.svgd_target = svgd_target
+        if svgd_target == "pre-action":
+            assert policy.output_nonlinearity == tf.nn.tanh
+            assert policy.output_scale == 1.
+
         assert train_actor or train_critic
         #assert isinstance(policy, StochasticNNPolicy)
         #assert isinstance(exploration_strategy, MNNStrategy)
@@ -126,10 +132,18 @@ class VDDPG(OnlineAlgorithm, Serializable):
         # kernel.kappa_grads) outside the class. Could we do this somehow
         # differently?
         # Note: need to reshape policy output from N*K x Da to N x K x Da
-        actions_reshaped = tf.reshape(self.policy.output, (-1, K, Da))
-        self.kernel.kappa = self.kernel.get_kappa(actions_reshaped)
-        self.kernel.kappa_grads = self.kernel.get_kappa_grads(
-            actions_reshaped)
+        if self.svgd_target == "action":
+            actions_reshaped = tf.reshape(self.policy.output, (-1, K, Da))
+            self.kernel.kappa = self.kernel.get_kappa(actions_reshaped)
+            self.kernel.kappa_grads = self.kernel.get_kappa_grads(
+                actions_reshaped)
+        elif self.svgd_target == "pre-action":
+            pre_actions_reshaped = tf.reshape(self.policy.pre_output, (-1, K, Da))
+            self.kernel.kappa = self.kernel.get_kappa(pre_actions_reshaped)
+            self.kernel.kappa_grads = self.kernel.get_kappa_grads(
+                pre_actions_reshaped)
+        else:
+            raise NotImplementedError
 
         self.kernel.sess = self.sess
         self.qf.sess = self.sess
@@ -173,51 +187,93 @@ class VDDPG(OnlineAlgorithm, Serializable):
             action_input=self.policy.output,
             observation_input=self.policy.observations_placeholder,
         )
-        grad_qf = tf.gradients(self.critic_with_policy_input.output,
-                               self.policy.output)  # N*K x 1 x Da
-        grad_qf = tf.reshape(grad_qf, [-1, self.K, 1, Da])  # N x K x 1 x Da
+        if self.svgd_target == "action":
+            if self.q_prior is not None:
+                self.prior_with_policy_input = self.q_prior.get_weight_tied_copy(
+                    action_input=self.policy.output,
+                    observation_input=self.policy.observations_placeholder,
+                )
+                p = self.prior_coeff_placeholder
+                log_p = ((1.0 - p) * self.critic_with_policy_input.output
+                    + p * self.prior_with_policy_input.output)
+            else:
+                log_p = self.critic_with_policy_input.output
+            log_p = tf.squeeze(log_p)
+            grad_log_p = tf.gradients(log_p, self.policy.output)
+            grad_log_p = tf.reshape(grad_log_p, [-1, self.K, 1, Da])  # N x K x 1 x Da
 
-        if self.q_prior is not None:
-            self.prior_with_policy_input = self.q_prior.get_weight_tied_copy(
-                action_input=self.policy.output,
-                observation_input=self.policy.observations_placeholder,
+            kappa = tf.expand_dims(
+                self.kernel.kappa,
+                dim=3,
+            )  # N x K x K x 1
+
+            # grad w.r.t. left kernel input
+            kappa_grads = self.kernel.kappa_grads  # N x K x K x Da
+
+            # Stein Variational Gradient!
+            action_grads = tf.reduce_mean(
+                kappa * grad_log_p
+                + self.alpha_placeholder * kappa_grads,
+                reduction_indices=1,
+            ) # N x K x Da
+
+            # The first two dims needs to be flattened to correctly propagate the
+            # gradients to the policy network.
+            action_grads = tf.reshape(action_grads, (-1, Da))
+
+            # Propagate the grads through the policy net.
+            grads = tf.gradients(
+                self.policy.output,
+                self.policy.get_params_internal(),
+                grad_ys=action_grads,
             )
-            grad_prior = tf.gradients(self.prior_with_policy_input.output,
-                                      self.policy.output)  # N*K x 1 x Da
-            grad_prior = tf.reshape(grad_prior, [-1, self.K, 1, Da])  # N x K x 1 x Da
+        elif self.svgd_target == "pre-action":
+            if self.q_prior is not None:
+                self.prior_with_policy_input = self.q_prior.get_weight_tied_copy(
+                    action_input=self.policy.output,
+                    observation_input=self.policy.observations_placeholder,
+                )
+                p = self.prior_coeff_placeholder
+                log_p = ((1.0 - p) * self.critic_with_policy_input.output
+                    + p * self.prior_with_policy_input.output)
+            else:
+                log_p = self.critic_with_policy_input.output
+            log_p = tf.squeeze(log_p) + \
+                self.alpha_placeholder * tf.reduce_sum(
+                    tf.log(1. - tf.square(self.policy.output)),
+                    reduction_indices=1,
+                )
 
-        kappa = tf.expand_dims(
-            self.kernel.kappa,
-            dim=3,
-        )  # N x K x K x 1
+            grad_log_p = tf.gradients(log_p, self.policy.pre_output)
+            grad_log_p = tf.reshape(grad_log_p, [-1, self.K, 1, Da])  # N x K x 1 x Da
 
-        # grad w.r.t. left kernel input
-        kappa_grads = self.kernel.kappa_grads  # N x K x K x Da
+            kappa = tf.expand_dims(
+                self.kernel.kappa,
+                dim=3,
+            )  # N x K x K x 1
 
-        # Stein Variational Gradient!
-        if self.q_prior is not None:
-            p = self.prior_coeff_placeholder
-            action_grads = tf.reduce_mean(
-                kappa * ((1.0 - p) * grad_qf + p * grad_prior)
+            # grad w.r.t. left kernel input
+            kappa_grads = self.kernel.kappa_grads  # N x K x K x Da
+
+            # Stein Variational Gradient!
+            pre_action_grads = tf.reduce_mean(
+                kappa * grad_log_p
                 + self.alpha_placeholder * kappa_grads,
                 reduction_indices=1,
             ) # N x K x Da
+
+            # The first two dims needs to be flattened to correctly propagate the
+            # gradients to the policy network.
+            pre_action_grads = tf.reshape(pre_action_grads, (-1, Da))
+
+            # Propagate the grads through the policy net.
+            grads = tf.gradients(
+                self.policy.pre_output,
+                self.policy.get_params_internal(),
+                grad_ys=pre_action_grads,
+            )
         else:
-            action_grads = tf.reduce_mean(
-                kappa * grad_qf
-                + self.alpha_placeholder * kappa_grads,
-                reduction_indices=1,
-            ) # N x K x Da
-        # The first two dims needs to be flattened to correctly propagate the
-        # gradients to the policy network.
-        action_grads = tf.reshape(action_grads, (-1, Da))
-
-        # Propagate the grads through the policy net.
-        grads = tf.gradients(
-            self.policy.output,
-            self.policy.get_params_internal(),
-            grad_ys=action_grads,
-        )
+            raise NotImplementedError
 
         self.actor_surrogate_loss = tf.reduce_mean(
             - flatten_tensor_variables(all_dummy_params) *
