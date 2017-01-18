@@ -14,11 +14,19 @@ class MNNPolicy(NNPolicy):
         observation_dim,
         action_dim,
         K,
+        randomized=False,
         **kwargs
     ):
+        """
+        :param randomized: use this if you want the policy to always
+            randomly switch a head at each time step, except if it
+            is told to use a head explicitly. This is used in conjunction
+            with MNNStrategy.switch_type = "per_action"
+        """
         Serializable.quick_init(self, locals())
         self.K = K
         self.k = np.random.randint(0,K)
+        self.randomized = randomized
         super(MNNPolicy, self).__init__(
             scope_name, observation_dim, action_dim)
 
@@ -27,9 +35,13 @@ class MNNPolicy(NNPolicy):
             with tf.variable_scope('shared'):
                 self.shared_variables = self.create_shared_variables()
             self.heads = []
+            self.pre_heads = []
             for k in range(self.K):
                 with tf.variable_scope('head_%d'%(k)):
-                    self.heads.append(self.create_head(k))
+                    output, pre_output = self.create_head(k)
+                    self.heads.append(output)
+                    self.pre_heads.append(pre_output)
+            self.pre_output = tf.pack(self.pre_heads, axis=1, name='pre_outputs')
 
             return tf.pack(self.heads, axis=1, name='outputs')
 
@@ -48,25 +60,32 @@ class MNNPolicy(NNPolicy):
         An exploration strategy may overwrite this method and specify particular
             heads.
         """
+        if self.randomized:
+            k = np.random.randint(low=0, high=self.K)
         if k is None:
             k = self.k
             return self.sess.run(
                 self.heads[k],
                 {self.observations_placeholder: [observation]}
             ), {
-                'heads': k
+                'heads': k,
+                'num_heads': self.K,
             }
         elif k == "all":
             return self.sess.run(
                 self.output,
                 {self.observations_placeholder: [observation]}
-            ), {'heads':-1}
+            ), {
+                'heads':-1,
+                'num_heads': self.K,
+            }
         elif (isinstance(k, int) or isinstance(k,np.int64)) and 0 <= k <= self.K:
             return self.sess.run(
                 self.heads[k],
                 {self.observations_placeholder: [observation]}
             ), {
-                'heads': k
+                'heads': k,
+                'num_heads': self.K,
             }
         else:
             raise NotImplementedError
@@ -84,7 +103,13 @@ class MNNPolicy(NNPolicy):
         ), {'heads': -np.ones(len(observations))}
 
     def reset(self):
-        self.k = np.random.randint(0,self.K)
+        """
+        Should use MNNStrategy to switch heads during training.
+        Warning: "pass" will make rllab.samplers.utils.rollout() unable to
+        switch heads between rollouts, which will make BatchSampler fail to
+        sample paths for different heads.
+        """
+        pass
 
 
 from rllab.exploration_strategies.base import ExplorationStrategy
@@ -107,13 +132,13 @@ class MNNStrategy(ExplorationStrategy):
         action, _ = policy.get_action(observation, self.k)
         action_modified = self.substrategy.get_modified_action(t, action)
         if self.switch_type == "per_action":
-            self.k = np.mod(self.k + 1, self.K)
+            self.k = np.random.randint(low=0, high=self.K)
             # print("{} switches to head {}".format(policy.scope_name, self.k))
         return action_modified
 
     def reset(self):
         if self.switch_type == "per_path":
-            self.k = np.mod(self.k + 1, self.K)
+            self.k = np.random.randint(low=0, high=self.K)
         self.substrategy.reset()
 
 class FeedForwardMultiPolicy(MNNPolicy):
@@ -131,6 +156,7 @@ class FeedForwardMultiPolicy(MNNPolicy):
         output_b_init=None,
         hidden_nonlinearity=tf.nn.relu,
         output_nonlinearity=tf.nn.tanh,
+        **kwargs
     ):
         Serializable.quick_init(self, locals())
         self.shared_hidden_sizes = shared_hidden_sizes
@@ -148,6 +174,7 @@ class FeedForwardMultiPolicy(MNNPolicy):
             observation_dim,
             action_dim,
             K,
+            **kwargs
         )
     def create_shared_variables(self):
         shared_layer = mlp(
@@ -174,7 +201,7 @@ class FeedForwardMultiPolicy(MNNPolicy):
         else:
             output_b_initializer = self.output_b_init
 
-        preoutput_layer = mlp(
+        pre_output_layer = mlp(
             self.shared_variables["shared_layer"],
             shared_output_size,
             self.independent_hidden_sizes,
@@ -183,17 +210,18 @@ class FeedForwardMultiPolicy(MNNPolicy):
             b_initializer=self.hidden_b_init,
         )
         if len(self.independent_hidden_sizes) > 0:
-            preoutput_layer_size = self.independent_hidden_sizes[-1]
+            pre_output_layer_size = self.independent_hidden_sizes[-1]
         elif len(self.shared_hidden_sizes) > 0:
-            preoutput_layer_size = self.shared_hidden_sizes[-1]
+            pre_output_layer_size = self.shared_hidden_sizes[-1]
         else:
-            preoutput_layer_size = self.observation_dim
-        output = self.output_nonlinearity(linear(
-            preoutput_layer,
-            preoutput_layer_size,
+            pre_output_layer_size = self.observation_dim
+        pre_output = linear(
+            pre_output_layer,
+            pre_output_layer_size,
             self.action_dim,
             W_initializer=self.output_W_init,
             b_initializer=output_b_initializer,
             #b_initializer=self.output_b_init,
-        ))
-        return output
+        )
+        output = self.output_nonlinearity(pre_output)
+        return output, pre_output

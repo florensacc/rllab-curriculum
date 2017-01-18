@@ -77,11 +77,14 @@ class DiagonalGaussianKernel(Kernel):
             tf.square(xs_weighted),
             2, keep_dims=True
         ) # N x K x 1, computes yj^2
+
+
         D = -0.5 * (
             r - # yj^2
             2 * tf.batch_matmul(xs_weighted, xs_weighted, adj_y=True) + # yj*yk
             tf.transpose(r,[0,2,1]) # yk^2
         )
+
         kappa = tf.exp(D)
         return kappa
 
@@ -134,8 +137,19 @@ class SimpleAdaptiveDiagonalGaussianKernel(DiagonalGaussianKernel):
                 dim=1,
             ) # N x 1 x 1 x d
 
-    def update(self, algo, actor_feed):
-        xs = self.sess.run(algo.policy.output, actor_feed) # N x K x d
+    def update(self, algo, actor_feed, multiheaded=True, K=None):
+        # TODO(TH): hacky fix. To make this work on stochastic policies,
+        # we need to pass the number of particles
+        # in order to reshape the policy output back to N x K x d
+        if algo.svgd_target == "action":
+            xs = self.sess.run(algo.policy.output, actor_feed) #N x K x d or N*K x d
+        elif algo.svgd_target == "pre-action":
+            xs = self.sess.run(algo.policy.pre_output, actor_feed) #N x K x d or N*K x d
+        else:
+            raise NotImplementedError
+            
+        if not multiheaded:
+            xs = np.reshape(xs, (-1, K, self.dim))
         N, K, d = xs.shape
         assert self.dim == d
         assert K > 1, "cannot compute pairwise distance if K = 1"

@@ -12,6 +12,21 @@ class EnvChooser(object):
                 import SwimmerUndirectedEnv
             env = SwimmerUndirectedEnv(**kwargs)
 
+        elif env_name == "dragged_swimmer_undirected":
+            from sandbox.haoran.mddpg.envs.mujoco.dragged_swimmer_undirected_env \
+                import DraggedSwimmerUndirectedEnv
+            env = DraggedSwimmerUndirectedEnv(**kwargs)
+
+        elif env_name == "reacher":
+            from sandbox.haoran.mddpg.envs.mujoco.reacher_env\
+                import ReacherEnv
+            env = ReacherEnv(**kwargs)
+
+        elif env_name == "multi_goal_reacher":
+            from sandbox.haoran.mddpg.envs.mujoco.multi_goal_reacher_env\
+                import MultiGoalReacherEnv
+            env = MultiGoalReacherEnv(**kwargs)
+
         elif env_name == "hopper":
             from rllab.envs.mujoco.hopper_env import HopperEnv
             env = HopperEnv(**kwargs)
@@ -47,16 +62,16 @@ class EnvChooser(object):
 
         elif env_name == "double_slit":
             from sandbox.haoran.mddpg.envs.double_slit_env import DoubleSlitEnv
-            env = DoubleSlitEnv()
+            env = DoubleSlitEnv(**kwargs)
 
         elif env_name == "double_slit_v2":
             from sandbox.haoran.mddpg.envs.double_slit_env_v2 import \
                 DoubleSlitEnvV2
-            env = DoubleSlitEnvV2()
+            env = DoubleSlitEnvV2(**kwargs)
         elif env_name == "multi_goal":
             from sandbox.haoran.mddpg.envs.multi_goal_env import \
                 MultiGoalEnv
-            env = MultiGoalEnv()
+            env = MultiGoalEnv(**kwargs)
         else:
             print("Unknown environment %s"%(env_name))
             raise NotImplementedError

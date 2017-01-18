@@ -30,6 +30,7 @@ class OnlineAlgorithm(RLAlgorithm):
             policy,
             exploration_strategy,
             batch_size=64,
+            start_epoch=0,
             n_epochs=1000,
             epoch_length=1000,
             min_pool_size=10000,
@@ -39,6 +40,7 @@ class OnlineAlgorithm(RLAlgorithm):
             max_path_length=1000,
             eval_samples=10000,
             scale_reward=1.,
+            scale_reward_annealer=None,
             render=False,
     ):
         """
@@ -64,6 +66,7 @@ class OnlineAlgorithm(RLAlgorithm):
         self.exploration_strategy = exploration_strategy
         self.replay_pool_size = replay_pool_size
         self.batch_size = batch_size
+        self.start_epoch = start_epoch
         self.n_epochs = n_epochs
         self.epoch_length = epoch_length
         self.min_pool_size = min_pool_size
@@ -72,6 +75,7 @@ class OnlineAlgorithm(RLAlgorithm):
         self.max_path_length = max_path_length
         self.n_eval_samples = eval_samples
         self.scale_reward = scale_reward
+        self.scale_reward_annealer = scale_reward_annealer
         self.render = render
 
         self.observation_dim = self.env.observation_space.flat_dim
@@ -90,6 +94,7 @@ class OnlineAlgorithm(RLAlgorithm):
         with self.sess.as_default():
             self._init_tensorflow_ops()
         self.es_path_returns = []
+        self.es_path_lengths = []
 
         #HT: in general, VectorizedSampler can significantly reduce
         # PolicyExecTime, but not EnvExecTime. The latter consumes more
@@ -118,8 +123,10 @@ class OnlineAlgorithm(RLAlgorithm):
             gt.reset()
             gt.set_def_unique(False)
             for epoch in gt.timed_for(
-                range(self.n_epochs),save_itrs=True
+                range(self.start_epoch, self.start_epoch + self.n_epochs),
+                save_itrs=True,
             ):
+                self.update_training_settings(epoch)
                 logger.push_prefix('Epoch #%d | ' % epoch)
                 for _ in range(self.epoch_length):
                     # sampling
@@ -149,6 +156,7 @@ class OnlineAlgorithm(RLAlgorithm):
                         observation = self.env.reset()
                         self.exploration_strategy.reset()
                         self.es_path_returns.append(path_return)
+                        self.es_path_lengths.append(path_length)
                         path_length = 0
                         path_return = 0
                     else:
@@ -162,8 +170,12 @@ class OnlineAlgorithm(RLAlgorithm):
                     gt.stamp('train: updates')
 
                 # testing ---------------------------------
+                train_info = dict(
+                    es_path_returns=self.es_path_returns,
+                    es_path_lengths=self.es_path_lengths,
+                )
                 if self.n_eval_samples > 0:
-                    self.evaluate(epoch, self.es_path_returns)
+                    self.evaluate(epoch, train_info)
                     self.es_path_returns = []
                 gt.stamp("test")
 
@@ -182,6 +194,7 @@ class OnlineAlgorithm(RLAlgorithm):
                 logger.record_tabular("time: train",train_time)
                 logger.record_tabular("time: eval",eval_time)
                 logger.record_tabular("time: total",total_time)
+                logger.record_tabular("scale_reward", self.scale_reward)
                 logger.dump_tabular(with_prefix=False)
                 logger.pop_prefix()
                 gt.stamp("logging")
@@ -254,7 +267,7 @@ class OnlineAlgorithm(RLAlgorithm):
         return
 
     @abc.abstractmethod
-    def evaluate(self, epoch, es_path_returns):
+    def evaluate(self, epoch, train_info):
         """
         Perform evaluation for this algorithm.
 
@@ -264,3 +277,7 @@ class OnlineAlgorithm(RLAlgorithm):
         :return: Dictionary of statistics.
         """
         return
+
+    def update_training_settings(self, epoch):
+        if self.scale_reward_annealer is not None:
+            self.scale_reward = self.scale_reward_annealer.get_new_value(epoch)

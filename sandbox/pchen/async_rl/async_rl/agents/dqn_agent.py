@@ -554,6 +554,7 @@ class OldFixedDQNAgent(Agent,Shareable,Picklable):
             share_optimizer_states=False,
             tgt_behavior_policy=False,
             on_policy=False,
+            entropy_coeff=0.,
     ):
         if optimizer_args is None:
             optimizer_args = dict(lr=7e-4, eps=1e-1, alpha=0.99)
@@ -612,6 +613,7 @@ class OldFixedDQNAgent(Agent,Shareable,Picklable):
         self.gamma = gamma # discount
         self.process_id = process_id
         self.clip_reward = clip_reward
+        self.entropy_coeff = entropy_coeff
         self.keep_loss_scale_same = keep_loss_scale_same
         self.eps_start = eps_start
         if not sample_eps:
@@ -725,7 +727,8 @@ class OldFixedDQNAgent(Agent,Shareable,Picklable):
             global_vars = dict()
         if self.clip_reward:
             reward = np.clip(reward, -1, 1)
-        self.past_rewards[self.t - 1] = reward
+        if self.t != self.t_start:
+            self.past_rewards[self.t - 1] += reward
 
         if not is_state_terminal:
             statevar = chainer.Variable(np.expand_dims(self.preprocess(state), 0))
@@ -852,6 +855,10 @@ class OldFixedDQNAgent(Agent,Shareable,Picklable):
                     self.temp = np.clip(self.temp, 1e-3, 1e3)
                 self.epoch_entropies_list.append(entropy)
             else:
+                al = len(qs.data)
+                other_p = (eps)/al
+                eps_p = (1-eps) + eps/al
+                entropy = -eps_p*np.log(eps_p) - (al-1)*other_p*np.log(other_p)
                 if np.random.uniform() < eps:
                     a = np.random.randint(low=0, high=len(qs.data))
                 else:
@@ -867,8 +874,11 @@ class OldFixedDQNAgent(Agent,Shareable,Picklable):
                     qs = self.model.compute_qs(statevar)[0]
                 self.past_qvalues[self.t] = qs[a] # beware to record the variable (not just its data) to allow gradient computation
                 self.past_extra_infos[self.t] = extra_infos
+                self.past_rewards[self.t] = \
+                    self.entropy_coeff * entropy
                 self.epoch_q_list.append(float(qs[a].data))
                 self.cur_path_len += 1
+                self.cur_path_effective_return += reward
                 self.t += 1
             return a
         else:
@@ -878,7 +888,6 @@ class OldFixedDQNAgent(Agent,Shareable,Picklable):
             self.cur_path_effective_return = 0
             self.model.reset_state()
             return None
-
 
     def finish_epoch(self, epoch, log):
         if self.bonus_evaluator is not None:
@@ -903,8 +912,8 @@ class OldFixedDQNAgent(Agent,Shareable,Picklable):
             )
         self.epoch_td_loss_list = []
         self.epoch_q_list = []
-        self.epoch_path_len_list = [0]
-        self.epoch_effective_return_list = [0]
+        self.epoch_path_len_list = []
+        self.epoch_effective_return_list = []
         self.epoch_sync_t_gap_list = []
 
         if log:
@@ -1124,7 +1133,6 @@ class EntropyOldFixedDQNAgent(Agent,Shareable,Picklable):
             global_vars = dict()
         if self.clip_reward:
             reward = np.clip(reward, -1, 1)
-        self.past_rewards[self.t - 1] = reward
 
         if not is_state_terminal:
             statevar = chainer.Variable(np.expand_dims(self.preprocess(state), 0))
@@ -1266,6 +1274,7 @@ class EntropyOldFixedDQNAgent(Agent,Shareable,Picklable):
                     qs = self.model.compute_qs(statevar, self.temp)[0]
                 self.past_qvalues[self.t] = qs[a] # beware to record the variable (not just its data) to allow gradient computation
                 self.past_extra_infos[self.t] = extra_infos
+                self.past_rewards[self.t - 1] = reward
                 self.epoch_q_list.append(float(qs[a].data))
                 self.cur_path_len += 1
                 self.t += 1

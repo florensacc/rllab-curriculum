@@ -1,0 +1,25 @@
+exp003.py: Exactly replicating Haoran's experiments on EC2 - same param settings
+exp004.py: Same as exp003, except with my AtariEnv instead of Haoran's
+exp005.py: Same as exp004, except with input size of 84x84 instead of 42x42
+
+<from here on out, experiments use my own copy of ParallelGaussianConvBaseline
+ since old version has problems with joblib.load>
+
+exp006.py: Same as exp003 (Haoran's AtariEnv), except with max_start_nullops=0
+           and correct_luminance = False
+exp007.py: Same as exp003, except with correct_luminance = False
+exp008.py: Same as exp003, except resizing with scipy instead of cv2
+exp009.py: Same params as exp003, except with AtariEnvMinimal
+           (tried to make Haoran's AtariEnv as similar to mine as possible)
+exp010.py: Same params as exp003, but with my AtariEnv (fixed bug with imresize)
+exp011.py: Same params as exp003, but with my AtariEnv (fixed bug with setting frameskip)
+exp012.py: Same as exp011, but with 84x84 input images instead of 42x42
+exp013.py: Same as exp011, but with 44x44 input images instead of 42x42
+exp014.py: Same as exp013. Testing addition of persistent adv. examples to AtariEnv.
+exp015.py: Same as exp013, but for Space Invaders instead of Pong.
+           Trying both frameskip of 3 and 4.
+exp016.py: Same as exp015, but with 84x84 input images instead of 44x44 (to make
+           it easier to see enemy lasers), and with smaller batch size of 25000
+           instead of 100000 - otherwise EC2 machine crashes
+exp017.py: Same as exp016, but with Haoran's original AtariEnv instead of mine
+           (as a sanity check)
