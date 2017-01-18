@@ -48,7 +48,7 @@ from tensorflow.python.framework import ops
 
 _ARGSTACK_KEY = ("__arg_stack",)
 
-_DECORATED_OPS = set()
+_DECORATED_OPS = {}
 
 
 def _get_arg_stack():
@@ -69,7 +69,7 @@ def _current_arg_scope():
 def _add_op(op):
   key_op = (op.__module__, op.__name__)
   if key_op not in _DECORATED_OPS:
-    _DECORATED_OPS.add(key_op)
+    _DECORATED_OPS[key_op] = op
 
 
 @contextlib.contextmanager
@@ -121,6 +121,12 @@ def arg_scope(list_ops_or_scope, **kwargs):
       yield current_scope
     finally:
       _get_arg_stack().pop()
+
+def default_arg_scope(**kwargs):
+  """
+  Like arg_scope but it's always on
+  """
+  return arg_scope(list(_DECORATED_OPS.values()), **kwargs)
 
 
 def add_arg_scope(func):

@@ -9,9 +9,10 @@ import numpy as np
 from progressbar import ETA, Bar, Percentage, ProgressBar
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import Bernoulli, Gaussian, Mixture, DiscretizedLogistic, ConvAR
 import rllab.misc.logger as logger
+from rllab.misc.ext import delete
 import sys
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp, flatten, assign_to_gpu, \
-    average_grads, temp_restore
+    average_grads, temp_restore, np_logsumexp
 
 
 # model sharing vae
@@ -48,6 +49,7 @@ class ShareVAE(object):
             l2_reg=None,
             img_on=True,
             kl_coeff=1.,
+            kl_coeff_spec=None,
             noise=True,
             vis_ar=True,
             num_gpus=1,
@@ -58,6 +60,13 @@ class ShareVAE(object):
             staged=False,
             unconditional=False,
             resume_includes=None,
+            adaptive_kl=False,
+            adaptive_kl_tol=0.3,
+            ema_kl_decay=0.99,
+            min_kl_coeff=0.001,
+            input_skip=False,
+            deep_cond=False,
+            freeze_encoder=False,
     ):
         """
         :type model: RegularizedHelmholtzMachine
@@ -70,6 +79,12 @@ class ShareVAE(object):
         Parameters
         ----------
         """
+        self.adaptive_kl_tol = adaptive_kl_tol
+        self.freeze_encoder = freeze_encoder
+        self.min_kl_coeff = min_kl_coeff
+        self.deep_cond = deep_cond
+        self.input_skip = input_skip
+        self.ema_kl_decay = ema_kl_decay
         self.resume_includes = resume_includes
         self.unconditional = unconditional
         self.staged = staged
@@ -84,7 +99,20 @@ class ShareVAE(object):
         if isinstance(optimizer_cls, str):
             optimizer_cls = eval(optimizer_cls)
         self.noise = noise
-        self.kl_coeff = kl_coeff
+        self.kl_coeff_spec = kl_coeff_spec
+        if kl_coeff_spec is None and (not adaptive_kl):
+            self.kl_coeff = kl_coeff
+        else:
+            self.kl_coeff = tf.Variable(
+                initial_value=kl_coeff_spec(0) if kl_coeff_spec else 0.001,
+                trainable=False,
+                name="kl_coeff"
+            )
+        if adaptive_kl:
+            assert min_kl != 0.
+            self.kl_coeff_assignee = tf.placeholder(tf.float32)
+            self.kl_coeff_assginment = self.kl_coeff.assign(self.kl_coeff_assignee)
+        self.adaptive_kl = adaptive_kl
         self.anneal_factor = anneal_factor
         self.anneal_every = anneal_every
         self.img_on = img_on
@@ -107,8 +135,10 @@ class ShareVAE(object):
         self.log_dir = logger.get_snapshot_dir()
         self.snapshot_interval = snapshot_interval
         if updates_per_epoch:
-            print("should not set updates_per_epoch")
-        self.updates_per_epoch = dataset.train.images.shape[0] // batch_size
+            input("should not set updates_per_epoch")
+            self.updates_per_epoch = updates_per_epoch
+        else:
+            self.updates_per_epoch = dataset.train.images.shape[0] // batch_size
         self.summary_interval = summary_interval
         # self.learning_rate = learning_rate
         self.trainer = None
@@ -130,6 +160,7 @@ class ShareVAE(object):
         self.eval_log_vars = []
         self.sym_vars = {}
         self.ema = None
+        self.encoder_params = []
 
         bs_per_gpu = self.batch_size // self.num_gpus
         self.x_sample_holder = tf.placeholder(tf.float32, shape=(bs_per_gpu, 32, 32, 3))
@@ -156,6 +187,8 @@ class ShareVAE(object):
                 )
                 self.optimizer_args["learning_rate"] = self.lr_var
             self.optimizer = self.optimizer_cls(**self.optimizer_args)
+
+        logger.log("Algo inited")
 
     def init_opt(self, init=False, eval=False, opt_off=False):
         if init:
@@ -192,12 +225,29 @@ class ShareVAE(object):
             x = xs[i]
             with tf.device(assign_to_gpu(i)):
                 # get activations of pixelcnn
-                causal_feats = pixelcnn.infer_temp(
-                    x
-                )
+                if self.deep_cond:
+                    encoder_feats = tf.reshape(x, (-1,) + pixelcnn._shape)
+                else:
+                    causal_feats = pixelcnn.infer_temp(
+                        x
+                    )
+                    logger.log("causal_feats")
+                    if self.input_skip:
+                        encoder_feats = tf.concat(
+                            3,
+                            [causal_feats, tf.reshape(x, (-1,) + pixelcnn._shape)]
+                        )
+                    else:
+                        encoder_feats = causal_feats
 
+                if self.freeze_encoder:
+                    prev_params = tf.trainable_variables()
                 z_var, log_p_z_given_x, z_dist_info = \
-                    self.model.encode(causal_feats, k=self.k if eval else 1)
+                    self.model.encode(encoder_feats, k=self.k if eval else 1)
+                logger.log("encoded")
+                if self.freeze_encoder:
+                    new_params = list(set(tf.trainable_variables()) - set(prev_params))
+                    self.encoder_params += new_params
 
                 if not self.noise:
                     z_var = z_dist_info["mean"]
@@ -205,6 +255,18 @@ class ShareVAE(object):
 
                 # get raw conditional feats to avoid changing helmhpltz machine
                 cond_feats = self.model.decode(z_var, raw=True)
+                logger.log("decoded")
+
+                eval_compat_x = tf.reshape(
+                    tf.tile(x, [1, self.k]),
+                    [-1, self.dataset.image_dim],
+                ) if eval else x
+
+                if self.deep_cond:
+                    causal_feats = pixelcnn.infer_temp(
+                        eval_compat_x,
+                        context=cond_feats
+                    )
                 x_dist_info = dict(
                     causal_feats=causal_feats,
                     cond_feats=cond_feats * self.staged_cond_mask,
@@ -213,15 +275,15 @@ class ShareVAE(object):
                     x_dist_info["cond_feats"] = 0. * x_dist_info["cond_feats"]
 
                 log_p_x_given_z = self.model.output_dist.logli(
-                    tf.reshape(
-                        tf.tile(x, [1, self.k]),
-                        [-1, self.dataset.image_dim],
-                    ) if eval else x,
+                    eval_compat_x,
                     x_dist_info
                 )
+                logger.log("cond_logli")
 
                 ndim = self.model.output_dist.effective_dim
                 log_p_z = self.model.latent_dist.logli_prior(z_var)
+                logger.log("prior_logli")
+
                 dict_log_vars["log_p_z"].append(
                     tf.reduce_mean(log_p_z)
                 )
@@ -263,6 +325,7 @@ class ShareVAE(object):
                         kl if self.kl_coeff != 0. else 0.
                     )
                     if self.min_kl_onesided:
+                        assert not self.adaptive_kl
                         avg_log_p_sg_z = tf.reduce_mean(
                             # self.model.latent_dist.logli_prior(
                             #     tf.stop_gradient(z_var)
@@ -284,7 +347,7 @@ class ShareVAE(object):
                         if self.slow_kl:
                             ema_kl = self.ema_kl
                             dict_log_vars["ema_kl"].append(ema_kl / ndim)
-                            ema_kl_decay = 0.99
+                            ema_kl_decay = self.ema_kl_decay
                             if self.slow_kl is True:
                                 # "soft" version
                                 kl, _ = tf.tuple([
@@ -306,6 +369,8 @@ class ShareVAE(object):
                                 kl,
                                 self.min_kl * ndim
                             )
+                        if self.adaptive_kl:
+                            surr_kl = kl
                         vlb = tf.reduce_mean(log_p_x_given_z) - (
                             surr_kl * self.kl_coeff * self.staged_cond_mask
                             if self.kl_coeff != 0 else 0.
@@ -333,7 +398,13 @@ class ShareVAE(object):
                 self.init_hook(locals())
                 if tower_grads is None:
                     tower_grads = self.optimizer.compute_gradients(surr_loss)
+                if self.freeze_encoder:
+                    tower_grads = [
+                        (grad, var) for grad, var in tower_grads
+                        if var not in self.encoder_params
+                    ]
                 grads.append(tower_grads)
+                logger.log("grads")
 
         if init and self.exp_avg is not None:
             self.ema = tf.train.ExponentialMovingAverage(decay=self.exp_avg)
@@ -485,6 +556,7 @@ class ShareVAE(object):
         self.sess = sess
 
         self.init_opt(init=True)
+        logger.log("opt_inited w/ init=True")
 
         prev_bits = -10.
 
@@ -549,15 +621,18 @@ class ShareVAE(object):
                     if counter == 0:
                         if self.resume_from is None or (self.resume_includes is not None):
                             sess.run(init, feed)
+                            logger.log("TF init op finished")
                         self.init_opt(init=False, eval=True)
+                        logger.log("opt_inited eval=True")
                         self.init_opt(init=False, eval=False)
+                        logger.log("opt_inited eval=False")
                         vs = tf.all_variables()
                         sess.run(tf.initialize_variables([
                             v for v in vs if
                                 "optim" in v.name or "global_step" in v.name or \
                                 ("cv_coeff" in v.name)
                         ]))
-                        print("vars initd")
+                        logger.log("vars initd")
                         if self.staged:
                             sess.run(
                                 self.staged_cond_mask.assign(0.)
@@ -567,6 +642,9 @@ class ShareVAE(object):
                             # print("not resuming")
                             print("resuming from %s" % self.resume_from)
                             fn = tf.train.latest_checkpoint(self.resume_from)
+                            if fn is None:
+                                print("cant find latest checkpoint, treating as checkpoint file")
+                                fn = self.resume_from
                             print("latest ckpt: %s" % fn)
                             if self.resume_includes is None:
                                 saver.restore(sess, fn)
@@ -650,6 +728,10 @@ class ShareVAE(object):
                         feed
                     )[1:]
                     all_log_vals.append(log_vals)
+
+                    self.post_iter_hook(
+                        **delete(locals(), "self")
+                    )
                     # if any(np.any(np.isnan(val)) for val in log_vals):
                     #     print("NaN detected! ")
                     #     # if self.ema:
@@ -819,11 +901,47 @@ class ShareVAE(object):
                 print("code ON: %s"%inp_mask)
             elif epoch == 0:
                 assert self.model.output_dist._sanity2
+        if self.kl_coeff_spec is not None:
+            spec = self.kl_coeff_spec
+            prev = kw["sess"].run(
+                self.kl_coeff
+            ) if epoch != 0 else None
+            desired = spec(epoch)
+            if prev != desired:
+                kw["sess"].run(
+                    self.kl_coeff.assign(
+                        desired
+                    )
+                )
 
 
 
     def iter_hook(self, **kw):
         pass
+
+    def post_iter_hook(
+            self,
+            log_vals, log_keys, sess, counter,
+            **kw
+    ):
+        if self.adaptive_kl:
+            if counter % int(1. / (1.-self.ema_kl_decay)) == 0:
+                ema_kl = dict(zip(log_keys, log_vals))["ema_kl"]
+                cur_coeff = desired = 0.001
+                if ema_kl < self.min_kl:
+                    cur_coeff = sess.run(self.kl_coeff)
+                    desired = max(cur_coeff * 0.9, self.min_kl_coeff)
+                elif ema_kl > self.min_kl * (1. + self.adaptive_kl_tol):
+                    cur_coeff = sess.run(self.kl_coeff)
+                    desired = min(cur_coeff * 1.1, 1.)
+                if not np.allclose(cur_coeff, desired):
+                    sess.run(self.kl_coeff_assginment, {self.kl_coeff_assignee: desired})
+                    logger.log("\nema_kl:%s adjusting from %s to %s "%(ema_kl, cur_coeff, desired))
+            if counter % self.updates_per_epoch == 0:
+                cur_coeff = sess.run(self.kl_coeff)
+                logger.log("current coeff %s" % cur_coeff)
+
+
 
     def ar_vis(self, sess, feed, vars):
         import scipy
@@ -990,15 +1108,23 @@ class ShareVAE(object):
             self.resume_init(init_train=True)
         sess = self.sess
         self.sess.as_default().__enter__()
+        restorer = temp_restore(sess, self.ema)
+        restorer.__enter__()
 
-        feed = self.prepare_feed(self.dataset.validation, self.true_batch_size)
+        # feed = self.prepare_feed(self.dataset.validation, self.true_batch_size)
 
         dist = self.model.output_dist
         bs_per_gpu = self.batch_size // self.num_gpus
 
-        x_var, context_var, proposal_sym = dist.sample_sym(
-            bs_per_gpu, unconditional=self.unconditional
+        import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+        x_var, context_var, proposal_sym, tgt_vec_sym = dist.sample_sym(
+            bs_per_gpu, unconditional=self.unconditional, deep_cond=self.deep_cond,
         )
+        spatial_logli_sym = nn.discretized_mix_logistic(
+            x_var*2,
+            tgt_vec_sym
+        )
+
         batch_imshp = [bs_per_gpu, ] + list(self.model.image_shape)
         h, w = self.model.image_shape[:2]
         import scipy
@@ -1012,6 +1138,55 @@ class ShareVAE(object):
                 name,
                 img
             )
+
+        from sandbox.pchen.InfoGAN.infogan.misc.imported import plotting
+
+        # import IPython; IPython.embed()
+
+        # decompress
+        for di in range(10):
+            feed = self.prepare_feed(self.dataset.validation, self.true_batch_size)
+            originals = tuple(feed.items())[0][1][-bs_per_gpu:].reshape(batch_imshp)
+            # context = sess.run(self.sym_vars["train"]["x_dist_info"], feed)
+            cond = sess.run(self.sym_vars["train"]["cond_feats"], feed)
+            fol = "%s/decomp/" % self.checkpoint_dir
+            try:
+                import os
+                os.makedirs(fol)
+            except:
+                pass
+            # originals = tuple(feed.items())[0][1].reshape([128,32,32,3])
+            # cur_zeros = np.copy(self.dataset.train.images[:128].reshape([-1,32,32,3]))
+            for ix in range(bs_per_gpu):
+                custom_imsave(
+                    "%s/%s_step%s.png" % (fol, ix, 0),
+                    originals[ix]
+                )
+            cur_zeros = np.zeros_like(originals)
+            for yi in range(h):
+                for xi in range(w):
+                    ind = xi + yi * w
+                    if (ind % 8 == 1):
+                        for ix in range(bs_per_gpu):
+                            custom_imsave(
+                                "%s/%s_step%s.png" % (fol, ix, ind),
+                                cur_zeros[ix]
+                            )
+                    proposal_zeros = sess.run(proposal_sym, {
+                        x_var: cur_zeros,
+                        context_var: cond,
+                    })
+                    cur_zeros[:, yi, xi, :] = proposal_zeros[:, yi, xi, :].copy()
+            os.system(
+                "tar -zcvf %s/../decomp.tar.gz %s" % (fol, fol)
+            )
+            interleaved = np.concatenate(
+                [originals[np.newaxis, :, :, :, :], cur_zeros[np.newaxis, :, :, :, :]]
+            ).transpose([1, 0, 2, 3, 4]).reshape([-1, 32, 32, 3])
+            img_tile = plotting.img_tile(interleaved, aspect_ratio=1., border_color=1., stretch=True)
+            img = plotting.plot_img(img_tile, title=None, )
+            plotting.plt.savefig("%s/decomp_summary_%s.png" % (self.checkpoint_dir, di))
+            plotting.plt.close('all')
 
         # # samples
         z_var = self.model.latent_dist.sample_prior(bs_per_gpu)
@@ -1048,7 +1223,6 @@ class ShareVAE(object):
         os.system(
             "tar -zcvf %s/../samples.tar.gz %s" % (fol, fol)
         )
-        from sandbox.pchen.InfoGAN.infogan.misc.imported import plotting
         img_tile = plotting.img_tile(cur_zeros, aspect_ratio=1.0, border_color=1.0, stretch=True)
         img = plotting.plot_img(img_tile, title=None, )
         plotting.plt.savefig("%s/sample_summary.png" % self.checkpoint_dir)
@@ -1060,48 +1234,124 @@ class ShareVAE(object):
         # plotting.plt.close('all')
         # # import ipdb; ipdb.set_trace()
 
-        # decompress
-        originals = tuple(feed.items())[0][1][-bs_per_gpu:].reshape(batch_imshp)
-        # context = sess.run(self.sym_vars["train"]["x_dist_info"], feed)
-        cond = sess.run(self.sym_vars["train"]["cond_feats"], feed)
-        fol = "%s/decomp/" % self.checkpoint_dir
+        import IPython; IPython.embed()
+
+        # beam-search decompression
         try:
-            import os
-            os.makedirs(fol)
-        except:
-            pass
-        # originals = tuple(feed.items())[0][1].reshape([128,32,32,3])
-        # cur_zeros = np.copy(self.dataset.train.images[:128].reshape([-1,32,32,3]))
-        for ix in range(bs_per_gpu):
-            custom_imsave(
-                "%s/%s_step%s.png" % (fol, ix, 0),
-                originals[ix]
-            )
-        cur_zeros = np.zeros_like(originals)
-        for yi in range(h):
-            for xi in range(w):
-                ind = xi + yi * w
-                if (ind % 8 == 1):
-                    for ix in range(bs_per_gpu):
-                        custom_imsave(
-                            "%s/%s_step%s.png" % (fol, ix, ind),
-                            cur_zeros[ix]
-                        )
-                proposal_zeros = sess.run(proposal_sym, {
-                    x_var: cur_zeros,
-                    context_var: cond,
-                })
-                cur_zeros[:, yi, xi, :] = proposal_zeros[:, yi, xi, :].copy()
-        os.system(
-            "tar -zcvf %s/../decomp.tar.gz %s" % (fol, fol)
-        )
-        interleaved = np.concatenate(
-            [originals[np.newaxis, :, :, :, :], cur_zeros[np.newaxis, :, :, :, :]]
-        ).transpose([1, 0, 2, 3, 4]).reshape([-1, 32, 32, 3])
-        img_tile = plotting.img_tile(interleaved, aspect_ratio=1., border_color=1., stretch=True)
-        img = plotting.plot_img(img_tile, title=None, )
-        plotting.plt.savefig("%s/decomp_summary.png" % self.checkpoint_dir)
-        plotting.plt.close('all')
+            originals = tuple(feed.items())[0][1][-bs_per_gpu:].reshape(batch_imshp)
+            # context = sess.run(self.sym_vars["train"]["x_dist_info"], feed)
+            all_cond = sess.run(self.sym_vars["train"]["cond_feats"], feed)
+            all_imgs = np.zeros_like(originals)
+            for img_i in range(32):
+                cur_zeros = np.zeros_like(originals)
+                cond = np.repeat(all_cond[img_i:img_i+1], bs_per_gpu, axis=0)
+                for yi in range(h):
+                    for xi in range(w):
+                        ind = xi + yi * w
+                        proposal_zeros = sess.run(proposal_sym, {
+                            x_var: cur_zeros,
+                            context_var: cond,
+                        })
+                        cur_zeros[:, yi, xi, :] = proposal_zeros[:, yi, xi, :].copy()
+                        granularity = 2
+                        if ind % granularity == 0:
+                            spatial_logli = sess.run(spatial_logli_sym, {
+                                x_var: cur_zeros,
+                                context_var: cond,
+                            })
+                            cur_logli = np.mean(spatial_logli.reshape([-1, 32*32])[:, :ind+1], axis=1)
+                            bins = 16
+                            idx = np.argsort(cur_logli)[::-1][:bins]
+                            print(np.mean(cur_logli) / 3 / np.log(2))
+                            cur_zeros = np.repeat(cur_zeros[idx], bs_per_gpu // bins, axis=0)
+                img_tile = plotting.img_tile(cur_zeros, aspect_ratio=1., border_color=1., stretch=True)
+                img = plotting.plot_img(img_tile, title=None, )
+                # plotting.plt.savefig("%s/decomp_beam_%s.png" % (self.checkpoint_dir, img_i))
+                plotting.plt.savefig("%s/decomp_16beam_%s_gran_%s.png" % (self.checkpoint_dir, img_i, granularity))
+                plotting.plt.close('all')
+                all_imgs[img_i] = cur_zeros[0]
+
+            interleaved = np.concatenate(
+                [originals[np.newaxis, :, :, :, :], all_imgs[np.newaxis, :, :, :, :]]
+            ).transpose([1, 0, 2, 3, 4]).reshape([-1, 32, 32, 3])
+            img_tile = plotting.img_tile(interleaved, aspect_ratio=1., border_color=1., stretch=True)
+            img = plotting.plot_img(img_tile, title=None, )
+            plotting.plt.savefig("%s/decomp_beam_searched_abstract.png" % self.checkpoint_dir)
+            plotting.plt.close('all')
+        except Exception as e:
+            import IPython; IPython.embed()
 
         import IPython; IPython.embed()
+
+        count = 2
+        imgss = []
+        for _ in range(count):
+            cur_zeros = np.zeros(batch_imshp)
+            for yi in range(h):
+                for xi in range(w):
+                    proposal_zeros = sess.run(proposal_sym, {
+                        x_var: cur_zeros,
+                        context_var: context['context'],
+                    })
+                    cur_zeros[:, yi, xi, :] = proposal_zeros[:, yi, xi, :].copy()
+                print(yi)
+            imgss.append(cur_zeros)
+        img_tile = plotting.img_tile(np.concatenate(imgss), aspect_ratio=1.0, border_color=1.0, stretch=True)
+        img = plotting.plot_img(img_tile, title=None, )
+        plotting.plt.savefig("%s/sample_summary_big.png" % self.checkpoint_dir)
+        plotting.plt.close('all')
+
+    def eval(self, k=128*80, init=True):
+        # logprob evaluation
+        if init:
+            sess = tf.Session()
+            self.sess = sess
+        else:
+            sess = self.sess
+        with self.sess.as_default():
+            if init:
+                self.init_opt(init=True)
+                self.init_opt(init=False, eval=True)
+                saver = tf.train.Saver()
+                if self.resume_from is not None:
+                    # print("not resuming")
+                    print("resuming from %s" % self.resume_from)
+                    # fn = tf.train.latest_checkpoint(self.resume_from)
+                    # print("latest ckpt: %s" % fn)
+                    saver.restore(sess, self.resume_from)
+                    print("resumed")
+            # import IPython; IPython.embed()
+
+            # true_vlb = tf.reduce_mean(
+            #     logsumexp(tf.reshape(
+            #         log_p_x_given_z - (kls if self.kl_coeff != 0. else 0.),
+            #         [-1, self.k])),
+            # ) - np.log(self.k)
+            logpxz, kls = self.sym_vars['eval']["log_p_x_given_z"], self.sym_vars['eval']["kls"]
+            logli = logpxz - kls
+            eval_input = self.eval_input_tensor
+            imgs = self.dataset.validation.images
+            total_bs = imgs.shape[0]
+            loglis_buffer = np.zeros([total_bs, k], dtype="float32")
+            with temp_restore(sess, self.ema):
+                for ki in range(k // self.k):
+                    start, end = (ki*self.k), ((ki+1)*self.k)
+                    progress = ProgressBar()
+                    for bi in progress(range(total_bs)):
+                        loglis_buffer[bi, start:end] = sess.run(
+                            logli,
+                            feed_dict={
+                                eval_input: imgs[bi:bi+1, :]
+                            }
+                        )
+                    this_logli = np.mean(
+                        np_logsumexp(
+                            loglis_buffer[:, :end]
+                        ) - np.log(end)
+                    )
+                    logger.log("k=%s, logli=%s, bits/dim=%s" % (
+                        end,
+                        this_logli,
+                        this_logli / self.model.output_dist.effective_dim / np.log(2)
+                    ))
 
