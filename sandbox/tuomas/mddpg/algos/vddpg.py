@@ -525,7 +525,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
         while isinstance(true_env,ProxyEnv):
             true_env = true_env._wrapped_env
         if hasattr(true_env, "log_stats"):
-            env_stats = true_env.log_stats(epoch, paths)
+            env_stats = true_env.log_stats(self, epoch, paths)
             self.last_statistics.update(env_stats)
 
         for key, value in self.last_statistics.items():
