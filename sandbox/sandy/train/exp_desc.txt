@@ -27,3 +27,5 @@ exp018.py: Same as exp016, except trying both 84x84 inputs (and batch size 25000
            and 44x44 inputs (batch size 100000). Increase number of iterations to
            2000. Running on five games: Pong, Space Invaders, Beamrider, Breakout,
            and Q*bert.
+exp019.py: Same as exp018, except only with 44x44 inputs.
+           Running on Chopper Command, Seaquest, and Skiing.
