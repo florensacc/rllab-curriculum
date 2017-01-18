@@ -138,10 +138,10 @@ dist = cur
 # get a large batch to do weight norm init
 logger.log("Data init start")
 init_batch = (dataset.train.next_batch(128)[0]).reshape([-1, 32, 32, 3])
-init_placeholder = tf.placeholder(tf.float32, shape=init_batch.shape)
-dist.init_mode()
-init_logli = dist.logli_prior(init_placeholder)
-
+with tf.device("/gpu:0"):
+    init_placeholder = tf.placeholder(tf.float32, shape=init_batch.shape)
+    dist.init_mode()
+    init_logli = dist.logli_prior(init_placeholder)
 
 
 # train mode
@@ -150,14 +150,14 @@ batch_size = 64
 
 optimizer = AdamaxOptimizer()
 
-train_placeholder = tf.placeholder(tf.float32, shape=(batch_size,)+dataset.image_shape)
-train_logli = dist.logli_prior(train_placeholder)
-
-loss = -tf.reduce_mean(train_logli)
-tower_grads = optimizer.compute_gradients(loss)
-tower_grads_lst = [tower_grads]
-trainer = optimizer.apply_gradients(grads_and_vars=average_grads(tower_grads_lst))
-init = tf.initialize_all_variables()
+with tf.device("/gpu:0"):
+    train_placeholder = tf.placeholder(tf.float32, shape=(batch_size,)+dataset.image_shape)
+    train_logli = dist.logli_prior(train_placeholder)
+    loss = -tf.reduce_mean(train_logli)
+    tower_grads = optimizer.compute_gradients(loss)
+    tower_grads_lst = [tower_grads]
+    trainer = optimizer.apply_gradients(grads_and_vars=average_grads(tower_grads_lst))
+    init = tf.initialize_all_variables()
 
 sess = tf.Session()
 with sess.as_default():
@@ -167,7 +167,7 @@ with sess.as_default():
     for iter in range(100000):
         if (iter+1) % 10 == 0:
             logger.log("%s bits/dim" % (
-                (np.mean(logprobs)/32/32/3/-np.log(256.))*np.log(2)
+                (np.mean(logprobs)/32/32/3 - np.log(256.))*np.log(2)
             ))
             logprobs = []
 
