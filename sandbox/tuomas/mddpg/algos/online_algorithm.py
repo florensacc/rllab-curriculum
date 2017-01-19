@@ -41,6 +41,7 @@ class OnlineAlgorithm(RLAlgorithm):
             scale_reward=1.,
             scale_reward_annealer=None,
             render=False,
+            epoch_full_paths=False,
     ):
         """
         :param env: Environment
@@ -76,6 +77,7 @@ class OnlineAlgorithm(RLAlgorithm):
         self.scale_reward = scale_reward
         self.scale_reward_annealer = scale_reward_annealer
         self.render = render
+        self.epoch_full_paths = epoch_full_paths
 
         self.observation_dim = self.env.observation_space.flat_dim
         self.action_dim = self.env.action_space.flat_dim
@@ -121,14 +123,23 @@ class OnlineAlgorithm(RLAlgorithm):
             gt.rename_root('online algo')
             gt.reset()
             gt.set_def_unique(False)
+            total_steps = 0
             for epoch in gt.timed_for(
                 range(self.start_epoch, self.start_epoch + self.n_epochs),
                 save_itrs=True,
             ):
                 self.update_training_settings(epoch)
                 logger.push_prefix('Epoch #%d | ' % epoch)
-                iter, should_reset = 0, False
-                while iter < self.epoch_length and not should_reset:
+                if self.epoch_full_paths:
+                    def is_epoch_finished(t, should_reset):
+                        return t >= self.epoch_length and should_reset
+                else:
+                    def is_epoch_finished(t, should_reset):
+                        return t >= self.epoch_length
+
+                t, should_reset = 0, False
+                while not is_epoch_finished(t, should_reset):
+                    t = t + 1
                     # sampling
                     action = self.exploration_strategy.get_action(itr,
                                                                   observation,
@@ -210,6 +221,9 @@ class OnlineAlgorithm(RLAlgorithm):
                 logger.record_tabular("time: eval",eval_time)
                 logger.record_tabular("time: total",total_time)
                 logger.record_tabular("scale_reward", self.scale_reward)
+                logger.record_tabular("steps: current epoch", t)
+                total_steps += t
+                logger.record_tabular("steps: all", total_steps)
                 logger.dump_tabular(with_prefix=False)
                 logger.pop_prefix()
                 gt.stamp("logging")
