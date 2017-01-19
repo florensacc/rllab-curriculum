@@ -36,16 +36,22 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
         return np.concatenate([
             self.model.data.qpos.flat,
             self.model.data.qvel.flat,
-            self.get_body_com("torso").flat,
+            #self.get_body_com("torso").flat,
         ]).reshape(-1)
+
+    def get_com(self):
+        return self.get_body_com("torso").flat[:2]
 
     def step(self, action):
         self.forward_dynamics(action)
         next_obs = self.get_current_obs()
         lb, ub = self.action_bounds
         scaling = (ub - lb) * 0.5
-        ctrl_cost = 0.5 * self.ctrl_cost_coeff * np.sum(
-            np.square(action / scaling))
+        action_norm_sq = np.sum(np.square(action / scaling))
+        ctrl_cost = 0.5 * self.ctrl_cost_coeff * action_norm_sq
+        if (np.abs(action / scaling) > 1).any():
+            ctrl_cost += 0.1
+
         motion_reward = np.linalg.norm(self.get_body_comvel("torso"))
         reward = motion_reward - ctrl_cost
         done = False
