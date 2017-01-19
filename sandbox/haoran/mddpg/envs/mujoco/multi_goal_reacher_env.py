@@ -37,6 +37,8 @@ class MultiGoalReacherEnv(MujocoEnv, Serializable):
                 [0.134, -0.134],
                 [-0.134, -0.134],
             ],
+            use_sincos=True,
+            goal_reward=0.,
             *args,
             **kwargs
         ):
@@ -50,6 +52,8 @@ class MultiGoalReacherEnv(MujocoEnv, Serializable):
         self.deterministic = deterministic
         self.goal_threshold = goal_threshold
         self.goal_positions = np.array(goals)
+        self.use_sincos = use_sincos
+        self.goal_reward = goal_reward
         super(MultiGoalReacherEnv, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
 
@@ -71,11 +75,12 @@ class MultiGoalReacherEnv(MujocoEnv, Serializable):
         min_dist = np.amin(dists)
         reward_dist = - min_dist
         reward_ctrl = - np.square(action).sum()
-        reward = reward_dist + reward_ctrl
         self.forward_dynamics(action)
         # note: mujoco_env automatically clips the actions
         ob = self.get_current_obs()
         done = min_dist < self.goal_threshold
+        reward_goal = done * self.goal_reward
+        reward = reward_dist + reward_ctrl + reward_goal
         env_info = dict(
             reward_dist=reward_dist,
             reward_ctrl=reward_ctrl,
@@ -127,12 +132,18 @@ class MultiGoalReacherEnv(MujocoEnv, Serializable):
         # return self.get_current_obs()
 
     def get_current_obs(self):
-        theta = self.model.data.qpos.flat[:2] # joint angles
-        return np.concatenate([
-            np.cos(theta),
-            np.sin(theta),
-            self.model.data.qvel.flat[:2],
-        ])
+        if self.use_sincos:
+            theta = self.model.data.qpos.flat[:2] # joint angles
+            return np.concatenate([
+                np.cos(theta),
+                np.sin(theta),
+                self.model.data.qvel.flat[:2],
+            ])
+        else:
+            return np.concatenate([
+                self.model.data.qpos.flat[:2],
+                self.model.data.qvel.flat[:2],
+            ])
 
     def log_stats(self, algo, epoch, paths):
         # log the number of goals reached
@@ -165,10 +176,10 @@ class MultiGoalReacherEnv(MujocoEnv, Serializable):
                 snapshot_dir,
                 "itr_%d_test_paths.png"%(epoch),
             )
-            self.plot_paths(paths, variant, img_file)
+            self.plot_paths(paths, variant, img_file, epoch)
         return stats
 
-    def plot_paths(self, paths, variant, img_file):
+    def plot_paths(self, paths, variant, img_file, epoch):
         # plot the test paths
         fig = plt.figure(figsize=(7,7))
         ax_paths = fig.add_subplot(111)
@@ -186,7 +197,7 @@ class MultiGoalReacherEnv(MujocoEnv, Serializable):
         plt.pause(0.001)
 
         # title contains the variant parameters
-        fig_title = variant["exp_name"] + "\n"
+        fig_title = variant["exp_name"] + "\n" + "epoch: %d"%(epoch) + "\n"
         for key in sorted(variant.keys()):
             fig_title += "%s: %s \n"%(key, variant[key])
         ax_paths.set_title(fig_title, multialignment="left")
