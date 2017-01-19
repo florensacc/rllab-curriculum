@@ -299,7 +299,7 @@ class MDDPG(OnlineAlgorithm, Serializable):
                 for j in range(self.K)
             ]
             #WARN: get nan if self.alpha = 0; reason unknown
-            
+
             tmp = tf.expand_dims(
                 tf.pack([
                     tf.gradients(
@@ -593,7 +593,7 @@ class MDDPG(OnlineAlgorithm, Serializable):
         while isinstance(true_env,ProxyEnv):
             true_env = true_env._wrapped_env
         if hasattr(true_env, "log_stats"):
-            env_stats = true_env.log_stats(epoch, paths)
+            env_stats = true_env.log_stats(self, epoch, paths)
             self.last_statistics.update(env_stats)
 
         for key, value in self.last_statistics.items():

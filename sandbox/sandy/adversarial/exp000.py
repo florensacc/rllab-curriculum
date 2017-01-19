@@ -71,7 +71,7 @@ for v in variants:
 
     # Run policy rollouts with FGSM adversary for N trials, get average return
     env.set_adversary_fn(adversary_fn)
-    avg_return_adversary, paths = get_average_return(algo, seed=seed)
+    avg_return_adversary, paths = get_average_return(algo, seed)
     save_performance(output_h5, avg_return_adversary, len(paths))
 
     output_prefix = output_fname.split('.')[0]

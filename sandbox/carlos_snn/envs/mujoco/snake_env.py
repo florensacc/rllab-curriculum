@@ -31,10 +31,12 @@ class SnakeEnv(MujocoEnv, Serializable):
             ctrl_cost_coeff=1e-2,
             ego_obs=False,
             sparse_rew=False,
+            visit_axis_bound=None,
             *args, **kwargs):
         self.ctrl_cost_coeff = ctrl_cost_coeff
         self.ego_obs = ego_obs
         self.sparse_rew = sparse_rew
+        self.visit_axis_bound = visit_axis_bound
         super(SnakeEnv, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
 
@@ -101,15 +103,20 @@ class SnakeEnv(MujocoEnv, Serializable):
             logger.record_tabular('MinForwardProgress', np.min(progs))
             logger.record_tabular('StdForwardProgress', np.std(progs))
 
-        self.plot_visitation(paths, prefix=prefix)
+        self.plot_visitation(paths, prefix=prefix, visit_axis_bound=self.visit_axis_bound)
 
-    def plot_visitation(self, paths, mesh_density=50, maze=None, scaling=2, prefix=''):
+    def plot_visitation(self, paths, mesh_density=50, maze=None, scaling=2, prefix='', visit_axis_bound=None):
         fig, ax = plt.subplots()
         # now we will grid the space and check how much of it the policy is covering
         x_max = np.ceil(np.max(np.abs(np.concatenate([path["env_infos"]['com'][:, 0] for path in paths]))))
         y_max = np.ceil(np.max(np.abs(np.concatenate([path["env_infos"]['com'][:, 1] for path in paths]))))
         furthest = max(x_max, y_max)
         print('THE FUTHEST IT WENT COMPONENT-WISE IS: x_max={}, y_max={}'.format(x_max, y_max))
+        if visit_axis_bound and visit_axis_bound >= furthest:
+            print('fixing the axis bound to {}'.format(visit_axis_bound))
+            furthest = max(furthest, visit_axis_bound)
+        else:
+            print('keeping furthest as axis bound')
         # if maze:
         #     x_max = max(scaling * len(
         #         maze) / 2. - 1, x_max)  # maze enlarge plot to include the walls. ASSUME ROBOT STARTS IN CENTER!

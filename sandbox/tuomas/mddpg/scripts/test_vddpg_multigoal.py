@@ -154,7 +154,7 @@ def test():
     from sandbox.tuomas.mddpg.kernels.gaussian_kernel import \
         SimpleAdaptiveDiagonalGaussianKernel
     from sandbox.rocky.tf.envs.base import TfEnv
-    from sandbox.haoran.mddpg.envs.multi_goal_env import MultiGoalEnv
+    from sandbox.tuomas.mddpg.envs.multi_goal_env import MultiGoalEnv
     #from sandbox.tuomas.mddpg.envs.multi_goal_env import MultiGoalEnv
     from sandbox.tuomas.mddpg.critics.nn_qfunction import FeedForwardCritic
 

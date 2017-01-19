@@ -15,7 +15,7 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
                  action_dim,
                  hidden_dims,
                  W_initializer=None,
-                 output_nonlinearity=None,
+                 output_nonlinearity=tf.identity,
                  sample_dim=1,
                  freeze_samples=False,
                  K=1,
@@ -37,22 +37,28 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
             all_inputs = tf.concat(concat_dim=1,
                                    values=(self._obs_pl, self._sample_pl))
 
-            self._output = output_scale * mlp(
+            self._pre_output = mlp(
                 all_inputs,
                 observation_dim + self._sample_dim,
                 hidden_dims,
                 output_layer_size=action_dim,
                 nonlinearity=tf.nn.relu,
-                output_nonlinearity=output_nonlinearity,
+                output_nonlinearity=tf.identity,
                 W_initializer=W_initializer
             )
-
+            self._output = output_scale * output_nonlinearity(self._pre_output)
             self.variable_scope = variable_scope
 
         # Freeze stuff
         self._K = K
         self._samples = np.random.randn(K, self._sample_dim)
         self._k = np.random.randint(0, self._K)
+        self.output_nonlinearity = output_nonlinearity
+        self.output_scale = output_scale
+
+    @property
+    def pre_output(self):
+        return self._pre_output
 
     def _create_pls(self):
             self._obs_pl = tf.placeholder(
@@ -98,13 +104,9 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
         """
 
         if self._freeze:
-            assert (N % self._K) == 0 or N == 1
-            if N == 1:
-                return self._samples[[self._k]]
-            else:
-                batch_size = N // self._K
-                return np.tile(self._samples, (batch_size, 1))
-
+            indices = np.random.randint(low=0, high=self._K, size=N)
+            samples = self._samples[indices]
+            return samples
         else:
             #import pdb; pdb.set_trace()
             return self._rnd.randn(N, self._sample_dim)
