@@ -26,9 +26,9 @@ ec2_instance = "m4.10xlarge"
 # ]
 # subnet = "us-west-1b"
 info_instance = INSTANCE_TYPE_INFO[ec2_instance]
-n_parallel = int(info_instance['vCPU'] / 2.)
-# n_parallel = 4
-spot_price = info_instance['price']
+n_parallel = int(info_instance['vCPU'] / 2)
+# n_parallel = 1
+spot_price = str(info_instance['price'])
 
 # for subnet in subnets:
 aws_config = dict(
@@ -76,6 +76,10 @@ for activity_range in [6, 10, 15]:
             algo.train(),
             # where to launch the instances
             mode=mode,
+            aws_config=aws_config,
+            pre_commands=['pip install --upgrade pip',
+                          'pip install --upgrade theano',
+                          ],
             # Number of parallel workers for sampling
             n_parallel=n_parallel,
             # Only keep the snapshot parameters for the last iteration

@@ -20,6 +20,7 @@ from rllab.misc.instrument import query_yes_no
 from rllab.misc.console import colorize
 from sandbox.haoran.mddpg.algos.mddpg import MDDPG
 from sandbox.haoran.myscripts.myutilities import get_true_env
+from sandbox.haoran.mddpg.misc.sampler import MNNParallelSampler
 
 parser = argparse.ArgumentParser()
 parser.add_argument('prefix', type=str, default='??????',nargs='?', help="""
@@ -68,6 +69,7 @@ for pkl_file in pkl_files:
             algo = snapshot["algo"]
             max_path_length = algo.max_path_length
             K = algo.K
+            env = algo.env
         else:
             if args.max_path_length == -1:
                 print("""
@@ -90,21 +92,20 @@ for pkl_file in pkl_files:
                 resume=True, # very important
                 # other training params are irrelevant here
             )
+            env = snapshot["env"]
 
         # sample paths
+        algo.eval_sampler = MNNParallelSampler(algo)
         algo._start_worker()
         paths = algo.eval_sampler.obtain_samples(
             itr=0,
-            batch_size=max_path_length * K,
-            # each head gets one chance at least
-            # it doesn't matter whether some heads samples more paths, since
-            # the policies are deterministic
             max_path_length=max_path_length,
+            max_head_repeat=1,
         )
 
         # plotting
         fig, ax = plt.subplots()
-        true_env = get_true_env(snapshot["env"])
+        true_env = get_true_env(env)
         true_env.plot_visitation(
             epoch=0,
             paths=paths,

@@ -11,17 +11,19 @@ from rllab.exploration_strategies.base import ExplorationStrategy
 class StochasticNNPolicy(NeuralNetwork, Policy):
     def __init__(self,
                  scope_name,
-                 obs_dim,
+                 observation_dim,
                  action_dim,
                  hidden_dims,
                  W_initializer=None,
-                 output_nonlinearity=None,
+                 output_nonlinearity=tf.identity,
                  sample_dim=1,
                  freeze_samples=False,
+                 K=1,
+                 output_scale=1.0,
                  **kwargs):
         Serializable.quick_init(self, locals())
 
-        self._obs_dim = obs_dim
+        self._obs_dim = observation_dim
         self._action_dim = action_dim
         self._sample_dim = sample_dim
         self._rnd = np.random.RandomState()
@@ -35,17 +37,28 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
             all_inputs = tf.concat(concat_dim=1,
                                    values=(self._obs_pl, self._sample_pl))
 
-            self._output = mlp(
+            self._pre_output = mlp(
                 all_inputs,
-                obs_dim + self._sample_dim,  # + 1 is for the random sample
+                observation_dim + self._sample_dim,
                 hidden_dims,
                 output_layer_size=action_dim,
                 nonlinearity=tf.nn.relu,
-                output_nonlinearity=output_nonlinearity,
+                output_nonlinearity=tf.identity,
                 W_initializer=W_initializer
             )
-
+            self._output = output_scale * output_nonlinearity(self._pre_output)
             self.variable_scope = variable_scope
+
+        # Freeze stuff
+        self._K = K
+        self._samples = np.random.randn(K, self._sample_dim)
+        self._k = np.random.randint(0, self._K)
+        self.output_nonlinearity = output_nonlinearity
+        self.output_scale = output_scale
+
+    @property
+    def pre_output(self):
+        return self._pre_output
 
     def _create_pls(self):
             self._obs_pl = tf.placeholder(
@@ -78,6 +91,8 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
 
     def get_actions(self, observations):
         feed = self.get_feed_dict(observations)
+        #if type(observations) is not list and observations.shape[0] == 16:
+        #    import pdb; pdb.set_trace()
         return self.sess.run(self.output, feed), {}
 
     def _get_input_samples(self, N):
@@ -89,9 +104,18 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
         """
 
         if self._freeze:
-            self._rnd.seed(0)
+            indices = np.random.randint(low=0, high=self._K, size=N)
+            samples = self._samples[indices]
+            return samples
+        else:
+            #import pdb; pdb.set_trace()
+            return self._rnd.randn(N, self._sample_dim)
+            #self._rnd.seed(0)
 
-        return self._rnd.randn(N, self._sample_dim)
+        #return self._rnd.randn(N, self._sample_dim)
+
+    def reset(self):
+        self._k = np.random.randint(0, self._K)
 
 
 class DummyExplorationStrategy(ExplorationStrategy):

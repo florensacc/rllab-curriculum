@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import pickle
+from matplotlib.backends.backend_pdf import PdfPages
 
 from rllab.envs.proxy_env import ProxyEnv
 from rllab.exploration_strategies.ou_strategy import OUStrategy
@@ -12,18 +13,36 @@ from sandbox.tuomas.mddpg.policies.stochastic_policy import \
 
 from sandbox.tuomas.mddpg.critics.gaussian_critic import MixtureGaussian2DCritic
 
-from sandbox.tuomas.mddpg.algos.vddpg import VDDPG
+#from sandbox.tuomas.mddpg.algos.vddpg import VDDPG
 from rllab.misc.overrides import overrides
 import matplotlib.pyplot as plt
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
-flags.DEFINE_float('actor_lr', 0.01, 'Base learning rate for actor.')
-flags.DEFINE_float('critic_lr', 0.0001, 'Base learning rate for critic.')
+flags.DEFINE_float('actor_lr', 0.001, 'Base learning rate for actor.')
+flags.DEFINE_float('critic_lr', 0.001, 'Base learning rate for critic.')
 flags.DEFINE_integer('path_length', 100, 'Maximum path length.')
+flags.DEFINE_integer('n_particles', 64, 'Number of particles.')
+flags.DEFINE_string('alg', 'vddpg', 'Algorithm.')
+flags.DEFINE_string('policy', 'stochastic',
+                    'Policy (DETERMINISTIC/stochastic')
+flags.DEFINE_string('save_path', '', 'Path where the plots are saved.')
+
+if FLAGS.alg == 'ddpg':
+    from sandbox.tuomas.mddpg.algos.ddpg import DDPG as Alg
+elif FLAGS.alg == 'vddpg':
+    from sandbox.tuomas.mddpg.algos.vddpg import VDDPG as Alg
 
 
-class VDDPGTest(VDDPG):
+if FLAGS.policy == 'deterministic':
+    from sandbox.tuomas.mddpg.policies.nn_policy \
+        import FeedForwardPolicy as Policy
+elif FLAGS.policy == 'stochastic':
+    from sandbox.tuomas.mddpg.policies.stochastic_policy \
+        import StochasticNNPolicy as Policy
+
+
+class AlgTest(Alg):
     lim = 2
     plots_initialized = False
     eval_counter = 0
@@ -45,8 +64,10 @@ class VDDPGTest(VDDPG):
     @overrides
     def evaluate(self, epoch, es_path_returns):
         self.eval_counter += 1
-        n_paths = 10
+        n_paths = 10 # FLAGS.n_particles
 
+        pp = PdfPages(FLAGS.save_path + 'test_iter_' + str(self.eval_counter),
+                      '.pdf')
 
         if not self.plots_initialized:
             env = self.env
@@ -59,10 +80,10 @@ class VDDPGTest(VDDPG):
             plt.axis('equal')
 
             # Set up all critic plots.
-            fig = plt.figure(figsize=(20, 7))
+            self._critic_fig = plt.figure(figsize=(20, 7))
             self.ax_critics = []
             for i in range(3):
-                ax = fig.add_subplot(130 + i + 1)
+                ax = self._critic_fig.add_subplot(130 + i + 1)
                 self.ax_critics.append(ax)
                 plt.axis('equal')
                 ax.set_xlim((-self.lim, self.lim))
@@ -74,9 +95,11 @@ class VDDPGTest(VDDPG):
             env.plot_position_cost(self.ax_paths)
 
             # Create path objects only once.
-            self.h_paths = []
+            self.h_training_paths = []
+            self.h_test_paths = []
             for i in range(n_paths):
-                self.h_paths += self.ax_paths.plot([], [])
+                self.h_training_paths += self.ax_paths.plot([], [], 'r')
+                self.h_test_paths += self.ax_paths.plot([], [], 'b')
 
             self.plots_initialized = True
 
@@ -93,80 +116,98 @@ class VDDPGTest(VDDPG):
             ax_critic.clabel(cs, inline=1, fontsize=10, fmt='%.0f')
 
             # sample and plot actions
-            N = 250
+            N = FLAGS.n_particles
             all_obs = np.array([obs] * N)
             all_actions = self.policy.get_actions(all_obs)[0]
+            #print(all_actions)h_test_paths
 
 
             x = all_actions[:, 0]
             y = all_actions[:, 1]
             ax_critic.plot(x, y, '*')
 
-        # Do rollouts.
-        for line in self.h_paths:
+        ## Do rollouts.
+        for line in self.h_test_paths:
+            #self.policy.reset()
             path = rollout(self.env, self.policy, FLAGS.path_length)
             line.set_data(np.transpose(path['observations']))
 
+        # DEBUG: use training rollouts
+        if len(self.db.paths) >= n_paths:
+            for i, line in enumerate(self.h_training_paths):
+                line.set_data(np.transpose(self.db.paths[-i-1][0]))
+
         plt.draw()
         plt.pause(0.001)
+        pp.savefig(self._critic_fig)
+        pp.close()
+        #plt.savefig(pp, format='pdf')
 
-
-
-
-
-
-        ## Switch to the actual q:
-        #if self.eval_counter == 100:
-        #    self.qf = self.q_actual
-        #    self._init_ops()
-
-        #    # Dump the current actor first.
-        #    params = self.dummy_policy.get_param_values()
-        #    self.sess.run(tf.initialize_all_variables())
-        #    self.dummy_policy.set_param_values(params)
-
-        if self.eval_counter % 25 == 0:
-            self.alpha /= 3
-
-
-
-        return
+        # TODO: hacky way to check if this is VDDPG instance without loading
+        # VDDPG class.
+        if hasattr(self, 'alpha'):
+            if self.eval_counter % 50 == 0:
+                self.alpha /= 3
 
 # -------------------------------------------------------------------
 def test():
-    from sandbox.haoran.mddpg.kernels.gaussian_kernel import \
+    from sandbox.tuomas.mddpg.kernels.gaussian_kernel import \
         SimpleAdaptiveDiagonalGaussianKernel
     from sandbox.rocky.tf.envs.base import TfEnv
-    from sandbox.tuomas.mddpg.policies.stochastic_policy \
-        import StochasticNNPolicy
     from sandbox.tuomas.mddpg.envs.multi_goal_env import MultiGoalEnv
+    #from sandbox.tuomas.mddpg.envs.multi_goal_env import MultiGoalEnv
     from sandbox.tuomas.mddpg.critics.nn_qfunction import FeedForwardCritic
 
-    K = 16  # number of particles
 
-    ddpg_kwargs = dict(
-        epoch_length=25,  # evaluate / plot per SVGD step
-        min_pool_size=2,  # must be at least 2
+    alg_kwargs = dict(
+        epoch_length=100,  # evaluate / plot per SVGD step
+        min_pool_size=1000,#1000,  # must be at least 2
         #replay_pool_size=2,  # should only sample from recent experiences,
                         # note that the sample drawn can be one iteration older
         eval_samples=1,  # doesn't matter since we override evaluate()
         n_epochs=100000,  # number of SVGD steps
         policy_learning_rate=FLAGS.actor_lr,  # note: this is higher than DDPG's 1e-4
         qf_learning_rate=FLAGS.critic_lr,
-        #soft_target_tau=1.0,
+        Q_weight_decay=0.00,
+        #soft_target_tau=1.0
         max_path_length=FLAGS.path_length,
         batch_size=64,  # only need recent samples, though it's slow
-        alpha=3,#0.1,  # 1 is the SVGD default
-        train_actor=True,
-        train_critic=True,
-        q_target_type='mean'
+        scale_reward=0.1
     )
+
+    policy_kwargs = dict(
+    )
+
+    if FLAGS.policy == 'deterministic':
+        policy_kwargs.update(dict(
+            observation_hidden_sizes=(100, 100)
+        ))
+
+    elif FLAGS.policy == 'stochastic':
+        policy_kwargs.update(dict(
+            sample_dim=2,
+            freeze_samples=False,
+            K=FLAGS.n_particles,
+            output_nonlinearity=tf.tanh,
+            hidden_dims=(100, 100),
+            W_initializer=None,
+            output_scale=2.0,
+        ))
+
+    if FLAGS.alg == 'vddpg':
+        alg_kwargs.update(dict(
+            train_actor=True,
+            train_critic=True,
+            q_target_type='max',
+            K=FLAGS.n_particles,
+            alpha=10.,
+        ))
+
     # ----------------------------------------------------------------------
     env = TfEnv(MultiGoalEnv())
 
-    es = DummyExplorationStrategy()
-
-    #es = OUStrategy(env_spec=env.spec, mu=0, theta=0.15, sigma=0.03)
+    #es = DummyExplorationStrategy()
+    es = OUStrategy(env_spec=env.spec, mu=0, theta=0.15, sigma=0.3)
 
     qf = FeedForwardCritic(
         "critic",
@@ -176,7 +217,7 @@ def test():
         embedded_hidden_sizes=(100, 100),
     )
 
-    q_init = MixtureGaussian2DCritic(
+    q_prior = MixtureGaussian2DCritic(
         "critic",
         observation_dim=env.observation_space.flat_dim,
         action_input=None,
@@ -186,13 +227,11 @@ def test():
         sigmas=[1.0]
     )
 
-    policy = StochasticNNPolicy(
-        'actor',
-        env.observation_space.flat_dim,
-        env.action_space.flat_dim,
-        hidden_dims=(100, 100),
-        output_nonlinearity= None, #tf.tanh,
-        sample_dim=2,
+    policy = Policy(
+        scope_name='actor',
+        observation_dim=env.observation_space.flat_dim,
+        action_dim=env.action_space.flat_dim,
+        **policy_kwargs,
     )
 
     kernel = SimpleAdaptiveDiagonalGaussianKernel(
@@ -200,15 +239,18 @@ def test():
         dim=env.action_space.flat_dim,
     )
 
-    algorithm = VDDPGTest(
+    if FLAGS.alg == 'vddpg':
+       alg_kwargs.update(dict(
+            kernel=kernel,
+            q_prior=q_prior,
+        ))
+
+    algorithm = AlgTest(
         env=env,
         exploration_strategy=es,
         policy=policy,
-        kernel=kernel,
         qf=qf,
-        q_init=qf,#_init,
-        K=K,
-        **ddpg_kwargs
+        **alg_kwargs
     )
     algorithm.train()
 

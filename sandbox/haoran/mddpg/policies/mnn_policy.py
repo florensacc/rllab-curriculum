@@ -35,9 +35,13 @@ class MNNPolicy(NNPolicy):
             with tf.variable_scope('shared'):
                 self.shared_variables = self.create_shared_variables()
             self.heads = []
+            self.pre_heads = []
             for k in range(self.K):
                 with tf.variable_scope('head_%d'%(k)):
-                    self.heads.append(self.create_head(k))
+                    output, pre_output = self.create_head(k)
+                    self.heads.append(output)
+                    self.pre_heads.append(pre_output)
+            self.pre_output = tf.pack(self.pre_heads, axis=1, name='pre_outputs')
 
             return tf.pack(self.heads, axis=1, name='outputs')
 
@@ -197,7 +201,7 @@ class FeedForwardMultiPolicy(MNNPolicy):
         else:
             output_b_initializer = self.output_b_init
 
-        preoutput_layer = mlp(
+        pre_output_layer = mlp(
             self.shared_variables["shared_layer"],
             shared_output_size,
             self.independent_hidden_sizes,
@@ -206,17 +210,18 @@ class FeedForwardMultiPolicy(MNNPolicy):
             b_initializer=self.hidden_b_init,
         )
         if len(self.independent_hidden_sizes) > 0:
-            preoutput_layer_size = self.independent_hidden_sizes[-1]
+            pre_output_layer_size = self.independent_hidden_sizes[-1]
         elif len(self.shared_hidden_sizes) > 0:
-            preoutput_layer_size = self.shared_hidden_sizes[-1]
+            pre_output_layer_size = self.shared_hidden_sizes[-1]
         else:
-            preoutput_layer_size = self.observation_dim
-        output = self.output_nonlinearity(linear(
-            preoutput_layer,
-            preoutput_layer_size,
+            pre_output_layer_size = self.observation_dim
+        pre_output = linear(
+            pre_output_layer,
+            pre_output_layer_size,
             self.action_dim,
             W_initializer=self.output_W_init,
             b_initializer=output_b_initializer,
             #b_initializer=self.output_b_init,
-        ))
-        return output
+        )
+        output = self.output_nonlinearity(pre_output)
+        return output, pre_output

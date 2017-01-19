@@ -141,7 +141,13 @@ class SimpleAdaptiveDiagonalGaussianKernel(DiagonalGaussianKernel):
         # TODO(TH): hacky fix. To make this work on stochastic policies,
         # we need to pass the number of particles
         # in order to reshape the policy output back to N x K x d
-        xs = self.sess.run(algo.policy.output, actor_feed) #N x K x d or N*K x d
+        if algo.svgd_target == "action":
+            xs = self.sess.run(algo.policy.output, actor_feed) #N x K x d or N*K x d
+        elif algo.svgd_target == "pre-action":
+            xs = self.sess.run(algo.policy.pre_output, actor_feed) #N x K x d or N*K x d
+        else:
+            raise NotImplementedError
+            
         if not multiheaded:
             xs = np.reshape(xs, (-1, K, self.dim))
         N, K, d = xs.shape
