@@ -118,7 +118,7 @@ def main():
     algo, env = load_model(args.params_file, BATCH_SIZE)
 
     # Run policy rollouts for N trajectories, get average return
-    #avg_return, paths = get_average_return(algo, N, seed=FGSM_RANDOM_SEED)
+    #avg_return, paths = get_average_return(algo, FGSM_RANDOM_SEED, N)
     #print("Return:", avg_return)
 
     for fgsm_eps in FGSM_EPS:
@@ -128,9 +128,11 @@ def main():
             print("Output h5 file:", output_h5)
 
         # Run policy rollouts with FGSM adversary for N trials, get average return
-        env.set_adversary_fn(lambda x: fgsm_perturbation(x, algo, fgsm_eps,
-                             OBS_MIN, OBS_MAX, output_h5=output_h5, norm=args.norm))
-        avg_return_adversary, _ = get_average_return(algo, N, seed=FGSM_RANDOM_SEED)
+        env.set_adversary_fn(lambda x: fgsm_perturbation(x, algo, \
+                                       fgsm_eps=fgsm_eps, obs_min=OBS_MIN, \
+                                       obs_max=OBS_MAX, \
+                                       output_h5=output_h5, norm=args.norm))
+        avg_return_adversary, _ = get_average_return(algo, FGSM_RANDOM_SEED, N)
         print("Adversary Return:", avg_return_adversary)
         print("\tAdversary Params:", fgsm_eps, args.norm)
 
