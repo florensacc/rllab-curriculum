@@ -104,13 +104,9 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
         """
 
         if self._freeze:
-            assert (N % self._K) == 0 or N == 1
-            if N == 1:
-                return self._samples[[self._k]]
-            else:
-                batch_size = N // self._K
-                return np.tile(self._samples, (batch_size, 1))
-
+            indices = np.random.randint(low=0, high=self._K, size=N)
+            samples = self._samples[indices]
+            return samples
         else:
             #import pdb; pdb.set_trace()
             return self._rnd.randn(N, self._sample_dim)

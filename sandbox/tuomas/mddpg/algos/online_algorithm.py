@@ -143,8 +143,8 @@ class OnlineAlgorithm(RLAlgorithm):
                     gt.stamp('train: sampling')
 
                     self.plot_path(rewards=raw_reward,
-                                   obsrevation=observation,
-                                   action=action,
+                                   obs=observation,
+                                   actions=action,
                                    info=info)
 
                     # add experience to replay pool
@@ -162,7 +162,11 @@ class OnlineAlgorithm(RLAlgorithm):
                                              np.zeros_like(terminal),
                                              True)
                         #self.db.flush()
-                        self.plot_path(flush=True)
+                        self.plot_path(rewards=raw_reward,
+                                       obs=observation,
+                                       actions=action,
+                                       info=info,
+                                       flush=True)
 
                         observation = self.env.reset()
                         self.exploration_strategy.reset()
@@ -291,7 +295,7 @@ class OnlineAlgorithm(RLAlgorithm):
 
     @abc.abstractmethod
     def plot_path(self, rewards=None, terminals=None, obs=None, actions=None,
-                  next_obs=None, flush=False):
+                  next_obs=None, flush=False, info=None):
         """
         Plot training data or apply other postprocessing steps. Called after
         drawing a new training sample.
