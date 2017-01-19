@@ -1,3 +1,6 @@
+'''
+Launched Wednesday 11th. It was wrong: the normalize should have been on the inner env only!
+'''
 import math
 import os
 
@@ -54,7 +57,7 @@ for i in [1, 2, 3]:
                     # reward_coef_bonus=reward_coef_bonus,
                     batch_size=1e5 / time_step_agg,
                     whole_paths=True,
-                    max_path_length=5e3 / time_step_agg,
+                    max_path_length=int(5e3 / time_step_agg),
                     n_itr=2000,
                     discount=0.99,
                     step_size=0.01,

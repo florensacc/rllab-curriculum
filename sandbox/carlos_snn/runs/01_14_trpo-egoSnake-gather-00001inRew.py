@@ -1,5 +1,6 @@
 '''
-train baseline
+01/14/2017
+train baseline -- Add the coef inner rew of 1e-4 (before the order of maginitude of the inner rew was maybe too large)
 '''
 # from rllab.sampler import parallel_sampler
 # parallel_sampler.initialize(n_parallel=2)
@@ -39,7 +40,7 @@ aws_config = dict(
 )
 
 for activity_range in [6, 10, 15]:
-    for coef_inner_rew in [0., 1e-3]:
+    for coef_inner_rew in [1e-4]:
         env = normalize(SnakeGatherEnv(activity_range=activity_range, sensor_range=activity_range,
                                        sensor_span=math.pi * 2, ego_obs=True,
                                        coef_inner_rew=coef_inner_rew))    ######################### How to crack up balls reward?
@@ -59,7 +60,7 @@ for activity_range in [6, 10, 15]:
             batch_size=5e5,
             whole_paths=True,
             max_path_length=int(5e3 * activity_range / 6.),  # correct for larger envs
-            n_itr=2000,
+            n_itr=500,
             discount=0.99,
             step_size=0.01,
             # Uncomment both lines (this and the plot parameter below) to enable plotting
