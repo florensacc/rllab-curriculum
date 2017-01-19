@@ -80,7 +80,7 @@ if __name__ == "__main__":
                                       visitation_bonus_list, survival_bonus_list, dist_from_reset_bonus_list)
 
     # set other algorithm params
-    bs = 50000
+    bs = 30000
     pl = 500
     switch_lat_every_list = [100]
     start_bonus_after_list = [0, 10]
