@@ -1,5 +1,5 @@
 """
-01/15/2017 1:48 (the one from yesterday had the wrong bs and pl!!!
+01/15/2017 one random seed was missing for pkl30
 Run one more random seed of each
 SnakeGather: find good size to compare agains baseline
 """
@@ -22,6 +22,7 @@ from sandbox.carlos_snn.policies.categorical_mlp_policy import CategoricalMLPPol
 stub(globals())
 
 # exp setup --------------------------------------------------------
+# mode = "local_docker"
 mode = "ec2"
 local_instance = "m4.16xlarge"
 # subnets =[
@@ -30,7 +31,7 @@ local_instance = "m4.16xlarge"
 # subnet = "us-west-1b"
 info_instance = INSTANCE_TYPE_INFO[local_instance]
 n_parallel = int(info_instance['vCPU']/2.)
-# n_parallel = 1
+# n_parallel = 4
 spot_price = info_instance['price']
 
 # for subnet in subnets:
@@ -44,13 +45,13 @@ aws_config = dict(
 
 exp_dir = 'data_upload/egoSnake64-snn/'
 for dir in os.listdir(exp_dir):
-    if 'Figure' not in dir and os.path.isfile(os.path.join(exp_dir, dir, 'params.pkl')):
+    if 'Figure' not in dir and os.path.isfile(os.path.join(exp_dir, dir, 'params.pkl')) and ('30' in dir or '20' in dir):
         pkl_path = os.path.join(exp_dir, dir, 'params.pkl')
         print("hier for : ", pkl_path)
 
-        for maze_size_scaling in [7, 9]:
+        for maze_size_scaling in [7]:
 
-            for time_step_agg in [100, 500, 800]:
+            for time_step_agg in [500]:
 
                 inner_env = normalize(SnakeMazeEnv(maze_id=0, maze_size_scaling=maze_size_scaling,
                                                    sensor_span=math.pi * 2, ego_obs=True))
@@ -84,7 +85,7 @@ for dir in os.listdir(exp_dir):
                     step_size=0.01,
                 )
 
-                for s in [10]:  # range(10, 110, 10):  # [10, 20, 30, 40, 50]:
+                for s in [20]:  # range(10, 110, 10):  # [10, 20, 30, 40, 50]:
                     exp_prefix = 'hier-snn-egoSnake-maze0'
                     exp_name = exp_prefix + '{}scale_{}agg_{}pl_PRE{}_{}'.format(maze_size_scaling,
                                                                                  time_step_agg, int(
