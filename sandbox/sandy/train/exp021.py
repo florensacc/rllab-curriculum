@@ -36,7 +36,7 @@ logging_level = logging.INFO
 
 n_parallel = 2 # only for local exp
 snapshot_mode = "gap"
-snapshot_gap = 1
+snapshot_gap = 20
 plot = False
 use_gpu = False
 sync_s3_pkl = True
@@ -59,8 +59,8 @@ class VG(VariantGenerator):
 
     @variant
     def game(self):
-        return ["beamrider", "breakout", "pong", "qbert", "space_invaders", \
-                "chopper_command", "seaquest"]  # TODO: Run on skiing
+        return ["beamrider", "breakout", "qbert", "space_invaders", \
+                "chopper_command", "seaquest", "skiing"]
 
 variants = VG().variants()
 
@@ -82,13 +82,14 @@ for v in variants:
     img_width = img_size
     img_height = img_size
     n_last_screens = 4
+    n_iter = 400
 
     # problem setting
     agent_type = "a3c"
     entropy_bonus = 0.01
     shared_weights = True
     t_max = 5
-    lr = 7e-4
+    lr = 1e-3
     sync_t_gap_limit = 1000
     eval_frequency = 10**6
     eval_n_runs = 10
@@ -193,6 +194,7 @@ for v in variants:
             env=env,
             agent=agent,
             logging_level=logging_level,
+            total_steps=n_iter*eval_frequency,
             eval_frequency=eval_frequency,
             eval_n_runs=eval_n_runs,
             seeds=seeds,
