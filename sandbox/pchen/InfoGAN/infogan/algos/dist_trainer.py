@@ -12,7 +12,7 @@ import rllab.misc.logger as logger
 from rllab.misc.ext import delete
 import sys
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp, flatten, assign_to_gpu, \
-    average_grads, temp_restore, np_logsumexp
+    average_grads, temp_restore, np_logsumexp, get_available_gpus
 
 
 class DistTrainer(object):
@@ -21,39 +21,55 @@ class DistTrainer(object):
             dataset,
             dist,
             optimizer,
+            init_batch_size=512,
+            train_batch_size=64,
+            exp_avg=0.998,
     ):
         self._dist = dist
         self._optimizer = optimizer
         self._dataset = dataset
+        self._train_batch_size = train_batch_size
+        self._init_batch_size = init_batch_size
+        self._gpus = get_available_gpus()
+        self._exp_avg = exp_avg
 
     def init_opt(self, init=False):
         if init:
             self._dist.init_mode()
+            batch_size = self._init_batch_size
         else:
             self._dist.train_mode()
+            batch_size = self._train_batch_size
+        inp_shape = (batch_size,) + self._dataset.image_shape
+        x_inp = tf.placeholder(tf.float32, shape=inp_shape)
 
-                surr_loss = -vlb
-                tower_grads = None
-                self.init_hook(locals())
-                if tower_grads is None:
-                    tower_grads = self.optimizer.compute_gradients(surr_loss)
-                if self.freeze_encoder:
-                    tower_grads = [
-                        (grad, var) for grad, var in tower_grads
-                        if var not in self.encoder_params
-                        ]
-                grads.append(tower_grads)
-                logger.log("grads")
+        cpu_device = "/cpu:0"
+        if init:
+            with tf.device(cpu_device):
+                logprobs = self._dist.logli_prior(x_inp)
+        else:
+            devices = self._gpus if len(self._gpus) != 0 else [cpu_device]
 
-        if init and self.exp_avg is not None:
-            self.ema = tf.train.ExponentialMovingAverage(decay=self.exp_avg)
+            tower_grads_lst = []
+            for x, device in zip(
+                tf.split(0, len(devices), x_inp),
+                devices
+            ):
+                with tf.device(device):
+                    logprobs = self._dist.logli_prior(x)
+                    tower_loss = -tf.reduce_mean(logprobs)
+                    tower_grads = self._optimizer.compute_gradients(tower_loss)
+                    tower_grads_lst.append(tower_grads)
+
+        if self._exp_avg is not None:
+            self.ema = tf.train.ExponentialMovingAverage(decay=self._exp_avg)
             self.ema_applied = self.ema.apply(tf.trainable_variables())
             self.avg_dict = self.ema.variables_to_restore()
 
         log_vars = [
             (key, tf.add_n(vals) / self.num_gpus)
             for key, vals in dict_log_vars.items()
-            ]
+        ]
         if (not init) and (not eval) and (not opt_off):
             for name, var in log_vars:
                 tf.scalar_summary(name, var)
