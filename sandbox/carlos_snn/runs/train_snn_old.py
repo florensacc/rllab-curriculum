@@ -39,7 +39,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.clone:
-        autoclone.autoclone(__file__)
+        autoclone.autoclone(__file__, args)
         sys.exit()
 
     # setup ec2
