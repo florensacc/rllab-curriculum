@@ -11,9 +11,20 @@ from sandbox.sandy.misc.util import get_time_stamp
 
 adversary_algo = 'fgsm'
 adversary_algo_param_names = ['norm', 'fgsm_eps']  # Levels of all_output_h5
-game = 'pong'
+game = 'space-invaders'
+# Frameskip = 3, 44x44:
+#params_file = '/home/shhuang/src/rllab-private/data/s3/' + \
+#              'trpo-space/exp015/exp015_20170112_174121_353120_space_invaders/itr_499.pkl'
+# Frameskip = 4, 44x44:
 params_file = '/home/shhuang/src/rllab-private/data/s3/' + \
-              'trpo-pong/exp013/exp013_20170111_165334_736617_pong/itr_149.pkl'
+              'trpo-space/exp016/exp016_20170113_185323_813550_space_invaders/itr_499.pkl'
+
+# Frameskip = 3, 84x84:
+#params_file = '/home/shhuang/src/rllab-private/data/s3/' + \
+#              'trpo-space/exp016/exp016_20170113_185321_146337_space_invaders/itr_0.pkl'
+# Frameskip = 4, 84x84:
+#params_file = '/home/shhuang/src/rllab-private/data/s3/' + \
+#              'trpo-space/exp016/exp016_20170113_185322_438848_space_invaders/itr_0.pkl'
 output_dir_base = '/home/shhuang/src/rllab-private/data/local/rollouts'
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 output_dir = os.path.join(output_dir_base, exp_index, exp_index + "_" + get_time_stamp())
@@ -25,11 +36,13 @@ seed = 1  # TODO: Try a few different seeds
 class VG(VariantGenerator):
     @variant
     def fgsm_eps(self):
-        return [0, 0.0000625, 0.000125, 0.00025, 0.0005, 0.001, 0.002, 0.004, 0.008, 0.016]
+        #return [0, 0.0000625, 0.000125, 0.00025, 0.0005, 0.001, 0.002, 0.004, 0.008, 0.016]
+        return [0, 0.0000625]
 
     @variant
     def norm(self):
-        return ['l1', 'l2', 'l-inf']
+        #return ['l1', 'l2', 'l-inf']
+        return ['l-inf', 'l2']
 
 variants = VG().variants()
 
@@ -79,4 +92,3 @@ for v in variants:
     save_video_file(output_h5, video_file)
 
     save_performance_to_all(all_output_h5, avg_return_adversary, adv_params, len(paths))
-    # TODO: Save paths too?

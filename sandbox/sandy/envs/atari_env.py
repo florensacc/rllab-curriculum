@@ -52,6 +52,16 @@ class AtariEnv(GymEnv):
         # # rows, # cols) instead of (batch size, # rows, # cols, # channels)
         self._observation_space = Box(-1.,1.,(self.n_frames,self.img_height,self.img_width))
         self.update_last_frames(None)
+        self._is_terminal = True  # Need to call self.reset() to set this to False
+        self._reward = 0
+
+    @property
+    def reward(self):
+        return self._reward
+
+    @property
+    def is_terminal(self):
+        return self._is_terminal
 
     @property
     def observation(self):
@@ -93,6 +103,10 @@ class AtariEnv(GymEnv):
     def scale_obs(self, obs):
         return (obs / SCALE) * 2.0 - 1.0  # rescale to [-1,1]
 
+    def unscale_obs(self, obs):
+        # rescale from [-1,1] to [0,255]
+        return ((obs + 1.0) / 2.0 * SCALE).astype(np.uint8)
+
     def preprocess_obs(self, obs):
         # Preprocess Atari frames based on released DQN code from Nature paper:
         #     1) Convert RGB to grayscale (Y in YUV)
@@ -121,6 +135,8 @@ class AtariEnv(GymEnv):
         #    cv2.imshow(str(i), vis_obs[i,:,:])
         #cv2.waitKey()
 
+        self._is_terminal = done
+        self._reward = reward
         return Step(self.observation, reward, done, **info)
 
     @overrides
@@ -128,5 +144,7 @@ class AtariEnv(GymEnv):
         obs = super().reset()  # self.env.reset()
         self.clear_last_frames()
         self.update_last_frames(obs)
+        self._is_terminal = False
+        self._reward = 0
 
         return self.observation
