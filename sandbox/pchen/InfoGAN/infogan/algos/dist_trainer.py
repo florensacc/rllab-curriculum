@@ -28,7 +28,9 @@ class DistTrainer(object):
             max_iter=1000,
             updates_per_iter=None,
             eval_every=1,
+            save_every=10,
             checkpoint_dir=None,
+            resume_from=None,
     ):
         self._dist = dist
         self._optimizer = optimizer
@@ -45,8 +47,10 @@ class DistTrainer(object):
             else dataset.train.images.shape[0] // train_batch_size
         )
         self._eval_every = eval_every
+        self._save_every = save_every
         self._checkpoint_dir = checkpoint_dir or logger.get_snapshot_dir()
         assert self._checkpoint_dir, "checkpoint can't be none"
+        self._resume_from = resume_from
 
     def construct_init(self):
         self._dist.init_mode()
@@ -122,11 +126,13 @@ class DistTrainer(object):
 
         imgs_lst = []
         unit_bs = self._train_batch_size // len(devices)
-        for device in (
+        import sandbox.pchen.InfoGAN.infogan.misc.distributions as dists
+        for i, device in enumerate(
             devices
         ):
             with tf.device(device):
-                imgs_lst += [self._dist.sample_prior(unit_bs)]
+                with dists.set_current_seed((i+2)**2):
+                    imgs_lst += [self._dist.sample_prior(unit_bs)]
         imgs = tf.concat(0, imgs_lst)
 
         return imgs
@@ -143,11 +149,21 @@ class DistTrainer(object):
         sample_imgs = self.construct_eval()
         logger.log("opt_inited w/ eval")
 
-        init = tf.initialize_all_variables()
+        saver = tf.train.Saver()
 
         with sess.as_default():
-            sess.run(init, {init_inp: self.init_batch()})
-            logger.log("Init finished")
+            if self._resume_from:
+                print("resuming from %s" % self._resume_from)
+                fn = tf.train.latest_checkpoint(self._resume_from)
+                if fn is None:
+                    print("cant find latest checkpoint, treating as checkpoint file")
+                    fn = self._resume_from
+                saver.restore(sess, fn)
+                logger.log("Restore finished")
+            else:
+                init = tf.initialize_all_variables()
+                sess.run(init, {init_inp: self.init_batch()})
+                logger.log("Init finished")
 
             train_log_vals = []
             for itr in range(self._max_iter):
@@ -161,8 +177,6 @@ class DistTrainer(object):
 
                     except BaseException as e:
                         print("exception caught: %s" % e)
-                        def re():
-                            raise e
                         import IPython; IPython.embed()
 
                 if itr % self._eval_every == 0:
@@ -183,6 +197,10 @@ class DistTrainer(object):
                         plotting.plt.savefig("%s/samples_itr_%s.png" % (self._checkpoint_dir, itr))
                         plotting.plt.close('all')
 
+                if itr % self._save_every == 0:
+                    fn = saver.save(sess, "%s/%s.ckpt" % (self._checkpoint_dir, itr))
+                    logger.log(("Model saved in file: %s" % fn))
+
                 for prefix, ks, ls in [
                     ["train", train_log_names, train_log_vals],
                     ["vali", vali_log_names, vali_log_vals],
@@ -192,7 +210,6 @@ class DistTrainer(object):
                         logger.record_tabular_misc_stat("%s_%s" % (prefix, k), (v))
                 train_log_vals = []
                 logger.dump_tabular(with_prefix=False)
-
 
     def init_batch(self):
         train = self._dataset.train
@@ -213,3 +230,4 @@ class DistTrainer(object):
         ):
             yield data.next_batch(self._train_batch_size)[0].reshape((-1,)+self._image_shape)
         data.rewind()
+

@@ -12,14 +12,14 @@ dataset = Cifar10Dataset(dequantized=True)
 flat_dim = dataset.image_dim
 
 noise = Gaussian(flat_dim)
-shape = [-1, 16, 16, 12]
+shape = [-1, 8, 8, 12*4]
 shaped_noise = ReshapeFlow(
     noise,
     forward_fn=lambda x: tf.reshape(x, shape),
     backward_fn=lambda x: tf_go(x).reshape([-1, noise.dim]).value,
 )
 
-# 4 checkerboard flows
+# 3 checkerboard flows
 # note: unbalanced receptive growth version
 def resnet_blocks_gen(blocks=4, filters=64):
     def go(x):
@@ -78,7 +78,7 @@ def checkerboard_condition_fn_gen(bin=0, h_collapse=True):
 
     return split_gen(id), split_gen((id + 1) % 2), merge
 cur = shaped_noise
-for i in range(2):
+for i in range(3):
     cf, ef, merge = checkerboard_condition_fn_gen(i, True) # fixme: for now
     cur = ShearingFlow(
         cur,
@@ -105,7 +105,7 @@ def channel_condition_fn_gen(bin=0):
             vs = [effect, condition]
         return tf.concat(3, vs)
     return split_gen(id), split_gen((id + 1) % 2), merge
-for i in range(6):
+for i in range(3):
     cf, ef, merge = channel_condition_fn_gen(i, )
     cur = ShearingFlow(
         cur,
@@ -124,7 +124,34 @@ upsampled = ReshapeFlow(
 cur = upsampled
 
 # another 3 checkerboard
-for i in range(5):
+for i in range(3):
+    cf, ef, merge = checkerboard_condition_fn_gen(i, True) # fixme: for now
+    cur = ShearingFlow(
+        cur,
+        nn_builder=resnet_blocks_gen(),
+        condition_fn=cf,
+        effect_fn=ef,
+        combine_fn=merge,
+    )
+
+for i in range(3):
+    cf, ef, merge = channel_condition_fn_gen(i, )
+    cur = ShearingFlow(
+        cur,
+        nn_builder=resnet_blocks_gen(),
+        condition_fn=cf,
+        effect_fn=ef,
+        combine_fn=merge,
+    )
+
+# up-sample
+upsampled = ReshapeFlow(
+    cur,
+    forward_fn=lambda x: tf.depth_to_space(x, 2),
+    backward_fn=lambda x: tf_go(x, debug=False).space_to_depth(2).value,
+)
+cur = upsampled
+for i in range(3):
     cf, ef, merge = checkerboard_condition_fn_gen(i, True) # fixme: for now
     cur = ShearingFlow(
         cur,
@@ -136,14 +163,18 @@ for i in range(5):
 
 dist = DequantizedFlow(cur)
 
-fol = "data/local/proper_deeper_flow"
+fol = "data/local/vis_debug_global_proper_deeper_flow"
 logger.set_snapshot_dir(fol)
 
 algo = DistTrainer(
     dataset=dataset,
     dist=dist,
-    optimizer=AdamaxOptimizer(learning_rate=1e-3),
+    init_batch_size=1024,
+    train_batch_size=128, # also testing resuming from diff bs
+    optimizer=AdamaxOptimizer(learning_rate=2e-3),
     save_every=20,
+    updates_per_iter=5,
+    resume_from="/home/peter/rllab-private/data/local/global_proper_deeper_flow/"
     # checkpoint_dir="data/local/test_debug",
 
 )

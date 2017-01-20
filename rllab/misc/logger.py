@@ -105,6 +105,7 @@ def remove_tabular_output(file_name):
 
 
 def set_snapshot_dir(dir_name):
+    os.system("mkdir -p %s" % dir_name)
     global _snapshot_dir
     _snapshot_dir = dir_name
 
