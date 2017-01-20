@@ -62,10 +62,12 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
 
     @overrides
     def log_diagnostics(self, paths):
-        progs = [
-            path["observations"][-1][-3] - path["observations"][0][-3]
-            for path in paths
-        ]
+        progs = []
+        for path in paths:
+            coms = path["env_infos"]["com"]
+            progs.append(coms[-1][0] - coms[0][0])
+                # x-coord of com at the last time step minus the 1st step
+
         logger.record_tabular('env: ForwardProgressAverage', np.mean(progs))
         logger.record_tabular('env: ForwardProgressMax', np.max(progs))
         logger.record_tabular('env: ForwardProgressMin', np.min(progs))
@@ -73,11 +75,12 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
 
     def log_stats(self, algo, epoch, paths):
         # forward distance
-        progs = [
-            path["observations"][-1][-3] - path["observations"][0][-3]
-            # -3 refers to the x coordinate of the com of the torso
-            for path in paths
-        ]
+        progs = []
+        for path in paths:
+            coms = path["env_infos"]["com"]
+            progs.append(coms[-1][0] - coms[0][0])
+                # x-coord of com at the last time step minus the 1st step
+
         n_directions = [
             np.max(progs) > self.prog_threshold,
             np.min(progs) < - self.prog_threshold,
@@ -147,15 +150,16 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
         # plot the q-value at the initial state
         ax_qf = fig.add_subplot(212)
         ax_qf.grid(True)
-        lim = 2.
+        lim = algo.policy.output_scale
         ax_qf.set_xlim((-lim, lim))
         ax_qf.set_ylim((-lim, lim))
         obs = paths[0]["observations"][0]
             # assume the initial state is fixed
             # assume the observations are not normalized
         X, Y, Q = self.eval_qf(algo.sess, algo.qf, obs, lim)
+        log_prob = (Q - np.max(Q.ravel())) / algo.alpha
         ax_qf.clear()
-        cs = ax_qf.contour(X, Y, np.exp(Q / algo.alpha), 20)
+        cs = ax_qf.contour(X, Y, log_prob, 20)
         ax_qf.clabel(cs, inline=1, fontsize=10, fmt='%.2f')
 
         # sample and plot actions
