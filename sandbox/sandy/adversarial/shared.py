@@ -88,12 +88,12 @@ def get_average_return(algo, seed, N=10):
     else:
         assert False, "Algorithm type " + algo_name + " is not supported."
 
-def load_model_trpo(algo):
+def load_model_trpo(algo, env, batch_size):
     algo.batch_size = batch_size
     algo.sampler.worker_batch_size = batch_size
     algo.n_parallel = 1
     try:
-        algo.max_path_length = data['env'].horizon
+        algo.max_path_length = env.horizon
     except NotImplementedError:
         algo.max_path_length = 50000
 
@@ -119,7 +119,7 @@ def load_model(params_file, batch_size):
     algo = data['algo']
     algo_name = type(algo).__name__
     if algo_name in ['TRPO', 'ParallelTRPO']:
-        return load_model_trpo(algo)
+        return load_model_trpo(algo, data['env'], batch_size)
     elif algo_name in ['A3CALE']:
         return load_model_a3c(algo)
     else:
