@@ -2533,3 +2533,54 @@ class ReshapeFlow(Distribution):
     def nonreparam_logli(self, x_var, dist_info):
         raise "not defined"
 
+class DequantizedFlow(Distribution):
+    def __init__(
+            self,
+            base_dist,
+            width=1./256,
+    ):
+        global G_IDX
+        G_IDX += 1
+        self._name = "Dequantized_%s" % (G_IDX)
+        self._base_dist = base_dist
+        self._width = width
+
+    @overrides
+    def init_mode(self):
+        self._base_dist.init_mode()
+
+    @overrides
+    def train_mode(self):
+        self._base_dist.train_mode()
+
+    @property
+    def dim(self):
+        return self._base_dist.dim
+
+    @property
+    def effective_dim(self):
+        return self._base_dist.effective_dim
+
+    def logli(self, x_var, dist_info):
+        return self._base_dist.logli(x_var, dist_info) + self.dim*np.log(self._width)
+
+    def sample_logli(self, dist_info):
+        x, logpeps = self._base_dist.sample_logli(dist_info)
+        return x, logpeps + self.dim*np.log(self._width)
+
+    def prior_dist_info(self, batch_size):
+        return self._base_dist.prior_dist_info(batch_size)
+
+    @property
+    def dist_info_keys(self):
+        return self._base_dist.dist_info_keys
+
+    @property
+    def dist_flat_dim(self):
+        return self._base_dist.dist_flat_dim
+
+    def activate_dist(self, flat):
+        return self._base_dist.activate_dist(flat)
+
+    def nonreparam_logli(self, x_var, dist_info):
+        raise "not defined"
