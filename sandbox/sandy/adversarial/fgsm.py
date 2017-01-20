@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 import argparse
+import chainer
+from chainer import functions as F
 import numpy as np
 
 from sandbox.sandy.adversarial.io_util import init_output_file, save_rollout_step
@@ -55,6 +57,23 @@ def fgsm_perturbation_l1(grad_x, fgsm_eps, obs, obs_min, obs_max):
     eta = eta.reshape(grad_x.shape, order='C')
     return eta, np.sign(eta)
 
+def get_grad_x_a3c(obs, algo):
+    statevar = chainer.Variable(np.expand_dims(algo.cur_agent.preprocess(obs), 0))
+    logits = algo.cur_agent.model.pi.compute_logits(algo.cur_agent.model.head(statevar))
+    max_logits = F.broadcast_to(F.max(logits), (1,len(logits)))
+    # Calculate loss between predicted action distribution and the action distribution
+    # that places all weight on the argmax action
+    ce_loss = -1 * F.log(1.0 / F.sum(F.exp(logits - max_logits)))
+    ce_loss.backward(retain_grad=True)
+    grad_x = statevar.grad[0]
+    return grad_x
+
+def get_grad_x_trpo(obs, algo):
+    flat_obs = algo.policy.observation_space.flatten(obs)[np.newaxis,:]
+    grad_x = algo.optimizer._opt_fun["f_obs_grad"](flat_obs)[0,:]
+    grad_x = algo.policy.observation_space.unflatten(grad_x)
+    return grad_x
+
 def fgsm_perturbation(obs, algo, **kwargs):
     # Apply fast gradient sign method (FGSM):
     # For l-inf norm,
@@ -78,9 +97,13 @@ def fgsm_perturbation(obs, algo, **kwargs):
         raise
 
     # Calculate \grad_x J(\theta, x, y)
-    flat_obs = algo.policy.observation_space.flatten(obs)[np.newaxis,:]
-    grad_x = algo.optimizer._opt_fun["f_obs_grad"](flat_obs)[0,:]
-    grad_x = algo.policy.observation_space.unflatten(grad_x)
+    algo_name = type(algo).__name__
+    if algo_name in ['TRPO', 'ParallelTRPO']:
+        grad_x = get_grad_x_trpo(obs, algo)
+    elif algo_name in ['A3CALE']:
+        grad_x = get_grad_x_a3c(obs, algo)
+    else:
+        assert False, "Algorithm type " + algo_name + " is not supported."
     grad_x_current = grad_x[-1,:,:]
 
     if norm == 'l-inf':
