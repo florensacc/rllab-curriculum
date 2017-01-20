@@ -31,7 +31,7 @@ class OnlineAlgorithm(RLAlgorithm):
             batch_size=64,
             start_epoch=0,
             n_epochs=1000,
-            epoch_length=1000,
+            #epoch_length=1000,
             min_pool_size=10000,
             replay_pool_size=1000000,
             discount=0.99,
@@ -42,6 +42,8 @@ class OnlineAlgorithm(RLAlgorithm):
             scale_reward_annealer=None,
             render=False,
             epoch_full_paths=False,
+            training_epoch_length=100,
+            sampling_epoch_length=100
     ):
         """
         :param env: Environment
@@ -68,7 +70,6 @@ class OnlineAlgorithm(RLAlgorithm):
         self.batch_size = batch_size
         self.start_epoch = start_epoch
         self.n_epochs = n_epochs
-        self.epoch_length = epoch_length
         self.min_pool_size = min_pool_size
         self.discount = discount
         self.tau = soft_target_tau
@@ -104,6 +105,8 @@ class OnlineAlgorithm(RLAlgorithm):
         # self.eval_sampler = VectorizedSampler(self,n_envs=16)
         self.scope = None
         self.whole_paths = True
+        self.sampling_epoch_length = sampling_epoch_length
+        self.training_epoch_length = training_epoch_length
 
     def _start_worker(self):
         self.eval_sampler.start_worker()
@@ -132,11 +135,12 @@ class OnlineAlgorithm(RLAlgorithm):
                 logger.push_prefix('Epoch #%d | ' % epoch)
                 if self.epoch_full_paths:
                     def is_epoch_finished(t, should_reset):
-                        return t >= self.epoch_length and should_reset
+                        return t >= self.sampling_epoch_length and should_reset
                 else:
                     def is_epoch_finished(t, should_reset):
-                        return t >= self.epoch_length
+                        return t >= self.sampling_epoch_length
 
+                # sample
                 t, should_reset = 0, False
                 while not is_epoch_finished(t, should_reset):
                     t = t + 1
@@ -188,12 +192,14 @@ class OnlineAlgorithm(RLAlgorithm):
                     else:
                         observation = next_ob
                     gt.stamp('train: fill replay pool')
-
-                    # train
-                    if self.pool.size >= self.min_pool_size:
-                        self._do_training()
                     itr += 1
+
+                # train
+                if self.pool.size >= self.min_pool_size:
                     gt.stamp('train: updates')
+                    for _ in range(self.training_epoch_length):
+                        self._do_training()
+
 
                 # testing ---------------------------------
                 train_info = dict(
