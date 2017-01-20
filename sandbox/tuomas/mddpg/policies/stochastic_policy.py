@@ -49,6 +49,16 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
             self._output = output_scale * output_nonlinearity(self._pre_output)
             self.variable_scope = variable_scope
 
+            # N: batch size, Da: action dim, Ds: sample dimm
+            self._Doutput_Dsample = tf.pack(
+                [
+                    tf.gradients(self.output[:,i], self._sample_pl)[0]
+                    for i in range(self._action_dim)
+                ],
+                axis=1
+            ) # N x Da x Ds
+
+
         # Freeze stuff
         self._K = K
         self._samples = np.random.randn(K, self._sample_dim)

@@ -7,7 +7,7 @@ from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDatase
 import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
 import rllab.misc.logger as logger
 
-dataset = Cifar10Dataset()
+dataset = Cifar10Dataset(dequantized=True)
 flat_dim = dataset.image_dim
 
 noise = Gaussian(flat_dim)
@@ -77,7 +77,7 @@ def checkerboard_condition_fn_gen(bin=0, h_collapse=True):
 
     return split_gen(id), split_gen((id + 1) % 2), merge
 cur = shaped_noise
-for i in range(4):
+for i in range(2):
     cf, ef, merge = checkerboard_condition_fn_gen(i, True) # fixme: for now
     cur = ShearingFlow(
         cur,
@@ -104,7 +104,7 @@ def channel_condition_fn_gen(bin=0):
             vs = [effect, condition]
         return tf.concat(3, vs)
     return split_gen(id), split_gen((id + 1) % 2), merge
-for i in range(4):
+for i in range(6):
     cf, ef, merge = channel_condition_fn_gen(i, )
     cur = ShearingFlow(
         cur,
@@ -123,7 +123,7 @@ upsampled = ReshapeFlow(
 cur = upsampled
 
 # another 3 checkerboard
-for i in range(3):
+for i in range(5):
     cf, ef, merge = checkerboard_condition_fn_gen(i, True) # fixme: for now
     cur = ShearingFlow(
         cur,
@@ -143,7 +143,6 @@ with tf.device("/cpu:0"):
     init_placeholder = tf.placeholder(tf.float32, shape=init_batch.shape)
     dist.init_mode()
     init_logli = dist.logli_prior(init_placeholder)
-
 
 # train mode
 logger.log("Train graph start")

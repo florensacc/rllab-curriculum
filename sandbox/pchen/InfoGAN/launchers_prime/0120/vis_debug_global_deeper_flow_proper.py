@@ -1,3 +1,4 @@
+from sandbox.pchen.InfoGAN.infogan.algos.dist_trainer import DistTrainer
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import tf_go, AdamaxOptimizer, average_grads
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import *
 
@@ -7,18 +8,18 @@ from sandbox.pchen.InfoGAN.infogan.misc.datasets import MnistDataset, FaceDatase
 import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
 import rllab.misc.logger as logger
 
-dataset = Cifar10Dataset()
+dataset = Cifar10Dataset(dequantized=True)
 flat_dim = dataset.image_dim
 
 noise = Gaussian(flat_dim)
-shape = [-1, 16, 16, 12]
+shape = [-1, 8, 8, 12*4]
 shaped_noise = ReshapeFlow(
     noise,
     forward_fn=lambda x: tf.reshape(x, shape),
     backward_fn=lambda x: tf_go(x).reshape([-1, noise.dim]).value,
 )
 
-# 4 checkerboard flows
+# 3 checkerboard flows
 # note: unbalanced receptive growth version
 def resnet_blocks_gen(blocks=4, filters=64):
     def go(x):
@@ -77,7 +78,7 @@ def checkerboard_condition_fn_gen(bin=0, h_collapse=True):
 
     return split_gen(id), split_gen((id + 1) % 2), merge
 cur = shaped_noise
-for i in range(4):
+for i in range(3):
     cf, ef, merge = checkerboard_condition_fn_gen(i, True) # fixme: for now
     cur = ShearingFlow(
         cur,
@@ -104,7 +105,7 @@ def channel_condition_fn_gen(bin=0):
             vs = [effect, condition]
         return tf.concat(3, vs)
     return split_gen(id), split_gen((id + 1) % 2), merge
-for i in range(4):
+for i in range(3):
     cf, ef, merge = channel_condition_fn_gen(i, )
     cur = ShearingFlow(
         cur,
@@ -133,59 +134,48 @@ for i in range(3):
         combine_fn=merge,
     )
 
-dist = cur
+for i in range(3):
+    cf, ef, merge = channel_condition_fn_gen(i, )
+    cur = ShearingFlow(
+        cur,
+        nn_builder=resnet_blocks_gen(),
+        condition_fn=cf,
+        effect_fn=ef,
+        combine_fn=merge,
+    )
 
-device = "/gpu:0"
-# get a large batch to do weight norm init
-logger.log("Data init start")
-init_batch = (dataset.train.next_batch(512)[0]).reshape([-1, 32, 32, 3])
-with tf.device("/cpu:0"):
-    init_placeholder = tf.placeholder(tf.float32, shape=init_batch.shape)
-    dist.init_mode()
-    init_logli = dist.logli_prior(init_placeholder)
+# up-sample
+upsampled = ReshapeFlow(
+    cur,
+    forward_fn=lambda x: tf.depth_to_space(x, 2),
+    backward_fn=lambda x: tf_go(x, debug=False).space_to_depth(2).value,
+)
+cur = upsampled
+for i in range(3):
+    cf, ef, merge = checkerboard_condition_fn_gen(i, True) # fixme: for now
+    cur = ShearingFlow(
+        cur,
+        nn_builder=resnet_blocks_gen(),
+        condition_fn=cf,
+        effect_fn=ef,
+        combine_fn=merge,
+    )
 
+dist = DequantizedFlow(cur)
 
-# train mode
-logger.log("Train graph start")
-batch_size = 64
+fol = "data/local/vis_debug_global_proper_deeper_flow"
+logger.set_snapshot_dir(fol)
 
-optimizer = AdamaxOptimizer(learning_rate=1e-3)
+algo = DistTrainer(
+    dataset=dataset,
+    dist=dist,
+    init_batch_size=1024,
+    train_batch_size=128, # also testing resuming from diff bs
+    optimizer=AdamaxOptimizer(learning_rate=2e-3),
+    save_every=20,
+    updates_per_iter=5,
+    resume_from="/home/peter/rllab-private/data/local/global_proper_deeper_flow/"
+    # checkpoint_dir="data/local/test_debug",
 
-with tf.device(device):
-    dist.train_mode()
-    train_placeholder = tf.placeholder(tf.float32, shape=(batch_size,)+dataset.image_shape)
-    train_logli = dist.logli_prior(train_placeholder)
-    loss = -tf.reduce_mean(train_logli)
-    tower_grads = optimizer.compute_gradients(loss)
-    tower_grads_lst = [tower_grads]
-    trainer = optimizer.apply_gradients(grads_and_vars=average_grads(tower_grads_lst))
-    init = tf.initialize_all_variables()
-
-sess = tf.Session()
-with sess.as_default():
-    sess.run(init, {init_placeholder: init_batch})
-    logger.log("Data init finished")
-    logprobs = []
-    for iter in range(1000000):
-        if (iter+1) % 200 == 0:
-            logger.log("%s bits/dim" % (
-                (np.mean(logprobs)/32/32/3 - np.log(256.))/np.log(2)
-            ))
-            logprobs = []
-        if (iter+1) % 1000 == 0:
-            test_logprobs = []
-            for _ in range(100):
-                batch = dataset.validation.next_batch(batch_size)[0].reshape([-1, 32, 32, 3])
-                logprob = sess.run(train_logli, feed_dict={train_placeholder: batch})
-                test_logprobs.append(logprob)
-            logger.log("TEST %s bits/dim" % (
-                (np.mean(test_logprobs)/32/32/3 - np.log(256.))/np.log(2)
-            ))
-
-        batch = dataset.train.next_batch(batch_size)[0].reshape([-1, 32, 32, 3])
-        logprob, _ = sess.run([train_logli, trainer], feed_dict={train_placeholder: batch})
-        if np.any(np.isnan(logprob)):
-            print("NaN")
-            import ipdb; ipdb.set_trace()
-        logprobs.append(logprob)
-
+)
+algo.train()

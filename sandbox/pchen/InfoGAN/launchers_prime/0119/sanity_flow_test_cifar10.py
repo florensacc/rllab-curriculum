@@ -8,6 +8,8 @@ import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
 import rllab.misc.logger as logger
 
 dataset = Cifar10Dataset()
+####### SANITY CHECK ONLY
+dataset.train._images = np.random.normal(loc=0.233, scale=1.5, size=dataset.train.images.shape)
 flat_dim = dataset.image_dim
 
 noise = Gaussian(flat_dim)
@@ -168,19 +170,19 @@ with sess.as_default():
     logprobs = []
     for iter in range(1000000):
         if (iter+1) % 200 == 0:
-            logger.log("%s bits/dim" % (
-                (np.mean(logprobs)/32/32/3 - np.log(256.))/np.log(2)
+            logger.log("%s logprob/dim" % (
+                (np.mean(logprobs)/32/32/3 + 0.5*np.log(2*1.5**2*np.pi*np.e))
             ))
             logprobs = []
-        if (iter+1) % 1000 == 0:
-            test_logprobs = []
-            for _ in range(100):
-                batch = dataset.validation.next_batch(batch_size)[0].reshape([-1, 32, 32, 3])
-                logprob = sess.run(train_logli, feed_dict={train_placeholder: batch})
-                test_logprobs.append(logprob)
-            logger.log("TEST %s bits/dim" % (
-                (np.mean(test_logprobs)/32/32/3 - np.log(256.))/np.log(2)
-            ))
+        # if (iter+1) % 1000 == 0:
+        #     test_logprobs = []
+        #     for _ in range(100):
+        #         batch = dataset.validation.next_batch(batch_size)[0].reshape([-1, 32, 32, 3])
+        #         logprob = sess.run(train_logli, feed_dict={train_placeholder: batch})
+        #         test_logprobs.append(logprob)
+        #     logger.log("TEST %s bits/dim" % (
+        #         (np.mean(test_logprobs)/32/32/3 - np.log(256.))/np.log(2)
+        #     ))
 
         batch = dataset.train.next_batch(batch_size)[0].reshape([-1, 32, 32, 3])
         logprob, _ = sess.run([train_logli, trainer], feed_dict={train_placeholder: batch})
