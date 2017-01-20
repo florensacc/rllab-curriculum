@@ -33,3 +33,6 @@ exp020.py: Run A3C on seven games: Beamrider, Breakout, Pong, Q*bert, Space Inva
            Chopper Command, and Seaquest. 44x44 inputs.
 exp021.py: Same as exp020, except with lr=1e-3 (instead of 7e-4) and for 400
            iterations (instead of 80). Added Skiing instead of Pong.
+exp022.py: Same as exp020, except with 84x84 images instead of 44x44, and for
+           400 iterations. Only running on Breakout and Space Invaders (the two
+           that didn't improve in previous runs).
