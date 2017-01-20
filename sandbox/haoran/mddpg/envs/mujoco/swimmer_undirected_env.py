@@ -25,12 +25,23 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
             ctrl_cost_coeff=1e-2,
             visitation_plot_config=None,
             prog_threshold=2.,
+            motion_reward=True,
+            visitation_reward=False,
             *args, **kwargs):
         self.ctrl_cost_coeff = ctrl_cost_coeff
         self.visitation_plot_config = visitation_plot_config
         self.prog_threshold = prog_threshold
+
+        self.motion_reward = motion_reward
+        self.visitation_reward = visitation_reward
+
+        self.visitation_bins = np.zeros((8, 12))
+        self.visitation_reward_coeff = 1.
+        self.visitation_leak_factor = 0.999
+
         super(SwimmerUndirectedEnv, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
+
 
     def get_current_obs(self):
         return np.concatenate([
@@ -50,15 +61,44 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
         action_norm_sq = np.sum(np.square(action / scaling))
         ctrl_cost = 0.5 * self.ctrl_cost_coeff * action_norm_sq
         if (np.abs(action / scaling) > 1).any():
-            ctrl_cost += 0.1
+            dist = max((np.abs(action / scaling) - 1).max(), 0)
+            ctrl_cost += 1. * dist**2
+            #ctrl_cost += 0.1
 
-        motion_reward = np.linalg.norm(self.get_body_comvel("torso"))
-        reward = motion_reward - ctrl_cost
+
         done = False
         com = np.concatenate([self.get_body_com("torso").flat]).reshape(-1)
+
+        motion_reward = (
+            np.linalg.norm(self.get_body_comvel("torso"))
+            if self.motion_reward else 0.0
+        )
+
+        visitation_reward = (
+            self.get_visitation_reward(com) if self.visitation_reward else 0.0
+        )
+        reward = motion_reward + visitation_reward - ctrl_cost
             # send the com separately as env_info to avoid problems induced
             # by normalizing the observations
+
         return Step(next_obs, reward, done, com=com)
+
+    def get_visitation_reward(self, com):
+        th = np.arctan2(com[0], com[1]) + np.pi
+        dist = np.linalg.norm(com)
+
+        th_bin = int(th / np.pi * 4)
+        if th_bin == 8:  # Hacky fix for the corner case.
+            th_bin = 1
+        dist_bin = int(dist / 1.0)
+
+        self.visitation_bins[th_bin, dist_bin] += 1.
+        self.visitation_bins *= self.visitation_leak_factor
+
+        reward =  self.visitation_reward_coeff / (
+            self.visitation_bins[th_bin, dist_bin] + 1.)
+
+        return reward
 
     @overrides
     def log_diagnostics(self, paths):

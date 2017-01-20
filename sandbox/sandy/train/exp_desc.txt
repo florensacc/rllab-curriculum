@@ -29,5 +29,7 @@ exp018.py: Same as exp016, except trying both 84x84 inputs (and batch size 25000
            and Q*bert.
 exp019.py: Same as exp018, except only with 44x44 inputs.
            Running on Chopper Command, Seaquest, and Skiing.
-exp020.py: Run A3C on eight games: Beamrider, Breakout, Pong, Q*bert, Space Invaders,
-           Chopper Command, Seaquest, and Skiing. 44x44 inputs.
+exp020.py: Run A3C on seven games: Beamrider, Breakout, Pong, Q*bert, Space Invaders,
+           Chopper Command, and Seaquest. 44x44 inputs.
+exp021.py: Same as exp020, except with lr=1e-3 (instead of 7e-4) and for 400
+           iterations (instead of 80). Added Skiing instead of Pong.
