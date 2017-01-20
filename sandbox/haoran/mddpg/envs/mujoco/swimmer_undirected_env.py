@@ -50,7 +50,9 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
         action_norm_sq = np.sum(np.square(action / scaling))
         ctrl_cost = 0.5 * self.ctrl_cost_coeff * action_norm_sq
         if (np.abs(action / scaling) > 1).any():
-            ctrl_cost += 0.1
+            dist = max((np.abs(action / scaling) - 1).max(), 0)
+            ctrl_cost += 1. * dist**2
+            #ctrl_cost += 0.1
 
         motion_reward = np.linalg.norm(self.get_body_comvel("torso"))
         reward = motion_reward - ctrl_cost
