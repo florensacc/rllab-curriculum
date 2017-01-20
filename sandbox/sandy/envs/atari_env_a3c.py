@@ -10,11 +10,6 @@ from sandbox.sandy.adversarial.shared import get_base_env
 class AtariEnvA3C(AtariEnv, Shareable, Picklable):
     def __init__(self, env_name, record_video=False, video_schedule=None, \
                  log_dir=None, record_log=True, force_reset=False, **kwargs):
-        # persistent = True if the adversarial changes should stay in the history
-        #                   of N_FRAMES
-        # A persistent adversary attacks before the observation is stored in history
-        # A non-persistent adversary attacks after observation is stored in history.
-        # before it is fed through the policy neural net (this seems contrived)
  
         self.init_params = locals()
         self.init_params.pop('self')
