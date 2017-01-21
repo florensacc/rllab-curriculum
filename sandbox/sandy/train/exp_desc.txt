@@ -48,3 +48,5 @@ exp025b.py: Same as exp025.py, except fixed bug where I forgot to add back
 exp025c.py: Same as exp025b.py, except with version of Haoran's AtariEnv that's
             as similar as possible to mine.
 exp025d.py: Same as exp025b.py, except with scaling to [0,+1].
+exp026.py: Same as exp020, except with 84x84 images and scaling to [0,1].
+           Only running on Space Invaders. (With my AtariEnv)
