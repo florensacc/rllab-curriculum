@@ -45,3 +45,5 @@ exp025.py: Run A3C on Space Invaders with as close to Haoran's implementation as
            84x84 inputs, lr=7e-4.
 exp025b.py: Same as exp025.py, except fixed bug where I forgot to add back
             scaling of observations to [-1,+1].
+exp025c.py: Same as exp025b.py, except with version of Haoran's AtariEnv that's
+            as similar as possible to mine.
