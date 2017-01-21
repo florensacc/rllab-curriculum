@@ -6,6 +6,7 @@ class DQNALE(AsyncAlgo):
         """
         TODO: set different eps_end for different processes
         """
+        self.process_id = process_id
         agent.process_id = process_id
 
 

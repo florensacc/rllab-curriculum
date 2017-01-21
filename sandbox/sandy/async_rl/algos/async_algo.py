@@ -95,6 +95,7 @@ class AsyncAlgo(Picklable):
         Let shared params point to shared memory.
         Set process-specific parameters.
         """
+        self.process_id = process_id
 
         # Copy from the mother env, agent
         logger.log("Process %d: copying environment and agent for training."%(process_id),color="yellow")
@@ -189,6 +190,8 @@ class AsyncAlgo(Picklable):
                         n_runs=args["eval_n_runs"],
                         horizon=args["eval_horizon"]
                     )
+                    del self.test_env
+                    del self.test_agent
                     agent.phase = "Train"
 
                     # Notice that only one thread can report.
@@ -236,7 +239,7 @@ class AsyncAlgo(Picklable):
             raise
 
     def evaluate_performance(self,n_runs,horizon,return_paths=False):
-        logger.log("Evaluating test performance",color="yellow")
+        logger.log("Process %d: evaluating test performance"%(self.process_id),color="yellow")
         self.test_env.phase = "Test"
         self.test_agent.phase = "Test"
         env = self.test_env
@@ -261,12 +264,12 @@ class AsyncAlgo(Picklable):
                 t += 1
                 if t > horizon:
                     logger.log(
-                        "WARNING: test horizon %d exceeded."%(horizon),
+                        "Process %d: WARNING: test horizon %d exceeded."%(self.process_id, horizon),
                         color="yellow",
                     )
                     break
             logger.log(
-                "Finished testing #%d with score %f."%(i,scores[i]),
+                "Process %d: finished testing #%d with score %f."%(self.process_id, i,scores[i]),
                 color="green",
             )
         if return_paths:
