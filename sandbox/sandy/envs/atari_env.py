@@ -101,10 +101,12 @@ class AtariEnv(GymEnv):
                 self.last_adv_frames[-1,:,:] = next_adv_obs
 
     def scale_obs(self, obs):
-        return (obs / SCALE) * 2.0 - 1.0  # rescale to [-1,1]
+        # rescale to [-1,1]
+        return (obs / SCALE) * 2.0 - 1.0
 
     def unscale_obs(self, obs):
         # rescale from [-1,1] to [0,255]
+        assert obs.max() <= 1.0 and abs.min() >= -1.0, "obs is already unscaled"
         return ((obs + 1.0) / 2.0 * SCALE).astype(np.uint8)
 
     def preprocess_obs(self, obs):

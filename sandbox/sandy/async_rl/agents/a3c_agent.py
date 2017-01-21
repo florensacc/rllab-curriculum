@@ -212,7 +212,8 @@ class A3CAgent(Agent,Shareable,Picklable):
         #assert state[0].dtype == np.uint8
         #processed_state = (np.asarray(state, dtype=np.float32) / 255.0 * 2.0) - 1.0
         if state[0].max() > 1.01:
-            processed_state = (np.asarray(state, dtype=np.float32) / 255.0 * 2.0) - 1.0
+            #processed_state = (np.asarray(state, dtype=np.float32) / 255.0 * 2.0) - 1.0
+            processed_state = np.asarray(state, dtype=np.float32) / 255.0
         else:
             processed_state = np.asarray(state, dtype=np.float32)
         return processed_state
