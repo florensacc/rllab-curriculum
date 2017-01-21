@@ -9,8 +9,8 @@ FLAGS = flags.FLAGS
 flags.DEFINE_float('learning_rate', 0.001, 'Base learning rate.')
 flags.DEFINE_integer('modes', 2, 'Number of modes.')
 flags.DEFINE_boolean('fixed', True, 'Fixed target distribution.')
-flags.DEFINE_string('svgd_target', 'action', 'Where SVGD operates.')
-
+flags.DEFINE_string('svgd_target', 'pre-action', 'Where SVGD operates.')
+flags.DEFINE_integer("K", 100, 'Number of particles')
 
 class MultimodalGaussianEnv(Env):
 
@@ -129,7 +129,11 @@ class VDDPGTest(VDDPG):
         obs = np.tile(obs_single, (100, 1))
         feed_dict = self.policy.get_feed_dict(obs)
 
-        xs = self.sess.run(self.policy.output, feed_dict).ravel()
+        xs, jacobians = self.sess.run([
+                self.policy.output,
+                self.policy._Doutput_Dsample
+            ], feed_dict)
+        xs = xs.ravel()
         plt.clf()
         xx = np.linspace(-1, 1, num=100)
         yy = np.zeros_like(xx)
@@ -155,10 +159,33 @@ class VDDPGTest(VDDPG):
                 np.exp(-0.5/ (sigma**2) * (xx - mu) ** 2))
         yy_target = yy_target / (np.sum(yy_target) * delta)
         plt.plot(xx, yy_target, 'b-')
+        # print("KL est: %.4f"%(np.sum(yy * np.log(yy / yy_target))))
+
+        # compute the exact density given the Gaussian distribution on samples
+        # and the jacobian of output w.r.t. samples
+        coeffs = np.array([np.abs(np.linalg.det(J)) for J in jacobians])
+        sample_mu = 0.
+        sample_sigma = 1.
+        samples = feed_dict[self.policy._sample_pl]
+        q_samples = (1./np.sqrt(2. * np.pi * sample_sigma ** 2) *
+            np.exp(-0.5 / (sample_sigma ** 2) * (samples - sample_mu) ** 2))
+        q_samples = q_samples.ravel()
+        q_outputs = q_samples / coeffs
+        indices = np.argsort(xs)
+        plt.plot(xs[indices], q_outputs[indices], 'm')
+
+        ps = np.zeros_like(xs)
+        #for w, mu, sigma in zip(self.qf.weights, self.qf.mus, self.qf.sigmas):
+        for w, mu, sigma in zip(ws, mus, sigmas):
+            ps += (w * 1./np.sqrt(2. * np.pi * sigma**2) *
+                np.exp(-0.5/ (sigma**2) * (xs - mu) ** 2))
+        ps = ps / (np.sum(yy_target) * delta)
+        print("Entropy est: %.4f"%(np.mean(-np.log(q_outputs))))
+        print("KL est: %.4f"%(np.mean(np.log(q_outputs) / np.log(ps))))
 
         plt.plot(xs, np.zeros_like(xs), 'r*')
         plt.draw()
-        plt.legend(['q','p','x'])
+        plt.legend(['q','p','q_exact', 'x'])
         plt.xlim([-1, 1])
         plt.ylim([0, 2. * np.max(yy_target)])
         plt.pause(0.001)
@@ -175,7 +202,7 @@ def test():
     from sandbox.tuomas.mddpg.policies.stochastic_policy \
         import StochasticNNPolicy
 
-    K = 10 # number of particles
+    K = FLAGS.K
 
     adaptive_kernel = True
 
@@ -204,8 +231,10 @@ def test():
         elif FLAGS.modes == 2:
             # two modes, two cases
             fixed_observations = np.array([
-                [1./3., -2., 1.,    2./3., 2., 1.],
+                # [1./3., -2., 1.,    2./3., 2., 1.],
                 # [2./3., -2., 1.,    1./3., 2., 1.],
+                [1./3., -0.5, 0.3,    2./3., 0.5, 0.3],
+                [2./3., -0.5, 0.3,    1./3., 0.5, 0.3],
             ])
         elif FLAGS.modes == 3:
             # three modes, three cases

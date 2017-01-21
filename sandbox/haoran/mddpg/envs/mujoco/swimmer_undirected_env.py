@@ -4,13 +4,13 @@ from rllab.envs.mujoco.mujoco_env import MujocoEnv
 from rllab.core.serializable import Serializable
 from rllab.misc import logger
 from rllab.misc import autoargs
+from sandbox.haoran.mddpg.policies.mnn_policy import MNNPolicy
+from sandbox.tuomas.mddpg.policies.stochastic_policy import StochasticNNPolicy
 import os
+import json
 import numpy as np
-import matplotlib
-matplotlib.use('Agg')
-# This helps to plot the visitation map on linux machines.
-# But it doesn't work if pyplot has been imported before this line.
 import matplotlib.pyplot as plt
+plt.switch_backend('agg')
 import gc
 
 
@@ -102,22 +102,25 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
 
     @overrides
     def log_diagnostics(self, paths):
-        progs = [
-            path["observations"][-1][-3] - path["observations"][0][-3]
-            for path in paths
-        ]
+        progs = []
+        for path in paths:
+            coms = path["env_infos"]["com"]
+            progs.append(coms[-1][0] - coms[0][0])
+                # x-coord of com at the last time step minus the 1st step
+
         logger.record_tabular('env: ForwardProgressAverage', np.mean(progs))
         logger.record_tabular('env: ForwardProgressMax', np.max(progs))
         logger.record_tabular('env: ForwardProgressMin', np.min(progs))
         logger.record_tabular('env: ForwardProgressStd', np.std(progs))
 
-    def log_stats(self, epoch, paths):
+    def log_stats(self, algo, epoch, paths):
         # forward distance
-        progs = [
-            path["observations"][-1][-3] - path["observations"][0][-3]
-            # -3 refers to the x coordinate of the com of the torso
-            for path in paths
-        ]
+        progs = []
+        for path in paths:
+            coms = path["env_infos"]["com"]
+            progs.append(coms[-1][0] - coms[0][0])
+                # x-coord of com at the last time step minus the 1st step
+
         n_directions = [
             np.max(progs) > self.prog_threshold,
             np.min(progs) < - self.prog_threshold,
@@ -130,16 +133,111 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
             'env: ForwardProgressDiff': np.max(progs) - np.min(progs),
             'env: n_directions': n_directions,
         }
-        if self.visitation_plot_config is not None:
-            self.plot_visitation(
-                epoch,
-                paths,
-                mesh_density=self.visitation_plot_config["mesh_density"],
-                prefix=self.visitation_plot_config["prefix"],
-                variant=self.visitation_plot_config["variant"],
-                save_to_file=True,
+        # if self.visitation_plot_config is not None:
+        #     self.plot_visitation(
+        #         epoch,
+        #         paths,
+        #         mesh_density=self.visitation_plot_config["mesh_density"],
+        #         prefix=self.visitation_plot_config["prefix"],
+        #         variant=self.visitation_plot_config["variant"],
+        #         save_to_file=True,
+        #     )
+        snapshot_gap = logger.get_snapshot_gap()
+        if snapshot_gap <= 0 or \
+            np.mod(epoch + 1, snapshot_gap) == 0 or \
+            epoch == 0:
+            snapshot_dir = logger.get_snapshot_dir()
+            variant_file = os.path.join(
+                snapshot_dir,
+                "variant.json",
             )
+            with open(variant_file) as vf:
+                variant = json.load(vf)
+            img_file = os.path.join(
+                snapshot_dir,
+                "itr_%d_test_paths.png"%(epoch),
+            )
+            self.plot_paths(algo, paths, variant, img_file)
         return stats
+
+    def eval_qf(self, sess, qf, o, lim):
+        xx = np.arange(-lim, lim, 0.05)
+        X, Y = np.meshgrid(xx, xx)
+        all_actions = np.vstack([X.ravel(), Y.ravel()]).transpose()
+        obs = np.array([o] * all_actions.shape[0])
+
+        feed = {
+            qf.observations_placeholder: obs,
+            qf.actions_placeholder: all_actions
+        }
+        Q = sess.run(qf.output, feed).reshape(X.shape)
+        return X, Y, Q
+
+    def plot_paths(self, algo, paths, variant, img_file):
+        # plot the test paths
+        fig = plt.figure(figsize=(9, 14))
+            # don't ask me how I figured out this ratio
+        ax_paths = fig.add_subplot(211)
+        ax_paths.grid(True)
+        for path in paths:
+            positions = path["env_infos"]["com"]
+            xx = positions[:,0]
+            yy = positions[:,1]
+            ax_paths.plot(xx, yy, 'b')
+        ax_paths.set_xlim((-4., 4.))
+        ax_paths.set_ylim((-4., 4.))
+
+        # plot the q-value at the initial state
+        ax_qf = fig.add_subplot(212)
+        ax_qf.grid(True)
+        lim = algo.policy.output_scale
+        ax_qf.set_xlim((-lim, lim))
+        ax_qf.set_ylim((-lim, lim))
+        obs = paths[0]["observations"][0]
+            # assume the initial state is fixed
+            # assume the observations are not normalized
+        X, Y, Q = self.eval_qf(algo.sess, algo.qf, obs, lim)
+        log_prob = (Q - np.max(Q.ravel())) / algo.alpha
+        ax_qf.clear()
+        cs = ax_qf.contour(X, Y, log_prob, 20)
+        ax_qf.clabel(cs, inline=1, fontsize=10, fmt='%.2f')
+
+        # sample and plot actions
+        if isinstance(algo.policy, StochasticNNPolicy):
+            all_obs = np.array([obs] * algo.K)
+            all_actions = algo.policy.get_actions(all_obs)[0]
+        elif isinstance(algo.policy, MNNPolicy):
+            all_actions, info = algo.policy.get_action(obs, k="all")
+        else:
+            raise NotImplementedError
+
+        x = all_actions[:, 0]
+        y = all_actions[:, 1]
+        ax_qf.plot(x, y, '*')
+
+        # plot the action boundary, counterclockwise from the bottom left
+        ax_qf.plot(
+            [-1, 1, 1, -1, -1],
+            [-1, -1, 1, 1, -1],
+            'k-',
+        )
+
+        # title contains the variant parameters
+        fig_title = variant["exp_name"] + "\n"
+        for key in sorted(variant.keys()):
+            fig_title += "%s: %s \n"%(key, variant[key])
+        ax_paths.set_title(fig_title, multialignment="left")
+        fig.tight_layout()
+
+        plt.axis('equal')
+        plt.draw()
+        plt.pause(0.001)
+
+        # save to file
+        plt.savefig(img_file, dpi=100)
+        plt.cla()
+        plt.close('all')
+        gc.collect()
 
     def plot_visitation(self,
             epoch,

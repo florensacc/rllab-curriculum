@@ -10,8 +10,8 @@ import rllab.misc.logger as logger
 dataset = Cifar10Dataset()
 flat_dim = dataset.image_dim
 
-noise = Gaussian(flat_dim)
-shape = [-1, 16, 16, 12]
+noise = Gaussian(flat_dim*2)
+shape = [-1, 16, 16, 12*2]
 shaped_noise = ReshapeFlow(
     noise,
     forward_fn=lambda x: tf.reshape(x, shape),
@@ -135,10 +135,15 @@ for i in range(3):
 
 dist = cur
 
+def extend(x):
+    return np.concatenate(
+        [x, np.random.normal(size=x.shape)],
+        axis=3
+    )
 device = "/gpu:0"
 # get a large batch to do weight norm init
 logger.log("Data init start")
-init_batch = (dataset.train.next_batch(512)[0]).reshape([-1, 32, 32, 3])
+init_batch = extend(dataset.train.next_batch(512)[0].reshape([-1, 32, 32, 3]))
 with tf.device("/cpu:0"):
     init_placeholder = tf.placeholder(tf.float32, shape=init_batch.shape)
     dist.init_mode()
@@ -153,7 +158,7 @@ optimizer = AdamaxOptimizer(learning_rate=1e-3)
 
 with tf.device(device):
     dist.train_mode()
-    train_placeholder = tf.placeholder(tf.float32, shape=(batch_size,)+dataset.image_shape)
+    train_placeholder = tf.placeholder(tf.float32, shape=(batch_size,32,32,6))
     train_logli = dist.logli_prior(train_placeholder)
     loss = -tf.reduce_mean(train_logli)
     tower_grads = optimizer.compute_gradients(loss)
@@ -175,7 +180,7 @@ with sess.as_default():
         if (iter+1) % 1000 == 0:
             test_logprobs = []
             for _ in range(100):
-                batch = dataset.validation.next_batch(batch_size)[0].reshape([-1, 32, 32, 3])
+                batch = extend(dataset.validation.next_batch(batch_size)[0].reshape([-1, 32, 32, 3]))
                 logprob = sess.run(train_logli, feed_dict={train_placeholder: batch})
                 test_logprobs.append(logprob)
             logger.log("TEST %s bits/dim" % (
@@ -183,6 +188,7 @@ with sess.as_default():
             ))
 
         batch = dataset.train.next_batch(batch_size)[0].reshape([-1, 32, 32, 3])
+        batch = extend(batch)
         logprob, _ = sess.run([train_logli, trainer], feed_dict={train_placeholder: batch})
         if np.any(np.isnan(logprob)):
             print("NaN")
