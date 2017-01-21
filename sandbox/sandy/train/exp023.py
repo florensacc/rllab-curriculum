@@ -31,8 +31,8 @@ from rllab.misc.instrument import VariantGenerator, variant
 
 # exp setup -----------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
-#mode = "ec2_gpu"
-mode = "local_docker_gpu_test"
+mode = "ec2_gpu"
+#mode = "local_docker_gpu_test"
 ec2_instance = "p2.xlarge"
 price_multiplier = 3
 subnet = "us-west-2b"
@@ -73,11 +73,12 @@ elif "ec2_gpu" in mode or "docker" in mode:
     print("docker image:", config.DOCKER_IMAGE)
     if subnet.startswith("us-west-1"):
         config.AWS_REGION_NAME="us-west-1"
+        config.AWS_IMAGE_ID = "ami-931a51f3"
     elif subnet.startswith("us-west-2"):
         config.AWS_REGION_NAME="us-west-2"
+        config.AWS_IMAGE_ID = "ami-9af95dfa"
     else:
         raise NotImplementedError
-    config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[config.AWS_REGION_NAME]
     config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[config.AWS_REGION_NAME]
 
 # variant params ---------------------------------------
@@ -92,8 +93,7 @@ class VG(VariantGenerator):
 
     @variant
     def game(self):
-        return ["pong", "space_invaders", "beamrider", "breakout", "qbert", \
-                "chopper_command", "seaquest", "skiing"]
+        return ["space_invaders"]
 
     @variant
     def eta(self):
@@ -108,6 +108,7 @@ for v in variants:
     exp_prefix = "deep-q-rl/" + exp_index + "-" + game.split('_')[0]
     env_seed = 1 # deterministic env
     persistent = True
+    scale_neg1_1 = False
 
     # other exp setup --------------------------------------
     exp_name = "{exp_index}_{time}_{game}".format(
@@ -158,8 +159,8 @@ for v in variants:
     replay_memory_size = 1000 * 1000  # !
     batch_size = 32  # !
     resize_method = 'scale'  # !
-    resized_width = 44 # faster
-    resized_height = 44 # faster
+    resized_width = 84 # !
+    resized_height = 84 # !
     network_type = "nips"  # !
     freeze_interval = 10000  # !
     replay_start_size = 50000  # !
@@ -238,7 +239,8 @@ for v in variants:
         img_height=input_height,
         n_frames=phi_length,
         frame_skip=frame_skip,
-        persistent=persistent
+        persistent=persistent,
+        scale_neg1_1=scale_neg1_1
     )
 
     q_network = DeepQLearner(

@@ -32,6 +32,10 @@ class AtariEnvDQN(AtariEnv):
     def ale_ram_size(self):
         return self.base_env.ale.getRAMSize()
 
+    @property
+    def last_state(self):
+        return self.unscale_obs(self.observation[-1,:,:])
+
     def set_seed(self, seed):
         #self.base_env.ale.setInt(b'random_seed', seed)
         self.base_env._seed(int(seed))
