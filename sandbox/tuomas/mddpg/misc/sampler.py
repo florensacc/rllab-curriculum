@@ -27,12 +27,12 @@ def worker_init_head(G, k):
 
 
 class ParallelSampler(BaseSampler):
-    # TH: where is this called?
-    # TH: where are the envs and policies copied for each worker?
-    def start_worker(self):
+    def start_worker(self, policy=None):
         if singleton_pool.n_parallel > 1:
             singleton_pool.run_each(worker_init_tf)
-        parallel_sampler.populate_task(self.algo.env, self.algo.policy)
+        if policy is None:
+            policy = self.algo.policy
+        parallel_sampler.populate_task(self.algo.env, policy)
         if singleton_pool.n_parallel > 1:
             singleton_pool.run_each(worker_init_tf_vars)
 
@@ -61,16 +61,17 @@ class ParallelSampler(BaseSampler):
         paths = [res[0] for res in results]
         return paths
 
-    def obtain_samples(self, n_paths, max_path_length):
+    def obtain_samples(self, n_paths, max_path_length, policy=None):
         # copy latest params to the workers
-        policy_params = self.algo.policy.get_param_values()
+        if policy is None:
+            policy = self.alg.policy
+        policy_params = policy.get_param_values()
         if hasattr(self.algo.env, "get_param_values"):
             env_params = self.algo.env.get_param_values()
         else:
             env_params = None
         scope = None
 
-        # TH: Why singleton pool?
         singleton_pool.run_each(
             _worker_set_policy_params,
             [(policy_params, scope)] * singleton_pool.n_parallel
@@ -80,7 +81,6 @@ class ParallelSampler(BaseSampler):
             [(env_params, scope)] * singleton_pool.n_parallel
         )
 
-        # TH: okok, let's rewrite the following:
         paths = []
         for i in range(n_paths):
             paths += self.collect_paths(max_path_length)

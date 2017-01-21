@@ -11,13 +11,15 @@ from sandbox.tuomas.mddpg.misc.sim_policy import rollout, rollout_alg
 from rllab.misc.overrides import overrides
 from rllab.misc import logger
 from rllab.misc import special
-from rllab.core.serializable import Serializable
 from rllab.envs.proxy_env import ProxyEnv
 from rllab.core.serializable import Serializable
 
 from collections import OrderedDict
 import numpy as np
 import tensorflow as tf
+import matplotlib.pyplot as plt
+import os
+import gc
 
 TARGET_PREFIX = "target_"
 
@@ -48,6 +50,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             resume=False,
             n_eval_paths=2,
             svgd_target="action",
+            plt_backend="TkAgg",
             **kwargs
     ):
         """
@@ -105,6 +108,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         self.eval_sampler = ParallelSampler(self)
         self.n_eval_paths = n_eval_paths
+        plt.switch_backend(plt_backend)
 
     @overrides
     def _init_tensorflow_ops(self):
@@ -148,6 +152,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.kernel.sess = self.sess
         self.qf.sess = self.sess
         self.policy.sess = self.sess
+        self.eval_policy.sess = self.sess
         self.target_policy.sess = self.sess
         self.dummy_policy.sess = self.sess
 
@@ -404,13 +409,15 @@ class VDDPG(OnlineAlgorithm, Serializable):
         next_obs = self._replicate_obs(next_obs, self.K)
 
         feed = self.target_policy.get_feed_dict(next_obs)
+        feed.update(self.qf.get_feed_dict(obs, actions))
+        feed.update(self.target_qf.get_feed_dict(next_obs))
 
         feed.update({
             self.rewards_placeholder: np.expand_dims(rewards, axis=1),
             self.terminals_placeholder: np.expand_dims(terminals, axis=1),
-            self.qf.observations_placeholder: obs,
-            self.qf.actions_placeholder: actions,
-            self.target_qf.observations_placeholder: next_obs
+            #self.qf.observations_placeholder: obs,
+            #self.qf.actions_placeholder: actions,
+            #self.target_qf.observations_placeholder: next_obs
         })
 
         return feed
@@ -431,13 +438,11 @@ class VDDPG(OnlineAlgorithm, Serializable):
         paths = self.eval_sampler.obtain_samples(
             n_paths=self.n_eval_paths,
             max_path_length=self.max_path_length,
+            policy=self.eval_policy
         )
         rewards, terminals, obs, actions, next_obs = split_paths(paths)
         feed_dict = self._update_feed_dict(rewards, terminals, obs, actions,
                                            next_obs)
-
-        # rollout_alg(self)
-        #import pdb; pdb.set_trace()
 
         # Compute statistics
         (
@@ -521,15 +526,34 @@ class VDDPG(OnlineAlgorithm, Serializable):
             self.last_statistics.update(create_stats_ordered_dict(
                 'TrainingPathLengths', es_path_lengths))
 
+
+        # Create figure for plotting the environment.
+        fig = plt.figure(figsize=(12, 7))
+        ax = fig.add_subplot(111)
+        plt.axis('equal')
+
         true_env = self.env
-        while isinstance(true_env,ProxyEnv):
+        while isinstance(true_env, ProxyEnv):
             true_env = true_env._wrapped_env
         if hasattr(true_env, "log_stats"):
-            env_stats = true_env.log_stats(self, epoch, paths)
+            env_stats = true_env.log_stats(self, epoch, paths, ax)
             self.last_statistics.update(env_stats)
+
+        # Close and save figs.
+        snapshot_dir = logger.get_snapshot_dir()
+        img_file = os.path.join(snapshot_dir, 'itr_%d_test_paths.png' % epoch)
+
+        plt.draw()
+        plt.pause(0.001)
+
+        plt.savefig(img_file, dpi=100)
+        plt.cla()
+        plt.close('all')
 
         for key, value in self.last_statistics.items():
             logger.record_tabular(key, value)
+
+        gc.collect()
 
     def get_epoch_snapshot(self, epoch):
         return dict(

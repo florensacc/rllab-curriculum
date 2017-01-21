@@ -4,6 +4,7 @@ import uuid
 import tensorflow as tf
 
 from rllab.sampler.utils import rollout
+from rllab.misc.ext import set_seed
 
 if __name__ == "__main__":
 
@@ -14,6 +15,8 @@ if __name__ == "__main__":
                         help='Max length of rollout')
     parser.add_argument('--speedup', type=float, default=1,
                         help='Speedup')
+    parser.add_argument('--seed', type=int, default=-1,
+                        help='Fixed random seed')
     args = parser.parse_args()
 
     policy = None
@@ -24,6 +27,8 @@ if __name__ == "__main__":
     # with tf.Session():
     #     [rest of the code]
     # while True:
+    if args.seed >= 0:
+        set_seed(args.seed)
     with tf.Session() as sess:
         data = joblib.load(args.file)
         if "algo" in data:
