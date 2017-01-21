@@ -157,21 +157,36 @@ class StochasticPolicyMaximizer(Parameterized, Serializable):
         return actions[max_index], {}
 
     @overrides
-    def get_param_values(self):
-        policy_params = self._actor.get_param_values()
-        critic_params = self._critic.get_param_values()
+    def get_params_internal(self, **tags):
+        actor_params = self._actor.get_params_internal()
+        critic_params = self._critic.get_params_internal()
+        return actor_params + critic_params
 
-        return (policy_params, critic_params)
-
-    @overrides
-    def set_param_values(self, params):
-
-        self._actor.set_param_values(params[0])
-        self._critic.set_param_values(params[1])
+    # @overrides
+    # def get_param_values(self):
+    #     policy_params = self._actor.get_param_values()
+    #     critic_params = self._critic.get_param_values()
+    #
+    #     return (policy_params, critic_params)
+    #
+    # @overrides
+    # def set_param_values(self, params):
+    #
+    #     self._actor.set_param_values(params[0])
+    #     self._critic.set_param_values(params[1])
     @overrides
     def reset(self):
         pass
 
+    @property
+    def sess(self):
+        if self._sess is None:
+            self._sess = tf.get_default_session()
+        return self._sess
+
+    @sess.setter
+    def sess(self, value):
+        self._sess = value
 
 class DummyExplorationStrategy(ExplorationStrategy):
     def get_action(self, t, observation, policy, **kwargs):

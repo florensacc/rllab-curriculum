@@ -50,6 +50,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             resume=False,
             n_eval_paths=2,
             svgd_target="action",
+            plt_backend="TkAgg",
             **kwargs
     ):
         """
@@ -107,6 +108,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         self.eval_sampler = ParallelSampler(self)
         self.n_eval_paths = n_eval_paths
+        plt.switch_backend(plt_backend)
 
     @overrides
     def _init_tensorflow_ops(self):

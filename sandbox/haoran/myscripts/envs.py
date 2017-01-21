@@ -72,6 +72,14 @@ class EnvChooser(object):
             from sandbox.haoran.mddpg.envs.multi_goal_env import \
                 MultiGoalEnv
             env = MultiGoalEnv(**kwargs)
+        elif env_name == "gym_hopper":
+            from sandbox.haoran.mddpg.envs.mujoco.gym_hopper import \
+                HopperEnv
+            env = HopperEnv(**kwargs)
+        elif env_name == "tuomas_hopper":
+            from sandbox.tuomas.mddpg.envs.hopper_env import \
+                HopperEnv
+            env = HopperEnv(**kwargs)
         else:
             print("Unknown environment %s"%(env_name))
             raise NotImplementedError
