@@ -2,6 +2,7 @@
 Variational DDPG (online, consevative)
 
 Try Tuomas' Hopper. Compare VDDPG and DDPG in terms of speed.
+Continue exp-005, with the log(0) problem in pre-action fixed.
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
@@ -88,7 +89,7 @@ class VG(VariantGenerator):
 
     @variant
     def svgd_type(self):
-        return ["pre-action", "scaled-tanh"]
+        return ["pre-action"]
 
 variants = VG().variants()
 batch_tasks = []
