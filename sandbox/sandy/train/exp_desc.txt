@@ -43,3 +43,5 @@ exp024.py: Same as exp020, except with lr=4e-4 (instead of 7e-4) and for 400 ite
 exp025.py: Run A3C on Space Invaders with as close to Haoran's implementation as
            possible (from async-rl/runs/exp-008.py)-- as a sanity check that this works.
            84x84 inputs, lr=7e-4.
+exp025b.py: Same as exp025.py, except fixed bug where I forgot to add back
+            scaling of observations to [-1,+1].
