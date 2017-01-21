@@ -28,6 +28,7 @@ class OnlineAlgorithm(RLAlgorithm):
             env,
             policy,
             exploration_strategy,
+            eval_policy=None,
             batch_size=64,
             start_epoch=0,
             n_epochs=1000,
@@ -63,6 +64,7 @@ class OnlineAlgorithm(RLAlgorithm):
         assert min_pool_size >= 2
         self.env = env
         self.policy = policy
+        self.eval_policy = eval_policy
         self.exploration_strategy = exploration_strategy
         self.replay_pool_size = replay_pool_size
         self.batch_size = batch_size
@@ -106,7 +108,7 @@ class OnlineAlgorithm(RLAlgorithm):
         self.whole_paths = True
 
     def _start_worker(self):
-        self.eval_sampler.start_worker()
+        self.eval_sampler.start_worker(self.eval_policy)
 
     @overrides
     def train(self):

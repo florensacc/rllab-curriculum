@@ -2,20 +2,22 @@ import tensorflow as tf
 import numpy as np
 import os
 import pickle
+from rllab.misc.logger import set_snapshot_dir
 from matplotlib.backends.backend_pdf import PdfPages
 
 from rllab.envs.proxy_env import ProxyEnv
 from rllab.envs.normalized_env import normalize
 from rllab.exploration_strategies.ou_strategy import OUStrategy
-
+from rllab.core.serializable import Serializable
 
 from sandbox.tuomas.mddpg.policies.stochastic_policy import \
-    DummyExplorationStrategy
+    DummyExplorationStrategy, StochasticPolicyMaximizer
 
 from sandbox.tuomas.mddpg.critics.gaussian_critic import MixtureGaussian2DCritic
 
 #from sandbox.tuomas.mddpg.algos.vddpg import VDDPG
 from rllab.misc.overrides import overrides
+from rllab.misc import logger
 import matplotlib.pyplot as plt
 plt.switch_backend('TkAgg')
 #plt.switch_backend('Agg')
@@ -30,6 +32,10 @@ flags.DEFINE_string('alg', 'vddpg', 'Algorithm.')
 flags.DEFINE_string('policy', 'stochastic',
                     'Policy (DETERMINISTIC/stochastic')
 flags.DEFINE_string('save_path', '', 'Path where the plots are saved.')
+flags.DEFINE_string('snapshot_dir', None, 'Snapshot directory.')
+
+if FLAGS.snapshot_dir is not None:
+    logger.set_snapshot_dir(FLAGS.snapshot_dir)
 
 if FLAGS.alg == 'ddpg':
     from sandbox.tuomas.mddpg.algos.ddpg import DDPG as Alg
@@ -48,6 +54,7 @@ elif FLAGS.policy == 'stochastic':
 class AlgTest(Alg):
 
     def __init__(self, *args, **kwargs):
+        Serializable.quick_init(self, locals())
         super(AlgTest, self).__init__(*args, **kwargs)
 
         self.lim_a = 2.
@@ -146,7 +153,7 @@ class AlgTest(Alg):
         with open(self.filename('alg', 'pkl', 'wb')) as output:
             pickle.dump(self, output, pickle.HIGHEST_PROTOCOL)
 
-    if __name__ == '__main__':
+    if False: #__name__ == '__main__':
         @overrides
         def evaluate(self, epoch, es_path_returns):
             self._save_state()
@@ -297,6 +304,15 @@ def test():
         **policy_kwargs,
     )
 
+    if FLAGS.policy == 'stochastic':
+        eval_policy = StochasticPolicyMaximizer(
+            N=100,
+            actor=policy,
+            critic=qf,
+        )
+    else:
+        eval_policy = None
+
     kernel = SimpleAdaptiveDiagonalGaussianKernel(
         "kernel",
         dim=env.action_space.flat_dim,
@@ -312,6 +328,7 @@ def test():
         env=env,
         exploration_strategy=es,
         policy=policy,
+        eval_policy=eval_policy,
         qf=qf,
         **alg_kwargs
     )

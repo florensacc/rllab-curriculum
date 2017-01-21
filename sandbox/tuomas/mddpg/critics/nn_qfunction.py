@@ -69,6 +69,13 @@ class NNCritic(NeuralNetwork):
     def create_network(self, action_input, observation_input):
         raise NotImplementedError
 
+    def get_feed_dict(self, obs, action=None):
+        feed = {self.observations_placeholder: obs}
+        if action is not None:
+            feed[self.actions_placeholder] = action
+
+        return feed
+
 
 class FeedForwardCritic(NNCritic):
     def __init__(

@@ -73,32 +73,34 @@ class HopperEnv(MujocoEnv, Serializable):
         logger.record_tabular('MinForwardProgress', np.min(progs))
         logger.record_tabular('StdForwardProgress', np.std(progs))
 
-    def log_stats_just_for_reference_dont_use_as_is(self, epoch, paths):
+    def log_stats(self, alg, epoch, paths, ax):
         # forward distance
-        progs = [
-            path["observations"][-1][-3] - path["observations"][0][-3]
-            # -3 refers to the x coordinate of the com of the torso
-            for path in paths
-            ]
-        n_directions = [
-            np.max(progs) > self.prog_threshold,
-            np.min(progs) < - self.prog_threshold,
-            ].count(True)
+        progs = []
+        for path in paths:
+            coms = path["env_infos"]["com"]
+            progs.append(coms[-1][0] - coms[0][0])
+            # x-coord of com at the last time step minus the 1st step
+
         stats = {
             'env: ForwardProgressAverage': np.mean(progs),
             'env: ForwardProgressMax': np.max(progs),
             'env: ForwardProgressMin': np.min(progs),
             'env: ForwardProgressStd': np.std(progs),
             'env: ForwardProgressDiff': np.max(progs) - np.min(progs),
-            'env: n_directions': n_directions,
         }
-        if self.visitation_plot_config is not None:
-            self.plot_visitation(
-                epoch,
-                paths,
-                mesh_density=self.visitation_plot_config["mesh_density"],
-                prefix=self.visitation_plot_config["prefix"],
-                variant=self.visitation_plot_config["variant"],
-                save_to_file=True,
-            )
+
+        HopperEnv.plot_paths(paths, ax)
+
         return stats
+
+    @staticmethod
+    def plot_paths(paths, ax):
+        for path in paths:
+            com = path['env_infos']['com']
+            xx = com[:, 0]
+            zz = com[:, 2]
+            ax.plot(xx, zz, 'b')
+        ax.set_xlim((-1, 5))
+        ax.set_ylim((-1, 2))
+
+        #import pdb; pdb.set_trace()
