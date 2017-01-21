@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
 import argparse
-import chainer
-from chainer import functions as F
 import numpy as np
 
 from sandbox.sandy.adversarial.io_util import init_output_file, save_rollout_step
@@ -29,7 +27,10 @@ def fgsm_perturbation_linf(grad_x, fgsm_eps):
     return fgsm_eps * sign_grad_x, sign_grad_x
 
 def fgsm_perturbation_l2(grad_x, fgsm_eps):
-    grad_x_unit = grad_x / np.linalg.norm(grad_x)
+    if np.linalg.norm(grad_x) > 0:
+        grad_x_unit = grad_x / np.linalg.norm(grad_x)
+    else:
+        grad_x_unit = grad_x
     scaled_fgsm_eps = fgsm_eps * np.sqrt(grad_x.size)
     return scaled_fgsm_eps * grad_x_unit, grad_x_unit
 
@@ -58,6 +59,8 @@ def fgsm_perturbation_l1(grad_x, fgsm_eps, obs, obs_min, obs_max):
     return eta, np.sign(eta)
 
 def get_grad_x_a3c(obs, algo):
+    import chainer
+    from chainer import functions as F
     statevar = chainer.Variable(np.expand_dims(algo.cur_agent.preprocess(obs), 0))
     logits = algo.cur_agent.model.pi.compute_logits(algo.cur_agent.model.head(statevar))
     max_logits = F.broadcast_to(F.max(logits), (1,len(logits)))
@@ -67,6 +70,13 @@ def get_grad_x_a3c(obs, algo):
     ce_loss.backward(retain_grad=True)
     grad_x = statevar.grad[0]
     return grad_x
+
+def get_grad_x_dqn(obs, algo):
+    # Note: assumes epsilon = 0 (i.e., never chooses random action)
+    grad_x = algo.agent.network.f_obs_grad(algo.env.unscale_obs(obs)[np.newaxis,...])
+    #import IPython as ipy
+    #ipy.embed()
+    return grad_x[0]  # from (1,n_frames,img_size,img_size) to (n_frames,img_size,img_size)
 
 def get_grad_x_trpo(obs, algo):
     flat_obs = algo.policy.observation_space.flatten(obs)[np.newaxis,:]
@@ -102,6 +112,8 @@ def fgsm_perturbation(obs, algo, **kwargs):
         grad_x = get_grad_x_trpo(obs, algo)
     elif algo_name in ['A3CALE']:
         grad_x = get_grad_x_a3c(obs, algo)
+    elif algo_name in ['DQNAlgo']:
+        grad_x = get_grad_x_dqn(obs, algo)
     else:
         assert False, "Algorithm type " + algo_name + " is not supported."
     grad_x_current = grad_x[-1,:,:]
