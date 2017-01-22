@@ -80,6 +80,10 @@ class EnvChooser(object):
             from sandbox.tuomas.mddpg.envs.hopper_env import \
                 HopperEnv
             env = HopperEnv(**kwargs)
+        elif env_name == "gym_walker":
+            from sandbox.haoran.mddpg.envs.mujoco.gym_walker2d_env import \
+                Walker2DEnv
+            env = Walker2DEnv(**kwargs)
         else:
             print("Unknown environment %s"%(env_name))
             raise NotImplementedError

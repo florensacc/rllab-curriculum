@@ -1,0 +1,18 @@
+<mujoco>
+    <default class="main">
+        <geom rgba="1 0 0 1"/>
+        <default class="sub">
+            <geom rgba="0 1 0 1"/>
+        </default>
+    </default>
+
+    <worldbody>
+        <geom type="box"/>
+          <body childclass="sub">
+            <geom type="ellipsoid"/>
+            <geom type="sphere" rgba="0 0 1 0"/>
+            <geom type="cylinder" class="main"/>
+          </body>
+        </geom>
+    </worldbody>
+</mujoco>
