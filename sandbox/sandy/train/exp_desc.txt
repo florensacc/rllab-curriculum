@@ -57,3 +57,5 @@ exp029.py: Run DQN on all five games except Space Invaders (that's running in
            exp023). Use 84x84 inputs and scale to [0,1].
 exp030.py: Run A3C on Pong with 84x84 inputs and scale to *[-1,1]*. Trying to
            pinpoint why performance of Pong is bad in exp028.py.
+exp031.py: Run A3C on Pong with 44x44 inputs and scale to [0,1]. Since exp030.py
+           also doesn't work well.
