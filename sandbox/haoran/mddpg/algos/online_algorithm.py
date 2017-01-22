@@ -18,7 +18,6 @@ from sandbox.rocky.tf.samplers.vectorized_sampler import VectorizedSampler
 from sandbox.haoran.myscripts import tf_utils
 
 
-
 class OnlineAlgorithm(RLAlgorithm):
     """
     Online learning algorithm.
@@ -29,6 +28,7 @@ class OnlineAlgorithm(RLAlgorithm):
             env,
             policy,
             exploration_strategy,
+            eval_policy=None,
             batch_size=64,
             start_epoch=0,
             n_epochs=1000,
@@ -42,6 +42,7 @@ class OnlineAlgorithm(RLAlgorithm):
             scale_reward=1.,
             scale_reward_annealer=None,
             render=False,
+            epoch_full_paths=False,
     ):
         """
         :param env: Environment
@@ -63,6 +64,7 @@ class OnlineAlgorithm(RLAlgorithm):
         assert min_pool_size >= 2
         self.env = env
         self.policy = policy
+        self.eval_policy = eval_policy
         self.exploration_strategy = exploration_strategy
         self.replay_pool_size = replay_pool_size
         self.batch_size = batch_size
@@ -77,6 +79,7 @@ class OnlineAlgorithm(RLAlgorithm):
         self.scale_reward = scale_reward
         self.scale_reward_annealer = scale_reward_annealer
         self.render = render
+        self.epoch_full_paths = epoch_full_paths
 
         self.observation_dim = self.env.observation_space.flat_dim
         self.action_dim = self.env.action_space.flat_dim
@@ -105,7 +108,7 @@ class OnlineAlgorithm(RLAlgorithm):
         self.whole_paths = True
 
     def _start_worker(self):
-        self.eval_sampler.start_worker()
+        self.eval_sampler.start_worker(self.eval_policy)
 
     @overrides
     def train(self):
@@ -122,24 +125,40 @@ class OnlineAlgorithm(RLAlgorithm):
             gt.rename_root('online algo')
             gt.reset()
             gt.set_def_unique(False)
+            total_steps = 0
             for epoch in gt.timed_for(
                 range(self.start_epoch, self.start_epoch + self.n_epochs),
                 save_itrs=True,
             ):
                 self.update_training_settings(epoch)
                 logger.push_prefix('Epoch #%d | ' % epoch)
-                for _ in range(self.epoch_length):
+                if self.epoch_full_paths:
+                    def is_epoch_finished(t, should_reset):
+                        return t >= self.epoch_length and should_reset
+                else:
+                    def is_epoch_finished(t, should_reset):
+                        return t >= self.epoch_length
+
+                t, should_reset = 0, False
+                while not is_epoch_finished(t, should_reset):
+                    t = t + 1
                     # sampling
                     action = self.exploration_strategy.get_action(itr,
                                                                   observation,
                                                                   self.policy)
+                    action.squeeze()
                     if self.render:
                         self.env.render()
-                    next_ob, raw_reward, terminal, _ = self.env.step(action)
+                    next_ob, raw_reward, terminal, info = self.env.step(action)
                     reward = raw_reward * self.scale_reward
                     path_length += 1
                     path_return += reward
                     gt.stamp('train: sampling')
+
+                    self.plot_path(rewards=raw_reward,
+                                   obs=observation,
+                                   actions=action,
+                                   info=info)
 
                     # add experience to replay pool
                     self.pool.add_sample(observation,
@@ -147,12 +166,21 @@ class OnlineAlgorithm(RLAlgorithm):
                                          reward,
                                          terminal,
                                          False)
-                    if terminal or path_length >= self.max_path_length:
+                    should_reset = (terminal or
+                                    path_length >= self.max_path_length)
+                    if should_reset:
                         self.pool.add_sample(next_ob,
                                              np.zeros_like(action),
                                              np.zeros_like(reward),
                                              np.zeros_like(terminal),
                                              True)
+                        #self.db.flush()
+                        self.plot_path(rewards=raw_reward,
+                                       obs=observation,
+                                       actions=action,
+                                       info=info,
+                                       flush=True)
+
                         observation = self.env.reset()
                         self.exploration_strategy.reset()
                         self.es_path_returns.append(path_return)
@@ -195,6 +223,9 @@ class OnlineAlgorithm(RLAlgorithm):
                 logger.record_tabular("time: eval",eval_time)
                 logger.record_tabular("time: total",total_time)
                 logger.record_tabular("scale_reward", self.scale_reward)
+                logger.record_tabular("steps: current epoch", t)
+                total_steps += t
+                logger.record_tabular("steps: all", total_steps)
                 logger.dump_tabular(with_prefix=False)
                 logger.pop_prefix()
                 gt.stamp("logging")
@@ -275,6 +306,18 @@ class OnlineAlgorithm(RLAlgorithm):
         :param epoch: The epoch number.
         :param es_path_returns: List of path returns from explorations strategy
         :return: Dictionary of statistics.
+        """
+        return
+
+    @abc.abstractmethod
+    def plot_path(self, rewards=None, terminals=None, obs=None, actions=None,
+                  next_obs=None, flush=False, info=None):
+        """
+        Plot training data or apply other postprocessing steps. Called after
+        drawing a new training sample.
+        :param flush: True if the current sample is the last for the current
+            trajectory (either reached terminal state or max path length).
+        :return:
         """
         return
 

@@ -179,6 +179,10 @@ class DDPG(OnlineAlgorithm):
         }
 
     @overrides
+    def _start_worker(self):
+        self.eval_sampler.start_worker()
+
+    @overrides
     def evaluate(self, epoch, train_info):
         logger.log("Collecting samples for evaluation")
         paths = self.eval_sampler.obtain_samples(
