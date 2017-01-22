@@ -209,6 +209,7 @@ class DistTrainer(object):
                         # logger.record_tabular("%s_%s" % (prefix, k), np.mean(v))
                         logger.record_tabular_misc_stat("%s_%s" % (prefix, k), (v))
                 train_log_vals = []
+                logger.log("Iteration #%s" % itr)
                 logger.dump_tabular(with_prefix=False)
 
     def init_batch(self):

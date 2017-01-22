@@ -2639,3 +2639,15 @@ class DequantizedFlow(Distribution):
 
     def nonreparam_logli(self, x_var, dist_info):
         raise "not defined"
+
+def normalize(dist):
+    def normalize_per_dim(x):
+        mu, inv_std = nn.init_normalization(x)
+        return -mu, tf.log(inv_std)
+    return ShearingFlow(
+        dist,
+        nn_builder=normalize_per_dim,
+        condition_fn=lambda x: x,
+        effect_fn=lambda x: x,
+        combine_fn=lambda _, x: x,
+    )
