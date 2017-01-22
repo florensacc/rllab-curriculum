@@ -224,6 +224,5 @@ class ALEExperiment(object):
 
 
     def get_observation(self):
-        # Return the most recent observation, unscaled because it gets scaled
-        # in deep_q_rl/q_network.py
+        # Return the most recent observation, *scaled* to be from [0,1] (or [-1,1])
         return self.env.last_state

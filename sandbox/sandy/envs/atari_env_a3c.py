@@ -56,8 +56,8 @@ class AtariEnvA3C(AtariEnv, Shareable, Picklable):
 
     @property
     def state(self):
-        return list(self.unscale_obs(self.observation))
-        #return list(self.observation)
+        #return list(self.unscale_obs(self.observation))
+        return list(self.observation)
 
     @property
     def number_of_actions(self):

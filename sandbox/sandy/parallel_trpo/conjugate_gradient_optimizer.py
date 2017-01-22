@@ -253,6 +253,11 @@ class ParallelConjugateGradientOptimizer(Serializable):
                 outputs=obs_grad,
                 log_name="f_obs_grad",
             ),
+            f_obs_ce_loss=lambda: ext.compile_function(
+                inputs=[obs_var],
+                outputs=ce_loss,
+                log_name="f_obs_ce_loss",
+            ),
         )
 
     def init_par_objs(self, n_parallel, size_grad):
