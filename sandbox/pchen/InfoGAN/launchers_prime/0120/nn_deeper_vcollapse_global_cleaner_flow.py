@@ -24,10 +24,10 @@ shaped_noise = ReshapeFlow(
 # note: unbalanced receptive growth version
 cur = shaped_noise
 for i in range(3):
-    cf, ef, merge = checkerboard_condition_fn_gen(i, True) # fixme: for now
+    cf, ef, merge = checkerboard_condition_fn_gen(i, i<2) # fixme: for now
     cur = ShearingFlow(
         cur,
-        nn_builder=resnet_blocks_gen(),
+        nn_builder=resnet_blocks_gen(blocks=8),
         condition_fn=cf,
         effect_fn=ef,
         combine_fn=merge,
@@ -38,7 +38,7 @@ for i in range(3):
     cf, ef, merge = channel_condition_fn_gen(i, )
     cur = ShearingFlow(
         cur,
-        nn_builder=resnet_blocks_gen(),
+        nn_builder=resnet_blocks_gen(blocks=8),
         condition_fn=cf,
         effect_fn=ef,
         combine_fn=merge,
@@ -54,10 +54,10 @@ cur = upsampled
 
 # another 3 checkerboard
 for i in range(3):
-    cf, ef, merge = checkerboard_condition_fn_gen(i, True) # fixme: for now
+    cf, ef, merge = checkerboard_condition_fn_gen(i, i<2) # fixme: for now
     cur = ShearingFlow(
         cur,
-        nn_builder=resnet_blocks_gen(),
+        nn_builder=resnet_blocks_gen(blocks=8),
         condition_fn=cf,
         effect_fn=ef,
         combine_fn=merge,
@@ -67,7 +67,7 @@ for i in range(3):
     cf, ef, merge = channel_condition_fn_gen(i, )
     cur = ShearingFlow(
         cur,
-        nn_builder=resnet_blocks_gen(),
+        nn_builder=resnet_blocks_gen(blocks=8),
         condition_fn=cf,
         effect_fn=ef,
         combine_fn=merge,
@@ -81,10 +81,10 @@ upsampled = ReshapeFlow(
 )
 cur = upsampled
 for i in range(3):
-    cf, ef, merge = checkerboard_condition_fn_gen(i, True) # fixme: for now
+    cf, ef, merge = checkerboard_condition_fn_gen(i, i < 2) # fixme: for now
     cur = ShearingFlow(
         cur,
-        nn_builder=resnet_blocks_gen(),
+        nn_builder=resnet_blocks_gen(blocks=8),
         condition_fn=cf,
         effect_fn=ef,
         combine_fn=merge,
@@ -92,7 +92,7 @@ for i in range(3):
 
 dist = DequantizedFlow(cur)
 
-fol = "data/local/vis_debug_global_proper_deeper_flow"
+fol = "data/local/nndeeper_vcollapse_global_proper_deeper_flow"
 logger.set_snapshot_dir(fol)
 
 algo = DistTrainer(
@@ -102,8 +102,7 @@ algo = DistTrainer(
     train_batch_size=128, # also testing resuming from diff bs
     optimizer=AdamaxOptimizer(learning_rate=2e-3),
     save_every=20,
-    updates_per_iter=5,
-    resume_from="/home/peter/rllab-private/data/local/global_proper_deeper_flow/"
+    # resume_from="/home/peter/rllab-private/data/local/global_proper_deeper_flow/"
     # checkpoint_dir="data/local/test_debug",
 
 )
