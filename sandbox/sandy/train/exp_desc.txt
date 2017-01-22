@@ -49,5 +49,7 @@ exp025c.py: Same as exp025b.py, except with version of Haoran's AtariEnv that's
 exp025d.py: Same as exp025b.py, except with scaling to [0,+1].
 exp026.py: Same as exp020, except with 84x84 images and scaling to [0,1].
            Only running on Space Invaders. (With my AtariEnv)
-exp027.py: Run ParallelTRPO on five games: Chopper, Pong, Seaquest, Skiing, and
-           Space Invaders. Use 84x84 inputs and scale to [0,1].
+exp027.py: Run ParallelTRPO on all five games: Chopper, Pong, Seaquest, Skiing,
+           and Space Invaders. Use 84x84 inputs and scale to [0,1].
+exp028.py: Run A3C on all five games except Space Invaders (since that's running
+           in exp026). Use 84x84 inputs and scale to [0,1].
