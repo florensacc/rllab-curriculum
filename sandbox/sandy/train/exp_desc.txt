@@ -53,3 +53,7 @@ exp027.py: Run ParallelTRPO on all five games: Chopper, Pong, Seaquest, Skiing,
            and Space Invaders. Use 84x84 inputs and scale to [0,1].
 exp028.py: Run A3C on all five games except Space Invaders (since that's running
            in exp026). Use 84x84 inputs and scale to [0,1].
+exp029.py: Run DQN on all five games except Space Invaders (that's running in
+           exp023). Use 84x84 inputs and scale to [0,1].
+exp030.py: Run A3C on Pong with 84x84 inputs and scale to *[-1,1]*. Trying to
+           pinpoint why performance of Pong is bad in exp028.py.
