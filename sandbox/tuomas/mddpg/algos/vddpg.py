@@ -152,7 +152,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.kernel.sess = self.sess
         self.qf.sess = self.sess
         self.policy.sess = self.sess
-        self.eval_policy.sess = self.sess
+        if self.eval_policy:
+            self.eval_policy.sess = self.sess
         self.target_policy.sess = self.sess
         self.dummy_policy.sess = self.sess
 
@@ -239,17 +240,20 @@ class VDDPG(OnlineAlgorithm, Serializable):
                     observation_input=self.policy.observations_placeholder,
                 )
                 p = self.prior_coeff_placeholder
-                log_p = ((1.0 - p) * self.critic_with_policy_input.output
+                log_p_from_Q = ((1.0 - p) * self.critic_with_policy_input.output
                     + p * self.prior_with_policy_input.output)
             else:
-                log_p = self.critic_with_policy_input.output
-            log_p = tf.squeeze(log_p) + \
-                self.alpha_placeholder * tf.reduce_sum(
-                    tf.log(1. - tf.square(self.policy.output)),
-                    reduction_indices=1,
-                )
+                log_p_from_Q = self.critic_with_policy_input.output # N*K x 1
+            log_p_from_Q = tf.squeeze(log_p_from_Q) # N*K
 
-            grad_log_p = tf.gradients(log_p, self.policy.pre_output)
+            grad_log_p_from_Q = tf.gradients(log_p_from_Q, self.policy.pre_output)
+                # N*K x Da
+            grad_log_p_from_tanh = - 2. * self.policy.output # N*K x Da
+                # d/dx(log(1-tanh^2(x))) = -2tanh(x)
+            grad_log_p = (
+                grad_log_p_from_Q +
+                self.alpha_placeholder * grad_log_p_from_tanh
+            )
             grad_log_p = tf.reshape(grad_log_p, [-1, self.K, 1, Da])  # N x K x 1 x Da
 
             kappa = tf.expand_dims(
