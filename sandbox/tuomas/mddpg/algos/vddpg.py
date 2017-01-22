@@ -152,7 +152,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.kernel.sess = self.sess
         self.qf.sess = self.sess
         self.policy.sess = self.sess
-        self.eval_policy.sess = self.sess
+        if self.eval_policy:
+            self.eval_policy.sess = self.sess
         self.target_policy.sess = self.sess
         self.dummy_policy.sess = self.sess
 
