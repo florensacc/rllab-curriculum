@@ -128,7 +128,7 @@ next_states for batch_size randomly chosen state transitions.
                            self.phi_length,
                            self.height,
                            self.width),
-                          dtype='uint8')
+                          dtype='float32')
         actions = np.zeros((batch_size, 1), dtype='int32')
         rewards = np.zeros((batch_size, 1), dtype=floatX)
         terminal = np.zeros((batch_size, 1), dtype='bool')
@@ -136,7 +136,7 @@ next_states for batch_size randomly chosen state transitions.
                                 self.phi_length,
                                 self.height,
                                 self.width),
-                               dtype='uint8')
+                               dtype='float32')
         returns = np.zeros((batch_size, 1), dtype=floatX)
         env_infos = deque(maxlen=batch_size)
 
