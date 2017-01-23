@@ -239,7 +239,8 @@ class AsyncAlgo(Picklable):
             raise
 
     def evaluate_performance(self,n_runs,horizon,return_paths=False):
-        logger.log("Process %d: evaluating test performance"%(self.process_id),color="yellow")
+        #logger.log("Process %d: evaluating test performance"%(self.process_id),color="yellow")
+        logger.log("Evaluating test performance:",color="yellow")
         self.test_env.phase = "Test"
         self.test_agent.phase = "Test"
         env = self.test_env

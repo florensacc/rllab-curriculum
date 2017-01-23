@@ -104,6 +104,14 @@ class DeepQLearner(Serializable):
             broadcastable=(False, True))
 
         q_vals = lasagne.layers.get_output(self.l_out, states / input_scale)
+        ce_loss = - T.log(1.0 / T.sum(T.exp(q_vals - T.max(q_vals))))
+        obs_grad = theano.grad(ce_loss, wrt=states, disconnected_inputs="warn")
+        self.f_obs_grad = theano.function(inputs=[states], outputs=obs_grad,
+                                          allow_input_downcast=True)
+        self.f_obs_ce_loss = theano.function(inputs=[states], outputs=ce_loss,
+                                             allow_input_downcast=True)
+        self.f_obs_q_vals = theano.function(inputs=[states], outputs=q_vals,
+                                             allow_input_downcast=True)
 
         if self.freeze_interval > 0:
             next_q_vals = lasagne.layers.get_output(self.next_l_out,
