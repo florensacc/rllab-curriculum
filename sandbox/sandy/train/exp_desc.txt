@@ -66,3 +66,6 @@ exp033.py: Run A3C on Pong with 44x44 inputs and scale to [-1,1].
 exp034.py: Run A3C on Pong with 84x84 inputs, [0,1] scale for different learning
            rates and entropy bonuses. Still trying to get this to work.
 exp035.py: Exact same run as exp032, after fixing bug.
+exp036.py: Run A3C on all 4 games (not running on Skiing anymore) with 84x84 inputs,
+           scale to [0,1], slightly lower lr = 4e-4 (instead of 7e-4). Since this
+           combination works on Pong (exp034).

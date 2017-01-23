@@ -36,7 +36,7 @@ logging_level = logging.INFO
 
 n_parallel = 2 # only for local exp
 snapshot_mode = "gap"
-snapshot_gap = 5
+snapshot_gap = 20
 plot = False
 use_gpu = False
 sync_s3_pkl = True
@@ -47,15 +47,15 @@ config.USE_TF = False
 class VG(VariantGenerator):
     @variant
     def seed(self):
-        return [100, 300]
+        return [0, 100, 200, 300, 400]
 
     @variant
     def lr(self):
-        return [4e-4, 1e-3, 7e-4]
+        return [4e-4]
 
     @variant
     def entropy_bonus(self):
-        return [0.005, 0.001, 0.01]
+        return [0.01]
 
     @variant
     def frame_skip(self):
@@ -67,7 +67,7 @@ class VG(VariantGenerator):
 
     @variant
     def game(self):
-        return ["pong"]
+        return ["chopper_command", "pong", "seaquest", "space_invaders"]
 
 variants = VG().variants()
 
