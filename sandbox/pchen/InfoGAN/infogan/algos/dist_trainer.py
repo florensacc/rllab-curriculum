@@ -197,7 +197,7 @@ class DistTrainer(object):
                         plotting.plt.savefig("%s/samples_itr_%s.png" % (self._checkpoint_dir, itr))
                         plotting.plt.close('all')
 
-                if itr % self._save_every == 0:
+                if (itr+1) % self._save_every == 0:
                     fn = saver.save(sess, "%s/%s.ckpt" % (self._checkpoint_dir, itr))
                     logger.log(("Model saved in file: %s" % fn))
 
