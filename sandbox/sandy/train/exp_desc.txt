@@ -61,3 +61,7 @@ exp031.py: Run A3C on Pong with 44x44 inputs and scale to [0,1]. Since exp030.py
            also doesn't work well.
 exp032.py: Run DQN on all 5 games with 84x84 inputs and scale to [0,1], with
            input_scale=1.0 -- make sure things still work.
+exp033.py: Run A3C on Pong with 44x44 inputs and scale to [-1,1].
+           Reproduce results from exp020.py.
+exp034.py: Run A3C on Pong with 84x84 inputs, [0,1] scale for different learning
+           rates and entropy bonuses. Still trying to get this to work.
