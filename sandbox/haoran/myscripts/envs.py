@@ -84,6 +84,10 @@ class EnvChooser(object):
             from sandbox.haoran.mddpg.envs.mujoco.gym_walker2d_env import \
                 Walker2DEnv
             env = Walker2DEnv(**kwargs)
+        elif env_name == "gym_humanoid":
+            from sandbox.haoran.mddpg.envs.mujoco.gym_humanoid_env import \
+                HumanoidEnv
+            env = HumanoidEnv(**kwargs)
         else:
             print("Unknown environment %s"%(env_name))
             raise NotImplementedError

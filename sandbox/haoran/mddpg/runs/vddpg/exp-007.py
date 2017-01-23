@@ -1,7 +1,7 @@
 """
 Variational DDPG (online, consevative)
 
-Try DDPG on Walker (with more plots)
+Try DDPG on Humanoid (with more plots)
 Similar to test/exp-001e
 """
 # imports -----------------------------------------------------
@@ -51,7 +51,7 @@ class VG(VariantGenerator):
     @variant
     def env_name(self):
         return [
-            "gym_walker"
+            "gym_humanoid"
         ]
     @variant
     def max_path_length(self):
