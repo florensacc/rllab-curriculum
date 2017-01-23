@@ -61,7 +61,7 @@ class DDPG(OnlineAlgorithm):
     @overrides
     def _init_tensorflow_ops(self):
         # Initialize variables for get_copy to work
-        self.sess.run(tf.initialize_all_variables())
+        self.sess.run(tf.global_variables_initializer())
         self.target_policy = self.policy.get_copy(
             scope_name=TARGET_PREFIX + self.policy.scope_name,
         )
@@ -76,7 +76,7 @@ class DDPG(OnlineAlgorithm):
         self._init_critic_ops()
         self._init_actor_ops()
         self._init_target_ops()
-        self.sess.run(tf.initialize_all_variables())
+        self.sess.run(tf.global_variables_initializer())
 
     def _init_critic_ops(self):
         self.ys = (
@@ -177,6 +177,10 @@ class DDPG(OnlineAlgorithm):
             self.critic_with_action_input.observations_placeholder: obs,
             self.policy.observations_placeholder: obs,
         }
+
+    @overrides
+    def _start_worker(self):
+        self.eval_sampler.start_worker()
 
     @overrides
     def evaluate(self, epoch, train_info):
