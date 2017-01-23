@@ -89,3 +89,6 @@ class HumanoidEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             ax.plot(xx, zz, 'b')
         ax.set_xlim((np.min(xx) - 1, np.max(xx)+1))
         ax.set_ylim((-1, 2))
+
+    def terminate(self):
+        pass

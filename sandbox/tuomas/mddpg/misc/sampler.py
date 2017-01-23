@@ -63,7 +63,6 @@ class ParallelSampler(BaseSampler):
 
     def obtain_samples(self, n_paths, max_path_length, policy=None):
         # copy latest params to the workers
-        import pdb; pdb.set_trace()
         if policy is None:
             policy = self.algo.policy
         policy_params = policy.get_param_values()
