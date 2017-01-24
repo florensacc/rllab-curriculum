@@ -1,5 +1,5 @@
 """
-Mon Jan 23 23:49:34 2017: _v1
+Mon Jan 23 23:49:34 2017: _v1: this still didn't get through ec2!!?
 Fri Jan 20 11:16:18 2017: _v0
 """
 '''
@@ -58,6 +58,14 @@ if __name__ == "__main__":
     config.AWS_SPOT_PRICE = str(info["price"])
     n_parallel = int(info["vCPU"] / 2)  # make the default 4 if not using ec2
 
+    if args.ec2:
+        mode = 'ec2'
+    elif args.local_docker:
+        mode = 'local_docker'
+        n_parallel = 1
+    else:
+        mode = 'local'
+
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
@@ -91,10 +99,10 @@ if __name__ == "__main__":
         )
 
         for s in range(0, 110, 10):
-            exp_prefix = 'trpo-egoSnake-maze0'
+            exp_prefix = 'trpo-egoSnake-maze0-bis'
             exp_name = exp_prefix + '_{}goalRew_{}scale_{}pl_{}'.format(int(goal_rew), maze_size_scaling,
                                                               int(1e4 * maze_size_scaling / 2.), s)
-            if args.ec2:
+            if mode in ['ec2', 'local_docker']:
                 # choose subnet
                 subnet = random.choice(subnets)
                 config.AWS_REGION_NAME = subnet[:-1]
@@ -116,7 +124,7 @@ if __name__ == "__main__":
 
                 run_experiment_lite(
                     stub_method_call=algo.train(),
-                    mode='ec2',
+                    mode=mode,
                     # Number of parallel workers for sampling
                     n_parallel=n_parallel,
                     # Only keep the snapshot parameters for the last iteration
@@ -136,6 +144,8 @@ if __name__ == "__main__":
                         "conda install -f numpy -n rllab3 -y",
                     ],
                 )
+                if mode == 'local_docker':
+                    sys.exit()
             else:
                 run_experiment_lite(
                     stub_method_call=algo.train(),
@@ -148,4 +158,5 @@ if __name__ == "__main__":
                     exp_prefix=exp_prefix,
                     exp_name=exp_name,
                 )
+                sys.exit()
 

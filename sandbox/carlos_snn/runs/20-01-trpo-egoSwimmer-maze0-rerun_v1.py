@@ -1,5 +1,5 @@
 """
-Fri Jan 20 13:01:14 2017: _v1
+Fri Jan 20 13:01:14 2017: _v1:
 Fri Jan 20 11:16:18 2017: _v0: train 5 more random seeds
 """
 '''
@@ -32,13 +32,14 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
-    parser.add_argument('--clone', '-c', action='store_true', default=False,
-                        help="add flag to copy file and checkout current")
     parser.add_argument('--local_docker', '-d', action='store_true', default=False,
                         help="add flag to run in local dock")
     parser.add_argument('--type', '-t', type=str, default='', help='set instance type')
     parser.add_argument('--price', '-p', type=str, default='', help='set betting price')
-    parser.add_argument('--subnet', '-n', type=str, default='', help='set subnet like us-west-1a')
+    parser.add_argument('--subnet', '-sn', type=str, default='', help='set subnet like us-west-1a')
+    parser.add_argument('--clone', '-c', action='store_true', default=False,
+                        help="add flag to copy file and checkout current")
+    parser.add_argument('--name', '-n', type=str, default='', help='set exp prefix name and new file name')
     args = parser.parse_args()
 
     if args.clone:
@@ -90,7 +91,7 @@ if __name__ == "__main__":
         )
 
         for s in range(60, 110, 10):
-            exp_prefix = 'trpo-egoSwimmer-maze0'
+            exp_prefix = 'trpo-egoSwimmer-maze0' if not args.name else args.name
             exp_name = exp_prefix + '_{}goalRew_{}scale_{}pl_{}'.format(goal_rew, maze_size_scaling,
                                                                         int(1e4 * maze_size_scaling / 3.), s)
             if args.ec2:

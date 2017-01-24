@@ -40,6 +40,7 @@ if __name__ == "__main__":
     parser.add_argument('--price', '-p', type=str, default='', help='set betting price')
     parser.add_argument('--subnet', '-sn', type=str, default='', help='set subnet like us-west-1a')
     parser.add_argument('--name', '-n', type=str, default='', help='set exp prefix name and new file name')
+    parser.add_argument('--message', '-m', type=str, default='', help='message to inclue in the docstring')
     args = parser.parse_args()
 
     if args.clone:
@@ -51,9 +52,7 @@ if __name__ == "__main__":
         'us-east-2b', 'us-east-2a', 'ap-northeast-2a', 'ap-south-1a', 'us-east-2c', 'ap-south-1b', 'us-east-1d',
         'us-west-1a'
     ]
-
     ec2_instance = args.type if args.type else 'c4.4xlarge'
-
     # configure instance
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -63,21 +62,15 @@ if __name__ == "__main__":
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
+
     # set the rewards
-    reward_coef_l2_list = [0]
-    reward_coef_kl_list = [0]
-    reward_coef_mi_list = [0]
-
-    reward_coef_inner_list = [1]  # only for hierarchized envs
-
     reward_coef_grid_list = [100]  # how much of "intrinsic" bonus to add
     snn_H_bonus_list = [2, 1]  # coef for the snn_H bonus
     visitation_bonus_list = [0]  # coef for the visitation bonus
     survival_bonus_list = [5, 2, 1]
     dist_from_reset_bonus_list = [0.05, 0.01]
 
-    rewards_coefs = itertools.product(reward_coef_mi_list, reward_coef_kl_list, reward_coef_l2_list,
-                                      reward_coef_inner_list, reward_coef_grid_list, snn_H_bonus_list,
+    rewards_coefs = itertools.product(reward_coef_grid_list, snn_H_bonus_list,
                                       visitation_bonus_list, survival_bonus_list, dist_from_reset_bonus_list)
 
     # set other algorithm params
