@@ -96,7 +96,7 @@ def sample_dqn(algo, n_paths=1):  # Based on deep_q_rl/ale_experiment.py, run_ep
             paths[i]['actions'].append(action)
             env.step(action)
             paths[i]['rewards'].append(env.reward)
-            action = algo.agent.step(env.reward, env.observation[-1,:,:], {})
+            action = algo.agent.step(env.reward, env.last_state, {})
     return paths
 
 def get_average_return_dqn(algo, seed, N=10):
@@ -171,6 +171,7 @@ def load_model(params_file, batch_size):
                 height=algo.agent.image_height,
                 max_steps=algo.agent.phi_length * 2,
                 phi_length=algo.agent.phi_length)
+        algo.agent.testing = True
         algo.agent.bonus_evaluator = None
         algo.env = data['env']
         return algo, algo.env
