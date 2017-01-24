@@ -9,8 +9,7 @@ import numpy as np
 import tensorflow as tf
 from collections import OrderedDict
 
-from sandbox.haoran.mddpg.misc.simple_replay_pool \
-    import SimpleReplayPool, create_pool_callback_wrapper
+from sandbox.haoran.mddpg.misc.simple_replay_pool import SimpleReplayPool
 
 from rllab.algos.base import RLAlgorithm
 from rllab.misc import logger
