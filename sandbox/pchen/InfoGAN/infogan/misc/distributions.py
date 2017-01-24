@@ -2534,6 +2534,7 @@ class ReshapeFlow(Distribution):
             forward_fn,
             backward_fn,
             logli_diff_fn=lambda x: 0.,
+            debug=False,
     ):
         global G_IDX
         G_IDX += 1
@@ -2542,6 +2543,7 @@ class ReshapeFlow(Distribution):
         self._forward = forward_fn
         self._backward = backward_fn
         self._logli_diff = logli_diff_fn
+        self._debug = debug
 
         self.train_mode()
 
@@ -2565,7 +2567,9 @@ class ReshapeFlow(Distribution):
 
     def logli(self, x_var, dist_info):
         eps = self._backward(x_var)
-        return self._base_dist.logli(eps, dist_info) + self._logli_diff(x_var)
+        log_diff = self._logli_diff(x_var)
+        log_diff = tf.Print(log_diff, [x_var, log_diff]) if self._debug else log_diff
+        return self._base_dist.logli(eps, dist_info) + log_diff
 
     def sample_logli(self, dist_info):
         eps, logpeps = self._base_dist.sample_logli(dist_info)
@@ -2655,11 +2659,21 @@ def normalize(dist):
         combine_fn=lambda _, x: x,
     )
 
-def logitize(dist, coeff=1.9):
+def shift(dist, offset=0.5 + (1/256/2)):
+    return ReshapeFlow(
+        dist,
+        forward_fn=lambda eps: eps - offset,
+        backward_fn=lambda x: x + offset,
+        debug=False,
+    )
+
+def logitize(dist, coeff=0.90):
     # apply logit(coeff*x)
     return ReshapeFlow(
         dist,
-        forward_fn=lambda eps: 1. / (1. + tf.exp(-eps)),
+        forward_fn=lambda eps: (1. / (1. + tf.exp(-eps))) / coeff,
         backward_fn=lambda x: tf.log(coeff*x) - tf.log(1-coeff*x),
         logli_diff_fn=lambda x: tf.reduce_sum(-tf.log(x - coeff*(x**2)), reduction_indices=[1,2,3]),
+        debug=False,
     )
+
