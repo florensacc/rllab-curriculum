@@ -37,14 +37,15 @@ class VDDPG(OnlineAlgorithm, Serializable):
             policy,
             kernel,
             qf,
-            q_prior,
             K,
+            q_prior=None,
             q_target_type="max",
             qf_learning_rate=1e-3,
             policy_learning_rate=1e-4,
             Q_weight_decay=0.,
             alpha=1.,
             qf_extra_training=0,
+            temperatures=None,
             train_critic=True,
             train_actor=True,
             resume=False,
@@ -81,6 +82,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.train_critic = train_critic
         self.train_actor = train_actor
         self.resume = resume
+        self.temperatures = temperatures
 
         self.alpha_placeholder = tf.placeholder(tf.float32,
                                                 shape=(),
@@ -406,40 +408,64 @@ class VDDPG(OnlineAlgorithm, Serializable):
     def _get_finalize_ops(self):
         return [self.finalize_actor_op]
 
+    def _sample_temps(self, N):
+        inds = np.random.randint(0, self.temperatures.shape[0], size=(N,))
+        temps = self.temperatures[inds]
+        return temps
+
     @overrides
     def _update_feed_dict(self, rewards, terminals, obs, actions, next_obs):
+        if self.temperatures is not None:
+            N = obs.shape[0]
+            temp = self._sample_temps(N)
+        else:
+            temp = None
+
         feeds = dict()
         if self.train_actor:
-            feeds.update(self._actor_feed_dict(obs))
+            feeds.update(self._actor_feed_dict(obs, temp))
             feeds.update(
                 self.kernel.update(self, feeds, multiheaded=False, K=self.K)
             )
         if self.train_critic:
             feeds.update(self._critic_feed_dict(
-                rewards, terminals, obs, actions, next_obs
+                rewards, terminals, obs, actions, next_obs, temp
             ))
 
         return feeds
 
-    def _actor_feed_dict(self, obs):
+    def _actor_feed_dict(self, obs, temp=None):
         # Note that we want K samples for each observation. Therefore we
         # first need to replicate the observations.
-        obs = self._replicate_obs(obs, self.K)
+        obs = self._replicate_rows(obs, self.K)
+        temp = self._replicate_rows(temp, self.K)
 
-        feed = self.policy.get_feed_dict(obs)
-        feed.update(self.critic_with_policy_input.get_feed_dict(obs))
-        #feed[self.critic_with_policy_input.observations_placeholder] = obs
+        # Make sure we're not giving extra arguments for policies not supporting
+        # temperature input.
+        actor_inputs = (obs,) if temp is None else (obs, temp)
+        critic_inputs = (obs,) if temp is None else (obs, None, temp)
+
+        feed = self.policy.get_feed_dict(*actor_inputs)
+        feed.update(self.critic_with_policy_input.get_feed_dict(*critic_inputs))
         feed[self.alpha_placeholder] = self.alpha
         feed[self.prior_coeff_placeholder] = self.prior_coeff
         return feed
 
-    def _critic_feed_dict(self, rewards, terminals, obs, actions, next_obs):
+    def _critic_feed_dict(self, rewards, terminals, obs, actions, next_obs,
+                          temp=None):
         # Again, we'll need to replicate next_obs.
-        next_obs = self._replicate_obs(next_obs, self.K)
+        next_obs = self._replicate_rows(next_obs, self.K)
 
-        feed = self.target_policy.get_feed_dict(next_obs)
-        feed.update(self.qf.get_feed_dict(obs, actions))
-        feed.update(self.target_qf.get_feed_dict(next_obs))
+        # TODO: we should make the next temp really low (actually high since
+        # it is inverse temperature)
+        temp = self._replicate_rows(temp, self.K)
+
+        curr_inputs = (obs, actions, temp) if temp else (obs, actions)
+        next_inputs = (next_obs, temp) if temp else (next_obs,)
+
+        feed = self.target_policy.get_feed_dict(*next_inputs)
+        feed.update(self.qf.get_feed_dict(*curr_inputs))
+        feed.update(self.target_qf.get_feed_dict(*next_inputs))
 
         # Adjust rewards dims for backward compatibility.
         if len(rewards.shape) == 1:
@@ -448,20 +474,18 @@ class VDDPG(OnlineAlgorithm, Serializable):
         feed.update({
             self.rewards_placeholder: rewards,
             self.terminals_placeholder: np.expand_dims(terminals, axis=1),
-            #self.qf.observations_placeholder: obs,
-            #self.qf.actions_placeholder: actions,
-            #self.target_qf.observations_placeholder: next_obs
         })
 
         return feed
 
-    def _replicate_obs(self, obs, K):
+    def _replicate_rows(self, obs, K):
+        if obs is None:
+            return obs
         Do = self.env.observation_space.flat_dim
 
         obs = np.expand_dims(obs, axis=1)  # N x 1 x Do
         obs = np.tile(obs, (1, K, 1))  # N x K x Do
         obs = np.reshape(obs, (-1, Do))  # N*K x Do
-
 
         return obs
 

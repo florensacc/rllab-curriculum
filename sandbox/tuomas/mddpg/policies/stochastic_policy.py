@@ -17,6 +17,8 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
                  observation_dim,
                  action_dim,
                  hidden_dims,
+                 temperature_dim=0,
+                 default_temperature=None,
                  W_initializer=None,
                  output_nonlinearity=tf.identity,
                  sample_dim=1,
@@ -31,18 +33,23 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
         self._sample_dim = sample_dim
         self._rnd = np.random.RandomState()
         self._freeze = freeze_samples
+        self._temp_dim = temperature_dim
+        self._default_temp = default_temperature
 
         with tf.variable_scope(scope_name) as variable_scope:
             super(StochasticNNPolicy, self).__init__(
                 variable_scope.original_name_scope, **kwargs
             )
             self._create_pls()
-            all_inputs = tf.concat(concat_dim=1,
-                                   values=(self._obs_pl, self._sample_pl))
+            input_list = [self._obs_pl, self._sample_pl]
+            if self._temp_dim > 0:
+                input_list.append(self._temp_pl)
+
+            all_inputs = tf.concat(concat_dim=1, values=input_list)
 
             self._pre_output = mlp(
                 all_inputs,
-                observation_dim + self._sample_dim,
+                observation_dim + self._sample_dim + self._temp_dim,
                 hidden_dims,
                 output_layer_size=action_dim,
                 nonlinearity=tf.nn.relu,
@@ -52,15 +59,14 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
             self._output = output_scale * output_nonlinearity(self._pre_output)
             self.variable_scope = variable_scope
 
-            # N: batch size, Da: action dim, Ds: sample dimm
+            # N: batch size, Da: action dim, Ds: sample dim
             self._Doutput_Dsample = tf.pack(
                 [
                     tf.gradients(self.output[:,i], self._sample_pl)[0]
                     for i in range(self._action_dim)
                 ],
                 axis=1
-            ) # N x Da x Ds
-
+            )  # N x Da x Ds
 
         # Freeze stuff
         self._K = K
@@ -84,6 +90,12 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
                 shape=[None, self._sample_dim],
                 name='actor_sample'
             )
+            if self._temp_dim > 0:
+                self._temp_pl = tf.placeholder(
+                    tf.float32,
+                    shape=[None, self._temp_dim],
+                    name='actor_temperature'
+                )
 
             # Give another name for backward compatibility
             # TODO: should not access these directly.
@@ -91,19 +103,29 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
 
             self._input = self._obs_pl
 
-    def get_feed_dict(self, observations):
-        if type(observations) == list:
-            observations = np.array(observations)
+    def get_feed_dict(self, observations, temperatures=None):
+        #if type(observations) == list:
+        #    observations = np.array(observations)
         N = observations.shape[0]
         feed = {self._sample_pl: self._get_input_samples(N),
                 self._obs_pl: observations}
+        if self._temp_dim > 0:
+            if temperatures is None:
+                temperatures = self._default_temp[None]
+                temperatures = np.tile(temperatures, (N, 1))
+            assert (temperatures is not None
+                    and temperatures.shape[1] == self._temp_dim)
+            feed[self._temp_pl] = temperatures
         return feed
 
-    def get_action(self, observation):
-        return self.get_actions([observation])
+    def get_action(self, observation, temperature=None):
+        observation = np.reshape(observation, (1, -1))
+        if temperature is not None:
+            temperature = np.reshape(temperature, (1, -1))
+        return self.get_actions(observation, temperature)
 
-    def get_actions(self, observations):
-        feed = self.get_feed_dict(observations)
+    def get_actions(self, observations, temperatures=None):
+        feed = self.get_feed_dict(observations, temperatures)
         return self.sess.run(self.output, feed), {}
 
     def _get_input_samples(self, N):

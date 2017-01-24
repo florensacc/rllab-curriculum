@@ -167,6 +167,9 @@ class MultiCritic(NNCritic):
     Train multiple independent critics simultaneously. Requires that the
     reward dimensions matches the number critics. Output is simply the sum
     of the critics' outputs.
+
+    TODO: also allows varying temperature
+    TODO: also works with a single critic
     """
     def __init__(self, critics, fixed_temperatures=None):
         """
@@ -177,21 +180,29 @@ class MultiCritic(NNCritic):
 
         self._critics = critics
         self._M = len(critics)
+        self._create_temperature_placeholder()
 
         if fixed_temperatures is None:
             fixed_temperatures = np.ones(self._M)
         self._fixed_temperatures = fixed_temperatures
 
-        self._outputs = tf.concat(1, [c.output for c in self._critics])
+        # Make sure that all critic outputs have two axes.
+        outputs_list = []
+        for c in self._critics:
+            if len(c.output.get_shape().dims) == 1:
+                outputs_list.append(tf.reshape(c.output, (-1, 1)))
+            else:
+                outputs_list.append(c.output)
 
-        self._create_temperature_placeholder()
-        self._output = tf.reduce_sum(self._temp_pl * self._outputs, axis=1)
+        self._outputs = tf.concat(1, outputs_list)
+        # Notice that the temperature is actually 1 / T.
+        self._output = tf.reduce_sum(self._outputs * self._temp_pl, axis=1)
 
     def _create_temperature_placeholder(self):
         with tf.variable_scope(self.scope_name, reuse=False):
             self._temp_pl = tf.placeholder(
                 tf.float32,
-                shape=[1, self._M],
+                shape=(None, self._M),
                 name='critic_temps'
             )
 
@@ -229,10 +240,12 @@ class MultiCritic(NNCritic):
 
     @overrides
     def get_feed_dict(self, obs, action=None, temp=None):
-        # TODO: There must be a better way. If the critics shares the same
-        # inputs, then there shouldn't be need to fill each of then individually
-        temp = temp if temp else self._fixed_temperatures
-        temp = temp.reshape((1, self._M))  # Make sure the dimension is right.
+        if temp is None:
+            temp = self._fixed_temperatures
+
+        # Make sure the dimension is right.
+        temp = temp.reshape((-1, self._M))
+
         feed = {self._temp_pl: temp}
         for c in self._critics:
             feed.update(c.get_feed_dict(obs, action))
@@ -250,7 +263,6 @@ class MultiCritic(NNCritic):
     @property
     def dim(self):
         return self._M
-
 
 
 class SumCritic(NNCritic):
