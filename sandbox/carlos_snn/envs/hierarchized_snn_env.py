@@ -27,12 +27,14 @@ class HierarchizedSnnEnv(ProxyEnv, Serializable):
             json_path=None,
             npz_path=None,
             animate=False,
+            keep_rendered_rgb=False,
     ):
         Serializable.quick_init(self, locals())
         ProxyEnv.__init__(self, env)
         self.time_steps_agg = time_steps_agg
         self.discrete_actions = discrete_actions
         self.animate = animate
+        self.keep_rendered_rgb = keep_rendered_rgb
         if json_path:
             self.data = json.load(open(os.path.join(config.PROJECT_PATH, json_path), 'r'))
             self.low_policy_latent_dim = self.data['json_args']['policy']['latent_dim']
@@ -72,16 +74,19 @@ class HierarchizedSnnEnv(ProxyEnv, Serializable):
             if isinstance(self.wrapped_env, FastMazeEnv):
                 with self.wrapped_env.blank_maze():
                     frac_path = rollout(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg,
-                                        reset_start_rollout=False, animated=self.animate, speedup=1000)
+                                        reset_start_rollout=False, keep_rendered_rgbs=self.keep_rendered_rgb,
+                                        animated=self.animate, speedup=1000)
                 next_obs = self.wrapped_env.get_current_obs()
             elif isinstance(self.wrapped_env, NormalizedEnv) and isinstance(self.wrapped_env.wrapped_env, FastMazeEnv):
                 with self.wrapped_env.wrapped_env.blank_maze():
                     frac_path = rollout(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg,
-                                        reset_start_rollout=False, animated=self.animate, speedup=1000)
+                                        reset_start_rollout=False, keep_rendered_rgbs=self.keep_rendered_rgb,
+                                        animated=self.animate, speedup=1000)
                 next_obs = self.wrapped_env.wrapped_env.get_current_obs()
             else:
                 frac_path = rollout(self.wrapped_env, self.low_policy, max_path_length=self.time_steps_agg,
-                                    reset_start_rollout=False, animated=self.animate, speedup=1000)
+                                    reset_start_rollout=False, keep_rendered_rgbs=self.keep_rendered_rgb,
+                                    animated=self.animate, speedup=1000)
                 next_obs = frac_path['observations'][-1]
 
             reward = np.sum(frac_path['rewards'])
@@ -94,7 +99,7 @@ class HierarchizedSnnEnv(ProxyEnv, Serializable):
         # print("Next obs (com): {}, rew: {}, last_env_info: {}, last_agent_info: {}".format(last_env_info, reward, last_env_info,
         #                                                                              last_agent_info))
         if done:
-            # print("\n ########## \n ***** done!! *****")
+            print("\n ########## \n ***** done!! *****")
             # if done I need to PAD the tensor so there is no mismatch! Pad with what? with the last elem!
             # I need to pad first the env_infos!!
             frac_path['env_infos'] = tensor_utils.pad_tensor_dict(frac_path['env_infos'], self.time_steps_agg)
