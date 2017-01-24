@@ -1,19 +1,20 @@
 import tensorflow as tf
 import numpy as np
-import pickle
-from matplotlib.backends.backend_pdf import PdfPages
+import os
+
+from rllab import config
 
 from rllab.envs.proxy_env import ProxyEnv
+
+from rllab.misc import logger
+
+from sandbox.tuomas.mddpg.policies.stochastic_policy \
+    import DummyExplorationStrategy
+
 from rllab.exploration_strategies.ou_strategy import OUStrategy
 
+from rllab.core.serializable import Serializable
 
-from sandbox.tuomas.mddpg.misc.rollout import rollout
-from sandbox.tuomas.mddpg.policies.stochastic_policy import \
-    DummyExplorationStrategy
-
-from sandbox.tuomas.mddpg.critics.gaussian_critic import MixtureGaussian2DCritic
-
-#from sandbox.tuomas.mddpg.algos.vddpg import VDDPG
 from rllab.misc.overrides import overrides
 import matplotlib.pyplot as plt
 
@@ -26,7 +27,19 @@ flags.DEFINE_integer('n_particles', 64, 'Number of particles.')
 flags.DEFINE_string('alg', 'vddpg', 'Algorithm.')
 flags.DEFINE_string('policy', 'stochastic',
                     'Policy (DETERMINISTIC/stochastic')
-flags.DEFINE_string('save_path', '', 'Path where the plots are saved.')
+flags.DEFINE_string('output', 'exp00', 'Experiment name.')
+
+# flags.DEFINE_string('snapshot_dir', None, 'Snapshot directory.')
+
+#if FLAGS.snapshot_dir is not None:
+#    logger.set_snapshot_dir(FLAGS.snapshot_dir)
+tabular_log_file = os.path.join(config.LOG_DIR, 'multireward',
+                                FLAGS.output + '.txt')
+snapshot_dir = os.path.join(config.LOG_DIR, 'multireward', FLAGS.output)
+logger.add_tabular_output(tabular_log_file)
+logger.set_snapshot_dir(snapshot_dir)
+
+#flags.DEFINE_string('save_path', '', 'Path where the plots are saved.')
 
 if FLAGS.alg == 'ddpg':
     from sandbox.tuomas.mddpg.algos.ddpg import DDPG as Alg
@@ -43,111 +56,145 @@ elif FLAGS.policy == 'stochastic':
 
 
 class AlgTest(Alg):
-    lim = 2
-    plots_initialized = False
-    eval_counter = 0
+
+    def __init__(self, *args, **kwargs):
+        Serializable.quick_init(self, locals())
+        super(AlgTest, self).__init__(*args, **kwargs)
+
+        self._base_env = self.env
+        while isinstance(self._base_env, ProxyEnv):
+            self._base_env = self._base_env.wrapped_env
+
+        # Plot settings.
+        self._lim_action = 2.  # Limits for plotting.
+        self._n_training_paths = 10
+        self._n_test_paths = 10
+
+        self._training_path_counter = 0
+        self._test_path_counter = 0
+
+        # Evaluate the Q function for the following states.
+
+        self._q_obs_list = np.array([[-2.5, 0.0],
+                                     [0.0, 0.0],
+                                     [2.5, 2.5]])
+        self._q_list = [self.qf]
+
+        self._current_training_path = []
+        self._h_training_paths = []
+        self._h_test_paths = []
+
+        self._init_plots()
 
 
-    def eval_critic(self, o):
-        xx = np.arange(-self.lim, self.lim, 0.05)
+    @overrides
+    def process_env_info(self, info, flush):
+        self._current_training_path.append(info)
+        if flush:
+            self._h_training_paths.append(
+                self._base_env.plot_path(self._current_training_path,
+                                         self._ax_env, 'r')
+            )
+            plt.draw()
+            plt.pause(0.001)
+            self._current_training_path = []
+
+        if len(self._h_training_paths) > self._n_training_paths:
+            h = self._h_training_paths.pop(0)
+            h.remove()
+
+    def _init_plots(self):
+
+        # Set critic figure and all axes up.
+        self._critic_fig = plt.figure(figsize=(18, 7))
+        self._ax_critics = []
+        n_plots = self._q_obs_list.shape[0] * len(self._q_list)
+        for i in range(n_plots):
+            ax = self._critic_fig.add_subplot(100 + n_plots * 10 + i + 1)
+            self._ax_critics.append(ax)
+            plt.axis('equal')
+            ax.set_xlim((-self._lim_action, self._lim_action))
+            ax.set_ylim((-self._lim_action, self._lim_action))
+
+        # Set environment plot up
+        self._env_fig = plt.figure(figsize=(7, 7))
+        self._ax_env = self._env_fig.add_subplot(111)
+        self._base_env.set_axis(self._ax_env)
+
+    def _eval_critic(self, o, q):
+        xx = np.arange(-self._lim_action, self._lim_action, 0.05)
         X, Y = np.meshgrid(xx, xx)
-        all_actions = np.vstack([X.ravel(), Y.ravel()]).transpose()
+        all_actions = np.vstack([X.flatten(), Y.flatten()]).transpose()
         obs = np.array([o] * all_actions.shape[0])
 
-        feed = {
-            self.qf.observations_placeholder: obs,
-            self.qf.actions_placeholder: all_actions
-        }
-        Q = self.sess.run(self.qf.output, feed).reshape(X.shape)
+        feed = q.get_feed_dict(obs, all_actions)
+
+        Q = self.sess.run(q.output, feed).reshape(X.shape)
         return X, Y, Q
 
     @overrides
     def evaluate(self, epoch, es_path_returns):
-        self.eval_counter += 1
-        n_paths = 10 # FLAGS.n_particles
+        # Plot critic and samples.
 
-        pp = PdfPages(FLAGS.save_path + 'test_iter_' + str(self.eval_counter),
-                      '.pdf')
+        itr = 0
+        for obs in self._q_obs_list:
+            for q in self._q_list:
+                ax = self._ax_critics[itr]
+                X, Y, Q = self._eval_critic(obs, q)
 
-        if not self.plots_initialized:
-            env = self.env
-            while isinstance(env, ProxyEnv):
-                env = env.wrapped_env
+                ax.clear()
+                cs = ax.contour(X, Y, Q, 20)
+                ax.clabel(cs, inline=1, fontsize=10, fmt='%.0f')
 
-            #fig = plt.figure(figsize=(7, 12))
-            fig = plt.figure(figsize=(7, 7))
-            self.ax_paths = fig.add_subplot(111)
-            plt.axis('equal')
+                # sample and plot actions
+                N = FLAGS.n_particles
+                all_obs = np.array([obs] * N)
+                all_actions = self.policy.get_actions(all_obs)[0]
 
-            # Set up all critic plots.
-            self._critic_fig = plt.figure(figsize=(20, 7))
-            self.ax_critics = []
-            for i in range(3):
-                ax = self._critic_fig.add_subplot(130 + i + 1)
-                self.ax_critics.append(ax)
-                plt.axis('equal')
-                ax.set_xlim((-self.lim, self.lim))
-                ax.set_ylim((-self.lim, self.lim))
-            #self.ax_critic = fig.add_subplot(131)
+                x = all_actions[:, 0]
+                y = all_actions[:, 1]
+                ax.plot(x, y, '*')
 
+                itr += 1
 
-            # Plot cost only once.
-            env.plot_position_cost(self.ax_paths)
+        # Remove old test paths
+        while len(self._h_test_paths):
+            self._h_test_paths.pop().remove()
 
-            # Create path objects only once.
-            self.h_training_paths = []
-            self.h_test_paths = []
-            for i in range(n_paths):
-                self.h_training_paths += self.ax_paths.plot([], [], 'r')
-                self.h_test_paths += self.ax_paths.plot([], [], 'b')
-
-            self.plots_initialized = True
-
-        obss = np.array([[-2.5, 0.0],
-                         [0.0, 0.0],
-                         [2.5, 2.5]])
-
-        for ax_critic, obs in zip(self.ax_critics, obss):
-
-            X, Y, Q = self.eval_critic(obs)
-
-            ax_critic.clear()
-            cs = ax_critic.contour(X, Y, Q, 20)
-            ax_critic.clabel(cs, inline=1, fontsize=10, fmt='%.0f')
-
-            # sample and plot actions
-            N = FLAGS.n_particles
-            all_obs = np.array([obs] * N)
-            all_actions = self.policy.get_actions(all_obs)[0]
-            #print(all_actions)h_test_paths
-
-
-            x = all_actions[:, 0]
-            y = all_actions[:, 1]
-            ax_critic.plot(x, y, '*')
-
-        ## Do rollouts.
-        for line in self.h_test_paths:
-            #self.policy.reset()
-            path = rollout(self.env, self.policy, FLAGS.path_length)
-            line.set_data(np.transpose(path['observations']))
-
-        # DEBUG: use training rollouts
-        if len(self.db.paths) >= n_paths:
-            for i, line in enumerate(self.h_training_paths):
-                line.set_data(np.transpose(self.db.paths[-i-1][0]))
+        # Do test rollouts and plot.
+        env_state = self._base_env.__getstate__()
+        successes = 0.
+        for _ in range(self._n_test_paths):
+            o = self.env.reset()
+            info_list = []
+            rewards = []
+            for t in range(FLAGS.path_length):
+                a, _ = self.policy.get_action(o)
+                o, r, d, info = self.env.step(a)
+                info_list.append(info)
+                rewards.append(r)
+                if d:
+                    successes += 1.
+                    break
+            self._h_test_paths.append(
+                self._base_env.plot_path(info_list, self._ax_env)
+            )
+        self._base_env.__setstate__(env_state)
+        #mean_rewards = np.mean(np.stack(rewards, axis=1), axis=1)
 
         plt.draw()
         plt.pause(0.001)
-        pp.savefig(self._critic_fig)
-        pp.close()
-        #plt.savefig(pp, format='pdf')
+
+        logger.record_tabular("success_rate", successes / self._n_test_paths)
+        #logger.record_tabular("avg test int reward", mean_rewards[0])
+        #logger.record_tabular("avg test ext reward", mean_rewards[1])
 
         # TODO: hacky way to check if this is VDDPG instance without loading
         # VDDPG class.
         if hasattr(self, 'alpha'):
-            if self.eval_counter % 50 == 0:
-                self.alpha /= 3
+            if epoch % 50 == 0:
+                self.alpha /= 3.
+
 
 # -------------------------------------------------------------------
 def test():
@@ -155,8 +202,8 @@ def test():
         SimpleAdaptiveDiagonalGaussianKernel
     from sandbox.rocky.tf.envs.base import TfEnv
     from sandbox.tuomas.mddpg.envs.multi_goal_env import MultiGoalEnv
-    #from sandbox.tuomas.mddpg.envs.multi_goal_env import MultiGoalEnv
-    from sandbox.tuomas.mddpg.critics.nn_qfunction import FeedForwardCritic
+    from sandbox.tuomas.mddpg.critics.nn_qfunction \
+        import FeedForwardCritic, MultiCritic
 
 
     alg_kwargs = dict(
@@ -172,7 +219,7 @@ def test():
         #soft_target_tau=1.0
         max_path_length=FLAGS.path_length,
         batch_size=64,  # only need recent samples, though it's slow
-        scale_reward=0.1
+        scale_reward=0.1,
     )
 
     policy_kwargs = dict(
@@ -210,21 +257,11 @@ def test():
     es = OUStrategy(env_spec=env.spec, mu=0, theta=0.15, sigma=0.3)
 
     qf = FeedForwardCritic(
-        "critic",
+        "critic1",
         env.observation_space.flat_dim,
         env.action_space.flat_dim,
         observation_hidden_sizes=(),
         embedded_hidden_sizes=(100, 100),
-    )
-
-    q_prior = MixtureGaussian2DCritic(
-        "critic",
-        observation_dim=env.observation_space.flat_dim,
-        action_input=None,
-        observation_input=None,
-        weights=[1.],
-        mus=[np.array((0., 0.))],
-        sigmas=[1.0]
     )
 
     policy = Policy(
@@ -242,13 +279,14 @@ def test():
     if FLAGS.alg == 'vddpg':
        alg_kwargs.update(dict(
             kernel=kernel,
-            q_prior=q_prior,
-        ))
+            q_prior=None,
+       ))
 
     algorithm = AlgTest(
         env=env,
         exploration_strategy=es,
         policy=policy,
+        eval_policy=None,
         qf=qf,
         **alg_kwargs
     )
