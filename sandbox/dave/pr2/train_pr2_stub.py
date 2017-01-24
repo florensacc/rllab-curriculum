@@ -1,7 +1,7 @@
 import multiprocessing
 
 from sandbox.dave.pr2.action_limiter import FixedActionLimiter
-from rllab.algos.trpo import TRPO
+from sandbox.dave.rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 
 from rllab.envs.normalized_env import normalize
