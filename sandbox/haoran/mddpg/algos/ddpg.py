@@ -4,12 +4,15 @@
 import time
 from collections import OrderedDict
 
+import os
 import numpy as np
 import tensorflow as tf
+import matplotlib.pyplot as plt
 
 from sandbox.haoran.mddpg.algos.online_algorithm import OnlineAlgorithm
 from sandbox.haoran.mddpg.misc.data_processing import create_stats_ordered_dict
 from sandbox.haoran.mddpg.misc.rllab_util import split_paths
+from sandbox.haoran.myscripts.myutilities import get_true_env
 
 from sandbox.haoran.mddpg.misc.simple_replay_pool import SimpleReplayPool
 from rllab.misc import logger
@@ -33,6 +36,7 @@ class DDPG(OnlineAlgorithm):
             qf_learning_rate=1e-3,
             policy_learning_rate=1e-4,
             Q_weight_decay=0.,
+            plt_backend="MacOSX",
             **kwargs
     ):
         """
@@ -49,13 +53,15 @@ class DDPG(OnlineAlgorithm):
         self.critic_learning_rate = qf_learning_rate
         self.actor_learning_rate = policy_learning_rate
         self.Q_weight_decay = Q_weight_decay
+        self.plt_backend = plt_backend
+        plt.switch_backend(plt_backend)
 
         super().__init__(env, policy, exploration_strategy, **kwargs)
 
     @overrides
     def _init_tensorflow_ops(self):
         # Initialize variables for get_copy to work
-        self.sess.run(tf.initialize_all_variables())
+        self.sess.run(tf.global_variables_initializer())
         self.target_policy = self.policy.get_copy(
             scope_name=TARGET_PREFIX + self.policy.scope_name,
         )
@@ -70,7 +76,7 @@ class DDPG(OnlineAlgorithm):
         self._init_critic_ops()
         self._init_actor_ops()
         self._init_target_ops()
-        self.sess.run(tf.initialize_all_variables())
+        self.sess.run(tf.global_variables_initializer())
 
     def _init_critic_ops(self):
         self.ys = (
@@ -100,7 +106,9 @@ class DDPG(OnlineAlgorithm):
         # as input the output of the actor. See Equation (6) of "Deterministic
         # Policy Gradient Algorithms" ICML 2014.
         self.critic_with_action_input = self.qf.get_weight_tied_copy(
-            self.policy.output)
+            action_input=self.policy.output,
+            observation_input=self.policy.observations_placeholder
+        )
             # remember that the critic takes no action input at the beginning
         self.actor_surrogate_loss = - tf.reduce_mean(
             self.critic_with_action_input.output)
@@ -171,6 +179,10 @@ class DDPG(OnlineAlgorithm):
         }
 
     @overrides
+    def _start_worker(self):
+        self.eval_sampler.start_worker()
+
+    @overrides
     def evaluate(self, epoch, train_info):
         logger.log("Collecting samples for evaluation")
         paths = self.eval_sampler.obtain_samples(
@@ -238,6 +250,27 @@ class DDPG(OnlineAlgorithm):
             train_returns = np.asarray(es_path_returns) / self.scale_reward
             self.last_statistics.update(create_stats_ordered_dict(
                 'TrainingReturns', train_returns))
+
+        # Create figure for plotting the environment.
+        fig = plt.figure(figsize=(12, 7))
+        ax = fig.add_subplot(111)
+        plt.axis('equal')
+
+        true_env = get_true_env(self.env)
+        if hasattr(true_env, "log_stats"):
+            env_stats = true_env.log_stats(self, epoch, paths, ax)
+            self.last_statistics.update(env_stats)
+
+        # Close and save figs.
+        snapshot_dir = logger.get_snapshot_dir()
+        img_file = os.path.join(snapshot_dir, 'itr_%d_test_paths.png' % epoch)
+
+        plt.draw()
+        plt.pause(0.001)
+
+        plt.savefig(img_file, dpi=100)
+        plt.cla()
+        plt.close('all')
 
         for key, value in self.last_statistics.items():
             logger.record_tabular(key, value)

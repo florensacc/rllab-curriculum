@@ -100,7 +100,5 @@ class HopperEnv(MujocoEnv, Serializable):
             xx = com[:, 0]
             zz = com[:, 2]
             ax.plot(xx, zz, 'b')
-        ax.set_xlim((-1, 5))
+        ax.set_xlim((-1, np.max(xx)+1))
         ax.set_ylim((-1, 2))
-
-        #import pdb; pdb.set_trace()

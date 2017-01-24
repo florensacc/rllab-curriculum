@@ -33,7 +33,7 @@ actions, and rewards.
         self.phi_length = phi_length
 
         # Allocate the circular buffers and indices.
-        self.imgs = np.zeros((max_steps, height, width), dtype='uint8')
+        self.imgs = np.zeros((max_steps, height, width), dtype='float32')
         self.actions = np.zeros(max_steps, dtype='int32')
         self.rewards = np.zeros(max_steps, dtype=floatX)
         self.terminal = np.zeros(max_steps, dtype='bool')

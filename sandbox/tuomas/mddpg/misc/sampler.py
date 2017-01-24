@@ -64,7 +64,7 @@ class ParallelSampler(BaseSampler):
     def obtain_samples(self, n_paths, max_path_length, policy=None):
         # copy latest params to the workers
         if policy is None:
-            policy = self.alg.policy
+            policy = self.algo.policy
         policy_params = policy.get_param_values()
         if hasattr(self.algo.env, "get_param_values"):
             env_params = self.algo.env.get_param_values()

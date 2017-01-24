@@ -93,7 +93,7 @@ class VG(VariantGenerator):
 
     @variant
     def game(self):
-        return ["space_invaders"]
+        return ["chopper_command", "pong", "seaquest", "skiing"]
 
     @variant
     def eta(self):

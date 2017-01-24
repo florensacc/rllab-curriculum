@@ -93,7 +93,7 @@ class VG(VariantGenerator):
 
     @variant
     def game(self):
-        return ["space_invaders"]
+        return ["chopper_command", "pong", "seaquest", "skiing", "space_invaders"]
 
     @variant
     def eta(self):
@@ -261,7 +261,7 @@ for v in variants:
         conv_type=conv_type,
         update_rule=update_rule,
         batch_accumulator=batch_accumulator,
-        input_scale=255.0,
+        input_scale=1.0,
         network_args=network_args,
         eta=eta,
     )
