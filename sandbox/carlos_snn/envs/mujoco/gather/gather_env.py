@@ -390,9 +390,22 @@ class GatherEnv(ProxyEnv, Serializable):
             self.wrapped_env.viewer.set_model(self.wrapped_env.model)
         return self.wrapped_env.viewer
 
-    def render(self):
-        self.get_viewer()
-        self.wrapped_env.render()
+    def stop_viewer(self):
+        if self.wrapped_env.viewer:
+            self.wrapped_env.viewer.finish()
+
+    def render(self, mode='human', close=False):
+        if close:
+            self.stop_viewer()
+        if mode == 'rgb_array':
+            self.get_viewer().render()
+            data, width, height = self.get_viewer().get_image()
+            return np.fromstring(data, dtype='uint8').reshape(height, width, 3)[::-1,:,:]
+        elif mode == 'human':
+            # self.get_viewer().loop_once()
+            self.get_viewer()
+            self.wrapped_env.render()
+
 
     def get_ori(self):
         return self.wrapped_env.model.data.qpos[self.__class__.ORI_IND]
