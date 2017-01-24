@@ -19,7 +19,7 @@ class MultiRewardEnv(Env):
         self._max_force = 1
         self._max_speed = 0.5
         self._action_cost_coeff = 0.1
-        self._speed_reward_coeff = 1.
+        self._speed_reward_coeff = 0.01
         # Goal reward is designed so that it is better for the exploration
         # critic to choose reward over avoiding it.
         self._goal_reward = 50.
@@ -70,18 +70,24 @@ class MultiRewardEnv(Env):
         done = dist_to_goal < self._goal_tolerance
 
         # Compute rewards / costs.
-        action_cost = self._action_cost_coeff * np.sum(action**2)
+        action_norm_sq = np.sum(action**2)
+        action_cost = self._action_cost_coeff * action_norm_sq
         speed = np.linalg.norm(self._dynamics.velocity)
         reward_intrinsic = self._speed_reward_coeff * speed
         reward_extrinsic = self._goal_reward if done else 0.0
 
-        rewards = np.array((reward_extrinsic + reward_intrinsic,
-                            reward_extrinsic - action_cost))
+        # Intrinsic penalty for violating action boundaries.
+        action_penalty = max(0, action_norm_sq**0.5 - self._max_force)**2
+
+        rewards = np.array(
+            (reward_intrinsic - action_penalty,
+             reward_extrinsic - action_cost)
+        )
 
         return Step(next_obs, rewards, done, pos=next_obs[:2])
 
     @staticmethod
-    def plot(env_info_list, ax, style='b'):
+    def plot_path(env_info_list, ax, style='b'):
         path = np.concatenate([i['pos'][None] for i in env_info_list], axis=0)
         xx = path[:, 0]
         yy = path[:, 1]
@@ -94,24 +100,6 @@ class MultiRewardEnv(Env):
         ax.set_ylim((-10, 10))
         ax.grid(True)
         ax.plot(self._goal_pos[0], self._goal_pos[1], 'xk', mew=8, ms=16)
-
-    def render(self, close=False):
-        raise NotImplementedError
-
-        if not hasattr(self,'fig') or self.fig is None:
-            self.fig = plt.figure()
-            plt.axis('equal')
-            self.ax = self.fig.add_subplot(111)
-        if not hasattr(self,'fixed_plots') or self.fixed_plots is None:
-            self.fixed_plots = self.plot_position_cost(self.ax)
-        for obj in self.dynamic_plots:
-            obj.remove()
-        x,y = self.observation
-        point = self.ax.plot(x,y,'b*')
-        self.dynamic_plots = point
-
-        if close:
-            self.fixed_plots = None
 
     @overrides
     def log_diagnostics(self, paths):
@@ -150,8 +138,8 @@ class MultiRewardEnv(Env):
 class PointMassDynamics(object):
 
     def __init__(self, max_force, max_speed, mass=10):
-        self._max_force=max_force
-        self._max_speed=max_speed
+        self._max_force = max_force
+        self._max_speed = max_speed
         self._A = np.array([[1, 0, 1, 0],
                             [0, 1, 0, 1],
                             [0, 0, 1, 0],
@@ -170,8 +158,15 @@ class PointMassDynamics(object):
     def observe(self):
         return self._state.copy()
 
+    def _clip_force(self, action):
+        action_norm = np.linalg.norm(action)
+        if action_norm > self._max_force:
+            action = action / action_norm * self._max_force
+
+        return action
+
     def step(self, action):
-        action = np.clip(action, -self._max_force, self._max_force)
+        action = self._clip_force(action)
         self._state = self._A.dot(self._state) + self._B.dot(action)
 
         speed = np.linalg.norm(self._state[2:])

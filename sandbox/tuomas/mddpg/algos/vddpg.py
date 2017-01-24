@@ -308,11 +308,15 @@ class VDDPG(OnlineAlgorithm, Serializable):
             return
         M = self.qf.dim if hasattr(self.qf, 'dim') else 1
 
-        # q_next: N x K x M
         if hasattr(self.target_qf, 'outputs'):
-            q_next = tf.reshape(self.target_qf.outputs, (-1, self.K, M))
+            q_next = self.target_qf.outputs
+            q_curr = self.qf.outputs
         else:
-            q_next = tf.reshape(self.target_qf.output, (-1, self.K, M))
+            q_next = self.target_qf.output
+            q_curr = self.qf.output
+
+        q_next = tf.reshape(q_next, (-1, self.K, M))  # N x K x M
+        q_curr = tf.reshape(q_curr, (-1, M))  # N x M
 
         if self.q_target_type == 'mean':
             q_next = tf.reduce_mean(q_next, reduction_indices=1, name='q_next',
@@ -325,7 +329,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
                                    keep_dims=False)  # N x M
         else:
             raise NotImplementedError
-
+        # q_next: N x M
         # q_next = tf.Print(q_next, [tf.shape(q_next)], 'Shape of q_next: ')
 
         assert_op = tf.assert_equal(
@@ -342,7 +346,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
         # self.ys = tf.Print(self.ys, [tf.shape(self.ys)], 'Shape of ys: ')
 
         self.critic_loss = tf.reduce_mean(tf.reduce_mean(
-            tf.square(self.ys - self.qf.output)
+            tf.square(self.ys - q_curr)
         ))
 
         self.critic_reg = tf.reduce_sum(
