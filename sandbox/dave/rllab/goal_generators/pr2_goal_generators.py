@@ -26,8 +26,8 @@ class PR2LargeRange:
         # low_goal_boundhuntest12
         # s = np.array([0.3, -0.3, 0.3]) # Bad - contained unreachable goals
         # high_goal_bounds = np.array([0.8, 0.7, 1.3]) # Bad - contained unreachable goals
-        self.low_goal_bounds = np.array([0.3, -0.2, 0.5025])
-        self.high_goal_bounds = np.array([0.6, 0.6, 0.5025])
+        self.low_goal_bounds = np.array([0.4, -0.2, 0.5025])
+        self.high_goal_bounds = np.array([0.8, 0.8, 1])
 
 
 class PR2FixedGoalGenerator(FixedGoalGenerator):

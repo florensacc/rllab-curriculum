@@ -20,7 +20,7 @@ def _glfw_error_callback(e, d):
 
 
 class MjViewer(object):
-    def __init__(self, visible=True, init_width=99, init_height=99, go_fast=True, is_bot=False):
+    def __init__(self, visible=True, init_width=499, init_height=499, go_fast=True, is_bot=False):
 
         """
         Set go_fast=True to run at full speed instead of waiting for the 60 Hz monitor refresh

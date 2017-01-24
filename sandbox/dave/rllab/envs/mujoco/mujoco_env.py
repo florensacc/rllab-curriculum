@@ -167,10 +167,22 @@ class MujocoEnv(Env):
 
     def forward_dynamics(self, action, qvel=None, qpos=None, position_ctrl=False):
         self.model.data.ctrl = self.inject_action_noise(action)
-        for _ in range(self.dilate_time * self.frame_skip):
-            self.model.step()
-            if qvel is not None:
-                self.model.data.qvel = qvel
+        i = 0
+        if not position_ctrl:
+            for _ in range(self.frame_skip):
+                self.model.step()
+        else:
+            while True:
+                self.model.step()
+                if qvel is not None:
+                    self.model.data.qvel = qvel
+                error = abs(action - self.model.data.qpos[:7, 0])/0.1
+                if (error < 0.1).all() or i > 24:
+                # if i > 24:
+                    # print(i)
+                    # print(error)
+                    break
+                i += 1
         self.model.forward()
         new_com = self.model.data.com_subtree[0]
         self.dcom = new_com - self.current_com

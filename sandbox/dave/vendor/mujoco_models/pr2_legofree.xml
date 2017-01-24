@@ -362,7 +362,7 @@
                                                                 <inertial pos="0.03576 -0.01736 -0.00095" quat="0.474684 0.510909 0.446353 0.560727" mass="0.17389" diaginertia="0.000199 0.000181 0.000077" />
                                                                 <!--<joint name="l_gripper_r_finger_joint" type="hinge" pos="0 0 0" axis="0 0 -1" limited="true" range="0 0.548"/>-->
                                                                 <geom name="geom63" euler="3.14 0 0" rgba="0.7 0.7 0.7 1" mesh="l_finger" />
-                                                                 <site name="tip" pos="0 0 0" size="0.01"/>
+                                                                    <site name="tip" pos="0 0 0" size="0.01"/>
 
                                                                 <body name="l_gripper_r_finger_tip_link" pos="0.09137 -0.00495 0">
                                                                     <inertial pos="0.00423 -0.00284 0" quat="-0.249588 0.661594 0.249588 0.661594" mass="0.04419" diaginertia="0.000015 0.000015 0.000003" />
@@ -432,7 +432,7 @@
                                 <!--geom name="geom34f" type="capsule" pos="0.12961979 -0.00000014 0" quat="1 -0.00001340 0.00000169 -0.00000728" size="0.07297432 0.00139096" group="1"/-->
                                 <body name="r_upper_arm_link" pos="0 0 0">
                                     <inertial pos="0.21398 -0.01621 -0.0002" quat="-0.045020 0.697462 -0.088537 0.709705" mass="6.01769" diaginertia="0.076138 0.074931 0.015133" />
-                                    <geom name="geom35"rgba="0.7 0.7 0.7 1" mesh="upper_arm" contype="0"/>
+                                    <geom name="geom35" rgba="0.7 0.7 0.7 1" mesh="upper_arm" contype="0"/>
                                     <!--geom name="geom35f" type="capsule" pos="0.21533518 0.00017574 -0.00229182" quat="0.50005025 0.49945472 0.50003903 0.50045548" size="0.09823026 0.18895381" rgba="0 0.8 0 1" group="1"/-->
                                     <body name="r_elbow_flex_link" pos="0.4 0 0">
                                         <inertial pos="0.01014 0.00032 -0.01211" quat="0.308784 0.646797 0.639077 0.279083" mass="1.90327" diaginertia="0.004419 0.003965 0.003090" />

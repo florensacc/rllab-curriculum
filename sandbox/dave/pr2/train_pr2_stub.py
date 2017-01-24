@@ -5,43 +5,43 @@ from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 
 from rllab.envs.normalized_env import normalize
-from sandbox.dave.rllab.goal_generators.pr2_goal_generators import PR2FixedGoalGenerator
-from sandbox.dave.rllab.lego_generators.pr2_lego_generators import PR2LegoFixedBlockGenerator
+from sandbox.dave.rllab.goal_generators.pr2_goal_generators import PR2CrownGoalGeneratorSmall #PR2CrownGoalGeneratorSmall
+from sandbox.dave.rllab.lego_generators.pr2_lego_generators import PR2LegoBoxBlockGeneratorSmall #PR2LegoBoxBlockGeneratorSmall #PR2LegoFixedBlockGenerator
 from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.dave.rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 # from sandbox.dave.rllab.policies.gaussian_mlp_policy_tanh import GaussianMLPPolicy
 from rllab.misc.instrument import VariantGenerator, variant
 
 
-from sandbox.dave.rllab.envs.mujoco.pr2_env_lego import Pr2EnvLego
-# from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_position import Pr2EnvLego
+# from sandbox.dave.rllab.envs.mujoco.pr2_env_lego import Pr2EnvLego
+from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_position import Pr2EnvLego
 # from sandbox.dave.rllab.envs.mujoco.pr2_env_reach import Pr2EnvLego
 
 
 stub(globals())
 
-train_goal_generator=PR2FixedGoalGenerator()
-action_limiter=FixedActionLimiter()
+train_goal_generator = PR2CrownGoalGeneratorSmall()
+action_limiter = FixedActionLimiter()
 
 
 
-# seeds = [1, 11, 21]
-seeds = [11]
-# num_actio ns = [2, 5, 7, 10, 15, 20]
+# seeds = [1]
+seeds = [21]
+# num_actions = [2, 5, 7, 10, 15, 20]
 # num_actions = [1]
 for s in seeds:
-
     env = normalize(Pr2EnvLego(
         goal_generator=train_goal_generator,
-        lego_generator=PR2LegoFixedBlockGenerator(),
-        action_limiter=action_limiter,
+        lego_generator=PR2LegoBoxBlockGeneratorSmall(),
+        # action_limiter=action_limiter,
         max_action=1,
         pos_normal_sample=True,
         qvel_init_std=0.01,
         # pos_normal_sample_std=0.01,
         # use_depth=True,
         # use_vision=True,
-        # allow_random_restarts=True,
+        allow_random_restarts=True,
+        crop=True,
         # allow_random_vel_restarts=True,
         ))
 
@@ -50,8 +50,9 @@ for s in seeds:
         # The neural network policy should have n hidden layers, each with k hidden units.
         hidden_sizes=(64, 64, 64),
         # output_gain=1,
-        init_std=0.5,
-        # pkl_path="/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/RSS/position-crop/position_crop11/params.pkl"
+        init_std=1,
+        # beta=0.05,
+        # pkl_path="/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/RSS/position-control-random-lego/position-control-random-lego-21/params.pkl"
         # json_path="/home/ignasi/GitRepos/rllab-goals/data/local/train-Lego/rand_init_angle_reward_shaping_continuex2_2016_10_17_12_48_20_0001/params.json",
         )
 
@@ -61,15 +62,16 @@ for s in seeds:
         env=env,
         policy=policy,
         baseline=baseline,
-        batch_size=15000,
-        max_path_length=150,  #100
+        batch_size=5000,
+        max_path_length=100,  #100
         n_itr=5000, #50000
         discount=0.95,
         gae_lambda=0.98,
         step_size=0.01,
         goal_generator=train_goal_generator,
         action_limiter=None,
-        optimizer_args={'subsample_factor': 0.1}
+        optimizer_args={'subsample_factor': 0.1},
+        # discount_weights={'angle': 0.1, 'tip': .1},
         # plot=True,
         # Uncomment both lines (this and the plot parameter below) to enable plotting
         )
@@ -81,29 +83,25 @@ for s in seeds:
         n_parallel=32,
         # n_parallel=12,
         # n_parallel=1,
-        # n_parallel=4,
+        # pre_commands=['pip install --upgrade pip',
+        #               'pip install --upgrade theano'],
         sync_s3_pkl=True,
         periodic_sync=True,
         # sync_s3_png=True,
-        aws_config={"spot_price": '3.5', 'instance_type': 'm4.16xlarge'},
+        aws_config={"spot_price": '1.25', 'instance_type': 'm4.16xlarge'},
         # Only keep the snapshot parameters for the last iteration
         snapshot_mode="last",
-        # python_command="apt-get update \
-        # && apt-get -y install \
-        # xorg-dev \
-        # libglu1-mesa libgl1-mesa-dev \
-        # xvfb \
-        # libxinerama1 libxcursor1 \
-        # xvfb-run -a -s \"-screen 0 1400x900x24 +extension RANDR\" -- glxinfo",
-        # && xvfb-run -a \"-screen 0 1400x900x24 +extension RANDR\" -- python",
         # Specifies the seed for the experiment. If this is not provided, a random seed
         # will be used
-        seed=s,
+        # seed=1,
         mode="local",
         # mode="ec2",
+        seed=s,
         # log_dir="data/local/train-Lego/trial_pretraining",
         # exp_prefix="train-Lego/RSS/trial",
-        # exp_name="trial" + str(s),
-        exp_prefix="train-Lego/RSS/torque-control",
-        exp_name="random_param_torque_eve_fixed" + str(s),
+        # exp_name="trial",
+        # exp_prefix="train-Lego/RSS/torque-control",
+        # exp_name="random_0001_param_torque_eve_fixed" + str(s),
+        exp_prefix="train-Lego/RSS/debug-beta-02",
+        exp_name="debug-beta-02" + str(s),
     )

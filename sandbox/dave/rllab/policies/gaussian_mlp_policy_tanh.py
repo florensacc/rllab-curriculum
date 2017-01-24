@@ -6,7 +6,7 @@ import numpy as np
 
 from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
-from sandbox.dave.rllab.core.network import MLPtanh, MLP
+from sandbox.dave.rllab.core.network import MLP
 from sandbox.dave.rllab.spaces import Box
 
 from sandbox.dave.rllab.core.lasagne_layers import *
@@ -15,7 +15,7 @@ from rllab.policies.base import StochasticPolicy
 from rllab.misc.overrides import overrides
 from rllab.misc import logger
 from rllab.misc import ext
-from rllab.distributions.diagonal_gaussian import DiagonalGaussian
+from sandbox.dave.rllab.distributions.diagonal_gaussian_limited_action import DiagonalGaussian
 import theano.tensor as TT
 
 
@@ -34,7 +34,7 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             min_std=1e-6,
             std_hidden_nonlinearity=NL.tanh,
             hidden_nonlinearity=NL.tanh,
-            output_nonlinearity=NL.tanh,
+            output_nonlinearity=None,
             mean_network=None,
             std_network=None,
             output_gain=1.0,
@@ -44,7 +44,7 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             json_path=None,
             npz_path=None,
             trainable=True,
-            beta=0.1,
+            beta=0.05,
     ):
         """
         :param env_spec:
@@ -74,12 +74,10 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
         obs_dim = env_spec.observation_space.flat_dim
         action_dim = env_spec.action_space.flat_dim
 
-        l_input = L.InputLayer(shape=(None,) + (obs_dim,), name="input_layer")
-        l_joint_angles = CropLayer(l_input, start_index=None, end_index=7)
         # create network
         if mean_network is None:
-            mean_network = MLPtanh(
-                input_layer=l_input,
+            mean_network = MLP(
+                input_shape=(obs_dim,),
                 output_dim=action_dim,
                 hidden_sizes=hidden_sizes,
                 hidden_nonlinearity=hidden_nonlinearity,
@@ -87,7 +85,6 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 # output_gain=output_gain,
                 # num_relu=num_relu
             )
-
         self._mean_network = mean_network
         layers_mean = mean_network.layers
         l_mean = mean_network.output_layer
@@ -133,7 +130,7 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
         self._l_mean = l_mean
         self._l_log_std = l_log_std
 
-        self._dist = DiagonalGaussian(action_dim)
+        self._dist = DiagonalGaussian(action_dim, self.beta)
 
         LasagnePowered.__init__(self, [l_mean, l_log_std])
         super(GaussianMLPPolicy, self).__init__(env_spec)
@@ -159,6 +156,11 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
                         layer.params[layer.b].remove("trainable")
                 except:
                     layer.params[layer.param].remove("trainable")
+
+    @property
+    @overrides
+    def state_info_keys(self):
+        return ['joint_angles']
 
     def get_params_old(self):
         params = []
@@ -186,7 +188,7 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             log_std_var = TT.maximum(log_std_var, np.log(self.min_std))
         # state = CropLayer(obs_var, start_index=None, end_index=7)
         # TT.set_subtensor(joint_angles_var, obs_var[:, 7])
-        return dict(mean=mean_var, log_std=log_std_var)
+        return dict(mean=mean_var, log_std=log_std_var, joint_angles=state_info_vars['joint_angles'])
 
     @overrides
     def get_action(self, observation):
@@ -194,7 +196,7 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
         mean, log_std = [x[0] for x in self._f_dist([flat_obs])]
         rnd = np.random.normal(size=mean.shape)
         action = rnd * np.exp(log_std) + mean
-        action = 0.03 * np.tanh(action) + flat_obs[:7]
+        action = self.beta * np.tanh(action - flat_obs[:7]) + flat_obs[:7]
         return action, dict(mean=mean, log_std=log_std)
 
     def get_actions(self, observations):
@@ -202,7 +204,7 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
         means, log_stds = self._f_dist(flat_obs)
         rnd = np.random.normal(size=means.shape)
         actions = rnd * np.exp(log_stds) + means
-        return actions, dict(mean=means, log_std=log_stds, state=observations[:7])
+        return actions, dict(mean=means, log_std=log_stds)
 
     def get_reparam_action_sym(self, obs_var, action_var, old_dist_info_vars):
         """

@@ -43,6 +43,11 @@
 		<mesh file="l_finger.stl"/>
 		<mesh file="l_finger_tip.stl"/>
 
+		<mesh file="noddlesoup.stl"/>
+		<mesh file="windex.stl"/>
+		<mesh file="white_rain.stl"/>
+
+
 		<material name="MatGnd" specular=".3" shininess=".3" reflectance="0.3" rgba=".5 .55 .5 1"/>
 	</asset>
 
@@ -434,7 +439,7 @@
                                 <!--geom name="geom34f" type="capsule" pos="0.12961979 -0.00000014 0" quat="1 -0.00001340 0.00000169 -0.00000728" size="0.07297432 0.00139096" group="1"/-->
                                 <body name="r_upper_arm_link" pos="0 0 0">
                                     <inertial pos="0.21398 -0.01621 -0.0002" quat="-0.045020 0.697462 -0.088537 0.709705" mass="6.01769" diaginertia="0.076138 0.074931 0.015133" />
-                                    <geom name="geom35"rgba="0.7 0.7 0.7 1" mesh="upper_arm" contype="0"/>
+                                    <geom name="geom35" rgba="0.7 0.7 0.7 1" mesh="upper_arm" contype="0"/>
                                     <!--geom name="geom35f" type="capsule" pos="0.21533518 0.00017574 -0.00229182" quat="0.50005025 0.49945472 0.50003903 0.50045548" size="0.09823026 0.18895381" rgba="0 0.8 0 1" group="1"/-->
                                     <body name="r_elbow_flex_link" pos="0.4 0 0">
                                         <inertial pos="0.01014 0.00032 -0.01211" quat="0.308784 0.646797 0.639077 0.279083" mass="1.90327" diaginertia="0.004419 0.003965 0.003090" />
@@ -568,6 +573,23 @@
             <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>  #mass was 0.00001
             <geom name="brick" pos="0 0 0" type="box" size="0.0975 0.0475 0.0325" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
 
+        </body>
+
+        <body name="noddlesoup" pos ="0.6 0.2 0.5025">
+            <joint type="free" />
+            <site name="noddlesoup" pos="0 0 0" size="0.005"/>
+
+            <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>  #mass was 0.00001
+            <geom name="noddlesoup" mesh="noddlesoup" pos="0 0 0" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+
+        </body>
+
+        <body name="white_rain" pos ="0.6 0.2 0.5025">
+            <joint type="free" />
+            <site name="white_rain" pos="0 0 0" size="0.005"/>
+
+            <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>  #mass was 0.00001
+            <geom name="white_rain" mesh="white_rain" pos="0 0 0" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001" quat="0.707 0 0.707 0"/>
         </body>
 
 

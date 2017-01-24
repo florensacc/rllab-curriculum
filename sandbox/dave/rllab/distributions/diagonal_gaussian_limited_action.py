@@ -4,8 +4,9 @@ from rllab.distributions.base import Distribution
 
 
 class DiagonalGaussian(Distribution):
-    def __init__(self, dim):
+    def __init__(self, dim, beta):
         self._dim = dim
+        self.beta = beta
 
     @property
     def dim(self):
@@ -64,7 +65,7 @@ class DiagonalGaussian(Distribution):
         means = dist_info_vars["mean"]
         log_stds = dist_info_vars["log_std"]
         joint_angles_var = dist_info_vars["joint_angles"]
-        x_var = TT.arctanh((x_var - joint_angles_var) / 0.03)
+        x_var = TT.arctanh((x_var - joint_angles_var) / (self.beta + 1e-3)) + joint_angles_var
         zs = (x_var - means) / TT.exp(log_stds)
         return - TT.sum(log_stds, axis=-1) - \
                0.5 * TT.sum(TT.square(zs), axis=-1) - \
@@ -79,8 +80,8 @@ class DiagonalGaussian(Distribution):
     def log_likelihood(self, xs, dist_info):
         means = dist_info["mean"]
         log_stds = dist_info["log_std"]
-        state = dist_info["state"]
-        xs = TT.arctanh((xs - state) / 0.03)
+        state = dist_info["joint_angles"]
+        xs = np.arctanh((xs - state) / (self.beta + 1e-3)) + state
         zs = (xs - means) / np.exp(log_stds)
         return - np.sum(log_stds, axis=-1) - \
                0.5 * np.sum(np.square(zs), axis=-1) - \
