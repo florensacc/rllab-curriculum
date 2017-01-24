@@ -168,6 +168,7 @@ class StochasticPolicyMaximizer(Parameterized, Serializable):
 
         self._actor.set_param_values(params[0])
         self._critic.set_param_values(params[1])
+
     @overrides
     def reset(self):
         pass

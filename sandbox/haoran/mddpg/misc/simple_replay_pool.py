@@ -1,9 +1,10 @@
 import numpy as np
-
+from rllab.misc.overrides import overrides
 
 class SimpleReplayPool(object):
     def __init__(
             self, max_pool_size, observation_dim, action_dim,
+            reward_dim=1,
             replacement_policy='stochastic', replacement_prob=1.0,
             max_skip_episode=10):
         self._observation_dim = observation_dim
@@ -14,7 +15,7 @@ class SimpleReplayPool(object):
         self._max_skip_episode = max_skip_episode
         self._observations = np.zeros((max_pool_size, observation_dim))
         self._actions = np.zeros((max_pool_size, action_dim))
-        self._rewards = np.zeros(max_pool_size)
+        self._rewards = np.zeros((max_pool_size, reward_dim))
         # self._terminals[i] = a terminal was received at time i
         self._terminals = np.zeros(max_pool_size, dtype='uint8')
         # self._final_state[i] = state i was the final state in a rollout,

@@ -10,7 +10,7 @@ from sandbox.tuomas.mddpg.misc.sim_policy import rollout, rollout_alg
 
 from rllab.misc.overrides import overrides
 from rllab.misc import logger
-from rllab.misc import special
+from sandbox.tuomas.mddpg.misc import special
 from rllab.envs.proxy_env import ProxyEnv
 from rllab.core.serializable import Serializable
 
@@ -150,14 +150,14 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.kernel.sess = self.sess
         self.qf.sess = self.sess
         self.policy.sess = self.sess
-        self.eval_policy.sess = self.sess
+        if self.eval_policy is not None:
+            self.eval_policy.sess = self.sess
         self.target_policy.sess = self.sess
         self.dummy_policy.sess = self.sess
 
         self._init_ops()
 
         self.sess.run(tf.global_variables_initializer())
-
 
     def _init_ops(self):
         self._init_actor_ops()
@@ -198,7 +198,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 )
                 p = self.prior_coeff_placeholder
                 log_p = ((1.0 - p) * self.critic_with_policy_input.output
-                    + p * self.prior_with_policy_input.output)
+                         + p * self.prior_with_policy_input.output)
             else:
                 log_p = self.critic_with_policy_input.output
             log_p = tf.squeeze(log_p)
@@ -301,23 +301,44 @@ class VDDPG(OnlineAlgorithm, Serializable):
     def _init_critic_ops(self):
         if not self.train_critic:
             return
+        M = self.qf.dim if hasattr(self.qf, 'dim') else 1
 
-        q_next = tf.reshape(self.target_qf.output, (-1, self.K))  # N x K
+        # q_next: N x K x M
+        if hasattr(self.target_qf, 'outputs'):
+            q_next = tf.reshape(self.target_qf.outputs, (-1, self.K, M))
+        else:
+            q_next = tf.reshape(self.target_qf.output, (-1, self.K, M))
+
         if self.q_target_type == 'mean':
             q_next = tf.reduce_mean(q_next, reduction_indices=1, name='q_next',
-                                    keep_dims=True)  # N x 1
+                                    keep_dims=False)  # N x M
         elif self.q_target_type == 'max':
+            # TODO: This is actually wrong. Now the max of each critic might
+            # be attained with a different actions. We should consistently
+            # pick a single action and stick with that for all critics.
             q_next = tf.reduce_max(q_next, reduction_indices=1, name='q_next',
-                                   keep_dims=True)  # N x 1
+                                   keep_dims=False)  # N x M
         else:
             raise NotImplementedError
 
-        self.ys = (
-            self.rewards_placeholder + (1 - self.terminals_placeholder) *
-            self.discount * q_next
-        )  # N
+        # q_next = tf.Print(q_next, [tf.shape(q_next)], 'Shape of q_next: ')
 
-        self.critic_loss = tf.reduce_mean(tf.square(self.ys - self.qf.output))
+        assert_op = tf.assert_equal(
+            tf.shape(self.rewards_placeholder), tf.shape(q_next)
+        )
+
+        with tf.control_dependencies([assert_op]):
+            # TODO: Discount should be set independently for each critic.
+            self.ys = (
+                self.rewards_placeholder + (1 - self.terminals_placeholder) *
+                self.discount * q_next
+            )  # N x M
+
+        # self.ys = tf.Print(self.ys, [tf.shape(self.ys)], 'Shape of ys: ')
+
+        self.critic_loss = tf.reduce_mean(tf.reduce_mean(
+            tf.square(self.ys - self.qf.output)
+        ))
 
         self.critic_reg = tf.reduce_sum(
             tf.pack(
@@ -397,7 +418,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
         obs = self._replicate_obs(obs, self.K)
 
         feed = self.policy.get_feed_dict(obs)
-        feed[self.critic_with_policy_input.observations_placeholder] = obs
+        feed.update(self.critic_with_policy_input.get_feed_dict(obs))
+        #feed[self.critic_with_policy_input.observations_placeholder] = obs
         feed[self.alpha_placeholder] = self.alpha
         feed[self.prior_coeff_placeholder] = self.prior_coeff
         return feed
@@ -410,8 +432,12 @@ class VDDPG(OnlineAlgorithm, Serializable):
         feed.update(self.qf.get_feed_dict(obs, actions))
         feed.update(self.target_qf.get_feed_dict(next_obs))
 
+        # Adjust rewards dims for backward compatibility.
+        if len(rewards.shape) == 1:
+            rewards = np.expand_dims(rewards, axis=1)
+
         feed.update({
-            self.rewards_placeholder: np.expand_dims(rewards, axis=1),
+            self.rewards_placeholder: rewards,
             self.terminals_placeholder: np.expand_dims(terminals, axis=1),
             #self.qf.observations_placeholder: obs,
             #self.qf.actions_placeholder: actions,

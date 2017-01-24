@@ -3,6 +3,9 @@ import tensorflow as tf
 from sandbox.haoran.mddpg.core.neuralnet import NeuralNetwork
 from sandbox.haoran.mddpg.core.tf_util import he_uniform_initializer, mlp, linear, weight_variable
 from rllab.core.serializable import Serializable
+from rllab.misc.overrides import overrides
+
+import numpy as np
 
 
 class NNCritic(NeuralNetwork):
@@ -157,6 +160,99 @@ class FeedForwardCritic(NNCritic):
                           W_initializer=self.output_W_init,
                           b_initializer=self.output_b_init,
                           reuse_variables=True)
+
+
+class MultiCritic(NNCritic):
+    """
+    Train multiple independent critics simultaneously. Requires that the
+    reward dimensions matches the number critics. Output is simply the sum
+    of the critics' outputs.
+    """
+    def __init__(self, critics, temperatures=None):
+        """
+
+        :param critics: List of critics.
+        """
+        Serializable.quick_init(self, locals())
+
+        # We require that all critics share the same inputs.
+        # This would require more more engineering to make the critics
+        # share their inputs.
+        #obs_in = critics[0].observations_placeholder
+        #action_in = critics[0].actions_placeholder
+        #assert all([obs_in == c.observations_placeholder for c in critics])
+        #assert all([action_in == c.actions_placeholder for c in critics])
+
+        self._M = len(critics)
+
+        if temperatures is None:
+            temperatures = np.ones(self._M)
+
+        #self.observations_placeholder = obs_in
+        #self.actions_placeholder = action_in
+        self._critics = critics
+        self._temperatures = temperatures
+        self._dim = len(critics)
+
+        scaled_outputs = [t * c.output for t, c in zip(temperatures, critics)]
+
+        self._output = tf.add_n(scaled_outputs)
+        self._outputs = tf.pack([c.output for c in critics], axis=1)
+
+    def get_weight_tied_copy(self, action_input, observation_input):
+        return MultiCritic([
+            c.get_weight_tied_copy(action_input, observation_input)
+            for c in self._critics
+        ])
+
+    @overrides
+    def get_params_internal(self, **tags):
+        all_params = []
+        for c in self._critics:
+            all_params += c.get_params_internal()
+        return all_params
+
+    @overrides
+    def get_param_values(self, **tags):
+        all_params = []
+        for c in self._critics:
+            all_params.append(c.get_param_values(**tags))
+        return all_params
+
+    @overrides
+    def set_param_values(self, params, **tags):
+        for c, p in zip(self._critics, params):
+            c.set_param_values(p, **tags)
+
+    @overrides
+    def get_copy(self, scope_name, **kwargs):
+        c_cpy = [c.get_copy(scope_name=scope_name + c.scope_name, **kwargs)
+                 for c in self._critics]
+
+        return MultiCritic(c_cpy, self._temperatures.copy())
+
+    @overrides
+    def get_feed_dict(self, obs, action=None):
+        # TODO: There must be a better way. If the critics shares the same
+        # inputs, then there shouldn't be need to fill each of then individually
+        feed = dict()
+        for c in self._critics:
+            feed.update(c.get_feed_dict(obs, action))
+
+        return feed
+
+    @property
+    def scope_name(self):
+        return ''
+
+    @property
+    def outputs(self):
+        return self._outputs  # N x M
+
+    @property
+    def dim(self):
+        return self._dim
+
 
 
 class SumCritic(NNCritic):

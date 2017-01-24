@@ -10,7 +10,7 @@ from rllab.exploration_strategies.ou_strategy import OUStrategy
 
 
 from sandbox.tuomas.mddpg.policies.stochastic_policy import \
-    DummyExplorationStrategy
+    DummyExplorationStrategy, StochasticPolicyMaximizer
 
 from sandbox.tuomas.mddpg.critics.gaussian_critic import MixtureGaussian2DCritic
 
@@ -155,6 +155,13 @@ class AlgTest(Alg):
             plt.draw()
             plt.pause(0.001)
 
+            ## Create a test actor that approximately maximizes the Q value
+            #eval_actor = StochasticPolicyMaximizer(
+            #    N=100,
+            #    actor=self.policy,
+            #    critic=self.qf,
+            #)
+
             for ax_critic, qpos in zip(self.ax_critics, self.qpos_list):
                 env.reset_mujoco()
                 obs = env.get_current_obs()
@@ -176,11 +183,14 @@ class AlgTest(Alg):
                 y = all_actions[:, 1]
                 ax_critic.plot(x, y, '*')
 
+                # Plot eval_actor
+                max_action = self.eval_policy.get_action(obs)
+                ax_critic.plot(max_action[0], max_action[1], '*r')
+
             plt.draw()
             plt.pause(0.001)
 
             # Save plots
-
             if FLAGS.save_path != '':
                 filename = lambda plot_name: (os.path.join(
                     FLAGS.save_path,
@@ -190,6 +200,7 @@ class AlgTest(Alg):
 
                 self._critic_fig.savefig(filename('q'))
                 self._actor_fig.savefig(filename('trajs'))
+
 
 
 
@@ -206,7 +217,7 @@ def test():
 
 
     alg_kwargs = dict(
-        epoch_length=10 * FLAGS.path_length,  # evaluate / plot per SVGD step
+        epoch_length=1 * FLAGS.path_length,  # evaluate / plot per SVGD step
         min_pool_size=1000,  # must be at least 2
         #replay_pool_size=2,  # should only sample from recent experiences,
                         # note that the sample drawn can be one iteration older
@@ -290,6 +301,15 @@ def test():
         **policy_kwargs,
     )
 
+    if FLAGS.policy == 'stochastic':
+        eval_policy = StochasticPolicyMaximizer(
+                N=100,
+                actor=policy,
+                critic=qf,
+        )
+    else:
+        eval_policy = None
+
     kernel = SimpleAdaptiveDiagonalGaussianKernel(
         "kernel",
         dim=env.action_space.flat_dim,
@@ -305,6 +325,7 @@ def test():
         env=env,
         exploration_strategy=es,
         policy=policy,
+        eval_policy=eval_policy,
         qf=qf,
         **alg_kwargs
     )
