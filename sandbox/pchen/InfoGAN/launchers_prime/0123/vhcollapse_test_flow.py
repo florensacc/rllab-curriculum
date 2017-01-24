@@ -139,7 +139,7 @@ config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[config.AWS_REGION_NAME]
 config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[config.AWS_REGION_NAME]
 config.AWS_SECURITY_GROUP_IDS = config.ALL_REGION_AWS_SECURITY_GROUP_IDS[config.AWS_REGION_NAME]
 
-for v in variants:
+for v in variants[1:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
@@ -154,9 +154,9 @@ for v in variants:
         snapshot_mode="last",
         docker_image="dementrock/rllab3-shared-gpu-cuda80",
         seed=v["seed"],
-        terminate_machine=False,
-        pre_commands=[
-            "nvidia-modprobe -u -c=0",
-        ],
+        terminate_machine=True,
+        # pre_commands=[
+        #     "nvidia-modprobe -u -c=0",
+        # ],
     )
     break
