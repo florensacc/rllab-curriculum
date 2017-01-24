@@ -170,7 +170,7 @@ class AlgTest(Alg):
             rewards = []
             for t in range(FLAGS.path_length):
                 a, _ = self.policy.get_action(o)
-                _, r, d, info = self.env.step(a)
+                o, r, d, info = self.env.step(a)
                 info_list.append(info)
                 rewards.append(r)
                 if d:
@@ -188,6 +188,12 @@ class AlgTest(Alg):
         logger.record_tabular("success_rate", successes / self._n_test_paths)
         #logger.record_tabular("avg test int reward", mean_rewards[0])
         #logger.record_tabular("avg test ext reward", mean_rewards[1])
+
+        # TODO: hacky way to check if this is VDDPG instance without loading
+        # VDDPG class.
+        if hasattr(self, 'alpha'):
+            if epoch % 50 == 0:
+                self.alpha /= 3.
 
 
 # -------------------------------------------------------------------
