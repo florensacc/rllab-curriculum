@@ -2533,6 +2533,7 @@ class ReshapeFlow(Distribution):
             base_dist,
             forward_fn,
             backward_fn,
+            logli_diff_fn=lambda x: 0.,
     ):
         global G_IDX
         G_IDX += 1
@@ -2540,6 +2541,7 @@ class ReshapeFlow(Distribution):
         self._base_dist = base_dist
         self._forward = forward_fn
         self._backward = backward_fn
+        self._logli_diff = logli_diff_fn
 
         self.train_mode()
 
@@ -2563,12 +2565,12 @@ class ReshapeFlow(Distribution):
 
     def logli(self, x_var, dist_info):
         eps = self._backward(x_var)
-        return self._base_dist.logli(eps, dist_info)
+        return self._base_dist.logli(eps, dist_info) + self._logli_diff(x_var)
 
     def sample_logli(self, dist_info):
         eps, logpeps = self._base_dist.sample_logli(dist_info)
         x = self._forward(eps)
-        return x, logpeps
+        return x, logpeps + self._logli_diff(x)
 
     def prior_dist_info(self, batch_size):
         return self._base_dist.prior_dist_info(batch_size)
@@ -2640,6 +2642,7 @@ class DequantizedFlow(Distribution):
     def nonreparam_logli(self, x_var, dist_info):
         raise "not defined"
 
+# TODO: this has wrong impl for sampling
 def normalize(dist):
     def normalize_per_dim(x):
         mu, inv_std = nn.init_normalization(x)
@@ -2650,4 +2653,13 @@ def normalize(dist):
         condition_fn=lambda x: x,
         effect_fn=lambda x: x,
         combine_fn=lambda _, x: x,
+    )
+
+def logitize(dist, coeff=1.9):
+    # apply logit(coeff*x)
+    return ReshapeFlow(
+        dist,
+        forward_fn=lambda eps: 1. / (1. + tf.exp(-eps)),
+        backward_fn=lambda x: tf.log(coeff*x) - tf.log(1-coeff*x),
+        logli_diff_fn=lambda x: tf.reduce_sum(-tf.log(x - coeff*(x**2)), reduction_indices=[1,2,3]),
     )
