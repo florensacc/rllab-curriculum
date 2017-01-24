@@ -16,7 +16,6 @@ def init_all_output_file(output_dir, adv_name, algo_param_names, batch_size, \
     f['adv_type'] = adv_name
     f['algo_param_names'] = ';'.join(algo_param_names)
     f['batch_size'] = batch_size
-    f.create_group("results")
     f.close()
 
     return output_h5

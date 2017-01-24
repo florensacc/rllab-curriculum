@@ -1,6 +1,11 @@
 import copy
 import joblib
 import numpy as np
+import os, os.path as osp
+
+SCORE_KEY = {'async-rl': 'ReturnAverage', \
+             'deep-q-rl': 'TestAverageReturn', \
+             'trpo': 'RawReturnAverage'}
 
 class DQNAlgo(object):
     pass
@@ -96,7 +101,7 @@ def sample_dqn(algo, n_paths=1):  # Based on deep_q_rl/ale_experiment.py, run_ep
             paths[i]['actions'].append(action)
             env.step(action)
             paths[i]['rewards'].append(env.reward)
-            action = algo.agent.step(env.reward, env.observation[-1,:,:], {})
+            action = algo.agent.step(env.reward, env.last_state, {})
     return paths
 
 def get_average_return_dqn(algo, seed, N=10):
@@ -171,8 +176,68 @@ def load_model(params_file, batch_size):
                 height=algo.agent.image_height,
                 max_steps=algo.agent.phi_length * 2,
                 phi_length=algo.agent.phi_length)
+        algo.agent.testing = True
         algo.agent.bonus_evaluator = None
         algo.env = data['env']
         return algo, algo.env
     else:
         raise NotImplementedError
+
+def load_models(games, experiments, base_dir, batch_size, threshold=0, \
+                num_threshold=5, score_window=10):
+    # each entry in experiments should have the format "algo-name_exp-index"
+    # If threshold is in [0,1], then discard all policies which have a score
+    # less than threshold * the best policy's score - for each game and
+    # training algorithm pair
+
+    policies = {}  # key, top level: game name
+                   # key, second level: algorithm name
+                   # value: list of (algo, env) pairs - trained policies for that game
+    for game in games:
+        policies[game] = {}
+        for exp in experiments:
+            algo_name, exp_index = exp.split('_')
+            if algo_name not in policies[game]:
+                policies[game][algo_name] = []
+
+            params_parent_dir = osp.join(base_dir, algo_name, exp_index+'-'+game)
+            params_dirs = [osp.join(params_parent_dir, x) for x in os.listdir(params_parent_dir)]
+            params_dirs = [x for x in params_dirs if osp.isdir(x)]
+            for params_dir in params_dirs:
+                params_files = [x for x in os.listdir(params_dir) \
+                                if x.startswith('itr') and x.endswith('pkl')]
+                # Get the latest parameters
+                params_file = sorted(params_files,
+                                     key=lambda x: int(x.split('.')[0].split('_')[1]),
+                                     reverse=True)[0]
+                itr = int(params_file.split('.')[0].split('_')[1])
+                params_file = osp.join(params_dir, params_file)
+                algo, env = load_model(params_file, batch_size)
+                
+                # Calculate average score starting from saved iteration and
+                # going back score_window iterations
+                with open(osp.join(params_dir, 'progress.csv'), 'r') as progress_f:
+                    lines = progress_f.readlines()
+                    header = lines[0].split(',')
+                    score_idx = header.index(SCORE_KEY[algo_name])
+                    scores = [float(l.split(',')[score_idx]) \
+                              for l in lines[max(1,itr-score_window):itr+1]]
+                    score = sum(scores) / float(len(scores))
+                policies[game][algo_name].append((algo, env, score, params_file.split('/')[-2]))
+
+    if threshold > 1:
+        threshold = 1
+
+    # Discard all policies that are not close to as good as the best one, or not
+    # in the top num_threshold scores
+    best_policies = {}
+    for game in policies:
+        best_policies[game] = {}
+
+        for algo_name in policies[game]:
+            all_policies = sorted(policies[game][algo_name], key=lambda x: x[2], reverse=True)
+            best_score = all_policies[0][2]
+            best_policies[game][algo_name] = [x for x in all_policies if x[2] >= best_score*threshold]
+            best_policies[game][algo_name] = best_policies[game][algo_name][:num_threshold]
+
+    return best_policies
