@@ -27,7 +27,10 @@ def fgsm_perturbation_linf(grad_x, fgsm_eps):
     return fgsm_eps * sign_grad_x, sign_grad_x
 
 def fgsm_perturbation_l2(grad_x, fgsm_eps):
-    grad_x_unit = grad_x / np.linalg.norm(grad_x)
+    if np.linalg.norm(grad_x) > 0:
+        grad_x_unit = grad_x / np.linalg.norm(grad_x)
+    else:
+        grad_x_unit = grad_x
     scaled_fgsm_eps = fgsm_eps * np.sqrt(grad_x.size)
     return scaled_fgsm_eps * grad_x_unit, grad_x_unit
 
@@ -55,6 +58,45 @@ def fgsm_perturbation_l1(grad_x, fgsm_eps, obs, obs_min, obs_max):
     eta = eta.reshape(grad_x.shape, order='C')
     return eta, np.sign(eta)
 
+def get_grad_x_a3c(obs, algo):
+    import chainer
+    from chainer import functions as F
+    statevar = chainer.Variable(np.expand_dims(algo.cur_agent.preprocess(obs), 0))
+    logits = algo.cur_agent.model.pi.compute_logits(algo.cur_agent.model.head(statevar))
+    max_logits = F.broadcast_to(F.max(logits), (1,len(logits)))
+    # Calculate loss between predicted action distribution and the action distribution
+    # that places all weight on the argmax action
+    ce_loss = -1 * F.log(1.0 / F.sum(F.exp(logits - max_logits)))
+    ce_loss.backward(retain_grad=True)
+    grad_x = statevar.grad[0]
+    # For debugging:
+    #print("A3C:", abs(grad_x).max(), ce_loss.data)
+    return grad_x
+
+def get_grad_x_dqn(obs, algo):
+    # Note: assumes epsilon = 0 (i.e., never chooses random action)
+    obs_rand = np.random.rand(*obs.shape)
+
+    grad_x = algo.agent.network.f_obs_grad(obs[np.newaxis,...])
+
+    # For debugging:
+    #ce_loss_x = algo.agent.network.f_obs_ce_loss(obs[np.newaxis,...])
+    #grad_x_rand = algo.agent.network.f_obs_grad(obs_rand[np.newaxis,...])
+    #ce_loss_x_rand = algo.agent.network.f_obs_ce_loss(obs_rand[np.newaxis,...])
+    #import IPython as ipy
+    #ipy.embed()
+    #print("DQN:", abs(grad_x[0]).max(), ce_loss_x, abs(grad_x[0]-grad_x_rand[0]).max(), abs(ce_loss_x - ce_loss_x_rand))
+    return grad_x[0]  # from (1,n_frames,img_size,img_size) to (n_frames,img_size,img_size)
+
+def get_grad_x_trpo(obs, algo):
+    flat_obs = algo.policy.observation_space.flatten(obs)[np.newaxis,:]
+    grad_x = algo.optimizer._opt_fun["f_obs_grad"](flat_obs)[0,:]
+    grad_x = algo.policy.observation_space.unflatten(grad_x)
+    # For debugging:
+    #ce_loss_x = algo.optimizer._opt_fun["f_obs_ce_loss"](flat_obs)
+    #print("TRPO:", abs(grad_x).max(), ce_loss_x)
+    return grad_x
+
 def fgsm_perturbation(obs, algo, **kwargs):
     # Apply fast gradient sign method (FGSM):
     # For l-inf norm,
@@ -78,9 +120,15 @@ def fgsm_perturbation(obs, algo, **kwargs):
         raise
 
     # Calculate \grad_x J(\theta, x, y)
-    flat_obs = algo.policy.observation_space.flatten(obs)[np.newaxis,:]
-    grad_x = algo.optimizer._opt_fun["f_obs_grad"](flat_obs)[0,:]
-    grad_x = algo.policy.observation_space.unflatten(grad_x)
+    algo_name = type(algo).__name__
+    if algo_name in ['TRPO', 'ParallelTRPO']:
+        grad_x = get_grad_x_trpo(obs, algo)
+    elif algo_name in ['A3CALE']:
+        grad_x = get_grad_x_a3c(obs, algo)
+    elif algo_name in ['DQNAlgo']:
+        grad_x = get_grad_x_dqn(obs, algo)
+    else:
+        assert False, "Algorithm type " + algo_name + " is not supported."
     grad_x_current = grad_x[-1,:,:]
 
     if norm == 'l-inf':
@@ -118,7 +166,7 @@ def main():
     algo, env = load_model(args.params_file, BATCH_SIZE)
 
     # Run policy rollouts for N trajectories, get average return
-    #avg_return, paths = get_average_return(algo, N, seed=FGSM_RANDOM_SEED)
+    #avg_return, paths = get_average_return(algo, FGSM_RANDOM_SEED, N)
     #print("Return:", avg_return)
 
     for fgsm_eps in FGSM_EPS:
@@ -128,9 +176,11 @@ def main():
             print("Output h5 file:", output_h5)
 
         # Run policy rollouts with FGSM adversary for N trials, get average return
-        env.set_adversary_fn(lambda x: fgsm_perturbation(x, algo, fgsm_eps,
-                             OBS_MIN, OBS_MAX, output_h5=output_h5, norm=args.norm))
-        avg_return_adversary, _ = get_average_return(algo, N, seed=FGSM_RANDOM_SEED)
+        env.set_adversary_fn(lambda x: fgsm_perturbation(x, algo, \
+                                       fgsm_eps=fgsm_eps, obs_min=OBS_MIN, \
+                                       obs_max=OBS_MAX, \
+                                       output_h5=output_h5, norm=args.norm))
+        avg_return_adversary, _ = get_average_return(algo, FGSM_RANDOM_SEED, N)
         print("Adversary Return:", avg_return_adversary)
         print("\tAdversary Params:", fgsm_eps, args.norm)
 

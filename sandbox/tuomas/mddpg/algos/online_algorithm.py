@@ -10,41 +10,14 @@ import tensorflow as tf
 from collections import OrderedDict
 
 from sandbox.haoran.mddpg.misc.simple_replay_pool import SimpleReplayPool
+
 from rllab.algos.base import RLAlgorithm
 from rllab.misc import logger
 from rllab.misc.overrides import overrides
 from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 from sandbox.rocky.tf.samplers.vectorized_sampler import VectorizedSampler
 from sandbox.haoran.myscripts import tf_utils
-
-
-# DEBUG class
-class DB:
-    def __init__(self):
-        self._max_paths = 100
-        self.paths = []
-        self._reset()
-
-    def append(self, observation, action, reward):
-        self.obs_list.append(observation)
-        self.action_list.append(action)
-        self.reward_list.append(reward)
-
-    def flush(self):
-        path = (np.array(self.obs_list),
-                np.array(self.action_list),
-                np.array(self.reward_list))
-        self.paths.append(path)
-
-        self._reset()
-
-        if len(self.paths) > self._max_paths:
-            self.paths.pop(0)
-
-    def _reset(self):
-        self.obs_list = []
-        self.action_list = []
-        self.reward_list = []
+from rllab.envs.proxy_env import ProxyEnv
 
 
 class OnlineAlgorithm(RLAlgorithm):
@@ -57,6 +30,7 @@ class OnlineAlgorithm(RLAlgorithm):
             env,
             policy,
             exploration_strategy,
+            eval_policy=None,
             batch_size=64,
             start_epoch=0,
             n_epochs=1000,
@@ -70,6 +44,7 @@ class OnlineAlgorithm(RLAlgorithm):
             scale_reward=1.,
             scale_reward_annealer=None,
             render=False,
+            epoch_full_paths=False,  # TH: I'm good without this. Remove?
     ):
         """
         :param env: Environment
@@ -91,6 +66,7 @@ class OnlineAlgorithm(RLAlgorithm):
         assert min_pool_size >= 2
         self.env = env
         self.policy = policy
+        self.eval_policy = eval_policy
         self.exploration_strategy = exploration_strategy
         self.replay_pool_size = replay_pool_size
         self.batch_size = batch_size
@@ -105,18 +81,29 @@ class OnlineAlgorithm(RLAlgorithm):
         self.scale_reward = scale_reward
         self.scale_reward_annealer = scale_reward_annealer
         self.render = render
+        self.epoch_full_paths = epoch_full_paths
 
         self.observation_dim = self.env.observation_space.flat_dim
         self.action_dim = self.env.action_space.flat_dim
-        self.rewards_placeholder = tf.placeholder(tf.float32,
-                                                  shape=[None, 1],
-                                                  name='rewards')
+        base_env = self.env
+        while isinstance(base_env, ProxyEnv):
+            base_env = base_env.wrapped_env
+        if hasattr(base_env, 'reward_dim'):
+            self.reward_dim = base_env.reward_dim
+        else:
+            self.reward_dim = 1
+        self.rewards_placeholder = tf.placeholder(
+            tf.float32,
+            shape=[None, self.reward_dim],
+            name='rewards'
+        )
         self.terminals_placeholder = tf.placeholder(tf.float32,
                                                     shape=[None, 1],
                                                     name='terminals')
         self.pool = SimpleReplayPool(self.replay_pool_size,
                                      self.observation_dim,
-                                     self.action_dim)
+                                     self.action_dim,
+                                     reward_dim=self.reward_dim)
         self.last_statistics = OrderedDict()
         self.sess = tf.get_default_session() or tf_utils.create_session()
         with self.sess.as_default():
@@ -133,12 +120,10 @@ class OnlineAlgorithm(RLAlgorithm):
         self.whole_paths = True
 
     def _start_worker(self):
-        self.eval_sampler.start_worker()
+        self.eval_sampler.start_worker(self.eval_policy)
 
     @overrides
     def train(self):
-        self.db = DB()
-
         with self.sess.as_default():
             self._init_training()
             self._start_worker()
@@ -152,13 +137,23 @@ class OnlineAlgorithm(RLAlgorithm):
             gt.rename_root('online algo')
             gt.reset()
             gt.set_def_unique(False)
+            total_steps = 0
             for epoch in gt.timed_for(
                 range(self.start_epoch, self.start_epoch + self.n_epochs),
                 save_itrs=True,
             ):
                 self.update_training_settings(epoch)
                 logger.push_prefix('Epoch #%d | ' % epoch)
-                for _ in range(self.epoch_length):
+                if self.epoch_full_paths:
+                    def is_epoch_finished(t, should_reset):
+                        return t >= self.epoch_length and should_reset
+                else:
+                    def is_epoch_finished(t, should_reset):
+                        return t >= self.epoch_length
+
+                t, should_reset = 0, False
+                while not is_epoch_finished(t, should_reset):
+                    t = t + 1
                     # sampling
                     action = self.exploration_strategy.get_action(itr,
                                                                   observation,
@@ -166,13 +161,16 @@ class OnlineAlgorithm(RLAlgorithm):
                     action.squeeze()
                     if self.render:
                         self.env.render()
-                    next_ob, raw_reward, terminal, _ = self.env.step(action)
+                    next_ob, raw_reward, terminal, info = self.env.step(action)
                     reward = raw_reward * self.scale_reward
                     path_length += 1
                     path_return += reward
                     gt.stamp('train: sampling')
 
-                    self.db.append(observation, action, reward)
+                    #self.plot_path(rewards=raw_reward,
+                    #               obs=observation,
+                    #               actions=action,
+                    #               info=info)
 
                     # add experience to replay pool
                     self.pool.add_sample(observation,
@@ -180,13 +178,20 @@ class OnlineAlgorithm(RLAlgorithm):
                                          reward,
                                          terminal,
                                          False)
-                    if terminal or path_length >= self.max_path_length:
+                    should_reset = (terminal or
+                                    path_length >= self.max_path_length)
+                    if should_reset:
                         self.pool.add_sample(next_ob,
                                              np.zeros_like(action),
                                              np.zeros_like(reward),
                                              np.zeros_like(terminal),
                                              True)
-                        self.db.flush()
+
+                        #self.plot_path(rewards=raw_reward,
+                        #               obs=observation,
+                        #               actions=action,
+                        #               info=info,
+                        #               flush=True)
 
                         observation = self.env.reset()
                         self.exploration_strategy.reset()
@@ -196,6 +201,8 @@ class OnlineAlgorithm(RLAlgorithm):
                         path_return = 0
                     else:
                         observation = next_ob
+
+                    self.process_env_info(info=info, flush=should_reset)
                     gt.stamp('train: fill replay pool')
 
                     # train
@@ -230,6 +237,9 @@ class OnlineAlgorithm(RLAlgorithm):
                 logger.record_tabular("time: eval",eval_time)
                 logger.record_tabular("time: total",total_time)
                 logger.record_tabular("scale_reward", self.scale_reward)
+                logger.record_tabular("steps: current epoch", t)
+                total_steps += t
+                logger.record_tabular("steps: all", total_steps)
                 logger.dump_tabular(with_prefix=False)
                 logger.pop_prefix()
                 gt.stamp("logging")
@@ -310,6 +320,14 @@ class OnlineAlgorithm(RLAlgorithm):
         :param epoch: The epoch number.
         :param es_path_returns: List of path returns from explorations strategy
         :return: Dictionary of statistics.
+        """
+        return
+
+    @abc.abstractmethod
+    def process_env_info(self, info, flush):
+        """
+        Plot training data or apply other postprocessing steps. Called after
+        drawing a new training sample.
         """
         return
 

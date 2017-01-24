@@ -1,11 +1,14 @@
 import tensorflow as tf
 import numpy as np
 
+from rllab.misc.overrides import overrides
+
 from sandbox.haoran.mddpg.core.neuralnet import NeuralNetwork
 from sandbox.tuomas.utils.tf_util import mlp
 from rllab.core.serializable import Serializable
 from rllab.policies.base import Policy
 from rllab.exploration_strategies.base import ExplorationStrategy
+from sandbox.rocky.tf.core.parameterized import Parameterized
 
 
 class StochasticNNPolicy(NeuralNetwork, Policy):
@@ -49,6 +52,16 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
             self._output = output_scale * output_nonlinearity(self._pre_output)
             self.variable_scope = variable_scope
 
+            # N: batch size, Da: action dim, Ds: sample dimm
+            self._Doutput_Dsample = tf.pack(
+                [
+                    tf.gradients(self.output[:,i], self._sample_pl)[0]
+                    for i in range(self._action_dim)
+                ],
+                axis=1
+            ) # N x Da x Ds
+
+
         # Freeze stuff
         self._K = K
         self._samples = np.random.randn(K, self._sample_dim)
@@ -91,8 +104,6 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
 
     def get_actions(self, observations):
         feed = self.get_feed_dict(observations)
-        #if type(observations) is not list and observations.shape[0] == 16:
-        #    import pdb; pdb.set_trace()
         return self.sess.run(self.output, feed), {}
 
     def _get_input_samples(self, N):
@@ -102,25 +113,81 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
         :param N: Number of samples to be returned.
         :return: A numpy array holding N samples.
         """
-
         if self._freeze:
-            assert (N % self._K) == 0 or N == 1
-            if N == 1:
-                return self._samples[[self._k]]
-            else:
-                batch_size = N // self._K
-                return np.tile(self._samples, (batch_size, 1))
-
+            indices = np.random.randint(low=0, high=self._K, size=N)
+            samples = self._samples[indices]
+            return samples
         else:
-            #import pdb; pdb.set_trace()
             return self._rnd.randn(N, self._sample_dim)
-            #self._rnd.seed(0)
-
-        #return self._rnd.randn(N, self._sample_dim)
 
     def reset(self):
         self._k = np.random.randint(0, self._K)
 
+
+class StochasticPolicyMaximizer(Parameterized, Serializable):
+    """
+        Same as StochasticNNPolicy, but samples several actions and picks
+        the one that has maximal Q value.
+    """
+
+    def __init__(self, N, actor, critic):
+        """
+
+        :param N: Number of actions sampled.
+        :param critic: Q function to be maximized.
+        """
+        Serializable.quick_init(self, locals())
+        super(StochasticPolicyMaximizer, self).__init__()
+        self._N = N
+        self._critic = critic
+        self._actor = actor
+        self.sess = None  # This should be set elsewhere.
+
+    @overrides
+    def get_action(self, obs):
+        obs = np.expand_dims(obs, axis=0)
+        obs = np.tile(obs, (self._N, 1))
+
+        actions, _ = self._actor.get_actions(obs)
+        critic_feed = self._critic.get_feed_dict(obs, actions)
+        q_vals = self.sess.run(self._critic.output, feed_dict=critic_feed)
+
+        max_index = np.argmax(q_vals)
+
+        return actions[max_index], {}
+
+    @overrides
+    def get_param_values(self):
+        policy_params = self._actor.get_param_values()
+        critic_params = self._critic.get_param_values()
+
+        return (policy_params, critic_params)
+
+    @overrides
+    def set_param_values(self, params):
+
+        self._actor.set_param_values(params[0])
+        self._critic.set_param_values(params[1])
+
+    @overrides
+    def get_params_internal(self, **tags):
+        actor_params = self._actor.get_params_internal()
+        critic_params = self._critic.get_params_internal()
+        return actor_params + critic_params
+
+    @overrides
+    def reset(self):
+        pass
+
+    @property
+    def sess(self):
+        if self._sess is None:
+            self._sess = tf.get_default_session()
+        return self._sess
+
+    @sess.setter
+    def sess(self, value):
+        self._sess = value
 
 class DummyExplorationStrategy(ExplorationStrategy):
     def get_action(self, t, observation, policy, **kwargs):

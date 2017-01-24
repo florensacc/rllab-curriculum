@@ -17,6 +17,7 @@ DEFAULT_IMG_WIDTH = 42
 DEFAULT_N_FRAMES = 4
 DEFAULT_FRAMESKIP = 4
 DEFAULT_PERSISTENT = True
+DEFAULT_SCALE_NEG1_1 = True
 SCALE = 255.0
 
 RGB2Y_COEFF = np.array([0.2126, 0.7152, 0.0722])  # Y = np.dot(rgb, RGB2Y_COEFF)
@@ -40,6 +41,7 @@ class AtariEnv(GymEnv):
         self.img_width = kwargs.get("img_width", DEFAULT_IMG_WIDTH)
         self.n_frames = kwargs.get("n_frames", DEFAULT_N_FRAMES)
         self.persistent_adv = kwargs.get("persistent", DEFAULT_PERSISTENT)
+        self.scale_neg1_1 = kwargs.get("scale_neg1_1", DEFAULT_SCALE_NEG1_1)
 
         frameskip = kwargs.get('frame_skip', DEFAULT_FRAMESKIP)
         self.env.env.env.frameskip = frameskip
@@ -52,6 +54,16 @@ class AtariEnv(GymEnv):
         # # rows, # cols) instead of (batch size, # rows, # cols, # channels)
         self._observation_space = Box(-1.,1.,(self.n_frames,self.img_height,self.img_width))
         self.update_last_frames(None)
+        self._is_terminal = True  # Need to call self.reset() to set this to False
+        self._reward = 0
+
+    @property
+    def reward(self):
+        return self._reward
+
+    @property
+    def is_terminal(self):
+        return self._is_terminal
 
     @property
     def observation(self):
@@ -91,7 +103,21 @@ class AtariEnv(GymEnv):
                 self.last_adv_frames[-1,:,:] = next_adv_obs
 
     def scale_obs(self, obs):
-        return (obs / SCALE) * 2.0 - 1.0  # rescale to [-1,1]
+        if self.scale_neg1_1:
+            # rescale to [-1,1]
+            return (obs / SCALE) * 2.0 - 1.0
+        else:
+            # rescale to [0,1]
+            return obs / SCALE
+
+    def unscale_obs(self, obs):
+        assert obs.max() <= 1.0 and obs.min() >= -1.0, "obs is already unscaled"
+        if self.scale_neg1_1:
+            # rescale from [-1,1] to [0,255]
+            return ((obs + 1.0) / 2.0 * SCALE).astype(np.uint8)
+        else:
+            # rescale from [0,1] to [0,255]
+            return (obs * SCALE).astype(np.uint8)
 
     def preprocess_obs(self, obs):
         # Preprocess Atari frames based on released DQN code from Nature paper:
@@ -121,6 +147,8 @@ class AtariEnv(GymEnv):
         #    cv2.imshow(str(i), vis_obs[i,:,:])
         #cv2.waitKey()
 
+        self._is_terminal = done
+        self._reward = reward
         return Step(self.observation, reward, done, **info)
 
     @overrides
@@ -128,5 +156,7 @@ class AtariEnv(GymEnv):
         obs = super().reset()  # self.env.reset()
         self.clear_last_frames()
         self.update_last_frames(obs)
+        self._is_terminal = False
+        self._reward = 0
 
         return self.observation

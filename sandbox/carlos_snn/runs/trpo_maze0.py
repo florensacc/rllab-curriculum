@@ -39,7 +39,7 @@ ec2_instance = "m4.4xlarge"
 # subnet = "us-west-1b"
 info_instance = INSTANCE_TYPE_INFO[ec2_instance]
 n_parallel = int(info_instance['vCPU'] / 2.)
-spot_price = info_instance['price']
+spot_price = str(info_instance['price'])
 
 # for subnet in subnets:
 aws_config = dict(
