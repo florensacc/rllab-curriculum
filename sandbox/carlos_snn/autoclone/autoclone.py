@@ -25,7 +25,8 @@ def autoclone(file_path, launch_args):
     v_tag = '_v' + str(v_num)
 
     # construct new file name, checking that not taken
-    new_file_name = day_tag + file_name[i:j] + v_tag + '.py'
+    file_core_name = file_name[i:j] if not launch_args.name else launch_args.name
+    new_file_name = day_tag + file_core_name + v_tag + '.py'
     files = os.listdir(dir_path)
     while new_file_name in files:
         v_num += 1
