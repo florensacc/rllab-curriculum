@@ -29,7 +29,6 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
         self._obs_dim = observation_dim
         self._action_dim = action_dim
         self._sample_dim = sample_dim
-        self._rnd = np.random.RandomState()
         self._freeze = freeze_samples
 
         with tf.variable_scope(scope_name) as variable_scope:
@@ -118,7 +117,7 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
             samples = self._samples[indices]
             return samples
         else:
-            return self._rnd.randn(N, self._sample_dim)
+            return np.random.randn(N, self._sample_dim)
 
     def reset(self):
         self._k = np.random.randint(0, self._K)
