@@ -1,9 +1,5 @@
 """
-<<<<<<< HEAD
 Mon Jan 23 23:49:34 2017: _v1: this still didn't get through ec2!!?
-=======
-Mon Jan 23 23:49:34 2017: _v1
->>>>>>> 23-01-trpo-egoSnake-maze0-rerun_v1.py
 Fri Jan 20 11:16:18 2017: _v0
 """
 '''
