@@ -15,17 +15,22 @@ class MultiRewardEnv(Env):
     state: position and velocity in 2D
     action: force
     """
-    def __init__(self):
+    def __init__(self, goals=None):
         self._max_force = 1
         self._max_speed = 0.5
-        self._action_cost_coeff = 0.1
+        self._action_cost_coeff = 1
         self._speed_reward_coeff = 0.01
         # Goal reward is designed so that it is better for the exploration
         # critic to choose reward over avoiding it.
         self._goal_reward = 50.
         self._goal_tolerance = 1.
 
-        self._goal_pos = np.array((5, 5))
+        if goals is None:
+            goals = np.array(((5, 5),
+                              (5, -5),
+                              (-5, 5),
+                              (-5, -5)))
+        self._goal_pos = goals
 
         self._dynamics = PointMassDynamics(max_force=self._max_force,
                                            max_speed=self._max_speed)
@@ -66,7 +71,11 @@ class MultiRewardEnv(Env):
         next_obs = self._dynamics.observe()
 
         # Check if reached the goal.
-        dist_to_goal = np.linalg.norm(self._dynamics.position - self._goal_pos)
+        d = []
+        for goal in self._goal_pos:
+            d.append(np.linalg.norm(self._dynamics.position - goal))
+        dist_to_goal = min(d)
+        #dist_to_goal = np.linalg.norm(self._dynamics.position - self._goal_pos)
         done = dist_to_goal < self._goal_tolerance
 
         # Compute rewards / costs.
@@ -99,7 +108,8 @@ class MultiRewardEnv(Env):
         ax.set_xlim((-10, 10))
         ax.set_ylim((-10, 10))
         ax.grid(True)
-        ax.plot(self._goal_pos[0], self._goal_pos[1], 'xk', mew=8, ms=16)
+        for goal in self._goal_pos:
+            ax.plot(goal[0], goal[1], 'xk', mew=8, ms=16)
 
     @overrides
     def log_diagnostics(self, paths):

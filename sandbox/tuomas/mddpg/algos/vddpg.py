@@ -446,7 +446,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
         if self.temperatures is not None:
             ind = np.random.randint(0, self.temperatures.shape[0])
             K = self.Ks[ind]
-            temp = self.temperatures[ind]
+            temp = self.temperatures[[ind]]
             temp = self._replicate_rows(temp, N)
         else:
             temp = None
@@ -493,15 +493,24 @@ class VDDPG(OnlineAlgorithm, Serializable):
         # it is inverse temperature)
         temp = self._replicate_rows(temp, K)
 
-        curr_inputs = (obs, actions, temp) if temp else (obs, actions)
-        next_inputs = (next_obs, temp) if temp else (next_obs,)
+        target_policy_input = [next_obs]
+        critic_input = [obs, actions]
+        target_critic_input = [next_obs, None]
 
-        feed = self.target_policy.get_feed_dict(*next_inputs)
-        feed.update(self.qf.get_feed_dict(*curr_inputs))
-        feed.update(self.target_qf.get_feed_dict(*next_inputs))
+        if temp is not None:
+            target_policy_input.append(temp)
+            critic_input.append(temp)
+            target_critic_input.append(temp)
+
+        #curr_inputs = (obs, actions) if temp is None else (obs, actions, temp)
+        #next_inputs = (next_obs,) if temp is None else (next_obs, temp)
+
+        feed = self.target_policy.get_feed_dict(*target_policy_input)
+        feed.update(self.qf.get_feed_dict(*critic_input))
+        feed.update(self.target_qf.get_feed_dict(*target_critic_input))
 
         # Adjust rewards dims for backward compatibility.
-        if len(rewards.shape) == 1:
+        if rewards.ndim == 1:
             rewards = np.expand_dims(rewards, axis=1)
 
         feed.update({
@@ -511,16 +520,19 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         return feed
 
-    def _replicate_rows(self, obs, K):
-        if obs is None:
-            return obs
-        Do = self.env.observation_space.flat_dim
+    def _replicate_rows(self, t, K):
+        """Replicates each row in t K times."""
+        if t is None:
+            return t
 
-        obs = np.expand_dims(obs, axis=1)  # N x 1 x Do
-        obs = np.tile(obs, (1, K, 1))  # N x K x Do
-        obs = np.reshape(obs, (-1, Do))  # N*K x Do
+        assert t.ndim == 2
+        N = t.shape[0]
 
-        return obs
+        t = np.expand_dims(t, axis=1)  # N x 1 x X
+        t = np.tile(t, (1, K, 1))  # N x K x X
+        t = np.reshape(t, (N * K, -1))  # N*K x Do
+
+        return t
 
     @overrides
     def evaluate(self, epoch, train_info):
