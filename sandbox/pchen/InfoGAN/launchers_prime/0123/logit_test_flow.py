@@ -85,7 +85,7 @@ def run_task(v):
             combine_fn=merge,
         )
 
-    dist = DequantizedFlow(f(cur))
+    dist = OldDequantizedFlow(f(cur))
     if logit:
         dist = logitize(dist)
 

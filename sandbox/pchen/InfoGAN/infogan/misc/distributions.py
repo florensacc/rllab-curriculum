@@ -2594,7 +2594,7 @@ class ReshapeFlow(Distribution):
         raise "not defined"
 
 
-class DequantizedFlow(Distribution):
+class OldDequantizedFlow(Distribution):
     def __init__(
             self,
             base_dist,

@@ -67,7 +67,7 @@ with scopes.arg_scope(
         combine_fn=merge,
     )
 
-dist = DequantizedFlow(cur)
+dist = OldDequantizedFlow(cur)
 
 fol = "data/local/smallnn_norm_way_deeper"
 logger.set_snapshot_dir(fol)

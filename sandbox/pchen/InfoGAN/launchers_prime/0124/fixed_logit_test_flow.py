@@ -24,7 +24,7 @@ class VG(VariantGenerator):
     @variant
     def logit(self):
         return [
-            True,
+            True, False
         ]
 
     @variant
@@ -96,8 +96,8 @@ def run_task(v):
         train_batch_size=64, # also testing resuming from diff bs
         optimizer=AdamaxOptimizer(learning_rate=1e-3),
         save_every=20,
-        # for debug
-        updates_per_iter=10,
+        # # for debug
+        # updates_per_iter=10,
         # resume_from="/home/peter/rllab-private/data/local/global_proper_deeper_flow/"
         # checkpoint_dir="data/local/test_debug",
     )
@@ -115,21 +115,21 @@ config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[config.AWS_REGION_NAME]
 config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[config.AWS_REGION_NAME]
 config.AWS_SECURITY_GROUP_IDS = config.ALL_REGION_AWS_SECURITY_GROUP_IDS[config.AWS_REGION_NAME]
 
-for v in variants[:1]:
+for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="debug_normal_nn_logitize_test",
+        exp_prefix="fixed_normal_nn_logitize_test",
         variant=v,
 
-        mode="local",
+        # mode="local",
 
         # mode="local_docker",
         # env=dict(
         #     CUDA_VISIBLE_DEVICES="5"
         # ),
 
-        # mode="ec2",
+        mode="ec2",
 
         use_gpu=True,
         snapshot_mode="last",

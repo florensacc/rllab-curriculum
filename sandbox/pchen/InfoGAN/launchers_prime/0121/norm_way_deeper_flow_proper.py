@@ -63,7 +63,7 @@ for i in range(8):
         combine_fn=merge,
     )
 
-dist = DequantizedFlow(cur)
+dist = OldDequantizedFlow(cur)
 
 fol = "data/local/norm_way_deeper"
 logger.set_snapshot_dir(fol)

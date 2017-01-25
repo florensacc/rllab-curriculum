@@ -90,7 +90,7 @@ for i in range(3):
         combine_fn=merge,
     )
 
-dist = DequantizedFlow(
+dist = OldDequantizedFlow(
     normalize(cur)
 )
 

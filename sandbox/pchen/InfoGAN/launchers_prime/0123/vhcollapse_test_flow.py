@@ -113,7 +113,7 @@ def run_task(v):
             combine_fn=merge,
         )
 
-    dist = DequantizedFlow(cur)
+    dist = OldDequantizedFlow(cur)
 
     algo = DistTrainer(
         dataset=dataset,
