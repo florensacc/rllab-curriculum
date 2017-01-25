@@ -464,6 +464,87 @@ class Bernoulli(Distribution):
     def prior_dist_info(self, batch_size):
         return dict(p=0.5 * tf.ones([batch_size, self.dim]))
 
+class TruncatedLogistic(Distribution):
+    def __init__(self, shape, lo, hi):
+        Serializable.quick_init(self, locals())
+
+        self._shape = shape
+        self._dim = np.prod(shape)
+        self._lo = (np.ones([1, self._dim]) * lo).astype(np.float32)
+        self._hi = (np.ones([1, self._dim]) * hi).astype(np.float32)
+
+    @property
+    def dim(self):
+        return self._dim
+
+    @property
+    def dist_flat_dim(self):
+        return self._dim * 2
+
+    @property
+    def effective_dim(self):
+        return self._dim
+
+    @property
+    def dist_info_keys(self):
+        return ["mu", "scale"]
+
+    def cdf(self, x_var, dist_info):
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        return tf.nn.sigmoid((x_var - mu) / scale)
+
+    def inverse_cdf(self, p, dist_info):
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        return mu + scale * (tf.log(p) - tf.log(1 - p))
+
+    def logli(self, x_var, dist_info):
+        raise NotImplemented
+
+    def entropy(self, dist_info):
+        raise NotImplemented
+
+    def activate_dist(self, flat_dist):
+        return dict(
+            mu=(flat_dist[:, :self.dim]),
+            scale=tf.exp(flat_dist[:, self.dim:]),
+        )
+
+    def sample_logli(self, dist_info):
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        p_lo, p_hi = self.cdf(self._lo, dist_info), self.cdf(self._hi, dist_info)
+        span = p_hi - p_lo
+        p_delta = tf.random_uniform(
+            shape=universal_int_shape(mu),
+            maxval=span,
+        )
+        samples = self.inverse_cdf(p_lo+p_delta, dist_info)
+        raw_logli = (-(samples - mu)/scale) - tf.log(scale) - 2.*tf.log(1+tf.exp((-(samples - mu)/scale)))
+
+        samples_out = tf.select(
+            span > 1e-3,
+            samples,
+            tf.random_uniform(
+                shape=universal_int_shape(mu),
+                minval=self._lo[0],
+                maxval=self._hi[0],
+            )
+        )
+        logli_out = tf.select(
+            span > 1e-3,
+            raw_logli - tf.log(span),
+            -tf.log(self._hi - self._lo)
+        )
+
+        return samples_out, logli_out
+
+    def prior_dist_info(self, batch_size):
+        return dict(
+            mu=0.0 * np.ones([batch_size, self._dim]),
+            scale=np.ones([batch_size, self._dim]) * self._init_scale,
+        )
 
 class DiscretizedLogistic(Distribution):
     # assume to be -0.5 ~ 0.5
@@ -2602,7 +2683,7 @@ class OldDequantizedFlow(Distribution):
     ):
         global G_IDX
         G_IDX += 1
-        self._name = "Dequantized_%s" % (G_IDX)
+        self._name = "OldDequantized_%s" % (G_IDX)
         self._base_dist = base_dist
         self._width = width
 
@@ -2645,6 +2726,86 @@ class OldDequantizedFlow(Distribution):
 
     def nonreparam_logli(self, x_var, dist_info):
         raise "not defined"
+
+class DequantizedFlow(Distribution):
+    def __init__(
+            self,
+            base_dist,
+            noise_dist,
+    ):
+        global G_IDX
+        G_IDX += 1
+        self._name = "Dequantized_%s" % (G_IDX)
+        self._base_dist = base_dist
+        self._noise_dist = noise_dist
+
+    @overrides
+    def init_mode(self):
+        self._base_dist.init_mode()
+        self._noise_dist.init_mode()
+
+    @overrides
+    def train_mode(self):
+        self._base_dist.train_mode()
+        self._noise_dist.train_mode()
+
+    @property
+    def dim(self):
+        return self._base_dist.dim
+
+    @property
+    def effective_dim(self):
+        return self._base_dist.effective_dim
+
+    def logli(self, x_var, dist_info):
+        # abusing the notation in the sense that this is a vlb
+        eps, eps_logli = self._noise_dist.sample_logli(dict(condition=x_var))
+        return self._base_dist.logli(x_var+eps, dist_info) - eps_logli
+
+    def sample_logli(self, dist_info):
+        # abusing the notation in the sense that it doesn't
+        #  quantize the output again
+        x, logpeps = self._base_dist.sample_logli(dist_info)
+        return x, logpeps
+
+    def prior_dist_info(self, batch_size):
+        return self._base_dist.prior_dist_info(batch_size)
+
+    @property
+    def dist_info_keys(self):
+        return self._base_dist.dist_info_keys
+
+    @property
+    def dist_flat_dim(self):
+        return self._base_dist.dist_flat_dim
+
+    def activate_dist(self, flat):
+        return self._base_dist.activate_dist(flat)
+
+    def nonreparam_logli(self, x_var, dist_info):
+        raise "not defined"
+
+class DequantizationDistribution(Distribution):
+    @property
+    def dist_info_keys(self):
+        return ["condition"]
+
+class UniformDequant(DequantizationDistribution):
+    def __init__(
+            self,
+            width=1. / 256,
+    ):
+        global G_IDX
+        G_IDX += 1
+        self._name = "UniformDequnt_%s" % (G_IDX)
+        self._width = width
+
+    def sample_logli(self, dist_info):
+        condition = dist_info["condition"]
+        shp = int_shape(condition)
+        dim = np.prod(shp[1:])
+        return tf.random_uniform(shp, maxval=self._width), (-dim * np.log(self._width)).astype(np.float32)
+
 
 # TODO: this has wrong impl for sampling
 def normalize(dist):
