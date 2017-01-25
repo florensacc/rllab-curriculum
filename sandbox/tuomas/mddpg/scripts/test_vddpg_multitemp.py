@@ -19,9 +19,11 @@ flags.DEFINE_float('learning_rate', 0.01, 'Base learning rate.')
 flags.DEFINE_integer('modes', 2, 'Number of modes.')
 flags.DEFINE_boolean('fixed', False, 'Fixed target distribution.')
 
-K = 32  # number of particles
+#K = 32  # number of particles
 temperatures = np.array([[10.],
                          [1.]])
+Ks = np.array([1., 32])
+styles = ('*b', '*r')
 
 class MultimodalGaussianEnv(Env):
 
@@ -73,16 +75,12 @@ class VDDPGTest(VDDPG):
         plt.xlim((-5, 5))
         plt.ylim((-5, 5))
 
-        # Sample and plot actions. Note that we can actually interpolate over
-        # the temperature: the policy is not trained for T = 3.
-        self.plot_actions(obs_single, temperatures[0, 0], '*b')
-        self.plot_actions(obs_single, 3, '*g')
-        self.plot_actions(obs_single, temperatures[1, 0], '*r')
+        for temp, K, style in zip(temperatures, Ks, styles):
+            self.plot_actions(obs_single, temp, K*5, style),
 
-    def plot_actions(self, obs, temperature, style):
-        N = 100
-        all_obs = np.array([obs] * N)
-        temps = np.array([temperature] * N)[:, None]
+    def plot_actions(self, obs, temperature, K, style):
+        all_obs = np.tile(obs[None], (K, 1))
+        temps = np.tile(temperature[None], (K, 1))
         all_actions = self.policy.get_actions(all_obs, temps)[0]
 
         for k, action in enumerate(all_actions):
@@ -97,7 +95,7 @@ class VDDPGTest(VDDPG):
 
 # -------------------------------------------------------------------
 def test():
-    from sandbox.haoran.mddpg.kernels.gaussian_kernel import \
+    from sandbox.tuomas.mddpg.kernels.gaussian_kernel import \
         SimpleAdaptiveDiagonalGaussianKernel, \
         SimpleDiagonalConstructor, DiagonalGaussianKernel
     from sandbox.rocky.tf.envs.base import TfEnv
@@ -178,7 +176,8 @@ def test():
         policy=policy,
         kernel=kernel,
         qf=qf_temp,
-        K=K,
+        K=None,
+        Ks=Ks,
         q_target_type=q_target_type,
         temperatures=temperatures,
         **ddpg_kwargs

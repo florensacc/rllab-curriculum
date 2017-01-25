@@ -24,6 +24,20 @@ import gc
 TARGET_PREFIX = "target_"
 
 
+def tf_shape(shape):
+    """Converts a list of python and tf scalars tensors into a tf vector."""
+    tf_shape_list = []
+    for d in shape:
+        if type(d) not in (np.int32, int, tf.Tensor):
+            d = d.astype('int32')
+        if type(d) == tf.Tensor:
+            tf_shape_list.append(d)
+        else:
+            tf_shape_list.append(tf.constant(d))
+
+    return tf.pack(tf_shape_list)
+
+
 class VDDPG(OnlineAlgorithm, Serializable):
     """
     Variational DDPG with Stein Variational Gradient Descent using stochastic
@@ -38,6 +52,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             kernel,
             qf,
             K,
+            Ks=None,  # Use different number of particles for different temps.
             q_prior=None,
             q_target_type="max",
             qf_learning_rate=1e-3,
@@ -67,12 +82,15 @@ class VDDPG(OnlineAlgorithm, Serializable):
         :param Q_weight_decay: How much to decay the weights for Q
         :return:
         """
+        assert ((Ks is None and temperatures is None) or
+                Ks.shape[0] == temperatures.shape[0])
         Serializable.quick_init(self, locals())
         self.kernel = kernel
         self.qf = qf
         self.q_prior = q_prior
         self.prior_coeff = 0.#1.
         self.K = K
+        self.Ks = Ks
         self.q_target_type = q_target_type
         self.critic_lr = qf_learning_rate
         self.critic_weight_decay = Q_weight_decay
@@ -91,6 +109,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.prior_coeff_placeholder = tf.placeholder(tf.float32,
                                                       shape=(),
                                                       name='prior_coeff')
+        self.K_pl = tf.placeholder(tf.int32, shape=(), name='K')
         self.svgd_target = svgd_target
         if svgd_target == "pre-action":
             assert policy.output_nonlinearity == tf.nn.tanh
@@ -117,7 +136,6 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         # Useful dimensions.
         Da = self.env.action_space.flat_dim
-        K = self.K
 
         # Initialize variables for get_copy to work
         self.sess.run(tf.global_variables_initializer())
@@ -138,13 +156,14 @@ class VDDPG(OnlineAlgorithm, Serializable):
         # kernel.kappa_grads) outside the class. Could we do this somehow
         # differently?
         # Note: need to reshape policy output from N*K x Da to N x K x Da
+        shape = tf_shape((-1, self.K_pl, Da))
         if self.svgd_target == "action":
-            actions_reshaped = tf.reshape(self.policy.output, (-1, K, Da))
+            actions_reshaped = tf.reshape(self.policy.output, shape)
             self.kernel.kappa = self.kernel.get_kappa(actions_reshaped)
             self.kernel.kappa_grads = self.kernel.get_kappa_grads(
                 actions_reshaped)
         elif self.svgd_target == "pre-action":
-            pre_actions_reshaped = tf.reshape(self.policy.pre_output, (-1, K, Da))
+            pre_actions_reshaped = tf.reshape(self.policy.pre_output, shape)
             self.kernel.kappa = self.kernel.get_kappa(pre_actions_reshaped)
             self.kernel.kappa_grads = self.kernel.get_kappa_grads(
                 pre_actions_reshaped)
@@ -207,7 +226,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 log_p = self.critic_with_policy_input.output
             log_p = tf.squeeze(log_p)
             grad_log_p = tf.gradients(log_p, self.policy.output)
-            grad_log_p = tf.reshape(grad_log_p, [-1, self.K, 1, Da])  # N x K x 1 x Da
+            grad_log_p = tf.reshape(grad_log_p,
+                                    tf_shape((-1, self.K_pl, 1, Da)))
+            # N x K x 1 x Da
 
             kappa = tf.expand_dims(
                 self.kernel.kappa,
@@ -255,7 +276,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 grad_log_p_from_Q +
                 self.alpha_placeholder * grad_log_p_from_tanh
             )
-            grad_log_p = tf.reshape(grad_log_p, [-1, self.K, 1, Da])  # N x K x 1 x Da
+            grad_log_p = tf.reshape(grad_log_p,
+                                    tf_shape((-1, self.K_pl, 1, Da)))
+            # N x K x 1 x Da
 
             kappa = tf.expand_dims(
                 self.kernel.kappa,
@@ -317,7 +340,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             q_next = self.target_qf.output
             q_curr = self.qf.output
 
-        q_next = tf.reshape(q_next, (-1, self.K, M))  # N x K x M
+        q_next = tf.reshape(q_next, tf_shape((-1, self.K_pl, M)))  # N x K x M
         q_curr = tf.reshape(q_curr, (-1, M))  # N x M
 
         if self.q_target_type == 'mean':
@@ -408,37 +431,47 @@ class VDDPG(OnlineAlgorithm, Serializable):
     def _get_finalize_ops(self):
         return [self.finalize_actor_op]
 
-    def _sample_temps(self, N):
-        inds = np.random.randint(0, self.temperatures.shape[0], size=(N,))
-        temps = self.temperatures[inds]
-        return temps
+    #def _sample_temps(self, N):
+    #    inds = np.random.randint(0, self.temperatures.shape[0], size=(N,))
+    #    temps = self.temperatures[inds]
+    #    return temps
 
     @overrides
     def _update_feed_dict(self, rewards, terminals, obs, actions, next_obs):
+        # Note: each sample in a batch need to have the same K. That's why
+        # also the temperature is same for all of them (we want associate
+        # specific temperature values to specific Ks in order not to confuse
+        # the network.
+        N = obs.shape[0]
         if self.temperatures is not None:
-            N = obs.shape[0]
-            temp = self._sample_temps(N)
+            ind = np.random.randint(0, self.temperatures.shape[0])
+            K = self.Ks[ind]
+            temp = self.temperatures[ind]
+            temp = self._replicate_rows(temp, N)
         else:
             temp = None
+            K = self.K
 
         feeds = dict()
         if self.train_actor:
-            feeds.update(self._actor_feed_dict(obs, temp))
+            feeds.update(self._actor_feed_dict(obs, temp, K))
             feeds.update(
-                self.kernel.update(self, feeds, multiheaded=False, K=self.K)
+                self.kernel.update(self, feeds, multiheaded=False, K=K)
             )
         if self.train_critic:
             feeds.update(self._critic_feed_dict(
-                rewards, terminals, obs, actions, next_obs, temp
+                rewards, terminals, obs, actions, next_obs, temp, K
             ))
+
+        feeds[self.K_pl] = K
 
         return feeds
 
-    def _actor_feed_dict(self, obs, temp=None):
+    def _actor_feed_dict(self, obs, temp, K):
         # Note that we want K samples for each observation. Therefore we
         # first need to replicate the observations.
-        obs = self._replicate_rows(obs, self.K)
-        temp = self._replicate_rows(temp, self.K)
+        obs = self._replicate_rows(obs, K)
+        temp = self._replicate_rows(temp, K)
 
         # Make sure we're not giving extra arguments for policies not supporting
         # temperature input.
@@ -452,13 +485,13 @@ class VDDPG(OnlineAlgorithm, Serializable):
         return feed
 
     def _critic_feed_dict(self, rewards, terminals, obs, actions, next_obs,
-                          temp=None):
+                          temp, K):
         # Again, we'll need to replicate next_obs.
-        next_obs = self._replicate_rows(next_obs, self.K)
+        next_obs = self._replicate_rows(next_obs, K)
 
         # TODO: we should make the next temp really low (actually high since
         # it is inverse temperature)
-        temp = self._replicate_rows(temp, self.K)
+        temp = self._replicate_rows(temp, K)
 
         curr_inputs = (obs, actions, temp) if temp else (obs, actions)
         next_inputs = (next_obs, temp) if temp else (next_obs,)
