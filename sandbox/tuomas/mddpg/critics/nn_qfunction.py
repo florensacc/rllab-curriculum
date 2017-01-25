@@ -171,7 +171,7 @@ class MultiCritic(NNCritic):
     TODO: also allows varying temperature
     TODO: also works with a single critic
     """
-    def __init__(self, critics, fixed_temperatures=None):
+    def __init__(self, critics, default_temperatures=None):
         """
 
         :param critics: List of critics.
@@ -182,9 +182,9 @@ class MultiCritic(NNCritic):
         self._M = len(critics)
         self._create_temperature_placeholder()
 
-        if fixed_temperatures is None:
-            fixed_temperatures = np.ones(self._M)
-        self._fixed_temperatures = fixed_temperatures
+        if default_temperatures is None:
+            default_temperatures = np.ones(self._M)
+        self._default_temperatures = default_temperatures
 
         # Make sure that all critic outputs have two axes.
         outputs_list = []
@@ -236,12 +236,12 @@ class MultiCritic(NNCritic):
         c_cpy = [c.get_copy(scope_name=scope_name + c.scope_name, **kwargs)
                  for c in self._critics]
 
-        return MultiCritic(c_cpy, self._fixed_temperatures.copy())
+        return MultiCritic(c_cpy, self._default_temperatures.copy())
 
     @overrides
     def get_feed_dict(self, obs, action=None, temp=None):
         if temp is None:
-            temp = self._fixed_temperatures
+            temp = self._default_temperatures
 
         # Make sure the dimension is right.
         temp = temp.reshape((-1, self._M))

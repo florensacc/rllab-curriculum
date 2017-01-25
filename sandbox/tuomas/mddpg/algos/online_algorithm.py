@@ -129,6 +129,7 @@ class OnlineAlgorithm(RLAlgorithm):
             self._start_worker()
 
             observation = self.env.reset()
+            self.policy.reset()
             self.exploration_strategy.reset()
             itr = 0
             path_length = 0
@@ -183,6 +184,7 @@ class OnlineAlgorithm(RLAlgorithm):
                                              True)
 
                         observation = self.env.reset()
+                        self.policy.reset()
                         self.exploration_strategy.reset()
                         self.es_path_returns.append(path_return)
                         self.es_path_lengths.append(path_length)

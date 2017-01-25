@@ -18,7 +18,7 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
                  action_dim,
                  hidden_dims,
                  temperature_dim=0,
-                 default_temperature=None,
+                 temperatures=None,
                  W_initializer=None,
                  output_nonlinearity=tf.identity,
                  sample_dim=1,
@@ -32,8 +32,16 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
         self._action_dim = action_dim
         self._sample_dim = sample_dim
         self._freeze = freeze_samples
-        self._temp_dim = temperature_dim
-        self._default_temp = default_temperature
+        if temperatures is not None:
+            # TODO: temperature shouldn't be a property of a policy. Instead
+            # it is a property of the algorithm.
+            self._temp_dim = temperatures.shape[1]
+            self._n_temps = temperatures.shape[0]
+        else:
+            self._temp_dim = 0
+
+        self._temps = temperatures
+        self._current_temp = 0
 
         with tf.variable_scope(scope_name) as variable_scope:
             super(StochasticNNPolicy, self).__init__(
@@ -70,7 +78,6 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
         # Freeze stuff
         self._K = K
         self._samples = np.random.randn(K, self._sample_dim)
-        self._k = np.random.randint(0, self._K)
         self.output_nonlinearity = output_nonlinearity
         self.output_scale = output_scale
 
@@ -103,15 +110,14 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
             self._input = self._obs_pl
 
     def get_feed_dict(self, observations, temperatures=None):
-        #if type(observations) == list:
-        #    observations = np.array(observations)
         N = observations.shape[0]
         feed = {self._sample_pl: self._get_input_samples(N),
                 self._obs_pl: observations}
         if self._temp_dim > 0:
             if temperatures is None:
-                temperatures = self._default_temp[None]
+                temperatures = self._temps[self._current_temp][None]
                 temperatures = np.tile(temperatures, (N, 1))
+
             assert (temperatures is not None
                     and temperatures.shape[1] == self._temp_dim)
             feed[self._temp_pl] = temperatures
@@ -142,7 +148,8 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
             return np.random.randn(N, self._sample_dim)
 
     def reset(self):
-        self._k = np.random.randint(0, self._K)
+        if self._temp_dim > 0:
+            self._current_temp = (self._current_temp + 1) % self._n_temps
 
 
 class StochasticPolicyMaximizer(Parameterized, Serializable):
