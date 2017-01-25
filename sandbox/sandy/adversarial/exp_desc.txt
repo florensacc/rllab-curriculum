@@ -3,4 +3,6 @@ exp000.py: Try out different FGSM adversaries (varied norm and epsilon),
 exp001.py: Same as exp000.py, except with (slightly) more variation in rollouts
 exp002.py: Visualize trained policy for Space Invaders, for debugging
 exp003.py: Apply FGSM to multiple games (Chopper Command, Pong, Seaquest,
-           Space Invaders) trained with different algorithms (TRPO, A3C, DQN).
+           Space Invaders) trained with TRPO.
+exp006.py: Apply FGSM to multiple games (Chopper Command, Pong, Seaquest,
+           Space Invaders) trained with A3C.

@@ -53,8 +53,8 @@ def fgsm_perturbation_l1(grad_x, fgsm_eps, obs, obs_min, obs_max):
             eta[idx] = np.sign(eta[idx]) * budget
         budget -= abs(eta[idx])
 
-    if budget > 0:
-        print("WARNING: L1 budget not completely used - epsilon larger than necessary")
+    #if budget > 0:
+        #print("WARNING: L1 budget not completely used - epsilon larger than necessary")
     eta = eta.reshape(grad_x.shape, order='C')
     return eta, np.sign(eta)
 
@@ -87,6 +87,8 @@ def get_grad_x_trpo(obs, algo):
     grad_x = algo.optimizer._opt_fun["f_obs_grad"](flat_obs)[0,:]
     grad_x = algo.policy.observation_space.unflatten(grad_x)
     # For debugging:
+    #dist_info = algo.policy.dist_info(flat_obs)['prob']
+    #assert(abs(abs(dist_info).sum() - 1) < 1e-5), dist_info.sum()
     #ce_loss_x = algo.optimizer._opt_fun["f_obs_ce_loss"](flat_obs)
     #print("TRPO:", abs(grad_x).max(), abs(grad_x).sum() / grad_x.size, ce_loss_x)
     return grad_x

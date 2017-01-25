@@ -59,6 +59,8 @@ def get_average_return_trpo(algo, seed, N=10):
         curr_seed += 1
 
     avg_return = np.mean([sum(p['rewards']) for p in paths])
+    timesteps = sum([len(p['rewards']) for p in paths])
+    print("Timesteps:", timesteps)
     return avg_return, paths
 
 def get_average_return_a3c(algo, seed, N=10, horizon=10000):
@@ -85,39 +87,50 @@ def get_average_return_a3c(algo, seed, N=10, horizon=10000):
         curr_seed += 1
 
     avg_return = np.mean([sum(p['rewards']) for p in paths])
+    timesteps = sum([len(p['rewards']) for p in paths])
+    print("Timesteps:", timesteps)
     return avg_return, paths
 
 def sample_dqn(algo, n_paths=1):  # Based on deep_q_rl/ale_experiment.py, run_episode
     env = algo.env
-    paths = [{'rewards':[], 'states':[], 'actions':[]} for i in range(n_paths)]
+    #paths = [{'rewards':[], 'states':[], 'actions':[]} for i in range(n_paths)]
+    rewards = [0]*n_paths
+    timesteps = 0
     for i in range(n_paths):
         env.reset()
         action = algo.agent.start_episode(env.last_state)
+        total_reward = 0
         while True:
             if env.is_terminal:
-                algo.agent.end_episode(paths[i]['rewards'][-1])
+                algo.agent.end_episode(env.reward)
                 break
-            paths[i]['states'].append(env.observation)
-            paths[i]['actions'].append(action)
+            #paths[i]['states'].append(env.observation)
+            #paths[i]['actions'].append(action)
             env.step(action)
-            paths[i]['rewards'].append(env.reward)
+            #paths[i]['rewards'].append(env.reward)
+            total_reward += env.reward
             action = algo.agent.step(env.reward, env.last_state, {})
-    return paths
+            timesteps += 1
+        rewards[i] = total_reward
+    return rewards, timesteps
 
 def get_average_return_dqn(algo, seed, N=10):
     # Set random seed, for reproducibility
     set_seed(algo, seed)
     curr_seed = seed + 1
 
-    paths = []
-    while len(paths) < N:
-        new_paths = sample_dqn(algo, n_paths=1)  # Returns single path
-        paths.append(new_paths[0])
+    rewards = [0]*N
+    total_timesteps = 0
+    for i in range(N):
+        new_rewards, timesteps = sample_dqn(algo, n_paths=1)  # Returns single path
+        rewards[i] = new_rewards[0]
+        total_timesteps += timesteps
         set_seed(algo, curr_seed)
         curr_seed += 1
 
-    avg_return = np.mean([sum(p['rewards']) for p in paths])
-    return avg_return, paths
+    avg_return = np.mean(rewards)
+    print("Timesteps:", total_timesteps)
+    return avg_return, rewards
     
 def get_average_return(algo, seed, N=10):
     algo_name = type(algo).__name__

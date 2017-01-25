@@ -12,7 +12,7 @@ from sandbox.sandy.misc.util import get_time_stamp
 adversary_algo = 'fgsm'
 adversary_algo_param_names = ['norm', 'fgsm_eps', 'policy_adv', 'policy_rollout']  # Levels of all_output_h5
 
-experiments = ['trpo_exp027']  # Format: algo-name_exp-index
+experiments = ['async-rl_exp036']  # Format: algo-name_exp-index
 games = ['chopper', 'pong', 'seaquest', 'space']
 
 base_dir = '/home/shhuang/src/rllab-private/data/s3/'
