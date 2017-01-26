@@ -632,7 +632,6 @@ class VDDPG(OnlineAlgorithm, Serializable):
         # Create figure for plotting the environment.
         fig = plt.figure(figsize=(12, 7))
         ax = fig.add_subplot(111)
-        plt.axis('equal')
 
         true_env = self.env
         while isinstance(true_env, ProxyEnv):

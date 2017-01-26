@@ -43,7 +43,5 @@ if __name__ == "__main__":
                 if isinstance(true_env, mujoco_env.MujocoEnv):
                     # Gym mujoco env doesn't use the default np seed
                     true_env._seed(args.seed)
-                if isinstance(data['algo'].policy, StochasticNNPolicy):
-                    data['algo'].policy._rnd = np.random.RandomState(args.seed)
             path = rollout(env, policy, max_path_length=args.max_path_length,
                            animated=(not args.no_plot), speedup=args.speedup)

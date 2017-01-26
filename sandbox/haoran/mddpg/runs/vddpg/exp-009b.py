@@ -1,20 +1,23 @@
 """
 Variational DDPG (online, consevative)
 
-Test DDPG on the cautions hopper.
-We hope to see how the hopper stabilizes in different random seeds and random
-    initial states.
+Test VDDPG on the conservative hopper (no forward reward).
+We hope to see diverse ways to stay alive.
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
-from sandbox.haoran.mddpg.algos.ddpg import DDPG
-from sandbox.haoran.mddpg.policies.nn_policy import FeedForwardPolicy
-from sandbox.haoran.mddpg.qfunctions.nn_qfunction import FeedForwardCritic
-from sandbox.haoran.myscripts.envs import EnvChooser
-from sandbox.rocky.tf.envs.base import TfEnv
+import joblib
 from rllab.envs.normalized_env import normalize
 from rllab.exploration_strategies.ou_strategy import OUStrategy
-from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
+from sandbox.rocky.tf.envs.base import TfEnv
+from sandbox.haoran.myscripts.envs import EnvChooser
+from sandbox.tuomas.mddpg.kernels.gaussian_kernel import \
+    SimpleAdaptiveDiagonalGaussianKernel
+from sandbox.tuomas.mddpg.critics.nn_qfunction import FeedForwardCritic
+from sandbox.tuomas.mddpg.policies.stochastic_policy import StochasticNNPolicy
+from sandbox.tuomas.mddpg.policies.stochastic_policy import \
+    DummyExplorationStrategy, StochasticPolicyMaximizer
+from sandbox.tuomas.mddpg.algos.vddpg import VDDPG
 
 """ others """
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
@@ -23,6 +26,7 @@ from rllab import config
 from rllab.misc.instrument import stub, run_experiment_lite
 import sys,os
 import copy
+import numpy as np
 
 stub(globals())
 
@@ -32,12 +36,12 @@ from rllab.misc.instrument import VariantGenerator, variant
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/vddpg/" + exp_index
 mode = "ec2"
-ec2_instance = "c4.2xlarge"
-subnet = "us-west-1c"
+subnet = "us-west-1b"
+ec2_instance = "c4.4xlarge"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 config.AWS_IMAGE_ID = "ami-85d181e5" # with docker already pulled
 
-n_task_per_instance = 1
+n_task_per_instance = 5
 n_parallel = 2 # only for local exp
 snapshot_mode = "gap"
 snapshot_gap = 10
@@ -55,29 +59,36 @@ class VG(VariantGenerator):
             "gym_hopper"
         ]
     @variant
+    def K(self):
+        return [16]
+
+    @variant
+    def alpha(self):
+        return [1]
+
+    @variant
     def max_path_length(self):
         return [500]
 
     @variant
     def ou_sigma(self):
-        return [0.3]
+        return [0, 0.3]
 
     @variant
     def scale_reward(self):
-        return [1, 0.1, 10]
+        return [0.1, 1, 10]
 
     @variant
-    def qf_learning_rate(self):
-        return [1e-3]
+    def svgd_type(self):
+        return ["pre-action", "scaled-tanh"]
 
     @variant
     def tau(self):
-        return [1e-2]
+        return [0.01]
 
     @variant
     def use_forward_reward(self):
         return [False]
-
 
 variants = VG().variants()
 batch_tasks = []
@@ -88,31 +99,44 @@ for v in variants:
     # algo
     seed=v["zzseed"]
     env_name = v["env_name"]
-    shared_ddpg_kwargs = dict(
+    K = v["K"]
+
+    shared_alg_kwargs = dict(
+        alpha=v["alpha"],
         max_path_length=v["max_path_length"],
+        q_target_type = "max",
         scale_reward=v["scale_reward"],
-        qf_learning_rate=v["qf_learning_rate"],
+        qf_learning_rate=1e-3,
+        policy_learning_rate=1e-4,
         soft_target_tau=v["tau"],
     )
-    if "local" in mode and "local_docker" not in mode:
-        shared_ddpg_kwargs["plt_backend"] = "MacOSX"
+    if ("local" in mode) and (sys.platform == "darwin"):
+        shared_alg_kwargs["plt_backend"] = "MacOSX"
     else:
-        shared_ddpg_kwargs["plt_backend"] = "Agg"
+        shared_alg_kwargs["plt_backend"] = "Agg"
 
+    if v["svgd_type"] != "scaled-tanh":
+        shared_alg_kwargs["svgd_target"] = v["svgd_type"]
+        output_scale = 1.0
+    else:
+        shared_alg_kwargs["svgd_target"] = "action"
+        output_scale = 2.0
     if mode == "local_test" or mode == "local_docker_test":
-        ddpg_kwargs = dict(
-            epoch_length = 100,
-            min_pool_size = 100,
-            eval_samples = 100,
+        alg_kwargs = dict(
+            epoch_length=10,
+            min_pool_size=20000,
+                # beware that the algo doesn't finish an epoch
+                # until it finishes one path
+            n_eval_paths=1,
+            n_epochs=5,
         )
     else:
-        ddpg_kwargs = dict(
+        alg_kwargs = dict(
             epoch_length=1000,
-            n_epochs=500,
-            eval_samples=v["max_path_length"] * 10,
-                # deterministic env and policy: only need 1 traj sample
+            n_epochs=1000,
+            n_eval_paths=10,
         )
-    ddpg_kwargs.update(shared_ddpg_kwargs)
+    alg_kwargs.update(shared_alg_kwargs)
     if env_name == "hopper":
         env_kwargs = {
             "alive_coeff": 0.5
@@ -180,8 +204,9 @@ for v in variants:
     env_chooser = EnvChooser()
     env = TfEnv(normalize(
         env_chooser.choose_env(env_name,**env_kwargs),
-        clip=True,
+        clip=(not (v["svgd_type"] == "scaled-tanh")),
     ))
+
     qf = FeedForwardCritic(
         "critic",
         env.observation_space.flat_dim,
@@ -189,26 +214,45 @@ for v in variants:
         observation_hidden_sizes=(),
         embedded_hidden_sizes=(100, 100),
     )
+    q_prior = None
     es = OUStrategy(
         env_spec=env.spec,
         mu=0,
         theta=0.15,
         sigma=v["ou_sigma"],
-        clip=True,
+        clip=(not (v["svgd_type"] == "scaled-tanh")),
     )
-    policy = FeedForwardPolicy(
+    policy = StochasticNNPolicy(
         scope_name="actor",
         observation_dim=env.observation_space.flat_dim,
         action_dim=env.action_space.flat_dim,
+        sample_dim=env.action_space.flat_dim,
+        freeze_samples=False,
+        K=K,
         output_nonlinearity=tf.nn.tanh,
-        observation_hidden_sizes=(100, 100),
+        hidden_dims=(100, 100),
+        W_initializer=None,
+        output_scale=output_scale,
     )
-    algorithm = DDPG(
-        env,
-        es,
-        policy,
-        qf,
-        **ddpg_kwargs
+    eval_policy = StochasticPolicyMaximizer(
+        N=100,
+        actor=policy,
+        critic=qf,
+    )
+    kernel = SimpleAdaptiveDiagonalGaussianKernel(
+        "kernel",
+        dim=env.action_space.flat_dim,
+    )
+    algorithm = VDDPG(
+        env=env,
+        exploration_strategy=es,
+        policy=policy,
+        eval_policy=eval_policy,
+        kernel=kernel,
+        qf=qf,
+        q_prior=q_prior,
+        K=K,
+        **alg_kwargs
     )
 
     # run -----------------------------------------------------------
@@ -240,5 +284,6 @@ for v in variants:
         batch_tasks = []
         if "test" in mode:
             sys.exit(0)
+
 if ("local" not in mode) and ("test" not in mode):
     os.system("chmod 444 %s"%(__file__))
