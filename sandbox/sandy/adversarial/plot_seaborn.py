@@ -9,8 +9,8 @@ from pandas import DataFrame
 from sandbox.sandy.adversarial.io_util import get_param_names, get_all_result_paths
 
 PLOT_TYPE = ["no-transfer"]  # Options: ['no-transfer', 'transfer-policy', 'transfer-algo']
-PLOT_TARGET = ['exp027']
-PLOT_ADV = ['exp027']
+PLOT_TARGET = ['exp027', 'exp035c', 'exp036']
+PLOT_ADV = ['exp027', 'exp035c', 'exp036']
 SAVE_AS_PDF = False
 
 def plot_returns(h5_file, cond_key, x_key, y_key, exp_to_algo, screen_print=False):
@@ -22,9 +22,10 @@ def plot_returns(h5_file, cond_key, x_key, y_key, exp_to_algo, screen_print=Fals
     policy_adv_idx = param_names.index('policy_adv')
     policy_target_idx = param_names.index('policy_rollout')
 
+    paths = get_all_result_paths(h5_file, y_key[0])
+
     f = h5py.File(h5_file, 'r')
     data = []
-    paths = get_all_result_paths(h5_file, y_key[0])
     paths_by_game_exp = {}  # keys: (game, exp_index)
     for path in paths:
         path_info = path.split('/')[2:]
@@ -114,7 +115,7 @@ def main():
     args = parser.parse_args()
 
     plot_returns(args.returns_h5, ('norm', 'Norm'), ('fgsm_eps', r'$\epsilon$'), ('avg_return', 'Average Return'), \
-                 {'exp027':"TRPO", 'exp036':'A3C'}, screen_print=True)
+            {'exp027':"TRPO", 'exp035c':'DQN', 'exp036':'A3C'}, screen_print=True)
 
 if __name__ == "__main__":
     main()
