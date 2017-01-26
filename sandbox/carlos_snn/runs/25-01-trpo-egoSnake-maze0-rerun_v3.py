@@ -1,5 +1,5 @@
 """
-Wed Jan 25 00:06:10 2017: _v3
+Wed Jan 25 18:26:47 2017: _v3
 Wed Jan 25 00:05:50 2017: _v2
 Mon Jan 23 23:49:34 2017: _v1: this still didn't get through ec2!!?
 Fri Jan 20 11:16:18 2017: _v0
@@ -45,11 +45,10 @@ if __name__ == "__main__":
 
     if args.clone:
         autoclone.autoclone(__file__, args)
-        sys.exit()
 
     # setup ec2
     subnets = [
-        'us-east-2b', 'us-east-2c', 'us-east-2a'
+        'us-east-2b', 'us-east-2a', 'us-east-2c', 'us-east-1a', 'us-west-1b'
     ]
 
     ec2_instance = args.type if args.type else 'm4.10xlarge'
@@ -140,10 +139,8 @@ if __name__ == "__main__":
                     sync_s3_png=True,
                     # # use this ONLY with ec2 or local_docker!!!
                     pre_commands=[
-                        "which conda",
-                        "which python",
-                        "conda list -n rllab3",
-                        "conda install -f numpy -n rllab3 -y",
+                        "pip install --upgrade pip",
+                        "pip install --upgrade theano"
                     ],
                 )
                 if mode == 'local_docker':
