@@ -514,6 +514,7 @@ class TruncatedLogistic(Distribution):
     def sample_logli(self, dist_info):
         mu = dist_info["mu"]
         scale = dist_info["scale"]
+        bs = int_shape(mu)[0]
         p_lo, p_hi = self.cdf(self._lo, dist_info), self.cdf(self._hi, dist_info)
         span = p_hi - p_lo
         p_delta = tf.random_uniform(
@@ -523,8 +524,9 @@ class TruncatedLogistic(Distribution):
         samples = self.inverse_cdf(p_lo+p_delta, dist_info)
         raw_logli = (-(samples - mu)/scale) - tf.log(scale) - 2.*tf.log(1+tf.exp((-(samples - mu)/scale)))
 
+        THRESHOLD = 1e-3
         samples_out = tf.select(
-            span > 1e-3,
+            span > THRESHOLD,
             samples,
             tf.random_uniform(
                 shape=universal_int_shape(mu),
@@ -533,17 +535,17 @@ class TruncatedLogistic(Distribution):
             )
         )
         logli_out = tf.select(
-            span > 1e-3,
+            span > THRESHOLD,
             raw_logli - tf.log(span),
-            -tf.log(self._hi - self._lo)
+            tf.tile(-tf.log(self._hi - self._lo), [bs, 1])
         )
 
-        return samples_out, logli_out
+        return tf.reshape(samples_out, [-1]+list(self._shape)), tf.reduce_sum(logli_out, reduction_indices=[1])
 
     def prior_dist_info(self, batch_size):
         return dict(
-            mu=0.0 * np.ones([batch_size, self._dim]),
-            scale=np.ones([batch_size, self._dim]) * self._init_scale,
+            mu=np.zeros([batch_size, self._dim]),
+            scale=np.ones([batch_size, self._dim]),
         )
 
 class DiscretizedLogistic(Distribution):
@@ -2797,7 +2799,7 @@ class UniformDequant(DequantizationDistribution):
     ):
         global G_IDX
         G_IDX += 1
-        self._name = "UniformDequnt_%s" % (G_IDX)
+        self._name = "UniformDequant_%s" % (G_IDX)
         self._width = width
 
     def sample_logli(self, dist_info):
@@ -2805,6 +2807,66 @@ class UniformDequant(DequantizationDistribution):
         shp = int_shape(condition)
         dim = np.prod(shp[1:])
         return tf.random_uniform(shp, maxval=self._width), (-dim * np.log(self._width)).astype(np.float32)
+
+class TruncatedLogisticDequant(DequantizationDistribution):
+    def __init__(
+            self,
+            shape,
+            width=1. / 256,
+    ):
+        global G_IDX
+        G_IDX += 1
+        self._name = "TruncatedLogisticDequant_%s" % (G_IDX)
+        self._width = width
+        dim = np.prod(shape)
+        self._shape = shape
+        self._dim = dim
+        pshp = [1, dim]
+        self._mu = tf.get_variable(
+            self._name + "_mu",
+            pshp,
+            tf.float32,
+            tf.random_normal_initializer(0, 0.05),
+            trainable=True
+        )
+        self._log_scale = tf.get_variable(
+            self._name + "_log_scale",
+            pshp,
+            tf.float32,
+            tf.random_normal_initializer(0, 0.05),
+            trainable=True
+        )
+        self._delegate_dist = TruncatedLogistic(shape, -1., 1.)
+        self.init_mode()
+
+    @overrides
+    def init_mode(self):
+        self._custom_phase = CustomPhase.init
+        self._delegate_dist.init_mode()
+
+    @overrides
+    def train_mode(self):
+        self._custom_phase = CustomPhase.train
+        self._delegate_dist.train_mode()
+
+    def prior_dist_info(self, batch_size):
+        def expand(x):
+            if self._custom_phase == CustomPhase.init:
+                x = x.initialized_value()
+            return tf.tile(x, [batch_size, 1])
+        return dict(
+            mu=expand(self._mu),
+            scale=expand(self._log_scale),
+        )
+
+    def sample_logli(self, dist_info):
+        condition = dist_info["condition"]
+        delegate_info = self.prior_dist_info(int_shape(condition)[0])
+        eps, logli_eps = self._delegate_dist.sample_logli(
+            delegate_info
+        )
+        scaling = self._width / 2.
+        return eps * scaling, logli_eps - tf.log(scaling) * self._dim
 
 
 # TODO: this has wrong impl for sampling
