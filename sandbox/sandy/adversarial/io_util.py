@@ -77,7 +77,9 @@ def save_video_file(output_h5, video_file):
 
 def get_all_result_paths(h5_file, result_key):
     f = h5py.File(h5_file, 'r')
-    return get_all_result_paths_from(f['results'], result_key)
+    all_result_paths = get_all_result_paths_from(f['results'], result_key)
+    f.close()
+    return all_result_paths
 
 def get_all_result_paths_from(g, result_key):
     if result_key in g:
