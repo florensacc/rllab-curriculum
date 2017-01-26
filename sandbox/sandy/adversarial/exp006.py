@@ -45,7 +45,7 @@ policies = load_models(games, experiments, base_dir, batch_size, threshold=0.80,
 class VG(VariantGenerator):
     @variant
     def fgsm_eps(self):
-        return [0.0000625, 0.000125, 0.00025, 0.0005, 0.001, 0.002, 0.004, 0.008, 0]
+        return [0.00003125, 0.0000625, 0.000125, 0.00025, 0.0005, 0.001, 0.002, 0.004, 0.008, 0]
 
     @variant
     def norm(self):
@@ -113,5 +113,3 @@ for v in variants:
 
                 print("Average Reward:", avg_return_adversary)
                 save_performance_to_all(all_output_h5, avg_return_adversary, adv_params, len(paths))
-            if fgsm_eps == 0:
-                break

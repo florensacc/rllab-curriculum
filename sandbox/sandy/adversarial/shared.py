@@ -60,36 +60,31 @@ def get_average_return_trpo(algo, seed, N=10):
 
     avg_return = np.mean([sum(p['rewards']) for p in paths])
     timesteps = sum([len(p['rewards']) for p in paths])
-    print("Timesteps:", timesteps)
-    return avg_return, paths
+    return avg_return, paths, timesteps
 
 def get_average_return_a3c(algo, seed, N=10, horizon=10000):
-    algo.test_env = copy.deepcopy(algo.cur_env)
-    # copy.deepcopy doesn't copy lambda function
-    algo.test_env.adversary_fn = algo.cur_env.adversary_fn
-    algo.test_agent = copy.deepcopy(algo.cur_agent)
-
-    # Set random seed, for reproducibility
-    set_seed_env(algo.test_env, seed)
-    curr_seed = seed + 1
 
     #scores, paths = algo.evaluate_performance(N, horizon, return_paths=True)
     paths = []
+    curr_seed = seed
     while len(paths) < N:
-        _, new_paths = algo.evaluate_performance(1, horizon, return_paths=True)
-        paths.append(new_paths[0])
-
         algo.test_env = copy.deepcopy(algo.cur_env)
         # copy.deepcopy doesn't copy lambda function
         algo.test_env.adversary_fn = algo.cur_env.adversary_fn
         algo.test_agent = copy.deepcopy(algo.cur_agent)
+        # Set random seed, for reproducibility
         set_seed_env(algo.test_env, curr_seed)
+
+        _, new_paths = algo.evaluate_performance(1, horizon, return_paths=True)
+        paths.append(new_paths[0])
+
+        del algo.test_env
+        del algo.test_agent
         curr_seed += 1
 
     avg_return = np.mean([sum(p['rewards']) for p in paths])
     timesteps = sum([len(p['rewards']) for p in paths])
-    print("Timesteps:", timesteps)
-    return avg_return, paths
+    return avg_return, paths, timesteps
 
 def sample_dqn(algo, n_paths=1):  # Based on deep_q_rl/ale_experiment.py, run_episode
     env = algo.env
@@ -129,19 +124,23 @@ def get_average_return_dqn(algo, seed, N=10):
         curr_seed += 1
 
     avg_return = np.mean(rewards)
-    print("Timesteps:", total_timesteps)
-    return avg_return, rewards
+    return avg_return, rewards, total_timesteps
     
-def get_average_return(algo, seed, N=10):
+def get_average_return(algo, seed, N=10, return_timesteps=False):
     algo_name = type(algo).__name__
     if algo_name in ['TRPO', 'ParallelTRPO']:
-        return get_average_return_trpo(algo, seed, N=N)
+        get_average_return_f = get_average_return_trpo
     elif algo_name in ['A3CALE']:
-        return get_average_return_a3c(algo, seed, N=N)
+        get_average_return_f = get_average_return_a3c
     elif algo_name in ['DQNAlgo']:
-        return get_average_return_dqn(algo, seed, N=N)
+        get_average_return_f = get_average_return_dqn
     else:
         assert False, "Algorithm type " + algo_name + " is not supported."
+    avg_return, paths, timesteps = get_average_return_f(algo, seed, N=N)
+    if return_timesteps:
+        return avg_return, paths, timesteps
+    else:
+        return avg_return, paths
 
 def load_model_trpo(algo, env, batch_size):
     algo.batch_size = batch_size
