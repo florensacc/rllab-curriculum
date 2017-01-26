@@ -254,7 +254,6 @@ class DDPG(OnlineAlgorithm):
         # Create figure for plotting the environment.
         fig = plt.figure(figsize=(12, 7))
         ax = fig.add_subplot(111)
-        plt.axis('equal')
 
         true_env = get_true_env(self.env)
         if hasattr(true_env, "log_stats"):
@@ -285,3 +284,22 @@ class DDPG(OnlineAlgorithm):
             es=self.exploration_strategy,
             qf=self.qf,
         )
+
+    def _do_training(self):
+        minibatch = self.pool.random_batch(self.batch_size)
+        sampled_obs = minibatch['observations']
+        sampled_terminals = minibatch['terminals']
+        sampled_actions = minibatch['actions']
+        sampled_rewards = minibatch['rewards'][:,0] # assume single reward
+        sampled_next_obs = minibatch['next_observations']
+
+        feed_dict = self._update_feed_dict(sampled_rewards,
+                                           sampled_terminals,
+                                           sampled_obs,
+                                           sampled_actions,
+                                           sampled_next_obs)
+
+
+        # TH: First train, then finalize. This can be suboptimal.
+        self.sess.run(self._get_training_ops(), feed_dict=feed_dict)
+        self.sess.run(self._get_finalize_ops(), feed_dict=feed_dict)

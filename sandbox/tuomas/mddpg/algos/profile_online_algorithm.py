@@ -159,13 +159,14 @@ class OnlineAlgorithm(RLAlgorithm):
                                                                   observation,
                                                                   self.policy)
                     action.squeeze()
+                    gt.stamp('train: compute action')
                     if self.render:
                         self.env.render()
                     next_ob, raw_reward, terminal, info = self.env.step(action)
                     reward = raw_reward * self.scale_reward
                     path_length += 1
                     path_return += reward
-                    gt.stamp('train: sampling')
+                    gt.stamp('train: simulation')
 
                     #self.plot_path(rewards=raw_reward,
                     #               obs=observation,
@@ -209,7 +210,6 @@ class OnlineAlgorithm(RLAlgorithm):
                     if self.pool.size >= self.min_pool_size:
                         self._do_training()
                     itr += 1
-                    gt.stamp('train: updates')
 
                 # testing ---------------------------------
                 train_info = dict(
@@ -228,14 +228,17 @@ class OnlineAlgorithm(RLAlgorithm):
                 times_itrs = gt.get_times().stamps.itrs
                 train_time = np.sum([
                     times_itrs[stamp][-1]
-                    for stamp in ["train: sampling",
-                    "train: fill replay pool","train: updates"]
+                    for stamp in [
+                        "train: compute action",
+                        "train: simulation",
+                        "train: fill replay pool",
+                    ]
                 ])
                 eval_time = times_itrs["test"][-1]
                 total_time = gt.get_times().total
                 logger.record_tabular("time: train",train_time)
                 logger.record_tabular("time: eval",eval_time)
-                logger.record_tabular("time: total",total_time)
+                # logger.record_tabular("time: total",total_time)
                 logger.record_tabular("scale_reward", self.scale_reward)
                 logger.record_tabular("steps: current epoch", t)
                 total_steps += t
@@ -260,17 +263,34 @@ class OnlineAlgorithm(RLAlgorithm):
         sampled_actions = minibatch['actions']
         sampled_rewards = minibatch['rewards']
         sampled_next_obs = minibatch['next_observations']
+        gt.stamp('train: sampling a minibatch')
 
         feed_dict = self._update_feed_dict(sampled_rewards,
                                            sampled_terminals,
                                            sampled_obs,
                                            sampled_actions,
                                            sampled_next_obs)
+        gt.stamp('train: update feed dict')
 
+        from tensorflow.python.client import timeline
+        run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+        run_metadata = tf.RunMetadata()
+        self.sess.run(
+            self._get_training_ops(),
+            feed_dict=feed_dict,
+            options=run_options,
+            run_metadata=run_metadata
+        )
+        tl = timeline.Timeline(run_metadata.step_stats)
+        ctf = tl.generate_chrome_trace_format()
+        with open('timeline.json', 'w') as f:
+            f.write(ctf)
 
         # TH: First train, then finalize. This can be suboptimal.
-        self.sess.run(self._get_training_ops(), feed_dict=feed_dict)
+        # self.sess.run(self._get_training_ops(), feed_dict=feed_dict)
+        gt.stamp('train: train ops')
         self.sess.run(self._get_finalize_ops(), feed_dict=feed_dict)
+        gt.stamp('train: finalize ops')
 
     def get_epoch_snapshot(self, epoch):
         return dict(

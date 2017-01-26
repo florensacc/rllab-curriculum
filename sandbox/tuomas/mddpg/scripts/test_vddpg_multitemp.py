@@ -3,7 +3,15 @@ from rllab import spaces
 import tensorflow as tf
 import numpy as np
 
+from sandbox.tuomas.mddpg.policies.stochastic_policy import \
+    DummyExplorationStrategy
+
 from sandbox.tuomas.mddpg.critics.gaussian_critic import MixtureGaussian2DCritic
+from sandbox.tuomas.mddpg.critics.nn_qfunction import MultiCritic
+
+from sandbox.tuomas.mddpg.algos.vddpg import VDDPG
+from rllab.misc.overrides import overrides
+import matplotlib.pyplot as plt
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -11,6 +19,11 @@ flags.DEFINE_float('learning_rate', 0.01, 'Base learning rate.')
 flags.DEFINE_integer('modes', 2, 'Number of modes.')
 flags.DEFINE_boolean('fixed', False, 'Fixed target distribution.')
 
+#K = 32  # number of particles
+temperatures = np.array([[10.],
+                         [1.]])
+Ks = np.array([1., 32])
+styles = ('*b', '*r')
 
 class MultimodalGaussianEnv(Env):
 
@@ -24,29 +37,22 @@ class MultimodalGaussianEnv(Env):
         return self.observe(), 0, True, {}
 
     def observe(self):
-        return np.random.randn(1)
+        temps = np.array([0.1, 1])
+        temp = temps[[np.random.randint(0, 2)]]
+        return temp
 
     def reset(self):
         return self.observe()
 
     @property
-    def horizon(self):
-        pass
-
-    @property
     def action_space(self):
-        return spaces.Box(self._action_lb, self._action_ub)
+        return spaces.Box(-1, 1, (2,))
 
     @property
     def observation_space(self):
-        return spaces.Box(0, 0, (1,))
+        return spaces.Box(-1, 1, (1,))
 
-from sandbox.tuomas.mddpg.policies.stochastic_policy import \
-    DummyExplorationStrategy
 
-from sandbox.tuomas.mddpg.algos.vddpg import VDDPG
-from rllab.misc.overrides import overrides
-import matplotlib.pyplot as plt
 class VDDPGTest(VDDPG):
 
     def eval_critic(self, o):
@@ -55,10 +61,7 @@ class VDDPGTest(VDDPG):
         all_actions = np.vstack([X.ravel(), Y.ravel()]).transpose()
         obs = np.array([o] * all_actions.shape[0])
 
-        feed = {
-            self.qf.observations_placeholder: obs,
-            self.qf.actions_placeholder: all_actions
-        }
+        feed = self.qf.get_feed_dict(obs, all_actions)
         Q = self.sess.run(self.qf.output, feed).reshape(X.shape)
         return X, Y, Q
 
@@ -72,19 +75,18 @@ class VDDPGTest(VDDPG):
         plt.xlim((-5, 5))
         plt.ylim((-5, 5))
 
-        # sample and plot actions
-        all_actions = []
-        N = 250
-        all_obs = np.array([obs_single] * N)
-        all_actions = self.policy.get_actions(all_obs)[0]
-        #for i in range(N):
-        #    action, _ = self.policy.get_action(obs_single)
-        #    all_actions.append(action.squeeze())
+        for temp, K, style in zip(temperatures, Ks, styles):
+            self.plot_actions(obs_single, temp, K*5, style),
+
+    def plot_actions(self, obs, temperature, K, style):
+        all_obs = np.tile(obs[None], (K, 1))
+        temps = np.tile(temperature[None], (K, 1))
+        all_actions = self.policy.get_actions(all_obs, temps)[0]
 
         for k, action in enumerate(all_actions):
             x = action[0]
             y = action[1]
-            plt.plot(x, y, '*')
+            plt.plot(x, y, style)
             #ax_qf.text(x, y, '%d'%(k))
 
         plt.draw()
@@ -93,21 +95,18 @@ class VDDPGTest(VDDPG):
 
 # -------------------------------------------------------------------
 def test():
-    from rllab.exploration_strategies.ou_strategy import OUStrategy
-    from sandbox.haoran.mddpg.kernels.gaussian_kernel import \
+    from sandbox.tuomas.mddpg.kernels.gaussian_kernel import \
         SimpleAdaptiveDiagonalGaussianKernel, \
         SimpleDiagonalConstructor, DiagonalGaussianKernel
     from sandbox.rocky.tf.envs.base import TfEnv
-    from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
     from sandbox.tuomas.mddpg.policies.stochastic_policy \
         import StochasticNNPolicy
 
-    K = 100 # number of particles
 
     adaptive_kernel = True
 
     ddpg_kwargs = dict(
-        epoch_length=10,  # evaluate / plot per SVGD step
+        epoch_length=50,  # evaluate / plot per SVGD step
         min_pool_size=2,  # must be at least 2
         replay_pool_size=2,  # should only sample from recent experiences,
                         # note that the sample drawn can be one iteration older
@@ -137,9 +136,12 @@ def test():
         observation_dim=env.observation_space.flat_dim,
         action_input=None,
         observation_input=None,
-        weights=[1./2., 2./3.],
+        weights=[1./3., 2./3.],
         mus=[np.array((-2., 0.)), np.array((1., 1.))],
-        sigmas=[0.2, 1.0]
+        sigmas=[0.3, 1.0]
+    )
+    qf_temp = MultiCritic(
+        critics=[qf],
     )
 
     policy = StochasticNNPolicy(
@@ -148,6 +150,8 @@ def test():
         env.action_space.flat_dim,
         hidden_dims=(128, 128),
         sample_dim=2,
+        temperature_dim=temperatures.shape[1],
+        default_temperature=temperatures[0],
         freeze_samples=False
     )
 
@@ -171,9 +175,11 @@ def test():
         exploration_strategy=es,
         policy=policy,
         kernel=kernel,
-        qf=qf,
-        K=K,
+        qf=qf_temp,
+        K=None,
+        Ks=Ks,
         q_target_type=q_target_type,
+        temperatures=temperatures,
         **ddpg_kwargs
     )
     algorithm.train()

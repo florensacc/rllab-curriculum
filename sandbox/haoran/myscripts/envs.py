@@ -88,6 +88,10 @@ class EnvChooser(object):
             from sandbox.haoran.mddpg.envs.mujoco.gym_humanoid_env import \
                 HumanoidEnv
             env = HumanoidEnv(**kwargs)
+        elif env_name == "gym_humanoid_standup":
+            from sandbox.haoran.mddpg.envs.mujoco.gym_humanoid_standup_env import \
+                HumanoidStandupEnv
+            env = HumanoidStandupEnv(**kwargs)
         else:
             print("Unknown environment %s"%(env_name))
             raise NotImplementedError
