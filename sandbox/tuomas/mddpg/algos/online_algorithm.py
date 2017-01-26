@@ -129,6 +129,7 @@ class OnlineAlgorithm(RLAlgorithm):
             self._start_worker()
 
             observation = self.env.reset()
+            self.policy.reset()
             self.exploration_strategy.reset()
             itr = 0
             path_length = 0
@@ -167,11 +168,6 @@ class OnlineAlgorithm(RLAlgorithm):
                     path_return += reward
                     gt.stamp('train: sampling')
 
-                    #self.plot_path(rewards=raw_reward,
-                    #               obs=observation,
-                    #               actions=action,
-                    #               info=info)
-
                     # add experience to replay pool
                     self.pool.add_sample(observation,
                                          action,
@@ -187,13 +183,8 @@ class OnlineAlgorithm(RLAlgorithm):
                                              np.zeros_like(terminal),
                                              True)
 
-                        #self.plot_path(rewards=raw_reward,
-                        #               obs=observation,
-                        #               actions=action,
-                        #               info=info,
-                        #               flush=True)
-
                         observation = self.env.reset()
+                        self.policy.reset()
                         self.exploration_strategy.reset()
                         self.es_path_returns.append(path_return)
                         self.es_path_lengths.append(path_length)
