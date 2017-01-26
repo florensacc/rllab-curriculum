@@ -711,6 +711,8 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action="store_true", default=False)
     parser.add_argument("--port", type=int, default=5000)
     parser.add_argument("--disable-variant", default=False, action='store_true')
+    parser.add_argument("-o", default=False, action='store_true',
+        help='Open a brower tab automatically')
     args = parser.parse_args(sys.argv[1:])
 
     # load all folders following a prefix
@@ -724,7 +726,12 @@ if __name__ == "__main__":
                 args.data_paths.append(path)
     print("Importing data from {path}...".format(path=args.data_paths))
     reload_data()
-    # port = 5000
-    # url = "http://0.0.0.0:{0}".format(port)
-    print("Done! View http://localhost:%d in your browser" % args.port)
+    url = "http://localhost:%d"%(args.port)
+    print("Done! View %s in your browser"%(url))
+
+    if args.o:
+        # automatically open a new tab and show the plots
+        import webbrowser
+        webbrowser.open(url,new=2)
+        
     app.run(host='0.0.0.0', port=args.port, debug=args.debug)
