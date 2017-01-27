@@ -21,8 +21,8 @@ class PR2LegoLargeRange:
         # Initial tip position: [0.94, 0.17, 0.79]
         # low_goal_bounds = np.array([0.3, -0.3, 0.3]) # Bad - contained unreachable goals
         # high_goal_bounds = np.array([0.8, 0.7, 1.3]) # Bad - contained unreachable goals
-        self.low_lego_bounds = np.array([0.5, 0.25, 0.5025, 1, 0, 0, 0])
-        self.high_lego_bounds = np.array([0.7, -0.25, 0.5025, 1, 0, 0, 0])
+        self.low_lego_bounds = np.array([0.45, 0.25, 0.5025, 1, 0, 0, 0])
+        self.high_lego_bounds = np.array([0.75, -0.25, 0.5025, 1, 0, 0, 0])
 
 
 class PR2LegoFixedBlockGenerator(FixedGoalGenerator):
@@ -32,7 +32,8 @@ class PR2LegoFixedBlockGenerator(FixedGoalGenerator):
         # import pdb
         # pdb.set_trace()
         if block is None:
-            block = (0.6, 0.2, 0.5025, 1, 0, 0, 0)
+            # block = (0.6, 0.2, 0.5025, 1, 0, 0, 0)
+            block = (0.6, 0.35, 0.5025, 1, 0, 0, 0)
         block = np.array(block)
         super(PR2LegoFixedBlockGenerator, self).__init__(block)
 

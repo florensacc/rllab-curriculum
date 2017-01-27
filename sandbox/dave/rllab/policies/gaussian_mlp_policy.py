@@ -2,6 +2,7 @@ import joblib
 import lasagne
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
+import lasagne.init as LI
 import numpy as np
 
 from rllab.core.lasagne_layers import ParamLayer
@@ -16,6 +17,8 @@ from rllab.misc import logger
 from rllab.misc import ext
 from rllab.distributions.diagonal_gaussian import DiagonalGaussian
 import theano.tensor as TT
+import os
+from rllab import config
 
 
 
@@ -62,10 +65,18 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
         """
         Serializable.quick_init(self, locals())
         assert isinstance(env_spec.action_space, Box)
-
+        # import pdb; pdb.set_trace()
         self.pkl_path = pkl_path
         self.json_path = json_path
         self.npz_path = npz_path
+        if self.pkl_path is not None:
+            self.pkl_path = os.path.join(config.PROJECT_PATH, pkl_path)
+        # print(self.pkl_path)
+        if self.json_path is not None:
+            self.json_path = os.path.join(config.PROJECT_PATH, json_path)
+        if self.npz_path is not None:
+            self.npz_path = os.path.join(config.PROJECT_PATH, npz_path)
+
         self.trainable = trainable
 
         obs_dim = env_spec.observation_space.flat_dim
@@ -79,6 +90,7 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 hidden_sizes=hidden_sizes,
                 hidden_nonlinearity=hidden_nonlinearity,
                 output_nonlinearity=output_nonlinearity,
+                output_W_init=LI.GlorotUniform(gain=output_gain)
                 # output_gain=output_gain,
                 # num_relu=num_relu
             )

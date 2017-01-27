@@ -4,6 +4,7 @@ from rllab.sampler.base import BaseSampler
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
 from rllab.policies.base import Policy
+import numpy as np
 
 
 class BatchSampler(BaseSampler):
@@ -135,7 +136,10 @@ class BatchPolopt(RLAlgorithm):
                     if self.pause_for_plot:
                         input("Plotting evaluation run: Press Enter to "
                                   "continue...")
-            # self.env._wrapped_env.angle_penalty_weight *= 0.997
+            # self.env._wrapped_env.iter = itr
+            # self.env._wrapped_env.gamma = self.env._wrapped_env.discount *\
+            #                               (1 - np.exp(-self.env._wrapped_env.iter /
+            #                                           self.env._wrapped_env.tau))
             # self.env._wrapped_env.distance_tip_lego_penalty_weight *= 0.997
             self.shutdown_worker()
 
