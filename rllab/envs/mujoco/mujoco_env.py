@@ -226,6 +226,7 @@ class MujocoEnv(Env):
     def stop_viewer(self):
         if self.viewer:
             self.viewer.finish()
+            self.viewer = None
 
     def release(self):
         # temporarily alleviate the issue (but still some leak)

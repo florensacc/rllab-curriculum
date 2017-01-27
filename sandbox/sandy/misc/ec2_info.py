@@ -6,7 +6,8 @@ instance_info = {
     "c4.4xlarge": dict(price=0.14, vCPU=16),
     "m4.10xlarge": dict(price=0.37,vCPU=40),
     "c4.8xlarge": dict(price=0.28,vCPU=36),
-    "g2.2xlarge": dict(price=0.12, vCPU=8),
+    "g2.2xlarge": dict(price=0.50, vCPU=8),
+    "p2.xlarge": dict(price=0.50, vCPU=4),
 }
 
 all_subnet_info = {

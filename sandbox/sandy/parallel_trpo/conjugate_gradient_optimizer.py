@@ -213,9 +213,10 @@ class ParallelConjugateGradientOptimizer(Serializable):
 
         obs_var = inputs[0]
         if hasattr(target, 'distribution'):
-            dist = target.distribution
             dist_info_var = target.dist_info_sym(obs_var)["prob"]
-            ce_loss = - TT.log(1 / TT.sum(TT.exp(dist_info_var - TT.max(dist_info_var))))
+            # dist_info_var is probability distribution (softmax already taken)
+            ce_loss = - TT.log(TT.max(dist_info_var))
+            #ce_loss = - TT.log(1 / TT.sum(TT.exp(dist_info_var - TT.max(dist_info_var))))
             obs_grad = theano.grad(ce_loss, wrt=obs_var, disconnected_inputs='warn')
         else:
             obs_grad = None
@@ -252,6 +253,11 @@ class ParallelConjugateGradientOptimizer(Serializable):
                 inputs=[obs_var],
                 outputs=obs_grad,
                 log_name="f_obs_grad",
+            ),
+            f_obs_ce_loss=lambda: ext.compile_function(
+                inputs=[obs_var],
+                outputs=ce_loss,
+                log_name="f_obs_ce_loss",
             ),
         )
 

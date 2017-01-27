@@ -3,15 +3,18 @@ import os
 import sys
 import numpy as np
 import cv2
+import atari_py
 
-from ale_python_interface import ALEInterface
+from sandbox.haoran.ale_python_interface import ALEInterface
 from sandbox.sandy.async_rl.envs.base import Env
 from sandbox.sandy.async_rl.shareable.base import Shareable
 from sandbox.sandy.async_rl.utils.picklable import Picklable
 
 class AtariEnv(Env,Shareable,Picklable):
-    def __init__(self, rom_filename, seed=None, plot=False, n_last_screens=4,
-                 frame_skip=4, treat_life_lost_as_terminal=True,
+    def __init__(self, game, rom_filename, seed=None, plot=False, n_last_screens=4,
+                 frame_skip=4,
+                 treat_life_lost_as_terminal_in_train=True,
+                 treat_life_lost_as_terminal_in_test=False,
                  crop_or_scale='scale', img_width=84, img_height=84,
                  max_start_nullops=30,
                  record_screen_dir=None,
@@ -24,7 +27,9 @@ class AtariEnv(Env,Shareable,Picklable):
         self.init_params = locals()
         self.init_params.pop('self')
         self.n_last_screens = n_last_screens
-        self.treat_life_lost_as_terminal = treat_life_lost_as_terminal
+        self.treat_life_lost_as_terminal_in_train = treat_life_lost_as_terminal_in_train
+        self.treat_life_lost_as_terminal = treat_life_lost_as_terminal_in_train
+        self.treat_life_lost_as_terminal_in_test = treat_life_lost_as_terminal_in_test
         self.crop_or_scale = crop_or_scale
         self.max_start_nullops = max_start_nullops
         self.img_width = img_width # useless for now
@@ -34,7 +39,10 @@ class AtariEnv(Env,Shareable,Picklable):
         self.seed = seed
         self.record_screen_dir = record_screen_dir
         self.plot = plot
-        self.rom_filename = rom_filename
+        if rom_filename == "":
+            self.rom_filename = atari_py.get_game_path(game)
+        else:
+            self.rom_filename = rom_filename
         self.frame_skip = frame_skip
         self.phase = phase
         self.initial_manual_activation = initial_manual_activation
@@ -161,10 +169,15 @@ class AtariEnv(Env,Shareable,Picklable):
 
     @property
     def is_terminal(self):
-        if self.treat_life_lost_as_terminal:
-            return self.lives_lost or self.ale.game_over()
+        if self.treat_life_lost_as_terminal and self.lives_lost:
+            # print("terminal due to life lost; remaining lives: %d"%(self.lives))
+            return True
+        elif self.ale.game_over():
+            # print("terminate due to game over")
+            # print("remaining lives: %d"%(self.lives))
+            return True
         else:
-            return self.ale.game_over()
+            return False
 
     @property
     def reward(self):
@@ -176,9 +189,9 @@ class AtariEnv(Env,Shareable,Picklable):
 
     def receive_action(self, action):
         if self.phase == "Train":
-            self.treat_life_lost_as_terminal = True
+            self.treat_life_lost_as_terminal = self.treat_life_lost_as_terminal_in_train
         else:
-            self.treat_life_lost_as_terminal = False
+            self.treat_life_lost_as_terminal = self.treat_life_lost_as_terminal_in_test
 
         assert not self.is_terminal
 

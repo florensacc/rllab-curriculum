@@ -16,15 +16,21 @@ def init_all_output_file(output_dir, adv_name, algo_param_names, batch_size, \
     f['adv_type'] = adv_name
     f['algo_param_names'] = ';'.join(algo_param_names)
     f['batch_size'] = batch_size
-    f.create_group("results")
+    f.create_group('results')
     f.close()
 
     return output_h5
 
+def get_param_names(output_h5):
+    f = h5py.File(output_h5, 'r')
+    param_names = f['algo_param_names'][()].split(';')
+    f.close()
+    return param_names
+
 def save_performance_to_all(output_h5, avg_return, adv_params, n_paths):
     f = h5py.File(output_h5, 'r+')
     algo_param_names = f['algo_param_names'][()].split(';')
-    g = f
+    g = f['results']
     for p in algo_param_names:
         if str(adv_params[p]) not in g:
             g.create_group(str(adv_params[p]))
@@ -68,3 +74,16 @@ def save_video_file(output_h5, video_file):
     f = h5py.File(output_h5, 'r+')
     f['rollouts_video'] = video_file
     f.close()
+
+def get_all_result_paths(h5_file, result_key):
+    f = h5py.File(h5_file, 'r')
+    return get_all_result_paths_from(f['results'], result_key)
+
+def get_all_result_paths_from(g, result_key):
+    if result_key in g:
+        return [g.name]
+    result_paths = []
+    for k in g:
+        result_paths += get_all_result_paths_from(g[k], result_key)
+    return result_paths
+

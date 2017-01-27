@@ -115,7 +115,22 @@ class MultiGoalEnv(Env, Serializable):
         reward -= action_cost
 
         self.observation = np.copy(next_obs)
-        return next_obs, reward, done, {}
+        return next_obs, reward, done, {'pos': next_obs}
+
+    def set_axis(self, ax):
+        ax.set_aspect('equal', adjustable='box')
+        ax.set_xlim(self.xlim)
+        ax.set_ylim(self.ylim)
+        ax.grid(True)
+        #ax.plot(self._goal_pos[0], self._goal_pos[1], 'xk', mew=8, ms=16)
+        self.plot_position_cost(ax)
+
+    def plot_path(self, env_info_list, ax, style='b'):
+        path = np.concatenate([i['pos'][None] for i in env_info_list], axis=0)
+        xx = path[:, 0]
+        yy = path[:, 1]
+        line, = ax.plot(xx, yy, style)
+        return line
 
     def compute_reward(self, observation, action):
         # penalize the L2 norm of acceleration

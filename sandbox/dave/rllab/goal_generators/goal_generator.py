@@ -84,18 +84,18 @@ class ListGoalGenerator(GoalGenerator):
 
 class CrownGoalGenerator(GoalGenerator):
     """ Generate a goal from within a Crown normal to the z axis """
-    def __init__(self, center, radius_low, radius_high, shape=None, max_episodes_with_goal=1):
+    def __init__(self, radius_low, radius_high, shape=None, max_episodes_with_goal=1):
         """ Initialize the bounds of the crown """
-        self.crown = Crown(center, radius_low, radius_high, shape)
+        self.crown = Crown(radius_low, radius_high, shape)
         #print "Box init: " + str(self.box.low) + " " + str(self.box.high)
 
         #self.max_episodes_with_goal = max_episodes_with_goal
         super(CrownGoalGenerator, self).__init__()
         #print "Box init2: " + str(self.box.low) + " " + str(self.box.high)
 
-    def generate_goal(self, obs):
+    def generate_goal(self, center):
         # Generate a goal randomly from a box
-        self.goal = self.crown.sample()
+        self.goal = self.crown.sample(center)
 
         # if self.episodes_with_goal < self.max_episodes_with_goal and self.goal is not None:
         #     self.episodes_with_goal += 1

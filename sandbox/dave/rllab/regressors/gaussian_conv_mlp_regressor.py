@@ -81,8 +81,8 @@ class GaussianConvMLPRegressor(LasagnePowered, Serializable):
         self.output_dim = output_dim
         l_input = L.InputLayer(shape=(None,input_shape[0]), name="input_layer")
         if mean_network is None:
-            l_obs_robot = CropLayer(l_input, start_index=None, end_index=23)
-            l_image = CropLayer(l_input, start_index=23, end_index=None)
+            l_obs_robot = CropLayer(l_input, start_index=None, end_index=20)
+            l_image = CropLayer(l_input, start_index=20, end_index=None)
             l_image = L.ReshapeLayer(l_image, (-1, 3, 99, 99))
             conv_network = VanillaConvNet(input_layer=l_image)
             l_conv_out = conv_network.output_layer

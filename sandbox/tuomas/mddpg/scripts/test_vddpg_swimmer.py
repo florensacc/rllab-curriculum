@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+import os
 import pickle
 from matplotlib.backends.backend_pdf import PdfPages
 
@@ -9,13 +10,15 @@ from rllab.exploration_strategies.ou_strategy import OUStrategy
 
 
 from sandbox.tuomas.mddpg.policies.stochastic_policy import \
-    DummyExplorationStrategy
+    DummyExplorationStrategy, StochasticPolicyMaximizer
 
 from sandbox.tuomas.mddpg.critics.gaussian_critic import MixtureGaussian2DCritic
 
 #from sandbox.tuomas.mddpg.algos.vddpg import VDDPG
 from rllab.misc.overrides import overrides
 import matplotlib.pyplot as plt
+# plt.switch_backend('TkAgg')
+# plt.switch_backend('Agg')
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -47,7 +50,8 @@ class AlgTest(Alg):
     def __init__(self, *args, **kwargs):
         super(AlgTest, self).__init__(*args, **kwargs)
 
-        self.lim = 2.
+        self.lim_a = 2.
+        self.lim_xy = 5
         self.plots_initialized = False
         self.eval_counter = 0
         self.n_training_paths = 10
@@ -64,7 +68,7 @@ class AlgTest(Alg):
         self._init_plots()
 
     def eval_critic(self, o):
-        xx = np.arange(-self.lim, self.lim, 0.05)
+        xx = np.arange(-self.lim_a, self.lim_a, 0.05)
         X, Y = np.meshgrid(xx, xx)
         all_actions = np.vstack([X.ravel(), Y.ravel()]).transpose()
         obs = np.array([o] * all_actions.shape[0])
@@ -112,17 +116,17 @@ class AlgTest(Alg):
             ax = self._critic_fig.add_subplot(100 + n_plots * 10 + i + 1)
             self.ax_critics.append(ax)
             plt.axis('equal')
-            ax.set_xlim((-self.lim, self.lim))
-            ax.set_ylim((-self.lim, self.lim))
+            ax.set_xlim((-self.lim_a, self.lim_a))
+            ax.set_ylim((-self.lim_a, self.lim_a))
 
         # Setup actor plots
-        fig = plt.figure(figsize=(7, 7))
-        self.ax_paths = fig.add_subplot(111)
+        self._actor_fig = plt.figure(figsize=(7, 7))
+        self.ax_paths = self._actor_fig.add_subplot(111)
         #env.plot_env(self.ax_paths)
         plt.axis('equal')
         self.ax_paths.grid(True)
-        self.ax_paths.set_xlim((-1., 1.))
-        self.ax_paths.set_ylim((-1., 1.))
+        self.ax_paths.set_xlim((-self.lim_xy, self.lim_xy))
+        self.ax_paths.set_ylim((-self.lim_xy, self.lim_xy))
 
         self.h_training_paths = []
         self.h_test_paths = []
@@ -131,73 +135,74 @@ class AlgTest(Alg):
         for i in range(self.n_test_paths):
             self.h_test_paths += self.ax_paths.plot([], [], 'b')
 
-    @overrides
-    def evaluate(self, epoch, es_path_returns):
-        self.eval_counter += 1
+    if __name__ == '__main__':
+        @overrides
+        def evaluate(self, epoch, es_path_returns):
+            self.eval_counter += 1
 
 
-        env = self.env
-        while isinstance(env, ProxyEnv):
-            env = env.wrapped_env
+            env = self.env
+            while isinstance(env, ProxyEnv):
+                env = env.wrapped_env
+
+            for i in range(self.n_test_paths):
+                line = self.h_test_paths[self.test_path_counter % self.n_test_paths]
+                com = self.rollout()
+                line.set_data(np.transpose(com[:, :2]))
+                self.test_path_counter += 1
 
 
-        for i in range(self.n_test_paths):
-            line = self.h_test_paths[self.test_path_counter % self.n_test_paths]
-            com = self.rollout()
-            line.set_data(np.transpose(com[:, :2]))
-            self.test_path_counter += 1
+            plt.draw()
+            plt.pause(0.001)
+
+            ## Create a test actor that approximately maximizes the Q value
+            #eval_actor = StochasticPolicyMaximizer(
+            #    N=100,
+            #    actor=self.policy,
+            #    critic=self.qf,
+            #)
+
+            for ax_critic, qpos in zip(self.ax_critics, self.qpos_list):
+                env.reset_mujoco()
+                obs = env.get_current_obs()
+
+                X, Y, Q = self.eval_critic(obs)
+
+                ax_critic.clear()
+                cs = ax_critic.contour(X, Y, Q, 20)
+
+                ax_critic.clabel(cs, inline=1, fontsize=10, fmt='%.0f')
+
+                # sample and plot actions
+                N = FLAGS.n_particles
+                all_obs = np.array([obs] * N)
+                all_actions = self.policy.get_actions(all_obs)[0]
+                #print(all_actions)h_test_paths
+
+                x = all_actions[:, 0]
+                y = all_actions[:, 1]
+                ax_critic.plot(x, y, '*')
+
+                # Plot eval_actor
+                max_action = self.eval_policy.get_action(obs)
+                ax_critic.plot(max_action[0], max_action[1], '*r')
+
+            plt.draw()
+            plt.pause(0.001)
+
+            # Save plots
+            if FLAGS.save_path != '':
+                filename = lambda plot_name: (os.path.join(
+                    FLAGS.save_path,
+                    'exp001_' + plot_name + '_iter' +
+                    str(self.eval_counter).zfill(6) + '.png'
+                ))
+
+                self._critic_fig.savefig(filename('q'))
+                self._actor_fig.savefig(filename('trajs'))
 
 
-        plt.draw()
-        plt.pause(0.001)
 
-        for ax_critic, qpos in zip(self.ax_critics, self.qpos_list):
-            env.reset_mujoco()
-            obs = env.get_current_obs()
-
-            X, Y, Q = self.eval_critic(obs)
-
-            ax_critic.clear()
-            cs = ax_critic.contour(X, Y, Q, 20)
-
-            ax_critic.clabel(cs, inline=1, fontsize=10, fmt='%.0f')
-
-            # sample and plot actions
-            N = FLAGS.n_particles
-            all_obs = np.array([obs] * N)
-            all_actions = self.policy.get_actions(all_obs)[0]
-            #print(all_actions)h_test_paths
-
-            x = all_actions[:, 0]
-            y = all_actions[:, 1]
-            ax_critic.plot(x, y, '*')
-
-        plt.draw()
-        plt.pause(0.001)
-
-        # Do one rollout.
-        #return # Don't do
-
-        #if self.eval_counter % 10 == 0:
-        #    env.reset_mujoco()
-        #    o = env.reset()
-        #    for _ in range(100):
-        #        a, _ = self.policy.get_action(o)
-        #        o, r, d, _ = self.env.step(a)
-        #        self.env.render()
-        #        if d:
-        #            break
-        #        plt.pause(0.001)
-
-        #    import pdb; pdb.set_trace()
-
-            #print(a)
-
-        ## TODO: hacky way to check if this is VDDPG instance without loading
-        ## VDDPG class.
-        #if hasattr(self, 'alpha'):
-        #    if self.eval_counter % 50 == 0:
-        #        self.alpha /= 3
 
 # -------------------------------------------------------------------
 def test():
@@ -212,7 +217,7 @@ def test():
 
 
     alg_kwargs = dict(
-        epoch_length=100,  # evaluate / plot per SVGD step
+        epoch_length=1 * FLAGS.path_length,  # evaluate / plot per SVGD step
         min_pool_size=1000,  # must be at least 2
         #replay_pool_size=2,  # should only sample from recent experiences,
                         # note that the sample drawn can be one iteration older
@@ -252,17 +257,23 @@ def test():
             train_critic=True,
             q_target_type='max',
             K=FLAGS.n_particles,
-            alpha=100.,
+            alpha=30,#100.,
         ))
 
     # ----------------------------------------------------------------------
-    env = TfEnv(normalize(
-        SwimmerUndirectedEnv(random_init_state=False),
-        clip=False
-    ))
+    env = TfEnv(
+        normalize(
+            SwimmerUndirectedEnv(
+                random_init_state=False,
+                motion_reward=True,
+                visitation_reward=False,
+            ),
+            clip=False
+        )
+    )
 
-    #es = DummyExplorationStrategy()
-    es = OUStrategy(env_spec=env.spec, mu=0, theta=0.15, sigma=0.03, clip=False)
+    es = DummyExplorationStrategy()
+    #es = OUStrategy(env_spec=env.spec, mu=0, theta=0.15, sigma=0.03, clip=False)
     #es = OUStrategy(env_spec=env.spec, mu=0, theta=0.15, sigma=0.3, clip=False)
 
     qf = FeedForwardCritic(
@@ -290,6 +301,15 @@ def test():
         **policy_kwargs,
     )
 
+    if FLAGS.policy == 'stochastic':
+        eval_policy = StochasticPolicyMaximizer(
+                N=100,
+                actor=policy,
+                critic=qf,
+        )
+    else:
+        eval_policy = None
+
     kernel = SimpleAdaptiveDiagonalGaussianKernel(
         "kernel",
         dim=env.action_space.flat_dim,
@@ -305,6 +325,7 @@ def test():
         env=env,
         exploration_strategy=es,
         policy=policy,
+        eval_policy=eval_policy,
         qf=qf,
         **alg_kwargs
     )

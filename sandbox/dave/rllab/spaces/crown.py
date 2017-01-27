@@ -11,16 +11,17 @@ class Crown(Space):
     I.e., each coordinate is bounded.
     """
 
-    def __init__(self, center, radius_low, radius_high, shape=None):
-        assert center.shape == (3,) and np.isscalar(radius_low) and np.isscalar(radius_high)
-        self.center = center
+    def __init__(self, radius_low, radius_high, shape=None):
+        assert np.isscalar(radius_low) and np.isscalar(radius_high)
         self.radius_low = radius_low
         self.radius_high = radius_high
 
-    def sample(self):
+    def sample(self, center):
+        self.center = center
+        assert center.shape == (3,)
         angle = np.random.uniform(low=0, high=2*np.pi)
         radius = np.random.uniform(low=self.radius_low, high=self.radius_high)
-        return self.center + radius * np.array([np.cos(angle), np.sin(angle), 0])
+        return center + radius * np.array([np.cos(angle), np.sin(angle), 0])
 
     def contains(self, x):
         return x.shape == self.shape and (np.linalg.norm(x - self.center) >= self.radius_low) \

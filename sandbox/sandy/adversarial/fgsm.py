@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
 import argparse
-import chainer
-from chainer import functions as F
 import numpy as np
 
 from sandbox.sandy.adversarial.io_util import init_output_file, save_rollout_step
@@ -29,7 +27,10 @@ def fgsm_perturbation_linf(grad_x, fgsm_eps):
     return fgsm_eps * sign_grad_x, sign_grad_x
 
 def fgsm_perturbation_l2(grad_x, fgsm_eps):
-    grad_x_unit = grad_x / np.linalg.norm(grad_x)
+    if np.linalg.norm(grad_x) > 0:
+        grad_x_unit = grad_x / np.linalg.norm(grad_x)
+    else:
+        grad_x_unit = grad_x
     scaled_fgsm_eps = fgsm_eps * np.sqrt(grad_x.size)
     return scaled_fgsm_eps * grad_x_unit, grad_x_unit
 
@@ -52,12 +53,14 @@ def fgsm_perturbation_l1(grad_x, fgsm_eps, obs, obs_min, obs_max):
             eta[idx] = np.sign(eta[idx]) * budget
         budget -= abs(eta[idx])
 
-    if budget > 0:
-        print("WARNING: L1 budget not completely used - epsilon larger than necessary")
+    #if budget > 0:
+        #print("WARNING: L1 budget not completely used - epsilon larger than necessary")
     eta = eta.reshape(grad_x.shape, order='C')
     return eta, np.sign(eta)
 
 def get_grad_x_a3c(obs, algo):
+    import chainer
+    from chainer import functions as F
     statevar = chainer.Variable(np.expand_dims(algo.cur_agent.preprocess(obs), 0))
     logits = algo.cur_agent.model.pi.compute_logits(algo.cur_agent.model.head(statevar))
     max_logits = F.broadcast_to(F.max(logits), (1,len(logits)))
@@ -66,12 +69,28 @@ def get_grad_x_a3c(obs, algo):
     ce_loss = -1 * F.log(1.0 / F.sum(F.exp(logits - max_logits)))
     ce_loss.backward(retain_grad=True)
     grad_x = statevar.grad[0]
+    # For debugging:
+    #print("A3C:", abs(grad_x).max(), abs(grad_x).sum() / grad_x.size, ce_loss.data)
     return grad_x
+
+def get_grad_x_dqn(obs, algo):
+    # Note: assumes epsilon = 0 (i.e., never chooses random action)
+    grad_x = algo.agent.network.f_obs_grad(obs[np.newaxis,...])
+
+    #obs_rand = np.random.rand(*obs.shape)
+    #ce_loss_x = algo.agent.network.f_obs_ce_loss(obs[np.newaxis,...])
+    #print("DQN:", abs(grad_x[0]).max(), abs(grad_x[0]).sum()/grad_x.size, ce_loss_x)
+    return grad_x[0]  # from (1,n_frames,img_size,img_size) to (n_frames,img_size,img_size)
 
 def get_grad_x_trpo(obs, algo):
     flat_obs = algo.policy.observation_space.flatten(obs)[np.newaxis,:]
     grad_x = algo.optimizer._opt_fun["f_obs_grad"](flat_obs)[0,:]
     grad_x = algo.policy.observation_space.unflatten(grad_x)
+    # For debugging:
+    #dist_info = algo.policy.dist_info(flat_obs)['prob']
+    #assert(abs(abs(dist_info).sum() - 1) < 1e-5), dist_info.sum()
+    #ce_loss_x = algo.optimizer._opt_fun["f_obs_ce_loss"](flat_obs)
+    #print("TRPO:", abs(grad_x).max(), abs(grad_x).sum() / grad_x.size, ce_loss_x)
     return grad_x
 
 def fgsm_perturbation(obs, algo, **kwargs):
@@ -102,6 +121,8 @@ def fgsm_perturbation(obs, algo, **kwargs):
         grad_x = get_grad_x_trpo(obs, algo)
     elif algo_name in ['A3CALE']:
         grad_x = get_grad_x_a3c(obs, algo)
+    elif algo_name in ['DQNAlgo']:
+        grad_x = get_grad_x_dqn(obs, algo)
     else:
         assert False, "Algorithm type " + algo_name + " is not supported."
     grad_x_current = grad_x[-1,:,:]

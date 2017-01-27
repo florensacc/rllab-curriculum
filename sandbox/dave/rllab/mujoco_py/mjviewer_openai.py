@@ -8,6 +8,7 @@ from rllab.mujoco_py import mjcore, mjconstants, glfw
 from rllab.mujoco_py.mjlib import mjlib
 import numpy as np
 import OpenGL.GL as gl
+import OpenGL.GLU as glu
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +20,8 @@ def _glfw_error_callback(e, d):
 
 
 class MjViewer(object):
+    def __init__(self, visible=True, init_width=499, init_height=499, go_fast=True, is_bot=False):
 
-    def __init__(self, visible=True, init_width=500, init_height=500, go_fast=True, is_bot=False):
         """
         Set go_fast=True to run at full speed instead of waiting for the 60 Hz monitor refresh
         init_width and init_height set window size. On Mac Retina displays, they are in nominal
@@ -103,7 +104,6 @@ class MjViewer(object):
         mjlib.mjv_setCamera(self.model.ptr, self.data.ptr, byref(self.cam))
 
         mjlib.mjv_updateCameraPose(byref(self.cam), rect.width*1.0/rect.height)
-
         mjlib.mjr_render(0, rect, byref(self.objects), byref(self.ropt), byref(self.cam.pose), byref(self.con))
 
         if self.is_bot:
@@ -117,8 +117,8 @@ class MjViewer(object):
         """
         returns a tuple (width, height)
         """
-        if self.window:
-            return glfw.get_framebuffer_size(self.window)
+        # if self.window:
+        #     return glfw.get_framebuffer_size(self.window)
         return (self.init_width, self.init_height)
 
     def get_image(self):
@@ -132,19 +132,31 @@ class MjViewer(object):
         glfw.make_context_current(self.window)
         width, height = self.get_dimensions()
         gl.glReadBuffer(gl.GL_BACK)
-        data = gl.glReadPixels(0, 0, width, height, gl.GL_RGB, gl.GL_UNSIGNED_BYTE)
+        data = gl.glReadPixels(0, 0, width, height, gl.GL_RGB, gl.GL_UNSIGNED_SHORT)
         return (data, width, height)
 
     def get_depth_map(self):
         glfw.make_context_current(self.window)
         rect = self.get_rect()
         gl.glReadBuffer(gl.GL_BACK)
-        depth = gl.glReadPixels(0, 0, rect.height, rect.width, gl.GL_DEPTH_COMPONENT, gl.GL_FLOAT)
-        depth_rgb = np.tile(255 * depth, (3, 1, 1)).transpose([1, 2, 0])
+        depth = gl.glReadPixels(0, 0, rect.height, rect.width, gl.GL_DEPTH_COMPONENT, gl.GL_UNSIGNED_SHORT)
+        depth_rgb = np.tile(depth/65535, (3, 1, 1))
         # depth_rgb = np.zeros((rect.height//3, rect.width//3, 3))
         # depth_rgb[:,:,0] = depth_rgb[:,:,1] = depth_rgb[:,:,2] = misc.imresize(depth, (rect.height//3, rect.width//3))
         # gl.glDrawPixels(rect.height//3, rect.width//3, gl.GL_RGB, gl.GL_UNSIGNED_BYTE, depth_rgb)
         return depth_rgb
+
+    def get_3D(self, r, c, z):
+        modelview = gl.glGetDoublev(gl.GL_MODELVIEW_MATRIX)
+        projection = gl.glGetDoublev(gl.GL_PROJECTION_MATRIX)
+        view = gl.glGetIntegerv(gl.GL_VIEWPORT)
+        Vx, Vy, Vz = view[2], view[3], 1
+        x0, y0 = view[0], view[1]
+        clip_x, clip_y, clip_z = 2*(c-x0)/Vx - 1, 2*(r-y0)/Vy - 1, 2*z/Vz-1
+        PVM = np.dot(projection.T, modelview.T)
+        pos = np.array([clip_x, clip_y, clip_z, 1])
+        world_pos = np.dot(np.linalg.inv(PVM), pos)
+        return world_pos[:3]/world_pos[3]
 
     def _init_framebuffer_object(self):
         """
@@ -180,7 +192,6 @@ class MjViewer(object):
         logger.info('initializing glfw@%s', glfw.get_version())
 
         glfw.set_error_callback(_glfw_error_callback)
-
         if not glfw.init():
             raise Exception('glfw failed to initialize')
 

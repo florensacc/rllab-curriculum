@@ -223,7 +223,7 @@ class AlexNet(object):
 
 
 class VanillaConvNet(object):
-    def __init__(self, input_layer=None):
+    def __init__(self, input_layer):
         net = {}
         # if input_layer is None:
         net['data'] = input_layer

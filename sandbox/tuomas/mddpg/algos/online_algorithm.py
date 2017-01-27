@@ -10,12 +10,14 @@ import tensorflow as tf
 from collections import OrderedDict
 
 from sandbox.haoran.mddpg.misc.simple_replay_pool import SimpleReplayPool
+
 from rllab.algos.base import RLAlgorithm
 from rllab.misc import logger
 from rllab.misc.overrides import overrides
 from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 from sandbox.rocky.tf.samplers.vectorized_sampler import VectorizedSampler
 from sandbox.haoran.myscripts import tf_utils
+from rllab.envs.proxy_env import ProxyEnv
 
 
 class OnlineAlgorithm(RLAlgorithm):
@@ -28,6 +30,7 @@ class OnlineAlgorithm(RLAlgorithm):
             env,
             policy,
             exploration_strategy,
+            eval_policy=None,
             batch_size=64,
             start_epoch=0,
             n_epochs=1000,
@@ -41,7 +44,7 @@ class OnlineAlgorithm(RLAlgorithm):
             scale_reward=1.,
             scale_reward_annealer=None,
             render=False,
-            epoch_full_paths=False,
+            epoch_full_paths=False,  # TH: I'm good without this. Remove?
     ):
         """
         :param env: Environment
@@ -63,6 +66,7 @@ class OnlineAlgorithm(RLAlgorithm):
         assert min_pool_size >= 2
         self.env = env
         self.policy = policy
+        self.eval_policy = eval_policy
         self.exploration_strategy = exploration_strategy
         self.replay_pool_size = replay_pool_size
         self.batch_size = batch_size
@@ -81,15 +85,25 @@ class OnlineAlgorithm(RLAlgorithm):
 
         self.observation_dim = self.env.observation_space.flat_dim
         self.action_dim = self.env.action_space.flat_dim
-        self.rewards_placeholder = tf.placeholder(tf.float32,
-                                                  shape=[None, 1],
-                                                  name='rewards')
+        base_env = self.env
+        while isinstance(base_env, ProxyEnv):
+            base_env = base_env.wrapped_env
+        if hasattr(base_env, 'reward_dim'):
+            self.reward_dim = base_env.reward_dim
+        else:
+            self.reward_dim = 1
+        self.rewards_placeholder = tf.placeholder(
+            tf.float32,
+            shape=[None, self.reward_dim],
+            name='rewards'
+        )
         self.terminals_placeholder = tf.placeholder(tf.float32,
                                                     shape=[None, 1],
                                                     name='terminals')
         self.pool = SimpleReplayPool(self.replay_pool_size,
                                      self.observation_dim,
-                                     self.action_dim)
+                                     self.action_dim,
+                                     reward_dim=self.reward_dim)
         self.last_statistics = OrderedDict()
         self.sess = tf.get_default_session() or tf_utils.create_session()
         with self.sess.as_default():
@@ -106,7 +120,7 @@ class OnlineAlgorithm(RLAlgorithm):
         self.whole_paths = True
 
     def _start_worker(self):
-        self.eval_sampler.start_worker()
+        self.eval_sampler.start_worker(self.eval_policy)
 
     @overrides
     def train(self):
@@ -115,6 +129,7 @@ class OnlineAlgorithm(RLAlgorithm):
             self._start_worker()
 
             observation = self.env.reset()
+            self.policy.reset()
             self.exploration_strategy.reset()
             itr = 0
             path_length = 0
@@ -153,11 +168,6 @@ class OnlineAlgorithm(RLAlgorithm):
                     path_return += reward
                     gt.stamp('train: sampling')
 
-                    self.plot_path(rewards=raw_reward,
-                                   obs=observation,
-                                   actions=action,
-                                   info=info)
-
                     # add experience to replay pool
                     self.pool.add_sample(observation,
                                          action,
@@ -172,14 +182,9 @@ class OnlineAlgorithm(RLAlgorithm):
                                              np.zeros_like(reward),
                                              np.zeros_like(terminal),
                                              True)
-                        #self.db.flush()
-                        self.plot_path(rewards=raw_reward,
-                                       obs=observation,
-                                       actions=action,
-                                       info=info,
-                                       flush=True)
 
                         observation = self.env.reset()
+                        self.policy.reset()
                         self.exploration_strategy.reset()
                         self.es_path_returns.append(path_return)
                         self.es_path_lengths.append(path_length)
@@ -187,6 +192,8 @@ class OnlineAlgorithm(RLAlgorithm):
                         path_return = 0
                     else:
                         observation = next_ob
+
+                    self.process_env_info(info=info, flush=should_reset)
                     gt.stamp('train: fill replay pool')
 
                     # train
@@ -308,14 +315,10 @@ class OnlineAlgorithm(RLAlgorithm):
         return
 
     @abc.abstractmethod
-    def plot_path(self, rewards=None, terminals=None, obs=None, actions=None,
-                  next_obs=None, flush=False, info=None):
+    def process_env_info(self, info, flush):
         """
         Plot training data or apply other postprocessing steps. Called after
         drawing a new training sample.
-        :param flush: True if the current sample is the last for the current
-            trajectory (either reached terminal state or max path length).
-        :return:
         """
         return
 
