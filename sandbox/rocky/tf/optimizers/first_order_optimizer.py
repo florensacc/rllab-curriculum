@@ -4,6 +4,7 @@
 from rllab.misc import ext
 from rllab.misc import logger
 from rllab.core.serializable import Serializable
+from rllab.misc.ext import sliced_fun
 from sandbox.rocky.tf.misc import tensor_utils
 # from rllab.algo.first_order_method import parse_update_method
 from rllab.optimizers.minibatch_dataset import BatchDataset
@@ -25,10 +26,13 @@ class FirstOrderOptimizer(Serializable):
             tf_optimizer_args=None,
             # learning_rate=1e-3,
             max_epochs=1000,
+            max_updates=None,
             tolerance=1e-6,
             batch_size=32,
             callback=None,
             verbose=False,
+            n_slices=1,
+            n_passes_per_epoch=1,
             **kwargs):
         """
 
@@ -50,11 +54,14 @@ class FirstOrderOptimizer(Serializable):
             tf_optimizer_args = dict(learning_rate=1e-3)
         self._tf_optimizer = tf_optimizer_cls(**tf_optimizer_args)
         self._max_epochs = max_epochs
+        self._max_updates = max_updates
         self._tolerance = tolerance
         self._batch_size = batch_size
         self._verbose = verbose
         self._input_vars = None
         self._train_op = None
+        self._n_slices = n_slices
+        self._n_passes_per_epoch = n_passes_per_epoch
 
     def update_opt(self, loss, target, inputs, extra_inputs=None, **kwargs):
         """
@@ -82,7 +89,7 @@ class FirstOrderOptimizer(Serializable):
     def loss(self, inputs, extra_inputs=None):
         if extra_inputs is None:
             extra_inputs = tuple()
-        return self._opt_fun["f_loss"](*(tuple(inputs) + extra_inputs))
+        return sliced_fun(self._opt_fun["f_loss"], self._n_slices)(inputs, extra_inputs)
 
     def optimize(self, inputs, extra_inputs=None, callback=None):
 
@@ -90,14 +97,14 @@ class FirstOrderOptimizer(Serializable):
             # Assumes that we should always sample mini-batches
             raise NotImplementedError
 
-        f_loss = self._opt_fun["f_loss"]
-
         if extra_inputs is None:
             extra_inputs = tuple()
 
-        logger.log("Computing loss before")
-        last_loss = f_loss(*(tuple(inputs) + extra_inputs))
-        logger.log("Computed loss before")
+        if self._verbose:
+            logger.log("Computing loss before")
+        last_loss = self.loss(inputs, extra_inputs)
+        if self._verbose:
+            logger.log("Computed loss before")
 
         start_time = time.time()
 
@@ -105,21 +112,27 @@ class FirstOrderOptimizer(Serializable):
 
         sess = tf.get_default_session()
 
+        n_updates = 0
+
         for epoch in range(self._max_epochs):
             if self._verbose:
                 logger.log("Epoch %d" % (epoch))
-                progbar = pyprind.ProgBar(len(inputs[0]))
+                progbar = pyprind.ProgBar(len(inputs[0]) * self._n_passes_per_epoch)
 
-            for batch in dataset.iterate(update=True):
-                sess.run(self._train_op, dict(list(zip(self._input_vars, batch))))
-                if self._verbose:
-                    progbar.update(len(batch[0]))
+            for _ in range(self._n_passes_per_epoch):
+                for batch in dataset.iterate(update=True):
+                    sess.run(self._train_op, dict(list(zip(self._input_vars, batch))))
+                    n_updates += 1
+                    if self._verbose:
+                        progbar.update(len(batch[0]))
+                    if self._max_updates is not None and n_updates >= self._max_updates:
+                        break
 
             if self._verbose:
                 if progbar.active:
                     progbar.stop()
 
-            new_loss = f_loss(*(tuple(inputs) + extra_inputs))
+            new_loss = self.loss(inputs, extra_inputs)
 
             if self._verbose:
                 logger.log("Epoch: %d | Loss: %f" % (epoch, new_loss))
@@ -139,3 +152,6 @@ class FirstOrderOptimizer(Serializable):
             if self._tolerance is not None and abs(last_loss - new_loss) < self._tolerance:
                 break
             last_loss = new_loss
+
+            if self._max_updates is not None and n_updates >= self._max_updates:
+                break

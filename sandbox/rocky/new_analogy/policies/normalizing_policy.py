@@ -12,22 +12,25 @@ class NormalizingPolicy(Policy, Serializable):
         self.obs_dim = wrapped_policy.observation_space.flat_dim
         self.action_dim = wrapped_policy.action_space.flat_dim
 
-        obs = np.concatenate([p["observations"] for p in paths], axis=0)
-        actions = np.concatenate([p["actions"] for p in paths], axis=0)
+        if paths is not None:
+            obs = np.concatenate([p["observations"] for p in paths], axis=0)
+            actions = np.concatenate([p["actions"] for p in paths], axis=0)
 
-        if normalize_obs:
-            obs_mean = np.mean(obs, axis=0, keepdims=True)
-            obs_std = np.std(obs, axis=0, keepdims=True) + 1e-5
-        else:
-            obs_mean = np.zeros_like(obs[0])
-            obs_std = np.ones_like(obs[0])
+        if obs_mean is None:
+            if normalize_obs:
+                obs_mean = np.mean(obs, axis=0, keepdims=True)
+                obs_std = np.std(obs, axis=0, keepdims=True) + 1e-5
+            else:
+                obs_mean = np.zeros(self.obs_dim)
+                obs_std = np.ones(self.obs_dim)
 
-        if normalize_actions:
-            action_mean = np.mean(actions, axis=0, keepdims=True)
-            action_std = np.std(actions, axis=0, keepdims=True) + 1e-5
-        else:
-            action_mean = np.zeros_like(actions[0])
-            action_std = np.ones_like(actions[0])
+        if action_mean is None:
+            if normalize_actions:
+                action_mean = np.mean(actions, axis=0, keepdims=True)
+                action_std = np.std(actions, axis=0, keepdims=True) + 1e-5
+            else:
+                action_mean = np.zeros(self.action_dim)
+                action_std = np.ones(self.action_dim)
 
         self.obs_mean = obs_mean
         self.obs_std = obs_std
@@ -45,7 +48,7 @@ class NormalizingPolicy(Policy, Serializable):
 
         Policy.__init__(self, self.wrapped_policy.env_spec)
 
-    def dist_info_sym(self, obs_var, state_info_vars, **kwargs):
+    def dist_info_sym(self, obs_var, state_info_vars=None, **kwargs):
         norm_obs_var = (obs_var - self.obs_mean_var) / self.obs_std_var
         dist_info = self.wrapped_policy.dist_info_sym(
             norm_obs_var, state_info_vars=state_info_vars,

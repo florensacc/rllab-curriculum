@@ -5,6 +5,7 @@ import tensorflow as tf
 
 from rllab.envs.base import Env
 from sandbox.rocky.neural_learner.optimizers.tbptt_optimizer import TBPTTOptimizer
+from sandbox.rocky.new_analogy.policies.deterministic_policy import DeterministicPolicy
 from sandbox.rocky.tf.misc import tensor_utils
 from sandbox.rocky.tf.samplers.vectorized_sampler import VectorizedSampler
 import numpy as np

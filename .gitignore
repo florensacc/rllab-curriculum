@@ -54,3 +54,6 @@ conopt
 conopt_root
 sandbox/michael/tracking_data
 *.npy.z
+gpr_package
+gpr_root
+_pyxbld

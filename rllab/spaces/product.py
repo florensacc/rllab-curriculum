@@ -56,6 +56,10 @@ class Product(Space):
         unflat_xs_grouped = list(zip(*unflat_xs))
         return unflat_xs_grouped
 
+    @property
+    def default_value(self):
+        return tuple([x.default_value for x in self.components])
+
     def __eq__(self, other):
         if not isinstance(other, Product):
             return False

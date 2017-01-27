@@ -5,6 +5,7 @@ channels:
     - https://conda.anaconda.org/cjs14
     - https://conda.anaconda.org/menpo
     - jjhelmus
+    - soumith
 dependencies:
     - python==3.5.2
     - numpy==1.11.2
@@ -22,6 +23,8 @@ dependencies:
     - matplotlib
     - opencv3=3.1.0
     - scikit-learn
+    - pytorch
+    - torchvision
     - pip:
         - Pillow
         - atari-py

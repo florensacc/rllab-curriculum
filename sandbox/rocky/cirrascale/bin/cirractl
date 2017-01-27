@@ -75,6 +75,7 @@ def _probe_host(host):
     try:
         pids = subprocess.check_output([
             "ssh",
+            "-oStrictHostKeyChecking=no",
             "-oConnectTimeout=10",
             "rocky@" + host,
             "nvidia-smi --format=csv,noheader --query-compute-apps=pid",
@@ -84,6 +85,7 @@ def _probe_host(host):
             return []
         gpus = subprocess.check_output([
             "ssh",
+            "-oStrictHostKeyChecking=no",
             "-oConnectTimeout=10",
             "rocky@" + host,
             "nvidia-smi --format=csv,noheader --query-gpu=index"
@@ -93,6 +95,7 @@ def _probe_host(host):
             return []
         processes = subprocess.check_output([
             "ssh",
+            "-oStrictHostKeyChecking=no",
             "-oConnectTimeout=10",
             "rocky@" + host,
             "ps aux | grep -e '%s'" % '\|'.join(pids)
@@ -211,7 +214,8 @@ def ssh(job_id):
 
 @cli.command()
 @click.argument('job_id')
-def sim_policy(job_id):
+@click.option('--deterministic', '-d', default=False, help='run policy in deterministic mode')
+def sim_policy(job_id, deterministic):
     import redis
     import json
     import subprocess
@@ -246,7 +250,14 @@ def sim_policy(job_id):
         script = "sandbox/rocky/analogy/scripts/sim_policy.py"
     else:
         script = "scripts/sim_policy.py"
-    subprocess.check_call(["python", os.path.join(config.PROJECT_PATH, script), "/tmp/params.pkl"])
+    command = [
+        "python",
+        os.path.join(config.PROJECT_PATH, script),
+        "/tmp/params.pkl"
+    ]
+    if deterministic:
+        command += ["--deterministic"]
+    subprocess.check_call(command)
 
 
 def _kill_job(args):
@@ -310,6 +321,7 @@ def kill_f(pattern, force):
     with multiprocessing.Pool(100) as pool:
         pool.map(_kill_job, to_kill)
 
+
 @cli.command()
 @click.argument('pattern')
 @click.option('--force', '-f', default=False, help='force removal of the job from redis')
@@ -327,6 +339,7 @@ def kill_variant(pattern, force):
 
     with multiprocessing.Pool(100) as pool:
         pool.map(_kill_job, to_kill)
+
 
 @cli.command()
 @click.argument('job_id')

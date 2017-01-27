@@ -191,7 +191,8 @@ class Trainer(Serializable):
             self,
             env,
             policy,
-            demo_path,
+            demo_path=None,
+            paths=None,
             normalize=True,
             demo_cache_key=None,
             horizon=50,
@@ -205,10 +206,12 @@ class Trainer(Serializable):
             eval_horizon=100,
             gradient_clipping=40,
             task_id_filter=None,
+            threshold=None,
     ):
         Serializable.quick_init(self, locals())
         self.env = env
         self.demo_path = demo_path
+        self.paths = paths
         self.train_ratio = train_ratio
         self.normalize = normalize
         self.demo_cache_key = demo_cache_key
@@ -223,6 +226,7 @@ class Trainer(Serializable):
         self.eval_horizon = eval_horizon
         self.gradient_clipping = gradient_clipping
         self.task_id_filter = task_id_filter
+        self.threshold = threshold
 
     def init_opt(self, env, policy):
         demo_obs_var = env.observation_space.new_tensor_variable(name="demo_obs", extra_dims=2)
@@ -335,28 +339,31 @@ class Trainer(Serializable):
         exp_u = data["exp_u"]
         exp_rewards = data["exp_rewards"]
         exp_task_ids = data["exp_task_ids"]
-        import ipdb; ipdb.set_trace()
         logger.log("Loaded")
         paths = []
         for xs, us, rewards, task_id in zip(exp_x, exp_u, exp_rewards[:, :, 0], exp_task_ids):
             # Filter by performance
-            if rewards[-1] >= 5.3:
-                if self.task_id_filter is None or task_id in self.task_id_filter:
-                    paths.append(
-                        dict(
-                            observations=xs,
-                            actions=us,
-                            rewards=rewards,
-                            env_infos=dict(
-                                task_id=np.asarray([task_id] * len(xs))
-                            )
+            if self.task_id_filter is None or task_id in self.task_id_filter:
+                paths.append(
+                    dict(
+                        observations=xs,
+                        actions=us,
+                        rewards=rewards,
+                        env_infos=dict(
+                            task_id=np.asarray([task_id] * len(xs))
                         )
                     )
+                )
         return np.asarray(paths)
 
     def train(self, sess=None):
 
-        paths = self.collect_demos()
+        if self.paths is None:
+            paths = self.collect_demos()
+        else:
+            paths = self.paths
+        if self.threshold is not None:
+            paths = [p for p in self.paths if p["rewards"][-1] >= self.threshold]
 
         env = self.env
         policy = self.policy

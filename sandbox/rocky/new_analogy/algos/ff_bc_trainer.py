@@ -2,6 +2,7 @@ from rllab.core.serializable import Serializable
 import tensorflow as tf
 
 from rllab.envs.base import Env
+from sandbox.rocky.new_analogy.policies.deterministic_policy import DeterministicPolicy
 from sandbox.rocky.tf.misc import tensor_utils
 from sandbox.rocky.tf.optimizers.first_order_optimizer import FirstOrderOptimizer
 from sandbox.rocky.tf.samplers.vectorized_sampler import VectorizedSampler
@@ -21,6 +22,13 @@ class Trainer(Serializable):
             batch_size=128,
             learning_rate=1e-3,
             evaluate_performance=True,
+            max_path_length=100,
+            n_eval_trajs=100,
+            eval_batch_size=10000,
+            n_eval_envs=100,
+            n_passes_per_epoch=1,
+            n_slices=1,
+            learn_std=False,
     ):
         Serializable.quick_init(self, locals())
         self.env = env
@@ -40,6 +48,13 @@ class Trainer(Serializable):
         self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.evaluate_performance = evaluate_performance
+        self.max_path_length = max_path_length
+        self.n_eval_trajs = n_eval_trajs
+        self.eval_batch_size = eval_batch_size
+        self.n_eval_envs = n_eval_envs
+        self.n_passes_per_epoch = n_passes_per_epoch
+        self.n_slices = n_slices
+        self.learn_std = learn_std
 
     def init_opt(self):
         obs_var = self.env.observation_space.new_tensor_variable(name="obs", extra_dims=1)
@@ -47,9 +62,11 @@ class Trainer(Serializable):
 
         dist_info = self.policy.dist_info_sym(obs_var=obs_var)
 
-        # minimize the M-projection KL divergence
-
-        loss = tf.reduce_mean(tf.square(dist_info["mean"] - action_var))
+        if self.learn_std:
+            loss = tf.reduce_mean(-self.policy.distribution.log_likelihood_sym(action_var, dist_info))
+        else:
+            sqrdiff = tf.square(dist_info["mean"] - action_var)
+            loss = tf.reduce_mean(sqrdiff)
 
         self.optimizer = FirstOrderOptimizer(
             tf_optimizer_cls=tf.train.AdamOptimizer,
@@ -58,6 +75,8 @@ class Trainer(Serializable):
             batch_size=self.batch_size,
             tolerance=None,
             verbose=True,
+            n_passes_per_epoch=self.n_passes_per_epoch,
+            n_slices=self.n_slices,
         )
 
         self.optimizer.update_opt(loss=loss, target=self.policy, inputs=[obs_var, action_var])
@@ -75,15 +94,21 @@ class Trainer(Serializable):
         tensor_utils.initialize_new_variables(sess=sess)
 
         if self.evaluate_performance:
-            sampler = VectorizedSampler(
-                env=self.env,
-                policy=self.policy,
-                n_envs=100
-            )
+            if self.learn_std:
+                sampler = VectorizedSampler(
+                    env=self.env,
+                    policy=self.policy,#DeterministicPolicy(env_spec=self.env.spec, wrapped_policy=self.policy),
+                    n_envs=self.n_eval_envs
+                )
+            else:
+                sampler = VectorizedSampler(
+                    env=self.env,
+                    policy=DeterministicPolicy(env_spec=self.env.spec, wrapped_policy=self.policy),
+                    n_envs=self.n_eval_envs
+                )
             logger.log("Starting worker...")
             sampler.start_worker()
             logger.log("Worker started")
-            sess.run(tf.assign(self.policy._l_std_param.param, [-10] * self.env.action_dim))
 
         train_observations = np.concatenate([p["observations"] for p in self.train_paths])
         train_actions = np.concatenate([p["actions"] for p in self.train_paths])
@@ -104,16 +129,23 @@ class Trainer(Serializable):
             if self.evaluate_performance:
                 pol_paths = sampler.obtain_samples(
                     itr=itr,
-                    max_path_length=100,
-                    batch_size=10000,
-                    max_n_trajs=100
+                    max_path_length=self.max_path_length,
+                    batch_size=self.eval_batch_size,
+                    max_n_trajs=self.n_eval_trajs
                 )
                 logger.record_tabular('AverageExpertReward', np.mean([np.sum(p["rewards"]) for p in self.train_paths]))
-                logger.record_tabular('AveragePolicyReward', np.mean([np.sum(p["rewards"]) for p in pol_paths]))
-                logger.record_tabular('SuccessRate', np.mean([p["rewards"][-1] >= 4 for p in pol_paths]))
-            logger.dump_tabular()
+                logger.record_tabular_misc_stat('Return', [np.sum(p["rewards"]) for p in pol_paths])
+                logger.record_tabular_misc_stat('FinalReward', np.asarray([p["rewards"][-1] for p in pol_paths]))
+                self.env.log_diagnostics(pol_paths)
 
+                # import ipdb; ipdb.set_trace()
+
+            logger.dump_tabular()
+            # import ipdb; ipdb.set_trace()
+
+            logger.log("Saving params...")
             logger.save_itr_params(itr, dict(env=self.env, policy=self.policy))
+            logger.log("Saved")
 
         self.optimizer.optimize(inputs=[train_observations, train_actions], callback=cb)
 

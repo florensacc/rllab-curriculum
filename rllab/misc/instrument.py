@@ -359,7 +359,7 @@ def run_experiment_lite(
         periodic_sync=True,
         periodic_sync_interval=15,
         sync_all_data_node_to_s3=True,
-        use_cloudpickle=False,
+        use_cloudpickle=True,
         pre_commands=None,
         **kwargs):
     """

@@ -172,17 +172,22 @@ def ssh(job):
 
 @cli.command()
 @click.argument('job')
-def sim_policy(job):
+@click.option('--deterministic', '-d', default=False, help='run policy in deterministic mode')
+def sim_policy(job, deterministic):
     for instance in get_all_instances():
         name = get_name_tag(instance)
         if name == job:
             ip_addr = instance['PublicIpAddress']
             exp_prefix = get_exp_prefix_tag(instance)
+            key_name = config.ALL_REGION_AWS_KEY_NAMES[instance['Region']]
+            key_path = os.path.join(config.PROJECT_PATH, "private/key_pairs", key_name + ".pem")
 
             copy_command = [
                 "ssh",
                 "-oStrictHostKeyChecking=no",
                 "-oConnectTimeout=10",
+                "-i",
+                key_path,
                 "ubuntu@{ip}".format(ip=ip_addr),
                 "cp {project_path}/data/local/{exp_prefix}/{job}/params.pkl /tmp/params.pkl".format(
                     project_path=config.PROJECT_PATH,
@@ -198,6 +203,8 @@ def sim_policy(job):
                 "scp",
                 "-oStrictHostKeyChecking=no",
                 "-oConnectTimeout=10",
+                "-i",
+                key_path,
                 "ubuntu@{ip}:/tmp/params.pkl".format(
                     ip=ip_addr,
                     project_path=config.PROJECT_PATH,
@@ -212,7 +219,14 @@ def sim_policy(job):
                 script = "sandbox/rocky/analogy/scripts/sim_policy.py"
             else:
                 script = "scripts/sim_policy.py"
-            subprocess.check_call(["python", os.path.join(config.PROJECT_PATH, script), "/tmp/params.pkl"])
+            command = [
+                "python",
+                os.path.join(config.PROJECT_PATH, script),
+                "/tmp/params.pkl"
+            ]
+            if deterministic:
+                command += ["--deterministic"]
+            subprocess.check_call(command)
             return
     print("Not found!")
 
@@ -225,13 +239,12 @@ def kill_f(pattern):
     to_kill_ids = {}
     for instance in get_all_instances():
         name = get_name_tag(instance)
-        print(name)
         if name is None or pattern in name:
             instance_id = instance['InstanceId']
             region = instance['Region']
-            if name is None and query_yes_no(question="Kill instance {} without name in region {}?".format(
-                    instance_id, region)):
-                name = instance_id
+            # if name is None and query_yes_no(question="Kill instance {} without name in region {}?".format(
+            #         instance_id, region)):
+            #     name = instance_id
             if name:
                 if region not in to_kill_ids:
                     to_kill_ids[region] = []
