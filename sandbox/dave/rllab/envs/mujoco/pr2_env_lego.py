@@ -12,6 +12,7 @@ from scipy.misc import imresize
 import time
 # import cv2
 import pdb
+import copy
 np.set_printoptions(threshold=np.nan, linewidth=np.nan)
 class Pr2EnvLego(MujocoEnv, Serializable):
 
@@ -71,9 +72,16 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.discount = 0.95
         self.depth = np.zeros([99, 99, 3])  #TODO: Hacky
         self.model = model
+        self.gamma = 0
+        self.iter = 0
+        self.tau = 500
+        self.weight = 1
 
         super(Pr2EnvLego, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
+        init_qpos = copy.copy(self.model.data.qpos)
+        init_qpos[:7, 0] = np.array([1.2, -0.5, 2, -1.5, 0, 0, -0.25])
+        self.init_qpos = init_qpos
 
     def set_model(self, model):
         self.__class__.FILE = model
@@ -307,6 +315,8 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         cos_angle_previous = self.get_cos_vecs()
         reward_angle_previous = - self.angle_penalty_weight * cos_angle_previous
 
+        phi_prev = -(reward_tip_previous + reward_angle_previous)
+
         # import pdb; pdb.set_trace()
         # action = np.zeros_like(action)
         self.forward_dynamics(action)
@@ -331,8 +341,12 @@ class Pr2EnvLego(MujocoEnv, Serializable):
 
         # Penalize the robot for large actions.f
         # reward_occlusion = self.occlusion_weight * self.get_reward_occlusion()
+
+        phi = -(reward_angle + reward_tip)
         reward_ctrl = - self.action_penalty_weight * np.square(action).sum()
-        reward = reward_dist + reward_ctrl + reward_tip + reward_angle
+        # reward = reward_dist + reward_ctrl + self.gamma * phi - phi_prev
+        reward = reward_dist + reward_ctrl - self.weight * phi
+        # reward = reward_dist + reward_ctrl + self.gamma * phi - phi_prev
         state = self._state
         # print(reward_occlusion, reward_angle, reward_tip, reward_dist, )
         notdone = np.isfinite(state).all()
@@ -452,20 +466,18 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         xfrc[-2, 2] = -0.981
         xfrc[13, 2] = - 9.81 * 0.0917
         self.model.data.xfrc_applied = xfrc
-        import copy
-        damping = copy.copy(self.model.dof_damping)[:,0]
-        armature = copy.copy(self.model.dof_armature )[:, 0]
-        frictionloss = copy.copy(self.model.dof_frictionloss)[:,0]
-        dim = len(damping)
-        damping = np.maximum(0, np.random.multivariate_normal(damping, 0.001 * np.eye(dim)))
-        armature = np.maximum(0, np.random.multivariate_normal(armature, 0.001 * np.eye(dim)))
-        frictionloss = np.maximum(0, np.random.multivariate_normal(frictionloss, 0.001 * np.eye(dim)))
-        self.model.dof_damping = damping[:, None]
-        self.model.dof_frictionloss = frictionloss[:, None]
-        self.model.dof_armature = armature[:, None]
+        # import copy
+        # damping = copy.copy(self.model.dof_damping)[:,0]
+        # armature = copy.copy(self.model.dof_armature )[:, 0]
+        # frictionloss = copy.copy(self.model.dof_frictionloss)[:,0]
+        # dim = len(damping)
+        # damping = np.maximum(0, np.random.multivariate_normal(damping, 0.001 * np.eye(dim)))
+        # armature = np.maximum(0, np.random.multivariate_normal(armature, 0.001 * np.eye(dim)))
+        # frictionloss = np.maximum(0, np.random.multivariate_normal(frictionloss, 0.001 * np.eye(dim)))
+        # self.model.dof_damping = damping[:, None]
+        # self.model.dof_frictionloss = frictionloss[:, None]
+        # self.model.dof_armature = armature[:, None]
         # #Viewer
-
-
 
         if self.viewer is None and self.use_vision:
             self.viewer = MjViewer(visible=True, go_fast=False)
@@ -577,5 +589,31 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         # failure_rate = self.get_mean_failure_rate()
         # expected_damage = action_limit * failure_rate
         # logger.record_tabular('Expected Damage', expected_damage)
+    # def __getstate__(self):
+    #     d = super(Pr2EnvLego, self).__getstate__()
+    #     d['_iter'] = self.iter
+    #     return d
+    #
+    # def __setstate__(self, d):
+    #     super(Pr2EnvLego, self).__setstate__(d)
+    #     self.update_gamma(d['_iter'])
+    #
+    # def update_gamma(self, gamma):
+    #     self.iter += 1
+    #     self.gamma = self.discount * (1 - np.exp(-self.iter/self.tau))
+    #     # return self.angle_penalty_weight, self.distance_tip_lego_penalty_weight
 
+    def __getstate__(self):
+        d = super(Pr2EnvLego, self).__getstate__()
+        d['_iter'] = self.iter
+        return d
+
+    def __setstate__(self, d):
+        super(Pr2EnvLego, self).__setstate__(d)
+        self.update_gamma(d['_iter'])
+
+    def update_gamma(self, gamma):
+        self.iter += 1
+        self.gamma = self.discount * (1 - np.exp(-self.iter/self.tau))
+        # return self.angle_penalty_weight, self.distance_tip_lego_penalty_weight
 

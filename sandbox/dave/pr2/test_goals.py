@@ -15,7 +15,7 @@ from rllab.envs.normalized_env import normalize
 import os.path as osp
 
 from sandbox.dave.rllab.goal_generators.pr2_goal_generators import PR2CrownGoalGeneratorSmall #PR2BoxGoalGeneratorSmall #PR2FixedGoalGenerator #PR2CrownGoalGeneratorSmall #PR2TestGoalGenerator
-from sandbox.dave.rllab.lego_generators.pr2_lego_generators import PR2LegoFixedBlockGenerator #PR2LegoFixedBlockGenerator #PR2TestGoalGenerator
+from sandbox.dave.rllab.lego_generators.pr2_lego_generators import PR2LegoBoxBlockGeneratorLarge #PR2LegoBoxBlockGeneratorSmall #PR2LegoFixedBlockGenerator #PR2TestGoalGenerator
 # from sandbox.dave.rllab.policies.pretrain_gaussian_mlp_policy import PretrainGaussianMLPPolicy
 
 from sandbox.dave.rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
@@ -23,19 +23,25 @@ from sandbox.dave.rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
 # from sandbox.dave.rllab.envs.mujoco.pr2_env_lego import Pr2EnvLego
 from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_position import Pr2EnvLego
+# from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_hand import Pr2EnvLego
 # from sandbox.dave.rllab.envs.mujoco.pr2_env_reach import Pr2EnvLego
 from rllab.sampler.utils import rollout
+from sandbox.dave.utils.ploting import *
 
 filename = str(uuid.uuid4())
 
 
 def do_test(env, policy, num_test_goals, max_path_length):
+    paths = []
     for itr in range(num_test_goals):
         with logger.prefix('itr #%d | ' % itr):
             path = rollout(env, policy, animated=True, max_path_length=max_path_length, speedup=10)
-            paths = [path]
-            env.log_diagnostics(paths)
-            policy.log_diagnostics(paths)
+            paths.append(path)
+            env.log_diagnostics([path])
+            policy.log_diagnostics([path])
+            print('iteration:     ', itr)
+    plot_heatmap(paths, 'lego')
+
 
             #loggerdump_tabular(with_prefix=True)
             # if self.plot:
@@ -105,7 +111,19 @@ if __name__ == "__main__":
     # pkl_file = "/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/RSS/position-control-01/position-control-01-lego-gravity-eve-fix1/params.pkl"
     # pkl_file = "/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/RSS/position-control-random-lego/position-control-random-lego-1/params.pkl"
     # pkl_file = "/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/RSS/reward-guiding-0999/reward-guiding-09991/params.pkl"
-    pkl_file = "/home/ignasi/GitRepos/rllab-private/data/local/train-Lego/RSS/debug/debug21/params.pkl"
+    # pkl_file = "/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/RSS/position-control-random-everything/position_control_random_everything1/params.pkl"
+    # pkl_file = "/home/ignasi/GitRepos/rllab-private/data/local/train-Lego/RSS/debug-beta-02/debug-beta-0221/params.pkl"
+    # pkl_file = "/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/RSS/debug-constant-time/debug-constant-time21/params.pkl"
+    # pkl_file = "/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/RSS/stds-random-lego-mean-gain-001/std-0005-good-random-lego-mean-gain-0010.1/params.pkl"
+    # pkl_file = "data/local/train-Lego/RSS/position-control-fine-tune/position_control_fine_tune1/params.pkl"
+    # pkl_file = "data/s3/train-Lego/RSS/comparision-torque-position/position-control-n05-arm-fixed-lego//params.pkl"
+    # pkl_file = "data/s3/train-Lego/RSS/fixed-arm-position-ctrl-tip/fixed-arm-position-ctrl-tip1/params.pkl"
+    # pkl_file = "data/s3/train-Lego/RSS/fixed-arm-position-ctrl-tip/fixed-arm-position-ctrl-tip1/params.pkl"
+    pkl_file = "data/s3/train-Lego/RSS/fixed-arm-position-ctrl-tip-no-random-restarts/fixed-arm-position-ctrl-tip-no-random-restarts1/params.pkl"
+    # pkl_file = "data/local/train-Lego/RSS/baseline/training/params.pkl"
+
+
+
 
 
     parser = argparse.ArgumentParser()
@@ -115,7 +133,7 @@ if __name__ == "__main__":
                         help='Max length of rollout')
     parser.add_argument('--speedup', type=int, default=1,
                         help='Speedup')
-    parser.add_argument('--num_goals', type=int, default=100,
+    parser.add_argument('--num_goals', type=int, default=np.int(np.square(0.4/0.01)),
                         help='Number of test goals')
     args = parser.parse_args()
 
@@ -124,7 +142,7 @@ if __name__ == "__main__":
     # Add one to account for the goal created during environment initialization.
     # TODO - fix this hack.
     test_goal_generator = PR2CrownGoalGeneratorSmall() #PR2TestGoalGenerator()  #PR2TestGoalGenerator(
-    test_lego_generator = PR2LegoFixedBlockGenerator()
+    test_lego_generator = PR2LegoBoxBlockGeneratorLarge()
 
     # env = normalize(Pr2Env(
     #     goal_generator=test_goal_generator,
@@ -165,7 +183,7 @@ if __name__ == "__main__":
         distance_thresh=0.01,  # 1 cm
         qvel_init_std=0.01,
         pos_normal_sample=True, # Uniform sampling
-        pos_normal_sample_std=0.01,
+        pos_normal_sample_std=0.5,
         # model="pr2_legofree.xml",
         use_vision=True,
         crop=True,
@@ -177,9 +195,9 @@ if __name__ == "__main__":
     policy = GaussianMLPPolicy(
         env_spec=env.spec,
         # The neural network policy should have n hidden layers, each with k hidden units.
-        hidden_sizes=(64, 64, 64),
+        # hidden_sizes=(64, 64, 64),
         # output_gain=1,
-        init_std=1,
+        init_std=0,
         # beta=0.1,
         # pkl_path="/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/state/random_random_pixel_penalty_p0005_d_06_reward_distance_1_angle_02_crown_normal_sample_001_50000/params.pkl"
         # json_path=json_path,
