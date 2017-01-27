@@ -77,7 +77,7 @@ class AtariEnv(GymEnv):
 
     def clear_last_frames(self):
         # last_frames: last N_FRAMES of resized, scaled observations
-        self.last_frames = np.zeros(self.observation_space.shape, dtype=np.uint8)
+        self.last_frames = np.zeros(self.observation_space.shape, dtype=np.float32)
         self.last_frames = self.scale_obs(self.last_frames)
 
         # last_adv_frames: last N_FRAMES of resized, scaled, *and* 

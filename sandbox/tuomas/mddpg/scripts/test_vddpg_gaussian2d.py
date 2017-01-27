@@ -3,6 +3,7 @@ from rllab import spaces
 import tensorflow as tf
 import numpy as np
 
+from sandbox.tuomas.mddpg.critics.gaussian_critic import MixtureGaussian2DCritic
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -25,23 +26,6 @@ class MultimodalGaussianEnv(Env):
     def observe(self):
         return np.random.randn(1)
 
-        #if self._fixed_observations is not None:
-        #    n_cases = self._fixed_observations.shape[0]
-        #    i = np.random.randint(low=0, high=n_cases)
-        #    return self._fixed_observations[i]
-
-        #modes = self._n_modes
-
-        #weights = np.random.rand(modes)
-        #weights = weights / weights.sum()
-        #mus = np.random.randn(modes)*2 - 1
-        #sigmas = np.random.rand(modes) + 0.5
-
-        #obs = np.stack((weights, mus, sigmas), axis=1) # one row per mode
-        #obs = np.ndarray.flatten(obs) # (w_1, mu_1, sigma_1, w_2, ...)
-
-        #return obs
-
     def reset(self):
         return self.observe()
 
@@ -55,70 +39,7 @@ class MultimodalGaussianEnv(Env):
 
     @property
     def observation_space(self):
-        #dummy = np.array([0] * self._n_modes * 3)
-        dummy = np.array([0])
-        return spaces.Box(dummy, dummy)
-
-
-from sandbox.haoran.mddpg.qfunctions.nn_qfunction import NNCritic
-from rllab.core.serializable import Serializable
-class MixtureGaussian2DCritic(NNCritic):
-    """ Q(s,a) is a 2D mixture of Gaussian in a """
-    def __init__(
-            self,
-            scope_name,
-            observation_dim,
-            action_input,
-            observation_input,
-            reuse=False,
-            **kwargs
-    ):
-        Serializable.quick_init(self, locals())
-        super(MixtureGaussian2DCritic, self).__init__(
-            scope_name=scope_name,
-            observation_dim=observation_dim,
-            action_dim=2,
-            action_input=action_input,
-            observation_input=observation_input,
-            reuse=reuse,
-            **kwargs
-        )
-
-    def create_network(self, action_input, observation_input):
-        # obs = tf.unstack(observation_input, axis=1)
-        weights = [1./2., 2./3.]
-        mus = [np.array((-2., 0.)), np.array((1., 1.))]
-        sigmas = [0.2, 1.0]
-        a = action_input
-
-        # TODO: assume all samples in a batch are the same (use index 0).
-        # unnormalized density
-        components = []
-        for w, mu, sigma in zip(weights, mus, sigmas):
-            mu = np.reshape(mu, (1, 2))
-
-            comp = (1./tf.sqrt(2. * np.pi * sigma**2)) * tf.exp(
-                -0.5 / sigma**2 * tf.reduce_sum(tf.square(a - mu), axis=1))
-
-            components.append(comp)
-
-        temp = 0.5
-        output = temp * tf.log(tf.add_n(components))
-        return output
-
-    def get_weight_tied_copy(self, action_input, observation_input):
-        """
-        HT: basically, re-run __init__ with specified kwargs. In particular,
-        the variable scope doesn't change, and self.observations_placeholder
-        and NN params are reused.
-        """
-        return self.__class__(
-            scope_name=self.scope_name,
-            observation_dim=self.observation_dim,
-            action_input=action_input,
-            observation_input=observation_input,
-            reuse=True,
-        )
+        return spaces.Box(0, 0, (1,))
 
 from sandbox.tuomas.mddpg.policies.stochastic_policy import \
     DummyExplorationStrategy
@@ -216,6 +137,9 @@ def test():
         observation_dim=env.observation_space.flat_dim,
         action_input=None,
         observation_input=None,
+        weights=[1./2., 2./3.],
+        mus=[np.array((-2., 0.)), np.array((1., 1.))],
+        sigmas=[0.2, 1.0]
     )
 
     policy = StochasticNNPolicy(

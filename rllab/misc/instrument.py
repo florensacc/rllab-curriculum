@@ -874,6 +874,10 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
                     done & echo log sync initiated
                 """.format(log_dir=log_dir, remote_log_dir=remote_log_dir))
         sio.write("""
+            for i in {1..800}; do su -c "nvidia-modprobe -u -c=0" ubuntu && break || sleep 3; done
+            systemctl start nvidia-docker
+        """)
+        sio.write("""
             {command}
         """.format(command=to_docker_command(params, docker_image, python_command=python_command, script=script,
                                              use_gpu=use_gpu, env=env,

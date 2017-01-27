@@ -37,6 +37,8 @@ class DDPG(OnlineAlgorithm):
             policy_learning_rate=1e-4,
             Q_weight_decay=0.,
             plt_backend="MacOSX",
+            critic_train_frequency=1,
+            actor_train_frequency=1,
             **kwargs
     ):
         """
@@ -55,6 +57,10 @@ class DDPG(OnlineAlgorithm):
         self.Q_weight_decay = Q_weight_decay
         self.plt_backend = plt_backend
         plt.switch_backend(plt_backend)
+        self.critic_train_frequency = critic_train_frequency
+        self.critic_train_counter = 0
+        self.actor_train_frequency = actor_train_frequency
+        self.actor_train_counter = 0
 
         super().__init__(env, policy, exploration_strategy, **kwargs)
 
@@ -152,6 +158,20 @@ class DDPG(OnlineAlgorithm):
             self.update_target_actor_op,
         ]
 
+        # notice that the order of these ops are different from above
+        ops = []
+        if self.train_actor:
+            ops += [
+                self.train_actor_op,
+                self.update_target_actor_op,
+            ]
+        if self.train_critic:
+            ops += [
+                self.train_critic_op,
+                self.update_target_critic_op,
+            ]
+        return ops
+
     @overrides
     def _update_feed_dict(self, rewards, terminals, obs, actions, next_obs):
         critic_feed = self._critic_feed_dict(rewards,
@@ -160,10 +180,16 @@ class DDPG(OnlineAlgorithm):
                                              actions,
                                              next_obs)
         actor_feed = self._actor_feed_dict(obs)
-        return {**critic_feed, **actor_feed}
+        feed = {}
+        if self.train_critic:
+            feed.update(critic_feed)
+        if self.train_actor:
+            feed.update(actor_feed)
+        return feed
 
     def _critic_feed_dict(self, rewards, terminals, obs, actions, next_obs):
         return {
+            self.policy.observations_placeholder: obs,
             self.rewards_placeholder: np.expand_dims(rewards, axis=1),
             self.terminals_placeholder: np.expand_dims(terminals, axis=1),
             self.qf.observations_placeholder: obs,
@@ -254,7 +280,6 @@ class DDPG(OnlineAlgorithm):
         # Create figure for plotting the environment.
         fig = plt.figure(figsize=(12, 7))
         ax = fig.add_subplot(111)
-        plt.axis('equal')
 
         true_env = get_true_env(self.env)
         if hasattr(true_env, "log_stats"):
@@ -284,4 +309,41 @@ class DDPG(OnlineAlgorithm):
             policy=self.policy,
             es=self.exploration_strategy,
             qf=self.qf,
+        )
+
+    def _do_training(self):
+        self.train_critic = (np.mod(
+            self.critic_train_counter,
+            self.critic_train_frequency,
+        ) == 0)
+        self.train_actor = (np.mod(
+            self.actor_train_counter,
+            self.actor_train_frequency,
+        ) == 0)
+
+        minibatch = self.pool.random_batch(self.batch_size)
+        sampled_obs = minibatch['observations']
+        sampled_terminals = minibatch['terminals']
+        sampled_actions = minibatch['actions']
+        sampled_rewards = minibatch['rewards'][:,0] # assume single reward
+        sampled_next_obs = minibatch['next_observations']
+
+        feed_dict = self._update_feed_dict(sampled_rewards,
+                                           sampled_terminals,
+                                           sampled_obs,
+                                           sampled_actions,
+                                           sampled_next_obs)
+
+
+        # TH: First train, then finalize. This can be suboptimal.
+        self.sess.run(self._get_training_ops(), feed_dict=feed_dict)
+        self.sess.run(self._get_finalize_ops(), feed_dict=feed_dict)
+
+        self.critic_train_counter = np.mod(
+            self.critic_train_counter + 1,
+            self.critic_train_frequency
+        )
+        self.actor_train_counter = np.mod(
+            self.actor_train_counter + 1,
+            self.actor_train_frequency,
         )

@@ -5,15 +5,11 @@ import os
 from rllab import config
 
 from rllab.envs.proxy_env import ProxyEnv
-from rllab.exploration_strategies.ou_strategy import OUStrategy
 
 from rllab.misc import logger
-from rllab.misc.logger import set_snapshot_dir
 
-from sandbox.tuomas.mddpg.misc.rollout import rollout
 from sandbox.tuomas.mddpg.policies.stochastic_policy \
     import DummyExplorationStrategy
-from sandbox.tuomas.mddpg.critics.gaussian_critic import MixtureGaussian2DCritic
 
 from rllab.core.serializable import Serializable
 
@@ -24,8 +20,8 @@ flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_float('actor_lr', 0.01, 'Base learning rate for actor.')
 flags.DEFINE_float('critic_lr', 0.001, 'Base learning rate for critic.')
-flags.DEFINE_integer('path_length', 50, 'Maximum path length.')
-flags.DEFINE_integer('n_particles', 64, 'Number of particles.')
+flags.DEFINE_integer('path_length', 25, 'Maximum path length.')
+flags.DEFINE_integer('n_particles', 32, 'Number of particles.')
 flags.DEFINE_string('alg', 'vddpg', 'Algorithm.')
 flags.DEFINE_string('policy', 'stochastic',
                     'Policy (DETERMINISTIC/stochastic')
@@ -91,8 +87,8 @@ class AlgTest(Alg):
         self._current_training_path.append(info)
         if flush:
             self._h_training_paths.append(
-                self._base_env.plot(self._current_training_path,
-                                    self._ax_env, 'r')
+                self._base_env.plot_path(self._current_training_path,
+                                         self._ax_env, 'r')
             )
             plt.draw()
             plt.pause(0.001)
@@ -169,14 +165,14 @@ class AlgTest(Alg):
             rewards = []
             for t in range(FLAGS.path_length):
                 a, _ = self.policy.get_action(o)
-                _, r, d, info = self.env.step(a)
+                o, r, d, info = self.env.step(a)
                 info_list.append(info)
                 rewards.append(r)
                 if d:
                     successes += 1.
                     break
             self._h_test_paths.append(
-                self._base_env.plot(info_list, self._ax_env)
+                self._base_env.plot_path(info_list, self._ax_env)
             )
         self._base_env.__setstate__(env_state)
         mean_rewards = np.mean(np.stack(rewards, axis=1), axis=1)
@@ -240,7 +236,7 @@ def test():
             train_critic=True,
             q_target_type='max',
             K=FLAGS.n_particles,
-            alpha=0.1,
+            alpha=1.,
         ))
 
     # ----------------------------------------------------------------------

@@ -134,7 +134,7 @@ for i in range(7):
         combine_fn=merge,
     )
 
-dist = DequantizedFlow(cur)
+dist = OldDequantizedFlow(cur)
 
 algo = DistTrainer(
     dataset=dataset,

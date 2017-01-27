@@ -464,6 +464,114 @@ class Bernoulli(Distribution):
     def prior_dist_info(self, batch_size):
         return dict(p=0.5 * tf.ones([batch_size, self.dim]))
 
+class TruncatedLogistic(Distribution):
+    def __init__(self, shape, lo, hi):
+        Serializable.quick_init(self, locals())
+
+        self._shape = shape
+        self._dim = np.prod(shape)
+        assert hi > lo
+        self._lo = (np.ones([1, self._dim]) * lo).astype(np.float32)
+        self._hi = (np.ones([1, self._dim]) * hi).astype(np.float32)
+
+    @property
+    def dim(self):
+        return self._dim
+
+    @property
+    def dist_flat_dim(self):
+        return self._dim * 2
+
+    @property
+    def effective_dim(self):
+        return self._dim
+
+    @property
+    def dist_info_keys(self):
+        return ["mu", "scale"]
+
+    def cdf(self, x_var, dist_info):
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        return tf.nn.sigmoid((x_var - mu) / scale)
+
+    def inverse_cdf(self, p, dist_info):
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        return mu + scale * (tf.log(p) - tf.log(1 - p))
+
+    def logli(self, x_var, dist_info):
+        raise NotImplemented
+
+    def entropy(self, dist_info):
+        raise NotImplemented
+
+    def activate_dist(self, flat_dist):
+        return dict(
+            mu=(flat_dist[:, :self.dim]),
+            scale=tf.exp(flat_dist[:, self.dim:]),
+        )
+
+    def sample_logli(self, dist_info):
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        bs = int_shape(mu)[0]
+        p_lo, p_hi = self.cdf(self._lo, dist_info), self.cdf(self._hi, dist_info)
+        span = p_hi - p_lo
+        p_delta = tf.random_uniform(
+            shape=universal_int_shape(mu),
+            maxval=span,
+        )
+        samples = self.inverse_cdf(p_lo+p_delta, dist_info)
+
+        # untruncated logprob calculation
+        neg_standardized = -(samples - mu)/scale
+        log_exp_approx = tf.select(
+            neg_standardized > 70.,
+            neg_standardized,
+            tf.select(
+                neg_standardized < -10.,
+                tf.exp(neg_standardized),
+                tf.log(1. + tf.exp(neg_standardized))
+            )
+        )
+        raw_logli = neg_standardized - tf.log(scale) \
+                    - 2. * log_exp_approx
+
+        THRESHOLD = 1e-3
+        samples_out = tf.select(
+            span > THRESHOLD,
+            samples,
+            tf.random_uniform(
+                shape=universal_int_shape(mu),
+                minval=self._lo[0],
+                maxval=self._hi[0],
+            )
+        )
+        logli_out = tf.select(
+            span > THRESHOLD,
+            raw_logli - tf.log(span),
+            tf.tile(-tf.log(self._hi - self._lo), [bs, 1])
+        )
+        # logli_out = tf.Print(
+        #     logli_out,
+        #     [
+        #         # "p_hi", p_hi, "p_lo", p_lo,
+        #         "spans", span, "samples", samples_out,
+        #         "logli", logli_out,
+        #         "neg_std", neg_standardized,
+        #         "mu", mu,
+        #         "scale", scale,
+        #     ]
+        # )
+
+        return tf.reshape(samples_out, [-1]+list(self._shape)), tf.reduce_sum(logli_out, reduction_indices=[1])
+
+    def prior_dist_info(self, batch_size):
+        return dict(
+            mu=np.zeros([batch_size, self._dim]),
+            scale=np.ones([batch_size, self._dim]),
+        )
 
 class DiscretizedLogistic(Distribution):
     # assume to be -0.5 ~ 0.5
@@ -2533,6 +2641,8 @@ class ReshapeFlow(Distribution):
             base_dist,
             forward_fn,
             backward_fn,
+            logli_diff_fn=lambda x: 0.,
+            debug=False,
     ):
         global G_IDX
         G_IDX += 1
@@ -2540,6 +2650,8 @@ class ReshapeFlow(Distribution):
         self._base_dist = base_dist
         self._forward = forward_fn
         self._backward = backward_fn
+        self._logli_diff = logli_diff_fn
+        self._debug = debug
 
         self.train_mode()
 
@@ -2563,12 +2675,14 @@ class ReshapeFlow(Distribution):
 
     def logli(self, x_var, dist_info):
         eps = self._backward(x_var)
-        return self._base_dist.logli(eps, dist_info)
+        log_diff = self._logli_diff(x_var)
+        log_diff = tf.Print(log_diff, [x_var, log_diff]) if self._debug else log_diff
+        return self._base_dist.logli(eps, dist_info) + log_diff
 
     def sample_logli(self, dist_info):
         eps, logpeps = self._base_dist.sample_logli(dist_info)
         x = self._forward(eps)
-        return x, logpeps
+        return x, logpeps + self._logli_diff(x)
 
     def prior_dist_info(self, batch_size):
         return self._base_dist.prior_dist_info(batch_size)
@@ -2588,7 +2702,7 @@ class ReshapeFlow(Distribution):
         raise "not defined"
 
 
-class DequantizedFlow(Distribution):
+class OldDequantizedFlow(Distribution):
     def __init__(
             self,
             base_dist,
@@ -2596,7 +2710,7 @@ class DequantizedFlow(Distribution):
     ):
         global G_IDX
         G_IDX += 1
-        self._name = "Dequantized_%s" % (G_IDX)
+        self._name = "OldDequantized_%s" % (G_IDX)
         self._base_dist = base_dist
         self._width = width
 
@@ -2639,3 +2753,174 @@ class DequantizedFlow(Distribution):
 
     def nonreparam_logli(self, x_var, dist_info):
         raise "not defined"
+
+class DequantizedFlow(Distribution):
+    def __init__(
+            self,
+            base_dist,
+            noise_dist,
+    ):
+        global G_IDX
+        G_IDX += 1
+        self._name = "Dequantized_%s" % (G_IDX)
+        self._base_dist = base_dist
+        self._noise_dist = noise_dist
+
+    @overrides
+    def init_mode(self):
+        self._base_dist.init_mode()
+        self._noise_dist.init_mode()
+
+    @overrides
+    def train_mode(self):
+        self._base_dist.train_mode()
+        self._noise_dist.train_mode()
+
+    @property
+    def dim(self):
+        return self._base_dist.dim
+
+    @property
+    def effective_dim(self):
+        return self._base_dist.effective_dim
+
+    def logli(self, x_var, dist_info):
+        # abusing the notation in the sense that this is a vlb
+        eps, eps_logli = self._noise_dist.sample_logli(dict(condition=x_var))
+        return self._base_dist.logli(x_var+eps, dist_info) - eps_logli
+
+    def sample_logli(self, dist_info):
+        # abusing the notation in the sense that it doesn't
+        #  quantize the output again
+        x, logpeps = self._base_dist.sample_logli(dist_info)
+        return x, logpeps
+
+    def prior_dist_info(self, batch_size):
+        return self._base_dist.prior_dist_info(batch_size)
+
+    @property
+    def dist_info_keys(self):
+        return self._base_dist.dist_info_keys
+
+    @property
+    def dist_flat_dim(self):
+        return self._base_dist.dist_flat_dim
+
+    def activate_dist(self, flat):
+        return self._base_dist.activate_dist(flat)
+
+    def nonreparam_logli(self, x_var, dist_info):
+        raise "not defined"
+
+class DequantizationDistribution(Distribution):
+    @property
+    def dist_info_keys(self):
+        return ["condition"]
+
+class UniformDequant(DequantizationDistribution):
+    def __init__(
+            self,
+            width=1. / 256,
+    ):
+        global G_IDX
+        G_IDX += 1
+        self._name = "UniformDequant_%s" % (G_IDX)
+        self._width = width
+
+    def sample_logli(self, dist_info):
+        condition = dist_info["condition"]
+        shp = int_shape(condition)
+        dim = np.prod(shp[1:])
+        return tf.random_uniform(shp, maxval=self._width), (-dim * np.log(self._width)).astype(np.float32)
+
+class TruncatedLogisticDequant(DequantizationDistribution):
+    def __init__(
+            self,
+            shape,
+            width=1. / 256,
+    ):
+        global G_IDX
+        G_IDX += 1
+        self._name = "TruncatedLogisticDequant_%s" % (G_IDX)
+        self._width = width
+        dim = np.prod(shape)
+        self._shape = shape
+        self._dim = dim
+        pshp = [1, dim]
+        self._mu = tf.get_variable(
+            self._name + "_mu",
+            pshp,
+            tf.float32,
+            tf.random_normal_initializer(0, 0.05),
+            trainable=True
+        )
+        self._log_scale = tf.get_variable(
+            self._name + "_log_scale",
+            pshp,
+            tf.float32,
+            tf.random_normal_initializer(0, 0.05),
+            trainable=True
+        )
+        self._delegate_dist = TruncatedLogistic(shape, -1., 1.)
+        self.init_mode()
+
+    @overrides
+    def init_mode(self):
+        self._custom_phase = CustomPhase.init
+        self._delegate_dist.init_mode()
+
+    @overrides
+    def train_mode(self):
+        self._custom_phase = CustomPhase.train
+        self._delegate_dist.train_mode()
+
+    def prior_dist_info(self, batch_size):
+        def expand(x):
+            if self._custom_phase == CustomPhase.init:
+                x = x.initialized_value()
+            return tf.tile(x, [batch_size, 1])
+        return dict(
+            mu=expand(self._mu),
+            scale=tf.exp(expand(self._log_scale)),
+        )
+
+    def sample_logli(self, dist_info):
+        condition = dist_info["condition"]
+        delegate_info = self.prior_dist_info(int_shape(condition)[0])
+        eps, logli_eps = self._delegate_dist.sample_logli(
+            delegate_info
+        )
+        scaling = self._width / 2.
+        return (eps+1.) * scaling, logli_eps - tf.log(scaling) * self._dim
+
+# TODO: this has wrong impl for sampling
+def normalize(dist):
+    def normalize_per_dim(x):
+        mu, inv_std = nn.init_normalization(x)
+        return -mu, tf.log(inv_std)
+    return ShearingFlow(
+        dist,
+        nn_builder=normalize_per_dim,
+        condition_fn=lambda x: x,
+        effect_fn=lambda x: x,
+        combine_fn=lambda _, x: x,
+    )
+
+def shift(dist, offset=0.5 + (1/256/2)):
+    return ReshapeFlow(
+        dist,
+        forward_fn=lambda eps: eps - offset,
+        backward_fn=lambda x: x + offset,
+        debug=False,
+    )
+
+def logitize(dist, coeff=0.90):
+    # apply logit(coeff*x)
+    return ReshapeFlow(
+        dist,
+        forward_fn=lambda eps: (1. / (1. + tf.exp(-eps))) / coeff,
+        backward_fn=lambda x: tf.log(coeff*x) - tf.log(1-coeff*x),
+        logli_diff_fn=lambda x: tf.reduce_sum(-tf.log(x - coeff*(x**2)), reduction_indices=[1,2,3]),
+        debug=False,
+    )
+

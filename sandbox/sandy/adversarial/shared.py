@@ -1,6 +1,11 @@
 import copy
 import joblib
 import numpy as np
+import os, os.path as osp
+
+SCORE_KEY = {'async-rl': 'ReturnAverage', \
+             'deep-q-rl': 'TestAverageReturn', \
+             'trpo': 'RawReturnAverage'}
 
 class DQNAlgo(object):
     pass
@@ -54,76 +59,88 @@ def get_average_return_trpo(algo, seed, N=10):
         curr_seed += 1
 
     avg_return = np.mean([sum(p['rewards']) for p in paths])
-    return avg_return, paths
+    timesteps = sum([len(p['rewards']) for p in paths])
+    return avg_return, paths, timesteps
 
 def get_average_return_a3c(algo, seed, N=10, horizon=10000):
-    algo.test_env = copy.deepcopy(algo.cur_env)
-    # copy.deepcopy doesn't copy lambda function
-    algo.test_env.adversary_fn = algo.cur_env.adversary_fn
-    algo.test_agent = copy.deepcopy(algo.cur_agent)
-
-    # Set random seed, for reproducibility
-    set_seed_env(algo.test_env, seed)
-    curr_seed = seed + 1
 
     #scores, paths = algo.evaluate_performance(N, horizon, return_paths=True)
     paths = []
+    curr_seed = seed
     while len(paths) < N:
-        _, new_paths = algo.evaluate_performance(1, horizon, return_paths=True)
-        paths.append(new_paths[0])
-
         algo.test_env = copy.deepcopy(algo.cur_env)
         # copy.deepcopy doesn't copy lambda function
         algo.test_env.adversary_fn = algo.cur_env.adversary_fn
         algo.test_agent = copy.deepcopy(algo.cur_agent)
+        # Set random seed, for reproducibility
         set_seed_env(algo.test_env, curr_seed)
+
+        _, new_paths = algo.evaluate_performance(1, horizon, return_paths=True)
+        paths.append(new_paths[0])
+
+        del algo.test_env
+        del algo.test_agent
         curr_seed += 1
 
     avg_return = np.mean([sum(p['rewards']) for p in paths])
-    return avg_return, paths
+    timesteps = sum([len(p['rewards']) for p in paths])
+    return avg_return, paths, timesteps
 
 def sample_dqn(algo, n_paths=1):  # Based on deep_q_rl/ale_experiment.py, run_episode
     env = algo.env
-    paths = [{'rewards':[], 'states':[], 'actions':[]} for i in range(n_paths)]
+    #paths = [{'rewards':[], 'states':[], 'actions':[]} for i in range(n_paths)]
+    rewards = [0]*n_paths
+    timesteps = 0
     for i in range(n_paths):
         env.reset()
         action = algo.agent.start_episode(env.last_state)
+        total_reward = 0
         while True:
             if env.is_terminal:
-                algo.agent.end_episode(paths[i]['rewards'][-1])
+                algo.agent.end_episode(env.reward)
                 break
-            paths[i]['states'].append(env.observation)
-            paths[i]['actions'].append(action)
+            #paths[i]['states'].append(env.observation)
+            #paths[i]['actions'].append(action)
             env.step(action)
-            paths[i]['rewards'].append(env.reward)
-            action = algo.agent.step(env.reward, env.observation[-1,:,:], {})
-    return paths
+            #paths[i]['rewards'].append(env.reward)
+            total_reward += env.reward
+            action = algo.agent.step(env.reward, env.last_state, {})
+            timesteps += 1
+        rewards[i] = total_reward
+    return rewards, timesteps
 
 def get_average_return_dqn(algo, seed, N=10):
     # Set random seed, for reproducibility
     set_seed(algo, seed)
     curr_seed = seed + 1
 
-    paths = []
-    while len(paths) < N:
-        new_paths = sample_dqn(algo, n_paths=1)  # Returns single path
-        paths.append(new_paths[0])
+    rewards = [0]*N
+    total_timesteps = 0
+    for i in range(N):
+        new_rewards, timesteps = sample_dqn(algo, n_paths=1)  # Returns single path
+        rewards[i] = new_rewards[0]
+        total_timesteps += timesteps
         set_seed(algo, curr_seed)
         curr_seed += 1
 
-    avg_return = np.mean([sum(p['rewards']) for p in paths])
-    return avg_return, paths
+    avg_return = np.mean(rewards)
+    return avg_return, rewards, total_timesteps
     
-def get_average_return(algo, seed, N=10):
+def get_average_return(algo, seed, N=10, return_timesteps=False):
     algo_name = type(algo).__name__
     if algo_name in ['TRPO', 'ParallelTRPO']:
-        return get_average_return_trpo(algo, seed, N=N)
+        get_average_return_f = get_average_return_trpo
     elif algo_name in ['A3CALE']:
-        return get_average_return_a3c(algo, seed, N=N)
+        get_average_return_f = get_average_return_a3c
     elif algo_name in ['DQNAlgo']:
-        return get_average_return_dqn(algo, seed, N=N)
+        get_average_return_f = get_average_return_dqn
     else:
         assert False, "Algorithm type " + algo_name + " is not supported."
+    avg_return, paths, timesteps = get_average_return_f(algo, seed, N=N)
+    if return_timesteps:
+        return avg_return, paths, timesteps
+    else:
+        return avg_return, paths
 
 def load_model_trpo(algo, env, batch_size):
     algo.batch_size = batch_size
@@ -171,8 +188,68 @@ def load_model(params_file, batch_size):
                 height=algo.agent.image_height,
                 max_steps=algo.agent.phi_length * 2,
                 phi_length=algo.agent.phi_length)
+        algo.agent.testing = True
         algo.agent.bonus_evaluator = None
         algo.env = data['env']
         return algo, algo.env
     else:
         raise NotImplementedError
+
+def load_models(games, experiments, base_dir, batch_size, threshold=0, \
+                num_threshold=5, score_window=10):
+    # each entry in experiments should have the format "algo-name_exp-index"
+    # If threshold is in [0,1], then discard all policies which have a score
+    # less than threshold * the best policy's score - for each game and
+    # training algorithm pair
+
+    policies = {}  # key, top level: game name
+                   # key, second level: algorithm name
+                   # value: list of (algo, env) pairs - trained policies for that game
+    for game in games:
+        policies[game] = {}
+        for exp in experiments:
+            algo_name, exp_index = exp.split('_')
+            if algo_name not in policies[game]:
+                policies[game][algo_name] = []
+
+            params_parent_dir = osp.join(base_dir, algo_name, exp_index+'-'+game)
+            params_dirs = [osp.join(params_parent_dir, x) for x in os.listdir(params_parent_dir)]
+            params_dirs = [x for x in params_dirs if osp.isdir(x)]
+            for params_dir in params_dirs:
+                params_files = [x for x in os.listdir(params_dir) \
+                                if x.startswith('itr') and x.endswith('pkl')]
+                # Get the latest parameters
+                params_file = sorted(params_files,
+                                     key=lambda x: int(x.split('.')[0].split('_')[1]),
+                                     reverse=True)[0]
+                itr = int(params_file.split('.')[0].split('_')[1])
+                params_file = osp.join(params_dir, params_file)
+                algo, env = load_model(params_file, batch_size)
+                
+                # Calculate average score starting from saved iteration and
+                # going back score_window iterations
+                with open(osp.join(params_dir, 'progress.csv'), 'r') as progress_f:
+                    lines = progress_f.readlines()
+                    header = lines[0].split(',')
+                    score_idx = header.index(SCORE_KEY[algo_name])
+                    scores = [float(l.split(',')[score_idx]) \
+                              for l in lines[max(1,itr-score_window):itr+1]]
+                    score = sum(scores) / float(len(scores))
+                policies[game][algo_name].append((algo, env, score, params_file.split('/')[-2]))
+
+    if threshold > 1:
+        threshold = 1
+
+    # Discard all policies that are not close to as good as the best one, or not
+    # in the top num_threshold scores
+    best_policies = {}
+    for game in policies:
+        best_policies[game] = {}
+
+        for algo_name in policies[game]:
+            all_policies = sorted(policies[game][algo_name], key=lambda x: x[2], reverse=True)
+            best_score = all_policies[0][2]
+            best_policies[game][algo_name] = [x for x in all_policies if x[2] >= best_score*threshold]
+            best_policies[game][algo_name] = best_policies[game][algo_name][:num_threshold]
+
+    return best_policies

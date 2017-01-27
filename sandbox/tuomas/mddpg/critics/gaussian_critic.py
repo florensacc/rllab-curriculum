@@ -37,13 +37,11 @@ class MixtureGaussian2DCritic(NNCritic):
 
     def create_network(self, action_input, observation_input):
         a = action_input
-
         components = []
         for w, mu, sigma in zip(self._weights, self._mus, self._sigmas):
             mu = np.reshape(mu, (1, 2))
-
             comp = (1./tf.sqrt(2. * np.pi * sigma**2)) * tf.exp(
-                -0.5 / sigma**2 * tf.reduce_sum(tf.square(a - mu), axis=1))
+                    -0.5 / sigma**2 * tf.reduce_sum(tf.square(a - mu), axis=1))
 
             components.append(comp)
 
@@ -62,8 +60,8 @@ class MixtureGaussian2DCritic(NNCritic):
             observation_dim=self.observation_dim,
             action_input=action_input,
             observation_input=observation_input,
-            weights=self._weights,
-            mus=self._mus,
-            sigmas=self._sigmas,
+            weights=self._weights.copy(),
+            mus=self._mus.copy(),
+            sigmas=self._sigmas.copy(),
             reuse=True,
         )

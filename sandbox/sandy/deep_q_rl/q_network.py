@@ -21,7 +21,7 @@ from sandbox.sandy.deep_q_rl.updates import deepmind_rmsprop
 from rllab.core.serializable import Serializable
 from rllab.misc import logger
 
-class DeepQLearner(Serializable):
+class DeepQLearner():
     """
     Deep Q-learning network using Lasagne.
     """
@@ -32,7 +32,6 @@ class DeepQLearner(Serializable):
                  use_double, batch_size, network_type, conv_type, update_rule,
                  batch_accumulator, input_scale=np.float32(255.0), network_args=dict(),
                  eta=0):
-        Serializable.quick_init(self,locals())
 
         self.input_width = input_width
         self.input_height = input_height
@@ -48,11 +47,11 @@ class DeepQLearner(Serializable):
         self.freeze_interval = freeze_interval
         self.use_double = use_double
         self.eta = eta
+        self.input_scale = input_scale
 
         # Using Double DQN is pointless without periodic freezing
         if self.use_double:
             assert self.freeze_interval > 0
-
 
         self.update_counter = 0
 
@@ -432,6 +431,12 @@ class DeepQLearner(Serializable):
     def get_param_values(self):
         params = lasagne.layers.get_all_param_values(self.l_out)
         return params
+
+    def __getstate__(self):
+        return dict(
+                (k, v)
+                for (k, v) in self.__dict__.items()
+            )
 
 
 # def main():

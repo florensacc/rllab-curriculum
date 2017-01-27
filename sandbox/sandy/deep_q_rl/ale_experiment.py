@@ -43,11 +43,11 @@ class ALEExperiment(object):
         self.resize_method = resize_method
         self.width, self.height = self.env.ale_screen_dims
 
-        self.buffer_length = 2
-        self.buffer_count = 0
-        self.screen_buffer = np.empty((self.buffer_length,
-                                       self.height, self.width),
-                                      dtype=np.uint8)
+        #self.buffer_length = 2
+        #self.buffer_count = 0
+        #self.screen_buffer = np.empty((self.buffer_length,
+        #                               self.height, self.width),
+        #                              dtype=np.uint8)
 
         self.terminal_lol = False # Most recent episode ended on a loss of life
         self.max_start_nullops = max_start_nullops
@@ -155,7 +155,6 @@ class ALEExperiment(object):
             env=self.env,
         )
         logger.save_itr_params(epoch,params)
-
 
     def _init_episode(self):
         """ This method resets the game if needed, performs enough null
