@@ -28,7 +28,8 @@ if __name__ == "__main__":
         data = joblib.load(args.file)
         if "algo" in data:
             algo = data["algo"]
-            if hasattr(algo, "eval_policy"):
+            if hasattr(algo, "eval_policy") and \
+                (algo.eval_policy is not None):
                 policy = algo.eval_policy
             else:
                 policy = algo.policy

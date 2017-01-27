@@ -18,11 +18,12 @@ from sandbox.haoran.mddpg.misc.simple_replay_pool import SimpleReplayPool
 from rllab.misc import logger
 from rllab.misc import special
 from rllab.misc.overrides import overrides
+from rllab.core.serializable import Serializable
 
 TARGET_PREFIX = "target_"
 
 
-class DDPG(OnlineAlgorithm):
+class DDPG(OnlineAlgorithm, Serializable):
     """
     Deep Deterministic Policy Gradient.
     """
@@ -51,6 +52,7 @@ class DDPG(OnlineAlgorithm):
         :param Q_weight_decay: How much to decay the weights for Q
         :return:
         """
+        Serializable.quick_init(self, locals())
         self.qf = qf
         self.critic_learning_rate = qf_learning_rate
         self.actor_learning_rate = policy_learning_rate
@@ -61,6 +63,8 @@ class DDPG(OnlineAlgorithm):
         self.critic_train_counter = 0
         self.actor_train_frequency = actor_train_frequency
         self.actor_train_counter = 0
+        self.train_actor = True # shall be modified later
+        self.train_critic = True # shall be modified later
 
         super().__init__(env, policy, exploration_strategy, **kwargs)
 
@@ -305,10 +309,11 @@ class DDPG(OnlineAlgorithm):
     def get_epoch_snapshot(self, epoch):
         return dict(
             epoch=epoch,
-            env=self.env,
-            policy=self.policy,
-            es=self.exploration_strategy,
-            qf=self.qf,
+            # env=self.env,
+            # policy=self.policy,
+            # es=self.exploration_strategy,
+            # qf=self.qf,
+            algo=self,
         )
 
     def _do_training(self):
