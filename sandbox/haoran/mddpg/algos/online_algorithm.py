@@ -45,6 +45,7 @@ class OnlineAlgorithm(RLAlgorithm):
             scale_reward_annealer=None,
             render=False,
             epoch_full_paths=False,  # TH: I'm good without this. Remove?
+            train_repeat=1,
     ):
         """
         :param env: Environment
@@ -82,6 +83,7 @@ class OnlineAlgorithm(RLAlgorithm):
         self.scale_reward_annealer = scale_reward_annealer
         self.render = render
         self.epoch_full_paths = epoch_full_paths
+        self.train_repeat = train_repeat
 
         self.observation_dim = self.env.observation_space.flat_dim
         self.action_dim = self.env.action_space.flat_dim
@@ -207,7 +209,8 @@ class OnlineAlgorithm(RLAlgorithm):
 
                     # train
                     if self.pool.size >= self.min_pool_size:
-                        self._do_training()
+                        for _ in range(self.train_repeat):
+                            self._do_training()
                     itr += 1
                     gt.stamp('train: updates')
 
