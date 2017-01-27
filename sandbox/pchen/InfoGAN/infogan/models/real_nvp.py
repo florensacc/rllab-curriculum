@@ -10,7 +10,7 @@ import rllab.misc.logger as logger
 
 
 @scopes.add_arg_scope
-def resnet_blocks_gen(blocks=4, filters=64):
+def resnet_blocks_gen(blocks=4, filters=64, squash=tf.tanh):
     def go(x):
         chns = int_shape(x)[3]
         x = nn.conv2d(x, filters)
@@ -18,7 +18,9 @@ def resnet_blocks_gen(blocks=4, filters=64):
             x = nn.gated_resnet(x)
         temp = nn.conv2d(x, chns * 2)
         mu = temp[:, :, :, chns:]
-        logstd = tf.tanh(temp[:, :, :, :chns])  # might want learn scaling
+        logstd = (temp[:, :, :, :chns])  # might want learn scaling
+        if squash:
+            logstd = squash(logstd)
         return mu, logstd
 
     return go

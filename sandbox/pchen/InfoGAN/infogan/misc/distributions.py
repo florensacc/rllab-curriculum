@@ -2833,7 +2833,7 @@ class UniformDequant(DequantizationDistribution):
         dim = np.prod(shp[1:])
         return tf.random_uniform(shp, maxval=self._width), (-dim * np.log(self._width)).astype(np.float32)
 
-class TruncatedLogisticDequant(DequantizationDistribution):
+class FixedSpatialTruncatedLogisticDequant(DequantizationDistribution):
     def __init__(
             self,
             shape,
@@ -2889,6 +2889,50 @@ class TruncatedLogisticDequant(DequantizationDistribution):
         delegate_info = self.prior_dist_info(int_shape(condition)[0])
         eps, logli_eps = self._delegate_dist.sample_logli(
             delegate_info
+        )
+        scaling = self._width / 2.
+        return (eps+1.) * scaling, logli_eps - tf.log(scaling) * self._dim
+
+class FactorizedEncodingSpatialTruncatedLogisticDequant(DequantizationDistribution):
+    def __init__(
+            self,
+            shape,
+            nn_builder,
+            width=1. / 256,
+    ):
+        global G_IDX
+        G_IDX += 1
+        self._name = "FactorizedEncodingTruncatedLogisticDequant_%s" % (G_IDX)
+        self._nn_template = tf.make_template(self._name, nn_builder)
+        self._width = width
+        dim = np.prod(shape)
+        self._shape = shape
+        self._dim = dim
+        self._delegate_dist = TruncatedLogistic(shape, -1., 1.)
+        self.init_mode()
+
+    @overrides
+    def init_mode(self):
+        self._custom_phase = CustomPhase.init
+        self._delegate_dist.init_mode()
+
+    @overrides
+    def train_mode(self):
+        self._custom_phase = CustomPhase.train
+        self._delegate_dist.train_mode()
+
+    def sample_logli(self, dist_info):
+        condition = dist_info["condition"]
+        with scopes.default_arg_scope(
+                counters={}, init=self._custom_phase == CustomPhase.init,
+                ema=None
+        ):
+            delegate_info_flat = tf.reshape(
+                self._nn_template(condition),
+                [-1, self._delegate_dist.dist_flat_dim]
+            )
+        eps, logli_eps = self._delegate_dist.sample_logli(
+            self._delegate_dist.activate_dist(delegate_info_flat)
         )
         scaling = self._width / 2.
         return (eps+1.) * scaling, logli_eps - tf.log(scaling) * self._dim
