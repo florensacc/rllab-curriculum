@@ -470,6 +470,7 @@ class TruncatedLogistic(Distribution):
 
         self._shape = shape
         self._dim = np.prod(shape)
+        assert hi > lo
         self._lo = (np.ones([1, self._dim]) * lo).astype(np.float32)
         self._hi = (np.ones([1, self._dim]) * hi).astype(np.float32)
 
@@ -522,7 +523,20 @@ class TruncatedLogistic(Distribution):
             maxval=span,
         )
         samples = self.inverse_cdf(p_lo+p_delta, dist_info)
-        raw_logli = (-(samples - mu)/scale) - tf.log(scale) - 2.*tf.log(1+tf.exp((-(samples - mu)/scale)))
+
+        # untruncated logprob calculation
+        neg_standardized = -(samples - mu)/scale
+        log_exp_approx = tf.select(
+            neg_standardized > 70.,
+            neg_standardized,
+            tf.select(
+                neg_standardized < -10.,
+                tf.exp(neg_standardized),
+                tf.log(1. + tf.exp(neg_standardized))
+            )
+        )
+        raw_logli = neg_standardized - tf.log(scale) \
+                    - 2. * log_exp_approx
 
         THRESHOLD = 1e-3
         samples_out = tf.select(
@@ -539,6 +553,17 @@ class TruncatedLogistic(Distribution):
             raw_logli - tf.log(span),
             tf.tile(-tf.log(self._hi - self._lo), [bs, 1])
         )
+        # logli_out = tf.Print(
+        #     logli_out,
+        #     [
+        #         # "p_hi", p_hi, "p_lo", p_lo,
+        #         "spans", span, "samples", samples_out,
+        #         "logli", logli_out,
+        #         "neg_std", neg_standardized,
+        #         "mu", mu,
+        #         "scale", scale,
+        #     ]
+        # )
 
         return tf.reshape(samples_out, [-1]+list(self._shape)), tf.reduce_sum(logli_out, reduction_indices=[1])
 
@@ -2856,7 +2881,7 @@ class TruncatedLogisticDequant(DequantizationDistribution):
             return tf.tile(x, [batch_size, 1])
         return dict(
             mu=expand(self._mu),
-            scale=expand(self._log_scale),
+            scale=tf.exp(expand(self._log_scale)),
         )
 
     def sample_logli(self, dist_info):
@@ -2866,8 +2891,7 @@ class TruncatedLogisticDequant(DequantizationDistribution):
             delegate_info
         )
         scaling = self._width / 2.
-        return eps * scaling, logli_eps - tf.log(scaling) * self._dim
-
+        return (eps+1.) * scaling, logli_eps - tf.log(scaling) * self._dim
 
 # TODO: this has wrong impl for sampling
 def normalize(dist):

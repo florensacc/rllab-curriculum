@@ -99,11 +99,11 @@ def run_task(v):
         dataset=dataset,
         dist=dist,
         init_batch_size=1024,
-        train_batch_size=64, # also testing resuming from diff bs
-        optimizer=AdamaxOptimizer(learning_rate=1e-3),
+        train_batch_size=256, # also testing resuming from diff bs
+        optimizer=AdamaxOptimizer(learning_rate=2e-4),
         save_every=20,
         # # for debug
-        updates_per_iter=5,
+        debug=False,
         # resume_from="/home/peter/rllab-private/data/local/global_proper_deeper_flow/"
         # checkpoint_dir="data/local/test_debug",
     )
@@ -125,7 +125,7 @@ for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="spatial_tlogit_dequnt",
+        exp_prefix="final_spatial_tlogit_dequnt",
         variant=v,
 
         mode="local",

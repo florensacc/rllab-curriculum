@@ -31,6 +31,7 @@ class DistTrainer(object):
             save_every=10,
             checkpoint_dir=None,
             resume_from=None,
+            debug=False,
     ):
         self._dist = dist
         self._optimizer = optimizer
@@ -51,16 +52,18 @@ class DistTrainer(object):
         self._checkpoint_dir = checkpoint_dir or logger.get_snapshot_dir()
         assert self._checkpoint_dir, "checkpoint can't be none"
         self._resume_from = resume_from
+        self._debug = debug
 
     def construct_init(self):
         self._dist.init_mode()
         batch_size = self._init_batch_size
         inp_shape = (batch_size,) + self._dataset.image_shape
-        x_inp = tf.placeholder(tf.float32, shape=inp_shape)
 
         cpu_device = "/cpu:0"
         with tf.device(cpu_device):
-            logprobs = self._dist.logli_prior(x_inp)
+            with tf.name_scope("data_init"):
+                x_inp = tf.placeholder(tf.float32, shape=inp_shape)
+                logprobs = self._dist.logli_prior(x_inp)
 
         # save relevant sym vars
         self._sym_vars["init"] = dict(locals())
@@ -127,13 +130,14 @@ class DistTrainer(object):
         imgs_lst = []
         unit_bs = self._train_batch_size // len(devices)
         import sandbox.pchen.InfoGAN.infogan.misc.distributions as dists
-        for i, device in enumerate(
-            devices
-        ):
-            with tf.device(device):
-                with dists.set_current_seed((i+2)**2):
-                    imgs_lst += [self._dist.sample_prior(unit_bs)]
-        imgs = tf.concat(0, imgs_lst)
+        with tf.name_scope("eval"):
+            for i, device in enumerate(
+                devices
+            ):
+                with tf.device(device):
+                    with dists.set_current_seed((i+2)**2):
+                        imgs_lst += [self._dist.sample_prior(unit_bs)]
+            imgs = tf.concat(0, imgs_lst)
 
         return imgs
 
@@ -165,6 +169,27 @@ class DistTrainer(object):
                 sess.run(init, {init_inp: self.init_batch()})
                 logger.log("Init finished")
 
+            if self._debug:
+                from tensorflow.python.framework import dtypes
+                from tensorflow.python.framework import ops
+                from tensorflow.python.ops import array_ops
+                from tensorflow.python.ops import control_flow_ops
+                check_op = []
+                # This code relies on the ordering of ops in get_operations().
+                # The producer of a tensor always comes before that tensor's consumer in
+                # this list. This is true because get_operations() returns ops in the order
+                # added, and an op can only be added after its inputs are added.
+                for op in ops.get_default_graph().get_operations():
+                    for output in op.outputs:
+                        if output.dtype in [dtypes.float16, dtypes.float32, dtypes.float64]:
+                            if "save" in op.name or "data_init" in op.name or "optim" in op.name or "ExponentialMovingAverage" in op.name or "eval" in op.name:
+                                print("ignoring " + op.name)
+                                continue
+                            message = op.name + ":" + str(output.value_index) + "; traceback: " + "|||".join(" ".join(str(item) for item in items) for items in op.traceback)
+                            with ops.control_dependencies(check_op):
+                                check_op = [array_ops.check_numerics(output, message=message)]
+                check_op = control_flow_ops.group(*check_op)
+                trainer = tf.group(check_op, trainer)
             train_log_vals = []
             for itr in range(self._max_iter):
                 for update_i in ProgressBar()(range(self._updates_per_iter)):
@@ -174,6 +199,7 @@ class DistTrainer(object):
                             {train_inp: self.train_batch()}
                         )[1:]
                         train_log_vals.append(log_vals)
+                        assert not np.any(np.isnan(log_vals))
 
                     except BaseException as e:
                         print("exception caught: %s" % e)
