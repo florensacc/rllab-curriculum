@@ -12,8 +12,8 @@ from rllab.envs.normalized_env import NormalizedEnv
 from rllab.envs.proxy_env import ProxyEnv
 from rllab.misc import tensor_utils
 from rllab.misc.overrides import overrides
-from sandbox.carlos_snn.algos.hier_snn_mlp_policy import GaussianMLPPolicy_snn_hier
 from sandbox.carlos_snn.envs.mujoco.maze.fast_maze_env import FastMazeEnv
+from sandbox.carlos_snn.policies.hier_snn_mlp_policy import GaussianMLPPolicy_snn_hier
 from sandbox.carlos_snn.sampler.utils import rollout
 
 
