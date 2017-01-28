@@ -20,4 +20,4 @@ function sim_policy {
     )
 }
 
-source activate rllab_goal
+source activate rllab_goal_rl

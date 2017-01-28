@@ -1,4 +1,4 @@
-name: rllab_goal
+name: rllab_goal_rl
 channels:
     - https://conda.anaconda.org/kne
     - https://conda.binstar.org/tlatorre
