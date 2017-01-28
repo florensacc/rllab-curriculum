@@ -11,7 +11,6 @@ def rollout(env, agent, max_path_length=np.inf, reset_start_rollout=False, keep_
     rewards = []
     agent_infos = []
     env_infos = []
-    rendered_rgbs = []
     if reset_start_rollout:
         o = env.reset()  # otherwise it will never advance!!
     else:
@@ -24,6 +23,7 @@ def rollout(env, agent, max_path_length=np.inf, reset_start_rollout=False, keep_
     if animated:
         env.render()
     if keep_rendered_rgbs:  # will return a new entry to the path dict with all rendered images
+        rendered_rgbs = []
         rendered_rgbs.append(env.render(mode='rgb_array'))
     while path_length < max_path_length:
         # print("obs {} is {}".format(path_length, o))
