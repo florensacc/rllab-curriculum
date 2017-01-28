@@ -1,5 +1,5 @@
 """
-Fri Jan 27 15:07:20 2017: _v4
+Fri Jan 27 15:07:20 2017: _v0: tests for AntFollow with plain TRPO
 """
 # from rllab.sampler import parallel_sampler
 # parallel_sampler.initialize(n_parallel=2)
@@ -89,14 +89,12 @@ if __name__ == "__main__":
                         env=env,
                         policy=policy,
                         baseline=baseline,
-                        batch_size=1e6,
+                        batch_size=1e5,
                         whole_paths=True,
                         max_path_length=5e3,
                         n_itr=2000,
                         discount=0.99,
                         step_size=0.01,
-                        # Uncomment both lines (this and the plot parameter below) to enable plotting
-                        # plot=True,
                     )
 
                     for s in range(0, 40, 10):
