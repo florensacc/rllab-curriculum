@@ -20,12 +20,17 @@ def autoclone(file_path, launch_args):
     j = None
     v_num = 0
     if file_name[-3:-1] == '_v' and file_name[-1].isdigit():  # this only allows up to 10 versions!
-        v_num = int(file_name[-1]) + 1
+        v_num = int(file_name[-1]) + 1  # this will also be taken into account later for name conflict in case you are re-runnnig an old version
         j = -3
     v_tag = '_v' + str(v_num)
 
     # construct new file name, checking that not taken
-    file_core_name = file_name[i:j] if not launch_args.name else launch_args.name
+    if launch_args.name:
+        file_core_name = launch_args.name
+        v_num = 0
+        v_tag = '_v' + str(v_num)
+    else:
+        file_core_name = file_name[i:j]
     new_file_name = day_tag + file_core_name + v_tag + '.py'
     files = os.listdir(dir_path)
     while new_file_name in files:
