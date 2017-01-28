@@ -2838,6 +2838,7 @@ class FixedSpatialTruncatedLogisticDequant(DequantizationDistribution):
             self,
             shape,
             width=1. / 256,
+            scale=1.,
     ):
         global G_IDX
         G_IDX += 1
@@ -2846,6 +2847,7 @@ class FixedSpatialTruncatedLogisticDequant(DequantizationDistribution):
         dim = np.prod(shape)
         self._shape = shape
         self._dim = dim
+        self._scale = scale
         pshp = [1, dim]
         self._mu = tf.get_variable(
             self._name + "_mu",
@@ -2881,7 +2883,7 @@ class FixedSpatialTruncatedLogisticDequant(DequantizationDistribution):
             return tf.tile(x, [batch_size, 1])
         return dict(
             mu=expand(self._mu),
-            scale=tf.exp(expand(self._log_scale)),
+            scale=tf.exp(expand(self._log_scale)) * self._scale,
         )
 
     def sample_logli(self, dist_info):

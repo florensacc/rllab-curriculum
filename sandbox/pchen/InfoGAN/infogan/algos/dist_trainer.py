@@ -141,6 +141,32 @@ class DistTrainer(object):
 
         return imgs
 
+    def interact(self, embed=True):
+        sess = tf.Session()
+
+        assert self._resume_from
+        init_inp = self.construct_init()
+        logger.log("opt_inited w/ init=True")
+        train_inp, train_logs, trainer, ema = self.construct_train()
+        train_log_names, train_log_vars = zip(*train_logs.items())
+        logger.log("opt_inited w/ init=False")
+        sample_imgs = self.construct_eval()
+        logger.log("opt_inited w/ eval")
+
+        saver = tf.train.Saver()
+
+        with sess.as_default():
+            print("resuming from %s" % self._resume_from)
+            fn = tf.train.latest_checkpoint(self._resume_from)
+            if fn is None:
+                print("cant find latest checkpoint, treating as checkpoint file")
+                fn = self._resume_from
+            saver.restore(sess, fn)
+            logger.log("Restore finished")
+            if embed:
+                import IPython; IPython.embed()
+        return locals()
+
 
     def train(self):
         sess = tf.Session()
