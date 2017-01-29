@@ -73,7 +73,7 @@ class FollowEnv(GatherEnv, Serializable):
             goal_vector = self.get_readings(vector_obs=True)
             if np.sum(goal_vector) > 0:  # only give the dist rew if you see the goal!
                 ox, oy, typ = self.objects[0]
-                dist_reward = self.goal_dist_rew * 1. / np.max((ox - x) ** 2 + (oy - y) ** 2, 1)
+                dist_reward = self.goal_dist_rew * 1. / max((ox - x) ** 2 + (oy - y) ** 2, 1)
                 info['dist_rewards'] = dist_reward
                 reward += dist_reward
 
