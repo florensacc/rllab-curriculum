@@ -1,5 +1,5 @@
 """
-Fri Jan 27 15:07:20 2017: _v0: tests for AntFollow with plain TRPO
+Sat Jan 28 00:33:42 2017: _v0
 """
 # from rllab.sampler import parallel_sampler
 # parallel_sampler.initialize(n_parallel=2)
@@ -17,8 +17,7 @@ import argparse
 import sys
 from sandbox.carlos_snn.autoclone import autoclone
 
-
-from sandbox.carlos_snn.envs.mujoco.follow.ant_follow_env import AntFollowEnv
+from sandbox.carlos_snn.envs.mujoco.follow.snake_follow_env import SnakeFollowEnv
 
 stub(globals())
 
@@ -26,7 +25,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
-    parser.add_argument('--clone', '-c', action='store_true', default=False, help="add flag to copy file and checkout current")
+    parser.add_argument('--clone', '-c', action='store_true', default=False,
+                        help="add flag to copy file and checkout current")
     parser.add_argument('--local_docker', '-d', action='store_true', default=False,
                         help="add flag to run in local dock")
     parser.add_argument('--type', '-t', type=str, default='', help='set instance type')
@@ -40,9 +40,8 @@ if __name__ == "__main__":
 
     # setup ec2
     subnets = [
-        'us-east-2b', 'us-east-2c', 'us-west-1b', 'us-east-1d', 'us-east-1e', 'us-east-1b', 'ap-south-1a', 'us-east-1a',
-        'ap-northeast-2c', 'ap-south-1b', 'us-east-2a', 'us-west-1a', 'eu-west-1b', 'eu-west-1a', 'ap-southeast-2b',
-        'eu-west-1c'
+        'us-east-2c', 'us-east-2b', 'us-west-1b', 'ap-south-1a', 'us-east-1e', 'us-east-1d', 'us-east-1b',
+        'ap-northeast-2c', 'ap-south-1b', 'us-east-2a', 'us-east-1a'
     ]
 
     ec2_instance = args.type if args.type else 'c4.8xlarge'
@@ -67,15 +66,15 @@ if __name__ == "__main__":
 
     sensor_range = 10
 
-    for displ_std in [0.1, 0.3, 0.5]:
-        for sensor_span in [math.pi, 2*math.pi]:
-            for goal_dist_rew in [1]:
+    for displ_std in [0.1]:
+        for sensor_span in [2 * math.pi]:
+            for goal_dist_rew in [0, 1e-5]:
                 for goal_vector_obs in [True, False]:
 
-                    env = normalize(AntFollowEnv(sensor_span=sensor_span, sensor_range=sensor_range,
-                                                 goal_dist_rew=goal_dist_rew,
-                                                 goal_vector_obs=goal_vector_obs, ego_obs=True,
-                                                 ))
+                    env = normalize(SnakeFollowEnv(sensor_span=sensor_span, sensor_range=sensor_range,
+                                                   goal_dist_rew=goal_dist_rew,
+                                                   goal_vector_obs=goal_vector_obs, ego_obs=True,
+                                                   ))
 
                     policy = GaussianMLPPolicy(
                         env_spec=env.spec,
@@ -97,11 +96,11 @@ if __name__ == "__main__":
                         step_size=0.01,
                     )
 
-                    for s in range(0, 30, 10):
-                        exp_prefix = 'trpo-AntFollow'
+                    for s in range(0, 40, 10):
+                        exp_prefix = 'trpo-SnakeFollow'
                         exp_name = exp_prefix + '_{}displStd_{}sensSpan_{}goalDistRew_{}goalVectObs_{}'.format(
-                                                ''.join(str(displ_std).split('.')), int(sensor_span),
-                                                ''.join(str(goal_dist_rew).split('.')), str(goal_vector_obs), s)
+                            ''.join(str(displ_std).split('.')), int(sensor_span),
+                            ''.join(str(goal_dist_rew).split('.')), str(goal_vector_obs), s)
                         if mode in ['ec2', 'local_docker']:
                             # choose subnet
                             subnet = random.choice(subnets)
@@ -157,4 +156,3 @@ if __name__ == "__main__":
                                 exp_name=exp_name,
                             )
                             sys.exit()
-
