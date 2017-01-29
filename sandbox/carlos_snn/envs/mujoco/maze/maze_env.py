@@ -440,4 +440,4 @@ class MazeEnv(ProxyEnv, Serializable):
             if 'env_infos' in paths[0].keys() and 'inner_reward' in paths[0]['env_infos'].keys():
                 wrapped_undiscounted_return = np.mean([np.sum(path['env_infos']['inner_reward']) for path in paths])
                 logger.record_tabular('AverageReturn', wrapped_undiscounted_return)
-            self.wrapped_env.log_diagnostics(stripped_paths, *args, **kwargs)  # see swimmer_env.py for a scketch of the maze plotting!
+            self.wrapped_env.log_diagnostics(stripped_paths, *args, **kwargs)

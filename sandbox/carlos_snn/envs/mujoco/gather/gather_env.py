@@ -19,119 +19,10 @@ from rllab.misc import autoargs
 from rllab.misc.overrides import overrides
 from rllab.mujoco_py import MjViewer, MjModel, mjcore, mjlib, \
     mjextra, glfw
+from rllab.envs.mujoco.gather.gather_env import GatherViewer
 
 APPLE = 0
 BOMB = 1
-
-
-class GatherViewer(MjViewer):
-    def __init__(self, env):
-        self.env = env
-        super(GatherViewer, self).__init__()
-        green_ball_model = MjModel(osp.abspath(
-            osp.join(
-                MODEL_DIR, 'green_ball.xml'
-            )
-        ))
-        self.green_ball_renderer = EmbeddedViewer()
-        self.green_ball_model = green_ball_model
-        self.green_ball_renderer.set_model(green_ball_model)
-        red_ball_model = MjModel(osp.abspath(
-            osp.join(
-                MODEL_DIR, 'red_ball.xml'
-            )
-        ))
-        self.red_ball_renderer = EmbeddedViewer()
-        self.red_ball_model = red_ball_model
-        self.red_ball_renderer.set_model(red_ball_model)
-
-    def start(self):
-        super(GatherViewer, self).start()
-        self.green_ball_renderer.start(self.window)
-        self.red_ball_renderer.start(self.window)
-
-    def handle_mouse_move(self, window, xpos, ypos):
-        super(GatherViewer, self).handle_mouse_move(window, xpos, ypos)
-        self.green_ball_renderer.handle_mouse_move(window, xpos, ypos)
-        self.red_ball_renderer.handle_mouse_move(window, xpos, ypos)
-
-    def handle_scroll(self, window, x_offset, y_offset):
-        super(GatherViewer, self).handle_scroll(window, x_offset, y_offset)
-        self.green_ball_renderer.handle_scroll(window, x_offset, y_offset)
-        self.red_ball_renderer.handle_scroll(window, x_offset, y_offset)
-
-    def render(self):
-        super(GatherViewer, self).render()
-        tmpobjects = mjcore.MJVOBJECTS()
-        mjlib.mjlib.mjv_makeObjects(byref(tmpobjects), 1000)
-        for obj in self.env.objects:
-            x, y, typ = obj
-            # print x, y
-            qpos = np.zeros_like(self.green_ball_model.data.qpos)
-            qpos[0, 0] = x
-            qpos[1, 0] = y
-            if typ == APPLE:
-                self.green_ball_model.data.qpos = qpos
-                self.green_ball_model.forward()
-                self.green_ball_renderer.render()
-                mjextra.append_objects(
-                    tmpobjects, self.green_ball_renderer.objects)
-            else:
-                self.red_ball_model.data.qpos = qpos
-                self.red_ball_model.forward()
-                self.red_ball_renderer.render()
-                mjextra.append_objects(
-                    tmpobjects, self.red_ball_renderer.objects)
-        mjextra.append_objects(tmpobjects, self.objects)
-        mjlib.mjlib.mjv_makeLights(
-            self.model.ptr, self.data.ptr, byref(tmpobjects))
-        mjlib.mjlib.mjr_render(0, self.get_rect(), byref(tmpobjects), byref(
-            self.ropt), byref(self.cam.pose), byref(self.con))
-
-        try:
-            import OpenGL.GL as GL
-        except:
-            return
-
-        def draw_rect(x, y, width, height):
-            # start drawing a rectangle
-            GL.glBegin(GL.GL_QUADS)
-            # bottom left point
-            GL.glVertex2f(x, y)
-            # bottom right point
-            GL.glVertex2f(x + width, y)
-            # top right point
-            GL.glVertex2f(x + width, y + height)
-            # top left point
-            GL.glVertex2f(x, y + height)
-            GL.glEnd()
-
-        def refresh2d(width, height):
-            GL.glViewport(0, 0, width, height)
-            GL.glMatrixMode(GL.GL_PROJECTION)
-            GL.glLoadIdentity()
-            GL.glOrtho(0.0, width, 0.0, height, 0.0, 1.0)
-            GL.glMatrixMode(GL.GL_MODELVIEW)
-            GL.glLoadIdentity()
-
-        GL.glLoadIdentity()
-        width, height = glfw.get_framebuffer_size(self.window)
-        refresh2d(width, height)
-        GL.glDisable(GL.GL_LIGHTING)
-        GL.glEnable(GL.GL_BLEND)
-
-        GL.glColor4f(0.0, 0.0, 0.0, 0.8)
-        draw_rect(10, 10, 300, 100)
-
-        apple_readings, bomb_readings = self.env.get_readings()
-        for idx, reading in enumerate(apple_readings):
-            if reading > 0:
-                GL.glColor4f(0.0, 1.0, 0.0, reading)
-                draw_rect(20 * (idx + 1), 10, 5, 50)
-        for idx, reading in enumerate(bomb_readings):
-            if reading > 0:
-                GL.glColor4f(1.0, 0.0, 0.0, reading)
-                draw_rect(20 * (idx + 1), 60, 5, 50)
 
 
 class GatherEnv(ProxyEnv, Serializable):
@@ -223,7 +114,7 @@ class GatherEnv(ProxyEnv, Serializable):
         # import pdb; pdb.set_trace()
         ProxyEnv.__init__(self, inner_env)
 
-    def reset(self):
+    def reset(self, also_wrapped=True):
         # super(GatherMDP, self).reset()
         self.objects = []
         existing = set()
@@ -254,7 +145,8 @@ class GatherEnv(ProxyEnv, Serializable):
             self.objects.append((x, y, typ))
             existing.add((x, y))
 
-        self.wrapped_env.reset()
+        if also_wrapped:  # CF
+            self.wrapped_env.reset()
         return self.get_current_obs()
 
     def step(self, action):
@@ -340,9 +232,8 @@ class GatherEnv(ProxyEnv, Serializable):
     @property
     @overrides
     def observation_space(self):
-        dim = self.wrapped_env.observation_space.flat_dim
-        newdim = dim + self.n_bins * 2
-        ub = BIG * np.ones(newdim)
+        shp = self.get_current_obs().shape
+        ub = BIG * np.ones(shp)
         return spaces.Box(ub * -1, ub)
 
     # CF space of only the robot observations (they go first in the get current obs)
@@ -371,15 +262,6 @@ class GatherEnv(ProxyEnv, Serializable):
     def viewer(self):
         return self.wrapped_env.viewer
 
-    # CF needed?
-    @property
-    @overrides
-    def spec(self):
-        return EnvSpec(
-            observation_space=self.observation_space,
-            action_space=self.action_space,
-        )
-
     def action_from_key(self, key):
         return self.wrapped_env.action_from_key(key)
 
@@ -406,17 +288,15 @@ class GatherEnv(ProxyEnv, Serializable):
             self.get_viewer()
             self.wrapped_env.render()
 
-
     def get_ori(self):
         return self.wrapped_env.model.data.qpos[self.__class__.ORI_IND]
 
-
     # CF
     @overrides
-    def log_diagnostics(self, paths, *args, **kwargs):
+    def log_diagnostics(self, paths, log_prefix='Gather', *args, **kwargs):
         # we call here any logging related to the gather, strip the maze obs and call log_diag with the stripped paths
         # we need to log the purely gather reward!!
-        with logger.tabular_prefix('Gather_'):
+        with logger.tabular_prefix(log_prefix + '_'):
             gather_undiscounted_returns = [sum(path['env_infos']['gather_rewards']) for path in paths]
             logger.record_tabular_misc_stat('Return', gather_undiscounted_returns, placement='front')
         stripped_paths = []
