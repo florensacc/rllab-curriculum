@@ -137,10 +137,10 @@ class Pr2EnvLego(MujocoEnv, Serializable):
     def step(self, action):
 
         if self.use_baseline:
-            self.t += 0.05
 
             if not self.stop:
-                action = self.lego_pos + (self.goal - self.lego_pos) * (self.t - 0.2)
+                self.t += 0.05
+                action = self.lego_pos + (self.goal - self.lego_pos) * (self.t - 0.4)
                 action = action[:2]
             else:
                 action = self.model.data.qpos[:2, 0]
@@ -149,15 +149,20 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         distance_tip_to_goal_previous = np.linalg.norm(vec_to_goal_previous)
 
 
-        self.forward_dynamics(action, qvel=self.init_qvel, position_ctrl=True, range=0.01)
+        self.forward_dynamics(action)
 
         vec_tip_to_lego = self.get_vec_tip_to_lego()
         vec_to_goal = self.get_vec_to_goal()
         distance_to_goal = np.linalg.norm(vec_to_goal)
         distance_tip_to_lego = np.linalg.norm(vec_tip_to_lego)
+        #
+        # if distance_to_goal > distance_tip_to_goal_previous:
+        #     self.stop = True
 
-        if distance_to_goal > distance_tip_to_goal_previous:
+        if self.t >= 1.4:
             self.stop = True
+        # print(self.t)
+
 
         # Penalize the robot for being far from the goal and for having the arm far from the lego.
         reward_dist = - distance_to_goal
@@ -222,14 +227,15 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         else:
             # Use current position as new position.
             qpos = copy.copy(self.model.data.qpos) #[:-goal_dims]
-            if self.get_lego_position()[-1] < 0.4:
-                lego_position = self.get_lego_position()
-                if self._lego_generator is not None:
-                    self.lego = self._lego_generator.generate_goal(lego_position)
-                    qpos[-goal_dims - lego_dims - 1:-goal_dims] = self.lego[:, None]
-                else:
-                    # print("No lego generator!")
-                    qpos[-goal_dims - lego_dims - 1:-goal_dims] = np.array((0.6, 0.2, 0.5025, 1, 0, 0, 0))[:, None]
+            lego_position = self.get_lego_position()
+        if self._lego_generator is not None:
+            self.lego = self._lego_generator.generate_goal(lego_position)
+            theta = np.random.uniform(0, 2 * np.pi)
+            quat = np.array([np.cos(theta / 2), 0, 0, np.sin(theta / 2)])
+            qpos[-goal_dims - lego_dims - 1:-goal_dims, 0] = np.concatenate([self.lego[:3], quat])
+        else:
+            # print("No lego generator!")
+            qpos[-goal_dims - lego_dims - 1:-goal_dims] = np.array((0.6, 0.2, 0.5025, 1, 0, 0, 0))[:, None]
         # Generate a new goal.
 
 
@@ -240,7 +246,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             print("No goal generator!")
 
         self.lego_pos = self.lego[:3]
-        init_hand = self.lego_pos + (self.goal - self.lego_pos) * (self.t - 0.2)
+        init_hand = self.lego_pos + (self.goal - self.lego_pos) * (self.t - 0.4)
         qpos[:2, 0] = init_hand[:2]
 
         if self.allow_random_vel_restarts or self.first_time:

@@ -56,7 +56,7 @@
 
 
 
-    <body name="l_wrist_roll_link" pos="0 0 0.7025" quat="0.707 0 0.707 0">
+    <body name="l_wrist_roll_link" pos="0 0 0.75" quat="0.707 0 0.707 0">
 
         <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01" />
         <joint armature="0" axis="0 0 1" damping="0" name="hand_x" pos="0 0 0" ref="0" stiffness="0" type="slide"/>
@@ -105,7 +105,7 @@
         </body>
             <body name="table" pos="0 0 0">
             <inertial pos="0 0 0" mass="100.0" diaginertia="1.0 1.0 1.0"/>
-            <geom name="table_geom" type="box" pos="0.6 0 0.42" size="0.25 1.0 0.05" rgba="0 0.3 0 1" contype="1" conaffinity="1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+            <geom name="table_geom" type="box" pos="0.6 0 0.42" size="0.5 1.0 0.05" rgba="0 0.3 0 1" contype="1" conaffinity="1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
         </body>
 
         <body name="OBJ_brick1" pos ="0.6 0.2 0.5025">
@@ -128,7 +128,13 @@
 
     </worldbody>
     <actuator>
-    <position ctrllimited="false" forcelimited="true" forcerange="-10 10" joint="hand_x" kp="2"/>
-    <position ctrllimited="false" forcelimited="true" forcerange="-10 10" joint="hand_y" kp="2"/>
+    <motor joint="hand_x" ctrlrange="-3.0 3.0" ctrllimited="true"/>
+    <motor joint="hand_y" ctrlrange="-3.0 3.0" ctrllimited="true"/>
 </actuator>
 </mujoco>
+
+<!--0.1-->
+<!--0.1-->
+
+<!--10-->
+<!--10-->
