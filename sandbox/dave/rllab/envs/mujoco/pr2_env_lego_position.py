@@ -39,6 +39,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             number_actions=1,
             dilate_time=1,
             crop=True,
+            tip=1,
             *args, **kwargs):
 
         self.action_penalty_weight = action_penalty_weight
@@ -84,6 +85,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.beta = 0.1
         self.crop = crop
         self.discount_weights = 0.99
+        self.tip = tip
 
         super(Pr2EnvLego, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
@@ -226,7 +228,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         # Penalize the robot for large actions.f
         # reward_occlusion = self.occlusion_weight * self.get_reward_occlusion()
         # reward_ctrl = - self.action_penalty_weight * np.square(action).sum()
-        reward = reward_tip + reward_dist + reward_angle + reward_ctrl #reward_ctrl#+ reward_occlusion
+        reward = reward_dist + reward_angle + reward_tip #reward_ctrl#+ reward_occlusion
         state = self._state
         notdone = np.isfinite(state).all()
         done = not notdone
@@ -307,13 +309,17 @@ class Pr2EnvLego(MujocoEnv, Serializable):
 
         else:
             # Use current position as new position.
-            qpos_curr = self.model.data.qpos #[:-goal_dims]
-            qpos = list(qpos_curr)
+            qpos = copy.copy(self.model.data.qpos) #[:-goal_dims]
+            # qpos = list(qpos_curr)
             # if self.get_lego_position()[-1] < 0.4:
         lego_position = self.get_lego_position()
         if self._lego_generator is not None:
+            theta = np.random.uniform(0, 2 * np.pi)
+            quat = np.array([np.cos(theta/2), 0, 0, np.sin(theta/2)])
             self.lego = self._lego_generator.generate_goal(lego_position)
-            qpos[-goal_dims - lego_dims - 1:-goal_dims] = self.lego[:, None]
+            # qpos[-goal_dims - lego_dims - 1:-goal_dims, 0] = np.concatenate([self.lego[:3], quat])
+            qpos[-goal_dims - lego_dims - 1:-goal_dims, 0] = self.lego
+                # np.concatenate([self.lego[:3], quat])[:, None]
         else:
             # print("No lego generator!")
             qpos[-goal_dims - lego_dims - 1:-goal_dims] = np.array((0.6, 0.2, 0.5025, 1, 0, 0, 0))[:, None]

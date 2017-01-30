@@ -4,7 +4,8 @@ import time
 from rllab.envs.normalized_env import NormalizedEnv  # this is just to check if the env passed is a normalized maze
 
 
-def rollout(env, agent, max_path_length=np.inf, reset_start_rollout=False, animated=False, speedup=1):
+def rollout(env, agent, max_path_length=np.inf, reset_start_rollout=False, keep_rendered_rgbs=False,
+            animated=False, speedup=1):
     observations = []
     actions = []
     rewards = []
@@ -21,6 +22,9 @@ def rollout(env, agent, max_path_length=np.inf, reset_start_rollout=False, anima
     path_length = 0
     if animated:
         env.render()
+    if keep_rendered_rgbs:  # will return a new entry to the path dict with all rendered images
+        rendered_rgbs = []
+        rendered_rgbs.append(env.render(mode='rgb_array'))
     while path_length < max_path_length:
         # print("obs {} is {}".format(path_length, o))
         a, agent_info = agent.get_action(o)
@@ -34,14 +38,16 @@ def rollout(env, agent, max_path_length=np.inf, reset_start_rollout=False, anima
         if d:
             break
         o = next_o
+        if keep_rendered_rgbs:  # will return a new entry to the path dict with all rendered images
+            rendered_rgbs.append(env.render(mode='rgb_array'))
         if animated:
             env.render()
             timestep = 0.05
             time.sleep(timestep / speedup)
-    # if animated:
+    # if animated:   # this is off as in the case of being an inner rollout, it will close the outer renderer!
         # env.render(close=True)
 
-    return dict(
+    path_dict = dict(
         observations=tensor_utils.stack_tensor_list(observations),
         actions=tensor_utils.stack_tensor_list(actions),
         rewards=tensor_utils.stack_tensor_list(rewards),
@@ -51,3 +57,7 @@ def rollout(env, agent, max_path_length=np.inf, reset_start_rollout=False, anima
         #  hence the next concatenation done by sampler at the higher level doesn't work because the mismatched dim
         #  1 and not 0!!
     )
+    if keep_rendered_rgbs:
+        path_dict['rendered_rgbs'] = tensor_utils.stack_tensor_list(rendered_rgbs)
+
+    return path_dict

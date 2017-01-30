@@ -140,6 +140,9 @@ class BatchPolopt(RLAlgorithm):
             # self.env._wrapped_env.gamma = self.env._wrapped_env.discount *\
             #                               (1 - np.exp(-self.env._wrapped_env.iter /
             #                                           self.env._wrapped_env.tau))
+
+            # self.env._wrapped_env.gamma = self.env._wrapped_env.discount * self.env._wrapped_env.tau ** itr
+            # print(self.env._wrapped_env.iter)
             # self.env._wrapped_env.distance_tip_lego_penalty_weight *= 0.997
             self.shutdown_worker()
 
