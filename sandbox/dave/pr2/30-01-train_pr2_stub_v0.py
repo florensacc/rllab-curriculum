@@ -8,13 +8,14 @@ from sandbox.dave.rllab.algos.trpo import TRPO
 from sandbox.dave.rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 
 from rllab.envs.normalized_env import normalize
-from sandbox.dave.rllab.goal_generators.pr2_goal_generators import PR2CrownGoalGeneratorSmall #PR2CrownGoalGeneratorSmall
-from sandbox.dave.rllab.lego_generators.pr2_lego_generators import PR2LegoBoxBlockGeneratorSmall #PR2LegoBoxBlockGeneratorSmall #PR2LegoBoxBlockGeneratorSmall #PR2LegoFixedBlockGenerator
+from sandbox.dave.rllab.goal_generators.pr2_goal_generators import \
+    PR2CrownGoalGeneratorSmall  # PR2CrownGoalGeneratorSmall
+from sandbox.dave.rllab.lego_generators.pr2_lego_generators import \
+    PR2LegoBoxBlockGeneratorSmall  # PR2LegoBoxBlockGeneratorSmall #PR2LegoBoxBlockGeneratorSmall #PR2LegoFixedBlockGenerator
 from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.dave.rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 # from sandbox.dave.rllab.policies.gaussian_mlp_policy_tanh import GaussianMLPPolicy
 from rllab.misc.instrument import VariantGenerator, variant
-
 
 from sandbox.dave.rllab.envs.mujoco.pr2_env_lego import Pr2EnvLego
 # from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_position import Pr2EnvLego
@@ -26,20 +27,16 @@ from sandbox.carlos_snn.autoclone import autoclone
 import os
 import random
 import argparse
-
+import sys
 
 stub(globals())
-
-train_goal_generator = PR2CrownGoalGeneratorSmall()
-action_limiter = FixedActionLimiter()
-
-
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
-    parser.add_argument('--clone', '-c', action='store_true', default=False, help="add flag to copy file and checkout current")
+    parser.add_argument('--clone', '-c', action='store_true', default=False,
+                        help="add flag to copy file and checkout current")
     parser.add_argument('--local_docker', '-d', action='store_true', default=False,
                         help="add flag to run in local dock")
     parser.add_argument('--type', '-t', type=str, default='', help='set instance type')
@@ -78,6 +75,9 @@ if __name__ == "__main__":
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
 
+    train_goal_generator = PR2CrownGoalGeneratorSmall()
+    action_limiter = FixedActionLimiter()
+
     seeds = range(50, 300, 50)  # [1, 11, 21, 31, 41]
     # seeds = [11, 21, 31, 41]
     # seeds = [11, 21, 31, 41]
@@ -87,8 +87,9 @@ if __name__ == "__main__":
     # taus = [1000, 2000]
     # taus = [0.9, 0.95, 0.995]
     # taus = [1]
-    bool_tip = [0, 1]
-    for t in bool_tip:
+    taus = [2000, 5000, 10000]
+
+    for t in taus:
         for s in seeds:
             env = normalize(Pr2EnvLego(
                 goal_generator=train_goal_generator,
@@ -97,15 +98,15 @@ if __name__ == "__main__":
                 max_action=1,
                 pos_normal_sample=True,
                 qvel_init_std=0.01,
-                pos_normal_sample_std=.01,  #0.5
+                pos_normal_sample_std=.01,  # 0.5
                 # use_depth=True,
                 # use_vision=True,
                 allow_random_restarts=True,
-                tip=t,
-                # tau=t,
+                # tip=t,
+                tau=t,
                 # crop=True,
                 # allow_random_vel_restarts=True,
-                ))
+            ))
 
             policy = GaussianMLPPolicy(
                 env_spec=env.spec,
@@ -116,7 +117,7 @@ if __name__ == "__main__":
                 # beta=0.05,
                 # pkl_path= "upload/fixed-arm-position-ctrl-tip-no-random-restarts/fixed-arm-position-ctrl-tip-no-random-restarts1/params.pkl"
                 # json_path="/home/ignasi/GitRepos/rllab-goals/data/local/train-Lego/rand_init_angle_reward_shaping_continuex2_2016_10_17_12_48_20_0001/params.json",
-                )
+            )
 
             baseline = LinearFeatureBaseline(env_spec=env.spec)
 
@@ -125,8 +126,8 @@ if __name__ == "__main__":
                 policy=policy,
                 baseline=baseline,
                 batch_size=50000,
-                max_path_length=150,  #100
-                n_itr=10000, #50000
+                max_path_length=150,  # 100
+                n_itr=10000,  # 50000
                 discount=0.95,
                 gae_lambda=0.98,
                 step_size=0.01,
@@ -136,16 +137,13 @@ if __name__ == "__main__":
                 # discount_weights={'angle': 0.1, 'tip': .1},
                 # plot=True,
                 # Uncomment both lines (this and the plot parameter below) to enable plotting
-                )
+            )
 
             # algo.train()
 
-        ##lambda exp: exp.params['exp_name'].split('_')[-1][:2]
-            exp_prefix = "train-Lego/RSS/rewards"
-            if t:
-                exp_name="r_tip_" + str(s)
-            else:
-                exp_name = "r_base_" + str(s)
+            ##lambda exp: exp.params['exp_name'].split('_')[-1][:2]
+            exp_prefix = "train-Lego/RSS/reward-fixed"
+            exp_name = "r_tau_" + str(t) + '_' + str(s)
 
             if mode in ['ec2', 'local_docker']:
                 # choose subnet
@@ -179,6 +177,7 @@ if __name__ == "__main__":
                     exp_prefix=exp_prefix,
                     exp_name=exp_name,
                     sync_s3_pkl=True,
+                    periodic_sync=True,
                     # for sync the pkl file also during the training
                     sync_s3_png=True,
                     # # use this ONLY with ec2 or local_docker!!!
