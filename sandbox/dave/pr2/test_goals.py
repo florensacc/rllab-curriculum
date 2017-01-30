@@ -21,7 +21,7 @@ from sandbox.dave.rllab.lego_generators.pr2_lego_generators import PR2LegoFixedB
 from sandbox.dave.rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 # from sandbox.dave.rllab.policies.gaussian_mlp_policy_tanh import GaussianMLPPolicy
 
-# from sandbox.dave.rllab.envs.mujoco.pr2_env_lego import Pr2EnvLego
+from sandbox.dave.rllab.envs.mujoco.pr2_env_lego import Pr2EnvLego
 from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_position import Pr2EnvLego
 # from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_position_different_objects import Pr2EnvLego
 from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_hand import Pr2EnvLego
@@ -121,8 +121,9 @@ if __name__ == "__main__":
     # pkl_file = "data/s3/train-Lego/RSS/fixed-arm-position-ctrl-tip/fixed-arm-position-ctrl-tip1/params.pkl"
     # pkl_file = "data/s3/train-Lego/RSS/fixed-arm-position-ctrl-tip/fixed-arm-position-ctrl-tip1/params.pkl"
     # pkl_file = "upload/fixed-arm-position-ctrl-tip-no-random-restarts/fixed-arm-position-ctrl-tip-no-random-restarts1/params.pkl"
-    pkl_file = "data/s3/train-Lego/RSS/baseline/hand-xy-torque/params.pkl"
+    # pkl_file = "data/s3/train-Lego/RSS/fine-tune-just-distance-different-orient-no-time/fine-tune-just-distance-different-orient-no-time/params.pkl"
     # pkl_file = "data/s3/train-Lego/RSS/fine-tune-just-distance-n-control/fine-tune-just-distance-n-control/params.pkl"
+    pkl_file = "data/local/train-Lego/RSS/baseline/lego_hand_no_torque_limitation/params.pkl"
     # pkl_file = "data/s3/train-Lego/RSS/position-control-different-orientation/position-control-different-orientation/params.pkl"
     # pkl_file = "data/s3/train-Lego/RSS/comparison-rewards/fixed-arm-lego-phi/params.pkl"
 

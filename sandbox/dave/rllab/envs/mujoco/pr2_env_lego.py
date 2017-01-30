@@ -190,12 +190,9 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         reward_ctrl = - self.action_penalty_weight * np.square(action).sum()
         # reward = reward_dist + reward_ctrl + self.gamma * phi - phi_prev
         # reward = reward_dist + reward_ctrl + reward_tip
-        if self.tip:
-            reward = reward_dist + reward_ctrl + reward_tip #reward_ctrl#+ reward_occlusion
-        else:
-            reward = reward_dist + reward_ctrl # reward_ctrl#+ reward_occlusion
-        state = self._state
+        reward = reward_dist + reward_ctrl + self.gamma * phi - phi_prev #reward_ctrl#+ reward_occlusion
 
+        state = self._state
         # print(reward_occlusion, reward_angle, reward_tip, reward_dist, )
         notdone = np.isfinite(state).all()
         done = not notdone
@@ -437,25 +434,25 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         # failure_rate = self.get_mean_failure_rate()
         # expected_damage = action_limit * failure_rate
         # logger.record_tabular('Expected Damage', expected_damage)
-    # def __getstate__(self):
-    #     d = super(Pr2EnvLego, self).__getstate__()
-    #     d['_iter'] = self.iter
-    #     return d
-    #
-    # def __setstate__(self, d):
-    #     super(Pr2EnvLego, self).__setstate__(d)
-    #     self.update_gamma(d['_iter'])
-    #
-    # def update_gamma(self, gamma):
-    #     self.iter += 1
-    #     self.gamma = self.discount * self.tau ** self.iter
-    #     return self.angle_penalty_weight, self.distance_tip_lego_penalty_weight
-    #
-    # def __getstate__(self):
-    #     d = super(Pr2EnvLego, self).__getstate__()
-    #     d['_iter'] = self.iter
-    #     d['_gamma'] = self.gamma
-    #     return d
+    def __getstate__(self):
+        d = super(Pr2EnvLego, self).__getstate__()
+        d['_iter'] = self.iter
+        return d
+
+    def __setstate__(self, d):
+        super(Pr2EnvLego, self).__setstate__(d)
+        self.update_gamma(d['_iter'])
+
+    def update_gamma(self, gamma):
+        self.iter += 1
+        self.gamma = self.discount * self.tau ** self.iter
+        return self.angle_penalty_weight, self.distance_tip_lego_penalty_weight
+
+    def __getstate__(self):
+        d = super(Pr2EnvLego, self).__getstate__()
+        d['_iter'] = self.iter
+        d['_gamma'] = self.gamma
+        return d
     #
     # def __setstate__(self, d):
     #     super(Pr2EnvLego, self).__setstate__(d)

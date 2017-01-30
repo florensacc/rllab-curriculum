@@ -128,9 +128,9 @@
 
     </worldbody>
     <actuator>
-    <motor joint="hand_x" ctrlrange="-3.0 3.0" ctrllimited="true"/>
-    <motor joint="hand_y" ctrlrange="-3.0 3.0" ctrllimited="true"/>
-    <motor joint="rotation" ctrlrange="-3.0 3.0" ctrllimited="true"/>
+    <motor joint="hand_x"/>
+    <motor joint="hand_y"/>
+    <motor joint="rotation"/>
 </actuator>
 </mujoco>
 
