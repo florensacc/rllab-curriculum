@@ -72,7 +72,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.use_depth = use_depth
         self.discount = 0.95
         self.depth = np.zeros([99, 99, 3])  #TODO: Hacky
-        self.model = model
+        # self.model = model
         self.gamma = 0
         self.iter = 0
         self.tau = tau
@@ -80,9 +80,6 @@ class Pr2EnvLego(MujocoEnv, Serializable):
 
         super(Pr2EnvLego, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
-        init_qpos = copy.copy(self.model.data.qpos)
-        init_qpos[:7, 0] = np.array([1.2, -0.5, 2, -1.5, 0, 0, -0.25])
-        self.init_qpos = init_qpos
 
     def set_model(self, model):
         self.__class__.FILE = model
@@ -178,7 +175,6 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         distance_to_goal = np.linalg.norm(vec_to_goal)
         distance_tip_to_lego = np.linalg.norm(vec_tip_to_lego)
 
-        # print("calculat:  ", self.get_lego_from_image(), "|", "real:  ", self.get_lego_position())
         # Penalize the robot for being far from the goal and for having the arm far from the lego.
         reward_dist = - distance_to_goal
         reward_tip = - self.distance_tip_lego_penalty_weight * distance_tip_to_lego
@@ -188,13 +184,13 @@ class Pr2EnvLego(MujocoEnv, Serializable):
 
         # Penalize the robot for large actions.f
         # reward_occlusion = self.occlusion_weight * self.get_reward_occlusion()
-
         phi = -(reward_angle + reward_tip)
         reward_ctrl = - self.action_penalty_weight * np.square(action).sum()
         # reward = reward_dist + reward_ctrl + self.gamma * phi - phi_prev
-        reward = reward_dist + reward_ctrl -phi
-        # reward = reward_dist + reward_ctrl + self.gamma * phi - phi_prev
+        # reward = reward_dist + reward_ctrl + reward_tip
+        reward = reward_dist + reward_ctrl + self.gamma * phi - phi_prev
         state = self._state
+
         # print(reward_occlusion, reward_angle, reward_tip, reward_dist, )
         notdone = np.isfinite(state).all()
         done = not notdone
@@ -453,13 +449,14 @@ class Pr2EnvLego(MujocoEnv, Serializable):
     def __getstate__(self):
         d = super(Pr2EnvLego, self).__getstate__()
         d['_iter'] = self.iter
+        d['_gamma'] = self.gamma
         return d
 
     def __setstate__(self, d):
         super(Pr2EnvLego, self).__setstate__(d)
-        self.update_gamma(d['_iter'])
+        self.update_gamma()
 
-    def update_gamma(self, gamma):
+    def update_gamma(self):
         self.iter += 1
         self.gamma = self.discount * (1 - np.exp(-self.iter/self.tau))
         # return self.angle_penalty_weight, self.distance_tip_lego_penalty_weight
