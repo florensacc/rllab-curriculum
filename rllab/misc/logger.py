@@ -37,11 +37,13 @@ _snapshot_gap = 1
 
 _log_tabular_only = False
 _header_printed = False
+_disable_prefix = False
 
 _tf_summary_dir = None
 _tf_summary_writer = None
 
 _disabled = False
+_tabular_disabled = False
 
 
 def disable():
@@ -49,9 +51,19 @@ def disable():
     _disabled = True
 
 
+def disable_tabular():
+    global _tabular_disabled
+    _tabular_disabled = True
+
+
 def enable():
     global _disabled
     _disabled = False
+
+
+def enable_tabular():
+    global _tabular_disabled
+    _tabular_disabled = False
 
 
 def _add_output(file_name, arr, fds, mode='a'):
@@ -87,12 +99,13 @@ def add_tabular_output(file_name):
 
 
 def remove_tabular_output(file_name):
-    if _tabular_fds[file_name] in _tabular_header_written:
-        _tabular_header_written.remove(_tabular_fds[file_name])
+    if file_name in _tabular_header_written:
+        _tabular_header_written.remove(file_name)
     _remove_output(file_name, _tabular_outputs, _tabular_fds)
 
 
 def set_snapshot_dir(dir_name):
+    os.system("mkdir -p %s" % dir_name)
     global _snapshot_dir
     _snapshot_dir = dir_name
 
@@ -145,11 +158,18 @@ def set_log_tabular_only(log_tabular_only):
 def get_log_tabular_only():
     return _log_tabular_only
 
+def set_disable_prefix(disable_prefix):
+    global _disable_prefix
+    _disable_prefix = disable_prefix
+
+def get_disable_prefix():
+    return _disable_prefix
+
 
 def log(s, with_prefix=True, with_timestamp=True, color=None):
     if not _disabled:
         out = s
-        if with_prefix:
+        if with_prefix and not _disable_prefix:
             out = _prefix_str + out
         if with_timestamp:
             now = datetime.datetime.now(dateutil.tz.tzlocal())
@@ -167,6 +187,7 @@ def log(s, with_prefix=True, with_timestamp=True, color=None):
 
 
 def record_tabular(key, val, *args, **kwargs):
+    # if not _disabled and not _tabular_disabled:
     _tabular.append((_tabular_prefix_str + str(key), str(val)))
 
 
@@ -222,9 +243,11 @@ class TerminalTablePrinter(object):
 
 table_printer = TerminalTablePrinter()
 
+_tabular_headers = dict()  # None
+
 
 def dump_tabular(*args, **kwargs):
-    if not _disabled:
+    if not _disabled:  # and not _tabular_disabled:
         wh = kwargs.pop("write_header", None)
         if len(_tabular) > 0:
             if _log_tabular_only:
@@ -232,16 +255,45 @@ def dump_tabular(*args, **kwargs):
             else:
                 for line in tabulate(_tabular).split('\n'):
                     log(line, *args, **kwargs)
-            tabular_dict = dict(_tabular)
-            # Also write to the csv files
-            # This assumes that the keys in each iteration won't change!
-            for tabular_fd in list(_tabular_fds.values()):
-                writer = csv.DictWriter(tabular_fd, fieldnames=list(tabular_dict.keys()))
-                if wh or (wh is None and tabular_fd not in _tabular_header_written):
-                    writer.writeheader()
-                    _tabular_header_written.add(tabular_fd)
-                writer.writerow(tabular_dict)
-                tabular_fd.flush()
+            if not _tabular_disabled:
+                tabular_dict = dict(_tabular)
+                # Also write to the csv files
+                # This assumes that the keys in each iteration won't change!
+                for tabular_file_name, tabular_fd in list(_tabular_fds.items()):
+                    keys = tabular_dict.keys()
+                    if tabular_file_name in _tabular_headers:
+                        # check against existing keys
+                        existing_keys = _tabular_headers[tabular_file_name]
+                        if not set(existing_keys).issuperset(set(keys)):
+                            joint_keys = set(keys).union(set(existing_keys))
+                            tabular_fd.flush()
+                            read_fd = open(tabular_file_name, 'r')
+                            reader = csv.DictReader(read_fd)
+                            rows = list(reader)
+                            read_fd.close()
+                            tabular_fd.close()
+                            tabular_fd = _tabular_fds[tabular_file_name] = open(tabular_file_name, 'w')
+                            new_writer = csv.DictWriter(tabular_fd, fieldnames=list(joint_keys))
+                            new_writer.writeheader()
+                            for row in rows:
+                                for key in joint_keys:
+                                    if key not in row:
+                                        row[key] = np.nan
+                            new_writer.writerows(rows)
+                            _tabular_headers[tabular_file_name] = list(joint_keys)
+                    else:
+                        _tabular_headers[tabular_file_name] = keys
+
+                    writer = csv.DictWriter(tabular_fd, fieldnames=_tabular_headers[tabular_file_name])  # list(
+                    if wh or (wh is None and tabular_file_name not in _tabular_header_written):
+                        writer.writeheader()
+                        _tabular_header_written.add(tabular_file_name)
+                        _tabular_headers[tabular_file_name] = keys
+                    for key in _tabular_headers[tabular_file_name]:
+                        if key not in tabular_dict:
+                            tabular_dict[key] = np.nan
+                    writer.writerow(tabular_dict)
+                    tabular_fd.flush()
             del _tabular[:]
 
 
@@ -259,7 +311,7 @@ def save_itr_params(itr, params, use_cloudpickle=False):
             # override previous params
             file_name = osp.join(get_snapshot_dir(), 'params.pkl')
         elif _snapshot_mode == "gap":
-            if itr % _snapshot_gap == 0:
+            if itr == 0 or (itr + 1) % _snapshot_gap == 0:
                 file_name = osp.join(get_snapshot_dir(), 'itr_%d.pkl' % itr)
             else:
                 return
@@ -390,4 +442,3 @@ def record_tabular_misc_stat(key, values, placement='back'):
         record_tabular(prefix + "Median" + suffix, np.nan)
         record_tabular(prefix + "Min" + suffix, np.nan)
         record_tabular(prefix + "Max" + suffix, np.nan)
-

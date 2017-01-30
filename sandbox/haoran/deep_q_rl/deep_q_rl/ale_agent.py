@@ -210,7 +210,7 @@ class NeuralAgent(object):
             plt.grid(color='r', linestyle='-', linewidth=1)
         plt.show()
 
-    def step(self, reward, observation):
+    def step(self, reward, observation, env_info):
         """
         This method is called each time step.
 
@@ -232,7 +232,7 @@ class NeuralAgent(object):
             if self.clip_reward:
                 reward = np.clip(reward, -1, 1)
             action = self._choose_action(self.test_data_set, .05,
-                                         observation, reward)
+                                         observation, reward, env_info)
 
         #NOT TESTING---------------------------
         else:
@@ -245,7 +245,7 @@ class NeuralAgent(object):
 
                 action = self._choose_action(self.data_set, self.epsilon,
                                              observation,
-                                             reward)
+                                             reward, env_info)
 
                 if self.step_counter % self.update_frequency == 0:
                     loss = self._do_training()
@@ -255,30 +255,31 @@ class NeuralAgent(object):
             else: # Still gathering initial random data...
                 action = self._choose_action(self.data_set, self.epsilon,
                                              observation,
-                                             reward)
+                                             reward, env_info)
 
         self.last_action = action
         self.last_img = observation
 
         return action
 
-    def _choose_action(self, data_set, epsilon, cur_img, reward):
+    def _choose_action(self, data_set, epsilon, cur_img, reward, env_info):
         """
         Add the most recent data to the data set and choose
         an action based on the current policy.
         """
 
-        data_set.add_sample(self.last_img, self.last_action, reward, False)
+        data_set.add_sample(self.last_img, self.last_action, reward, False, env_info)
         if self.step_counter >= self.phi_length:
             phi = data_set.phi(cur_img)
             action = self.network.choose_action(phi, epsilon)
 
             states = np.asarray([phi])
             actions = np.asarray([action])
+            env_infos = np.asarray([env_info])
             if self.bonus_evaluator is not None:
-                self.bonus_evaluator.update(states,actions)
+                self.bonus_evaluator.update(states,actions, env_infos)
             if self.extra_bonus_evaluator is not None:
-                self.extra_bonus_evaluator.update(states,actions)
+                self.extra_bonus_evaluator.update(states,actions, env_infos)
 
         else:
             action = np.random.randint(0, self.num_actions)
@@ -291,23 +292,24 @@ class NeuralAgent(object):
         May be overridden if a subclass needs to train the network
         differently.
         """
-        states, actions, rewards, next_states, terminals, returns = \
+        states, actions, rewards, next_states, terminals, returns, env_infos = \
                                 self.data_set.random_batch(
                                     self.network.batch_size)
 
         if self.bonus_evaluator is not None:
-            bonus_rewards = self.bonus_evaluator.evaluate(states,actions,next_states)
+            bonus_rewards = self.bonus_evaluator.evaluate(
+                states,actions,next_states, env_infos)
             rewards = rewards + bonus_rewards.reshape((len(bonus_rewards),1))
             rewards = rewards.astype(np.float32)
         if self.extra_bonus_evaluator is not None:
-            self.extra_bonus_evaluator.evaluate(states,actions,next_states) # do nothing
+            self.extra_bonus_evaluator.evaluate(states,actions,next_states, env_infos) # do nothing
 
 
         loss =  self.network.train(states, actions, rewards, next_states, terminals, returns)
         return loss
 
 
-    def end_episode(self, reward, terminal=True):
+    def end_episode(self, reward, terminal=True, env_info=None):
         """
         This function is called once at the end of an episode.
 
@@ -319,7 +321,7 @@ class NeuralAgent(object):
             None
         """
         self.episode_rewards.append(reward)
-        raise NotImplementedError # reward should be clipped first, as it contributes to supplied returns
+        # raise NotImplementedError # reward should be clipped first, as it contributes to supplied returns
         self.episode_reward = np.sum(self.episode_rewards)
         self.step_counter += 1
         total_time = time.time() - self.start_time
@@ -340,7 +342,8 @@ class NeuralAgent(object):
             self.data_set.add_sample(self.last_img,
                                      self.last_action,
                                      reward,
-                                     True)
+                                     True,
+                                     env_info)
             returns = special.discount_cumsum(self.episode_rewards,self.network.discount)
             self.data_set.supply_returns(returns)
 

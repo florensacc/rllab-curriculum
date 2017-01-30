@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from rllab.core.serializable import Serializable
 from rllab.misc.tensor_utils import flatten_tensors, unflatten_tensors
 import tensorflow as tf
+from distutils.version import LooseVersion
 
 
 load_params = True
@@ -95,7 +96,12 @@ class Parameterized(object):
         Serializable.__setstate__(self, d)
         global load_params
         if load_params:
-            tf.get_default_session().run(tf.initialize_variables(self.get_params()))
+            if LooseVersion(tf.__version__) >= '0.12.1':
+                # this suppresses annoying warning messages from tf
+                initializer = tf.variables_initializer
+            else:
+                initializer = tf.initialize_variables
+            tf.get_default_session().run(initializer(self.get_params()))
             self.set_param_values(d["params"])
 
 

@@ -1,5 +1,6 @@
 data
 data_upload
+upload
 *.pyc
 *-checkpoint.ipynb
 .DS_Store
@@ -52,3 +53,5 @@ __pycache__
 conopt
 conopt_root
 .c9/
+sandbox/michael/tracking_data
+*.npy.z

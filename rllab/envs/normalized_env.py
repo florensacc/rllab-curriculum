@@ -17,6 +17,7 @@ class NormalizedEnv(ProxyEnv, Serializable):
             normalize_reward=False,
             obs_alpha=0.001,
             reward_alpha=0.001,
+            clip=True
     ):
         Serializable.quick_init(self, locals())
         ProxyEnv.__init__(self, env)
@@ -29,6 +30,7 @@ class NormalizedEnv(ProxyEnv, Serializable):
         self._reward_alpha = reward_alpha
         self._reward_mean = 0.
         self._reward_var = 1.
+        self._clip = clip
 
     def _update_obs_estimate(self, obs):
         flat_obs = self.wrapped_env.observation_space.flatten(obs)
@@ -48,8 +50,8 @@ class NormalizedEnv(ProxyEnv, Serializable):
         self._update_reward_estimate(reward)
         return reward / (np.sqrt(self._reward_var) + 1e-8)
 
-    def reset(self):
-        ret = self._wrapped_env.reset()
+    def reset(self, **kwargs):
+        ret = self._wrapped_env.reset(**kwargs)
         if self._normalize_obs:
             return self._apply_normalize_obs(ret)
         else:
@@ -80,7 +82,8 @@ class NormalizedEnv(ProxyEnv, Serializable):
             # rescale the action
             lb, ub = self._wrapped_env.action_space.bounds
             scaled_action = lb + (action + 1.) * 0.5 * (ub - lb)
-            scaled_action = np.clip(scaled_action, lb, ub)
+            if self._clip:
+                scaled_action = np.clip(scaled_action, lb, ub)
         else:
             scaled_action = action
         wrapped_step = self._wrapped_env.step(scaled_action)

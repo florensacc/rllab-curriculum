@@ -1,6 +1,3 @@
-
-
-
 from rllab.misc import ext
 from rllab.misc.overrides import overrides
 import rllab.misc.logger as logger
@@ -20,6 +17,7 @@ class NPO(BatchPolopt):
             optimizer=None,
             optimizer_args=None,
             step_size=0.01,
+            entropy_bonus_coeff=0.,
             **kwargs):
         if optimizer is None:
             if optimizer_args is None:
@@ -27,6 +25,7 @@ class NPO(BatchPolopt):
             optimizer = PenaltyLbfgsOptimizer(**optimizer_args)
         self.optimizer = optimizer
         self.step_size = step_size
+        self.entropy_bonus_coeff = entropy_bonus_coeff
         super(NPO, self).__init__(**kwargs)
 
     @overrides
@@ -66,13 +65,15 @@ class NPO(BatchPolopt):
 
         dist_info_vars = self.policy.dist_info_sym(obs_var, state_info_vars)
         kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
+        ent = dist.entropy_sym(dist_info_vars)
         lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, dist_info_vars)
         if is_recurrent:
             mean_kl = tf.reduce_sum(kl * valid_var) / tf.reduce_sum(valid_var)
-            surr_loss = - tf.reduce_sum(lr * advantage_var * valid_var) / tf.reduce_sum(valid_var)
+            surr_loss = - tf.reduce_sum(lr * advantage_var * valid_var) / tf.reduce_sum(valid_var) - \
+                        self.entropy_bonus_coeff * tf.reduce_sum(ent * valid_var) / tf.reduce_sum(valid_var)
         else:
             mean_kl = tf.reduce_mean(kl)
-            surr_loss = - tf.reduce_mean(lr * advantage_var)
+            surr_loss = - tf.reduce_mean(lr * advantage_var) - self.entropy_bonus_coeff * tf.reduce_mean(ent)
 
         input_list = [
                          obs_var,

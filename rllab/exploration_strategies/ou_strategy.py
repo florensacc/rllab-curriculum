@@ -16,13 +16,15 @@ class OUStrategy(ExplorationStrategy, Serializable):
     where Wt denotes the Wiener process
     """
 
-    def __init__(self, env_spec, mu=0, theta=0.15, sigma=0.3, **kwargs):
+    def __init__(self, env_spec, mu=0, theta=0.15, sigma=0.3, clip=True,
+                 **kwargs):
         assert isinstance(env_spec.action_space, Box)
         assert len(env_spec.action_space.shape) == 1
         Serializable.quick_init(self, locals())
         self.mu = mu
         self.theta = theta
         self.sigma = sigma
+        self.clip = clip
         self.action_space = env_spec.action_space
         self.state = np.ones(self.action_space.flat_dim) * self.mu
         self.reset()
@@ -49,8 +51,14 @@ class OUStrategy(ExplorationStrategy, Serializable):
     @overrides
     def get_action(self, t, observation, policy, **kwargs):
         action, _ = policy.get_action(observation)
+        return self.get_modified_action(t, action)
+
+    def get_modified_action(self, t, action):
         ou_state = self.evolve_state()
-        return np.clip(action + ou_state, self.action_space.low, self.action_space.high)
+        modified_action = action + ou_state
+        if self.clip:
+            modified_action = np.clip(modified_action, self.action_space.low, self.action_space.high)
+        return modified_action
 
 
 if __name__ == "__main__":

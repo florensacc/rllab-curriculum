@@ -7,16 +7,12 @@ class BassHash(NaryHash):
     """
     def __init__(self,
             bass,
-            n_channel,
-            img_width,
-            img_height,
             bucket_sizes=None,
             parallel=False,
         ):
-        self.image_shape = (img_height, img_width, n_channel)
         self.item_dim = None
         self.bass = bass
-        dim_key = self.bass.get_feature_length(self.image_shape)
+        dim_key = self.bass.get_feature_length()
 
         super().__init__(
             n=bass.n_bin,
@@ -27,5 +23,5 @@ class BassHash(NaryHash):
 
 
     def compute_nary_keys(self, rgb_images):
-        naries = np.asarray([self.bass.compute_feature_nary(I) for I in rgb_images])
+        naries = self.bass.compute_features_nary(rgb_images)
         return naries

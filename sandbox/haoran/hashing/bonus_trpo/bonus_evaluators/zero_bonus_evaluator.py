@@ -10,6 +10,9 @@ class ZeroBonusEvaluator(object):
     def init_par_objs(self,n_parallel):
         pass
 
+    def init_shared_dict(self, shared_dict):
+        pass
+
     def init_rank(self,rank):
         self.rank = rank
 

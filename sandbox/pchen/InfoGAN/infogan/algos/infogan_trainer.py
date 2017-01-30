@@ -69,13 +69,30 @@ class InfoGANTrainer(object):
         with pt.defaults_scope(phase=pt.Phase.train):
             z_var = self.model.latent_dist.sample_prior(self.batch_size)
             fake_x, _ = self.model.generate(z_var)
-            real_d, _, _ = self.model.discriminate(input_tensor)
-            fake_d, _, fake_reg_z_dist_info = self.model.discriminate(fake_x)
+            real_d_logits, _, _, _ = self.model.discriminate(input_tensor)
+            fake_d_logits, _, fake_reg_z_dist_info, _ = self.model.discriminate(fake_x)
 
             reg_z = self.model.reg_z(z_var)
 
-            discriminator_loss = - self.real_cost_coeff * tf.reduce_mean(tf.log(real_d + TINY) + tf.log(1. - fake_d + TINY))
-            generator_loss = - self.real_cost_coeff * tf.reduce_mean(tf.log(fake_d + TINY))
+            # discriminator_loss = \
+            #     - self.real_cost_coeff * tf.reduce_mean(
+            #         tf.log(real_d + TINY) + tf.log(1. - fake_d + TINY))
+            discriminator_loss = self.real_cost_coeff * tf.reduce_mean(
+                tf.nn.sigmoid_cross_entropy_with_logits(
+                    real_d_logits,
+                    tf.ones_like(real_d_logits)
+                ) + tf.nn.sigmoid_cross_entropy_with_logits(
+                    fake_d_logits,
+                    tf.zeros_like(fake_d_logits)
+                )
+            )
+            # generator_loss = - self.real_cost_coeff * tf.reduce_mean(tf.log(fake_d + TINY))
+            generator_loss = self.real_cost_coeff * tf.reduce_mean(
+                tf.nn.sigmoid_cross_entropy_with_logits(
+                    fake_d_logits,
+                    tf.ones_like(fake_d_logits)
+                )
+            )
 
             self.log_vars.append(("discriminator_loss", discriminator_loss))
             self.log_vars.append(("generator_loss", generator_loss))
@@ -138,17 +155,27 @@ class InfoGANTrainer(object):
             d_vars = [var for var in all_vars if var.name.startswith('d_')]
             g_vars = [var for var in all_vars if var.name.startswith('g_')]
 
+            real_d = tf.nn.sigmoid(real_d_logits)
+            fake_d = tf.nn.sigmoid(fake_d_logits)
             self.log_vars.append(("max_real_d", tf.reduce_max(real_d)))
             self.log_vars.append(("min_real_d", tf.reduce_min(real_d)))
             self.log_vars.append(("max_fake_d", tf.reduce_max(fake_d)))
             self.log_vars.append(("min_fake_d", tf.reduce_min(fake_d)))
 
-            discriminator_optimizer = tf.train.AdamOptimizer(self.discriminator_learning_rate, beta1=0.5)
-            self.discriminator_trainer = pt.apply_optimizer(discriminator_optimizer, losses=[discriminator_loss],
-                                                            var_list=d_vars)
-
-            generator_optimizer = tf.train.AdamOptimizer(self.generator_learning_rate, beta1=0.5)
-            self.generator_trainer = pt.apply_optimizer(generator_optimizer, losses=[generator_loss], var_list=g_vars)
+            discriminator_optimizer = tf.train.AdamOptimizer(
+                self.discriminator_learning_rate, beta1=0.5
+            )
+            self.discriminator_trainer = pt.apply_optimizer(
+                discriminator_optimizer, losses=[discriminator_loss],
+                var_list=d_vars
+            )
+            generator_optimizer = tf.train.AdamOptimizer(
+                self.generator_learning_rate, beta1=0.5
+            )
+            self.generator_trainer = pt.apply_optimizer(
+                generator_optimizer, losses=[generator_loss],
+                var_list=g_vars
+            )
 
             for k, v in self.log_vars:
                 tf.scalar_summary(k, v)

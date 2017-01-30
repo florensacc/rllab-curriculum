@@ -23,13 +23,28 @@ MODEL_DIR = osp.abspath(
 BIG = 1e6
 
 
+def q_inv(a):
+    return [a[0], -a[1], -a[2], -a[3]]
+
+
+def q_mult(a, b): # multiply two quaternion
+    w = a[0]*b[0] - a[1]*b[1] - a[2]*b[2] - a[3]*b[3]
+    i = a[0]*b[1] + a[1]*b[0] + a[2]*b[3] - a[3]*b[2]
+    j = a[0]*b[2] - a[1]*b[3] + a[2]*b[0] + a[3]*b[1]
+    k = a[0]*b[3] + a[1]*b[2] - a[2]*b[1] + a[3]*b[0]
+    return [w, i, j, k]
+
+
 class MujocoEnv(Env):
     FILE = None
 
     @autoargs.arg('action_noise', type=float,
                   help='Noise added to the controls, which will be '
                        'proportional to the action bounds')
-    def __init__(self, action_noise=0.0, file_path=None, template_args=None):
+    def __init__(self, action_noise=0.0, file_path=None, template_args=None,
+        random_init_state=True,
+    ):
+    #Haoran: even if random_init_state
         # compile template
         if file_path is None:
             if self.__class__.FILE is None:
@@ -60,6 +75,7 @@ class MujocoEnv(Env):
         self.qvel_dim = self.init_qvel.size
         self.ctrl_dim = self.init_ctrl.size
         self.action_noise = action_noise
+        self.random_init_state = random_init_state
         if "frame_skip" in self.model.numeric_names:
             frame_skip_id = self.model.numeric_names.index("frame_skip")
             addr = self.model.numeric_adr.flat[frame_skip_id]
@@ -98,10 +114,15 @@ class MujocoEnv(Env):
 
     def reset_mujoco(self, init_state=None):
         if init_state is None:
-            self.model.data.qpos = self.init_qpos + \
-                                   np.random.normal(size=self.init_qpos.shape) * 0.01
-            self.model.data.qvel = self.init_qvel + \
-                                   np.random.normal(size=self.init_qvel.shape) * 0.1
+            if self.random_init_state:
+                self.model.data.qpos = self.init_qpos + \
+                    np.random.normal(size=self.init_qpos.shape) * 0.01
+                self.model.data.qvel = self.init_qvel + \
+                    np.random.normal(size=self.init_qvel.shape) * 0.1
+            else:
+                self.model.data.qpos = self.init_qpos
+                self.model.data.qvel = self.init_qvel
+
             self.model.data.qacc = self.init_qacc
             self.model.data.ctrl = self.init_ctrl
         else:
@@ -180,16 +201,29 @@ class MujocoEnv(Env):
         self.dcom = new_com - self.current_com
         self.current_com = new_com
 
-    def get_viewer(self):
+    def get_viewer(self, config=None):
         if self.viewer is None:
             self.viewer = MjViewer()
             self.viewer.start()
             self.viewer.set_model(self.model)
+        if config is not None:
+            self.viewer.set_window_pose(config["xpos"], config["ypos"])
+            self.viewer.set_window_size(config["width"], config["height"])
+            self.viewer.set_window_title(config["title"])
         return self.viewer
 
-    def render(self):
-        viewer = self.get_viewer()
-        viewer.loop_once()
+    def render(self, close=False, mode='human', config=None):
+        if mode == 'human':
+            viewer = self.get_viewer(config=config)
+            viewer.loop_once()
+        elif mode == 'rgb_array':
+            viewer = self.get_viewer(config=config)
+            viewer.loop_once()
+            # self.get_viewer(config=config).render()
+            data, width, height = self.get_viewer(config=config).get_image()
+            return np.fromstring(data, dtype='uint8').reshape(height, width, 3)[::-1,:,:]
+        if close:
+            self.stop_viewer()
 
     def start_viewer(self):
         viewer = self.get_viewer()
@@ -199,6 +233,7 @@ class MujocoEnv(Env):
     def stop_viewer(self):
         if self.viewer:
             self.viewer.finish()
+            self.viewer = None
 
     def release(self):
         # temporarily alleviate the issue (but still some leak)
@@ -224,3 +259,27 @@ class MujocoEnv(Env):
 
     def action_from_key(self, key):
         raise NotImplementedError
+
+    def set_state_tmp(self, state, restore=True):
+        if restore:
+            prev_pos = self.model.data.qpos
+            prev_qvel = self.model.data.qvel
+            prev_ctrl = self.model.data.ctrl
+            prev_act = self.model.data.act
+        qpos, qvel = self.decode_state(state)
+        self.model.data.qpos = qpos
+        self.model.data.qvel = qvel
+        self.model.forward()
+        yield
+        if restore:
+            self.model.data.qpos = prev_pos
+            self.model.data.qvel = prev_qvel
+            self.model.data.ctrl = prev_ctrl
+            self.model.data.act = prev_act
+            self.model.forward()
+
+    def get_param_values(self):
+        return {}
+
+    def set_param_values(self, values):
+        pass

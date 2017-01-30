@@ -24,17 +24,19 @@ class DiscreteEmbeddingNonlinearityLayer(lasagne.layers.Layer):
     This has to be put after the batch norm layer.
     """
 
-    def __init__(self, incoming, n_units, batch_size,
+    def __init__(self, incoming, n_units, batch_size, b=lasagne.init.Constant(0.),
                  **kwargs):
         super(DiscreteEmbeddingNonlinearityLayer, self).__init__(incoming, **kwargs)
         self._srng = RandomStreams()
         self._n_units = n_units
         self._batch_size = batch_size
+        self.b = self.add_param(b, (n_units,), name="b", regularizable=False)
 
     def nonlinearity(self, x, noise_mask=1):
         # Force outputs to be binary through noise.
         print('noise mask: {}'.format(noise_mask))
-        return lasagne.nonlinearities.sigmoid(x) + noise_mask * self._srng.uniform(
+        print("convbnn: fixme, added bias in nonlinearity")
+        return lasagne.nonlinearities.sigmoid(x + self.b.dimshuffle('x', 0)) + noise_mask * self._srng.uniform(
             size=x.shape, low=-0.3,
             high=0.3)
 
@@ -611,9 +613,9 @@ class ConvBNNVIME(LasagnePowered, Serializable):
                 if layer_disc['batch_norm'] is True:
                     s_net = batch_norm(s_net)
             elif layer_disc['name'] == 'discrete_embedding':
-                s_net = DiscreteEmbeddingLinearLayer(
-                    s_net,
-                    num_units=layer_disc['n_units'])
+                # s_net = DiscreteEmbeddingLinearLayer(
+                #     s_net,
+                #     num_units=layer_disc['n_units'])
                 if layer_disc['batch_norm'] is True:
                     s_net = BatchNormLayer(s_net)
                 s_net = DiscreteEmbeddingNonlinearityLayer(s_net, layer_disc['n_units'], self.batch_size)

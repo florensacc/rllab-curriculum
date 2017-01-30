@@ -21,6 +21,7 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
             state_bonus_mode="1/n_s",
             state_action_bonus_mode="log(n_s)/n_sa",
             log_prefix="",
+            count_target="ram_states",
         ):
         self.state_dim = state_dim
         if state_preprocessor is not None:
@@ -62,25 +63,42 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
         self.epoch_bonus_list = [] # record the bonus given throughout the epoch
         self.new_state_count = 0 # the number of new states used during q-value updates
         self.new_state_action_count = 0
+        self.total_state_count = 0
         self.log_prefix = log_prefix
+        self.count_target = count_target
 
     def preprocess(self,states):
         if self.state_preprocessor is not None:
             states = self.state_preprocessor.process(states)
         return states
 
-    def update(self, states, actions):
+    def update(self, states, actions, env_infos):
         """
         Assume that actions are integers.
         """
-        states = self.preprocess(states)
+        if self.count_target == "ram_states":
+            targets = np.array([
+                env_info["ram_state"]
+                for env_info in env_infos
+            ])
+        elif self.count_target == "states":
+            targets = states
+        elif self.count_target == "rgb_images":
+            targets = np.array([
+                env_info["rgb_image"]
+                for env_info in env_infos
+            ])
+        else:
+            raise NotImplementedError
+        targets = self.preprocess(targets)
         if self.count_mode == "s":
             hash = self.hash_list[0]
-            hash.inc(states)
-            counts = hash.query(states)
+            keys = hash.compute_keys(targets)
+            hash.inc_keys(keys)
+            counts = hash.query_keys(keys)
             self.new_state_count += list(counts).count(1)
         elif self.count_mode == "sa":
-            for s,a in zip(states,actions):
+            for s,a in zip(targets,actions):
                 s = s.reshape((1,len(s)))
                 hash = self.hash_list[a]
                 hash.inc(s)
@@ -90,23 +108,40 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
         else:
             raise NotImplementedError
 
-    def evaluate(self, states, actions, next_states):
+    def evaluate(self, states, actions, next_states, env_infos):
         """
         Compute a bonus score.
         """
+        if self.count_target == "ram_states":
+            targets = np.array([
+                env_info["ram_state"]
+                for env_info in env_infos
+            ])
+        elif self.count_target == "states":
+            targets = states
+        elif self.count_target == "rgb_images":
+            targets = np.array([
+                env_info["rgb_image"]
+                for env_info in env_infos
+            ])
+        else:
+            raise NotImplementedError
+
         if self.bonus_mode == "s":
-            states = self.preprocess(states)
-            counts = self.hash_list[0].query(states)
+            targets = self.preprocess(targets)
+            h = self.hash_list[0]
+            keys = h.compute_keys(targets)
+            counts = h.query_keys(keys)
             bonus = self.compute_state_bonus(counts)
         elif self.bonus_mode == "sa":
-            states = self.preprocess(states)
+            targets = self.preprocess(targets)
             # for each state, query the state-action count for each possible action
             counts = [
                 [
                     hash.query(s.reshape((1,len(s)))).ravel()
                     for hash in self.hash_list
                 ]
-                for s in states
+                for s in targets
             ]
             self.compute_state_action_bonus(counts, actions)
         elif self.bonus_mode == "s_next":
@@ -123,13 +158,13 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
 
     def compute_state_bonus(self,state_counts):
         if self.state_bonus_mode == "1/n_s":
-            bonus = 1./np.maximum(1.,state_counts)
+            bonuses = 1./np.maximum(1.,state_counts)
         elif self.state_bonus_mode == "1/sqrt(n_s)":
-            bonus = 1./np.sqrt(np.maximum(1., state_counts))
+            bonuses = 1./np.sqrt(np.maximum(1., state_counts))
         else:
             raise NotImplementedError
-        bonus *= self.bonus_coeff
-        return bonus
+        bonuses *= self.bonus_coeff
+        return bonuses
 
     def compute_state_action_bonus(self, state_action_counts, actions):
         raise NotImplementedError
@@ -162,6 +197,11 @@ class ALEHashingBonusEvaluator(BonusEvaluator):
                 logger.record_tabular(
                     self.log_prefix + "NewStateCount",
                     self.new_state_count,
+                )
+                self.total_state_count += self.new_state_count
+                logger.record_tabular(
+                    self.log_prefix + "TotalStateCount",
+                    self.total_state_count
                 )
             else:
                 raise NotImplementedError

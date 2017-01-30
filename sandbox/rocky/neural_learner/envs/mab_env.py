@@ -1,7 +1,10 @@
 from rllab.envs.base import Env, Step
 from rllab.core.serializable import Serializable
+from rllab.misc.ext import using_seed
 from rllab.spaces.discrete import Discrete
 import numpy as np
+
+from sandbox.rocky.neural_learner.envs.vec_env import VecEnv
 
 
 class MABEnv(Env, Serializable):
@@ -40,8 +43,11 @@ class MABEnv(Env, Serializable):
     def vec_env_executor(self, n_envs):
         return VecMAB(n_envs=n_envs, env=self)
 
+    def log_diagnostics(self, paths):
+        import ipdb; ipdb.set_trace()
 
-class VecMAB(object):
+
+class VecMAB(VecEnv):
     def __init__(self, n_envs, env):
         self.n_envs = n_envs
         self.env = env
@@ -49,11 +55,21 @@ class VecMAB(object):
         self.ts = np.zeros((self.n_envs,))
         self.reset_trial(np.asarray([True] * self.n_envs))
 
-    def reset_trial(self, dones):
+    def reset_trial(self, dones, seeds=None):
+        """
+        :param dones: array of length == self.n_envs
+        :param seeds: array of length == sum(dones)
+        :return:
+        """
         dones = np.cast['bool'](dones)
         self.ts[dones] = 0
         if self.env.arm_dist == "bernoulli":
-            self.arm_means[dones] = np.random.uniform(size=(int(np.sum(dones)), self.env.n_arms))
+            if seeds is None:
+                self.arm_means[dones] = np.random.uniform(size=(int(np.sum(dones)), self.env.n_arms))
+            else:
+                for idx, seed in zip(np.where(dones)[0], seeds):
+                    with using_seed(seed):
+                        self.arm_means[idx] = np.random.uniform(size=(self.env.n_arms,))
         else:
             raise NotImplementedError
         return self.reset(dones)

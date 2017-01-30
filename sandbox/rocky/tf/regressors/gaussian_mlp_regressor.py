@@ -234,17 +234,6 @@ class GaussianMLPRegressor(LayersPowered, Serializable):
         means, log_stds = self._f_pdists(xs)
         return self._dist.log_likelihood(ys, dict(mean=means, log_std=log_stds))
 
-    def log_likelihood_sym(self, x_var, y_var):
-        normalized_xs_var = (x_var - self._x_mean_var) / self._x_std_var
-
-        normalized_means_var, normalized_log_stds_var = \
-            L.get_output([self._l_mean, self._l_log_std], {self._mean_network.input_layer: normalized_xs_var})
-
-        means_var = normalized_means_var * self._y_std_var + self._y_mean_var
-        log_stds_var = normalized_log_stds_var + TT.log(self._y_std_var)
-
-        return self._dist.log_likelihood_sym(y_var, dict(mean=means_var, log_std=log_stds_var))
-
     def get_param_values(self, **tags):
         return LayersPowered.get_param_values(self, **tags)
 

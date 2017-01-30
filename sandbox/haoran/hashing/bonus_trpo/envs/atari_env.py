@@ -34,7 +34,9 @@ class AtariEnv(Env,Serializable):
             terminator=None,
             legal_actions=[],
             rom_filename="",
-            correct_luminance=False,
+            correct_luminance=True,
+            subsample_rgb_images=False,
+            recorded_rgb_image_scale=1.0,
         ):
         """
         plot: not compatible with rllab yet
@@ -51,6 +53,8 @@ class AtariEnv(Env,Serializable):
         self.obs_type = obs_type
         self.record_image = record_image
         self.record_rgb_image = record_rgb_image
+        self.recorded_rgb_image_scale = recorded_rgb_image_scale
+        self.subsample_rgb_images = subsample_rgb_images
         self.record_ram = record_ram
         self.record_internal_state = record_internal_state
         self.resetter = resetter
@@ -268,7 +272,21 @@ class AtariEnv(Env,Serializable):
             env_info["images"] = np.copy(np.asarray(list(self.last_screens)))
 
         if self.record_rgb_image:
-            env_info["rgb_images"] = self.ale.getScreenRGB()
+            rgb_img = self.ale.getScreenRGB()
+            scale = self.recorded_rgb_image_scale
+            if abs(scale-1.0) > 1e-4:
+                rgb_img = cv2.resize(rgb_img, dsize=(0,0),fx=scale,fy=scale)
+            env_info["rgb_images"] = rgb_img
+
+            if self.subsample_rgb_images:
+                full_height, full_width, channels = rgb_img.shape
+                subsampled_rgb_images = np.zeros((self.img_height, self.img_width, channels))
+                for channel in range(channels):
+                    subsampled_rgb_images[:, :, channel] = cv2.resize(
+                        rgb_img[:, :, channel],
+                        (self.img_width, self.img_height))
+                rgb_img = subsampled_rgb_images
+            env_info["rgb_images"] = rgb_img
 
         if self.record_internal_state:
             env_info["internal_states"] = self.ale.cloneState()

@@ -3,12 +3,12 @@ import contextlib
 from path import Path
 import sys
 import pickle as pickle
-import random
 from rllab.misc.console import colorize, Message
 from collections import OrderedDict
 import numpy as np
 import operator
 from functools import reduce
+import random
 
 sys.setrecursionlimit(50000)
 
@@ -122,6 +122,12 @@ def scanr(f, l, base=None):
     return list(iscanr(f, l, base))
 
 
+def delete(dict, key):
+    new_d = dict.copy()
+    new_d.pop(key)
+    return new_d
+
+
 def compile_function(inputs=None, outputs=None, updates=None, givens=None, log_name=None, **kwargs):
     import theano
     if log_name:
@@ -176,6 +182,8 @@ def path_len(p):
 
 def shuffled(sequence):
     deck = list(sequence)
+
+    # import random
     while len(deck):
         i = random.randint(0, len(deck) - 1)  # choose random card
         card = deck[i]  # take the card
@@ -192,6 +200,7 @@ def set_seed(seed):
     global seed_
     seed_ = seed
     import lasagne
+    import random
     random.seed(seed)
     np.random.seed(seed)
     lasagne.random.set_rng(np.random.RandomState(seed))
@@ -208,16 +217,19 @@ def set_seed(seed):
     ))
 
 
+
 @contextlib.contextmanager
 def using_seed(seed):
-    rand_state = random.getstate()
-    np_rand_state = np.random.get_state()
-    random.seed(seed)
-    np.random.seed(seed)
-    yield
-    random.setstate(rand_state)
-    np.random.set_state(np_rand_state)
-
+    if seed is None:
+        yield
+    else:
+        rand_state = random.getstate()
+        np_rand_state = np.random.get_state()
+        random.seed(seed)
+        np.random.seed(seed)
+        yield
+        random.setstate(rand_state)
+        np.random.set_state(np_rand_state)
 
 
 def get_seed():
@@ -352,6 +364,8 @@ Assume:
 1. each of f's inputs is iterable and composed of multiple "samples"
 2. outputs can be averaged over "samples"
 """
+
+
 def sliced_fun(f, n_slices):
     def sliced_f(sliced_inputs, non_sliced_inputs=None):
         if non_sliced_inputs is None:

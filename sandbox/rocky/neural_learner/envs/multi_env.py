@@ -78,7 +78,7 @@ class MultiEnv(ProxyEnv, Serializable):
     def discount_sum(self, rewards):
         return np.sum(self.discount ** np.arange(len(rewards)) * rewards)
 
-    def log_diagnostics(self, paths, *args, **kwargs):#logger=None):
+    def log_diagnostics(self, paths, *args, **kwargs):  # logger=None):
         if 'logger' in kwargs:
             logger = kwargs['logger']
         else:
@@ -127,20 +127,19 @@ class MultiEnv(ProxyEnv, Serializable):
 
         if hasattr(self.wrapped_env, 'log_diagnostics_multi'):
             self.wrapped_env.log_diagnostics_multi(multi_env=self, paths=paths, *args, **kwargs)
-        # for idx, tot_reward in enumerate(map(np.mean, episode_rewards)):
-        #     logger.record_tabular('AverageEpisodeReturn(%d)' % (idx + 1), tot_reward)
-        # for idx, tot_reward in enumerate(map(np.mean, episode_rewards)):
-        #     logger.record_tabular('AverageEpisodeReturn(%d)' % (idx + 1), tot_reward)
-        # for idx, tot_reward in enumerate(map(np.mean, discount_episode_rewards)):
-        #     logger.record_tabular('AverageDiscountEpisodeReturn(%d)' % (idx + 1), tot_reward)
-        # for idx, lens in enumerate(map(np.mean, episode_lens)):
-        #     logger.record_tabular('AverageSuccessEpisodeLength(%d)' % (idx + 1), lens)
-        # for idx, success in enumerate(map(np.mean, episode_success)):
-        #     logger.record_tabular('AverageSuccessRate(%d)' % (idx + 1), success)
+            # for idx, tot_reward in enumerate(map(np.mean, episode_rewards)):
+            #     logger.record_tabular('AverageEpisodeReturn(%d)' % (idx + 1), tot_reward)
+            # for idx, tot_reward in enumerate(map(np.mean, episode_rewards)):
+            #     logger.record_tabular('AverageEpisodeReturn(%d)' % (idx + 1), tot_reward)
+            # for idx, tot_reward in enumerate(map(np.mean, discount_episode_rewards)):
+            #     logger.record_tabular('AverageDiscountEpisodeReturn(%d)' % (idx + 1), tot_reward)
+            # for idx, lens in enumerate(map(np.mean, episode_lens)):
+            #     logger.record_tabular('AverageSuccessEpisodeLength(%d)' % (idx + 1), lens)
+            # for idx, success in enumerate(map(np.mean, episode_success)):
+            #     logger.record_tabular('AverageSuccessRate(%d)' % (idx + 1), success)
 
 
 class VecMultiEnv(object):
-
     def __init__(self, n_envs, env):
         assert getattr(env, 'vectorized', False)
         self.n_envs = n_envs
@@ -149,7 +148,8 @@ class VecMultiEnv(object):
         self.last_rewards = np.zeros((self.n_envs,))
         self.last_actions = np.zeros((self.n_envs,) + np.shape(env.wrapped_env.action_space.default_value))
         self.last_terminals = np.zeros((self.n_envs,))
-        self.cnt_episodes = np.zeros((self.n_envs,))
+        self.cnt_episodes = np.zeros((self.n_envs,), dtype=np.int)
+        self.trial_seeds = np.zeros((self.n_envs,), dtype=np.int)
         self.episode_t = np.zeros((self.n_envs,))
         self.ts = np.zeros((self.n_envs,))
         self.reset()
@@ -170,10 +170,8 @@ class VecMultiEnv(object):
         self.cnt_episodes[dones] = 0
         self.episode_t[dones] = 0
         self.ts[dones] = 0
-        try:
-            return self.convert_obs(self.vec_env.reset_trial(dones))
-        except Exception as e:
-            import ipdb; ipdb.set_trace()
+        self.trial_seeds[dones] = np.random.randint(low=0, high=np.iinfo(np.int32).max, size=np.sum(dones))
+        return self.convert_obs(self.vec_env.reset_trial(dones, seeds=self.trial_seeds[dones]))
 
     def step(self, actions, max_path_length):
         next_obs, rewards, dones, infos = self.vec_env.step(actions, max_path_length=None)
@@ -182,6 +180,9 @@ class VecMultiEnv(object):
         self.last_terminals = np.cast['int'](dones)
         self.episode_t += 1
         self.ts += 1
+
+        episode_ids = np.copy(self.cnt_episodes)
+        trial_seeds = np.copy(self.trial_seeds)
 
         dones[self.episode_t >= self.env.episode_horizon] = True
 
@@ -205,7 +206,16 @@ class VecMultiEnv(object):
                     next_obs[idx] = reset_obs[reset_idx]
                     reset_idx += 1
 
-        return next_obs, rewards, trial_done, dict(infos, episode_done=self.last_terminals)
+        infos = dict(
+            infos,
+            episode_done=np.copy(self.last_terminals),
+            episode_id=episode_ids,
+            trial_seed=trial_seeds,
+        )
+        return next_obs, rewards, trial_done, infos
 
     def convert_obs(self, obs):
         return list(zip(obs, self.last_actions, self.last_rewards, self.last_terminals))
+
+    def handle_policy_reset(self, policy, dones):
+        policy.reset(dones)

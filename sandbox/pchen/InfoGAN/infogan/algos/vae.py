@@ -2,6 +2,7 @@ from collections import defaultdict
 
 from pip._vendor.distlib.locators import locate
 
+from sandbox.pchen.InfoGAN.infogan.misc.imported import plotting
 from sandbox.pchen.InfoGAN.infogan.models.regularized_helmholtz_machine import RegularizedHelmholtzMachine
 import prettytensor as pt
 import tensorflow as tf
@@ -11,7 +12,7 @@ from sandbox.pchen.InfoGAN.infogan.misc.distributions import Bernoulli, Gaussian
 import rllab.misc.logger as logger
 import sys
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp, flatten, assign_to_gpu, \
-    average_grads, temp_restore
+    average_grads, temp_restore, np_logsumexp
 
 
 class VAE(object):
@@ -142,7 +143,7 @@ class VAE(object):
                 self.optimizer_args["learning_rate"] = self.lr_var
             self.optimizer = self.optimizer_cls(**self.optimizer_args)
 
-    def init_opt(self, init=False, eval=False):
+    def init_opt(self, init=False, eval=False, opt_off=False):
         if init:
             self.model.init_mode()
         else:
@@ -313,7 +314,7 @@ class VAE(object):
             (key, tf.add_n(vals) / self.num_gpus)
             for key, vals in dict_log_vars.items()
         ]
-        if (not init) and (not eval):
+        if (not init) and (not eval) and (not opt_off):
             for name, var in log_vars:
                 tf.scalar_summary(name, var)
 
@@ -448,6 +449,193 @@ class VAE(object):
         return {
             self.eval_input_tensor: x,
         }
+
+    def resume_init(self, init_train=False):
+        sess = tf.Session()
+        self.sess = sess
+        with self.sess.as_default():
+            self.init_opt(init=True)
+            if init_train:
+                self.init_opt(init=False, eval=False, opt_off=True)
+            self.init_opt(init=False, eval=True)
+            saver = tf.train.Saver()
+            if self.resume_from is not None:
+                # print("not resuming")
+                print("resuming from %s" % self.resume_from)
+                # fn = tf.train.latest_checkpoint(self.resume_from)
+                # print("latest ckpt: %s" % fn)
+                saver.restore(sess, self.resume_from)
+                print("resumed")
+
+    def vis(self,init=True,train=False):
+        if init:
+            self.resume_init(init_train=True)
+        sess = self.sess
+        self.sess.as_default().__enter__()
+
+        if train:
+            feed = self.prepare_feed(self.dataset.train, self.true_batch_size)
+        else:
+            feed = self.prepare_feed(self.dataset.validation, self.true_batch_size)
+
+        dist = self.model.output_dist
+        bs_per_gpu = self.batch_size // self.num_gpus
+        x_var, context_var, go_sym, tgt_dist = dist.infer_sym(
+            bs_per_gpu
+        )
+        batch_imshp = [bs_per_gpu, ] + list(self.model.image_shape)
+        h, w = self.model.image_shape[:2]
+        import scipy
+        def custom_imsave(name, img):
+            assert img.ndim == 3
+            if img.shape[2] == 3:
+                img = (img + 0.5) * 256
+            elif img.shape[2] == 1:
+                img = img.reshape(img.shape[:2])
+            scipy.misc.imsave(
+                name,
+                img
+            )
+
+        # # samples
+        z_var = self.model.latent_dist.sample_prior(bs_per_gpu)
+        _, x_dist_info = self.model.decode(z_var, sample=False)
+        context = sess.run(x_dist_info)
+        fol = "%s/samples/" % self.checkpoint_dir
+        try:
+            import os
+            os.makedirs(fol)
+        except:
+            pass
+        # originals = tuple(feed.items())[0][1].reshape([128,32,32,3])
+        # cur_zeros = np.copy(self.dataset.train.images[:128].reshape([-1,32,32,3]))
+        cur_zeros = np.zeros(batch_imshp)
+        h, w = self.model.image_shape[:2]
+        for yi in range(h):
+            for xi in range(w):
+                ind = xi + yi * w
+                if (ind % 16 == 1):
+                    for ix in range(bs_per_gpu):
+                        # scipy.misc.imsave(
+                        #     "%s/%s_step%s.png" % (fol, ix, ind),
+                        #                   (cur_zeros[ix] + 0.5) * 255)
+                        custom_imsave(
+                            "%s/%s_step%s.png" % (fol, ix, ind),
+                            cur_zeros[ix]
+                        )
+                proposal_zeros, tgt_dist_zeros = sess.run([go_sym, tgt_dist], {
+                    x_var: cur_zeros,
+                    context_var: context['context'],
+                })
+                cur_zeros[:, yi, xi, :] = proposal_zeros[:, yi, xi, :].copy()
+        os.system(
+            "tar -zcvf %s/../samples.tar.gz %s" % (fol, fol)
+        )
+
+        img_tile = plotting.img_tile(cur_zeros[:64, :, :, 0], aspect_ratio=1.0, border_color=1.0, stretch=True)
+        img = plotting.plot_img(img_tile, title=None, greyscale=True)
+        plotting.plt.savefig("%s/sample_summary.png" % self.checkpoint_dir)
+        plotting.plt.close('all')
+        # # import ipdb; ipdb.set_trace()
+
+        # decompress
+        originals = tuple(feed.items())[0][1][-bs_per_gpu:].reshape(batch_imshp)
+        context = sess.run(self.sym_vars["train"]["x_dist_info"], feed)
+        fol = "%s/decomp/" % self.checkpoint_dir
+        try:
+            import os
+            os.makedirs(fol)
+        except:
+            pass
+        # originals = tuple(feed.items())[0][1].reshape([128,32,32,3])
+        # cur_zeros = np.copy(self.dataset.train.images[:128].reshape([-1,32,32,3]))
+        for ix in range(bs_per_gpu):
+            custom_imsave(
+                "%s/%s_step%s.png" % (fol, ix, 0),
+                originals[ix]
+            )
+        cur_zeros = np.zeros_like(originals)
+        for yi in range(h):
+            for xi in range(w):
+                ind = xi + yi * w
+                if (ind % 8 == 1):
+                    for ix in range(bs_per_gpu):
+                        custom_imsave(
+                            "%s/%s_step%s.png" % (fol, ix, ind),
+                            cur_zeros[ix]
+                        )
+                proposal_zeros, tgt_dist_zeros = sess.run([go_sym, tgt_dist], {
+                    x_var: cur_zeros,
+                    context_var: context['context'],
+                })
+                cur_zeros[:, yi, xi, :] = proposal_zeros[:, yi, xi, :].copy()
+        os.system(
+            "tar -zcvf %s/../decomp.tar.gz %s" % (fol, fol)
+        )
+        interleaved = np.concatenate(
+            [originals[np.newaxis, :32, :, :, 0], cur_zeros[np.newaxis, :32, :, :, 0]]
+        ).transpose([1, 0, 2, 3]).reshape([-1, 28, 28])
+        img_tile = plotting.img_tile(interleaved, aspect_ratio=1., border_color=1., stretch=True)
+        img = plotting.plot_img(img_tile, title=None, greyscale=True)
+        plotting.plt.savefig("%s/decomp_summary.png" % self.checkpoint_dir)
+        plotting.plt.close('all')
+        import IPython; IPython.embed()
+
+    def eval(self, k=128*80, init=True):
+        # logprob evaluation
+        if init:
+            sess = tf.Session()
+            self.sess = sess
+        else:
+            sess = self.sess
+        with self.sess.as_default():
+            if init:
+                self.init_opt(init=True)
+                self.init_opt(init=False, eval=True)
+                saver = tf.train.Saver()
+                if self.resume_from is not None:
+                    # print("not resuming")
+                    print("resuming from %s" % self.resume_from)
+                    # fn = tf.train.latest_checkpoint(self.resume_from)
+                    # print("latest ckpt: %s" % fn)
+                    saver.restore(sess, self.resume_from)
+                    print("resumed")
+            # import IPython; IPython.embed()
+
+            # true_vlb = tf.reduce_mean(
+            #     logsumexp(tf.reshape(
+            #         log_p_x_given_z - (kls if self.kl_coeff != 0. else 0.),
+            #         [-1, self.k])),
+            # ) - np.log(self.k)
+            logpxz, kls = self.sym_vars['eval']["log_p_x_given_z"], self.sym_vars['eval']["kls"]
+            logli = logpxz - kls
+            eval_input = self.eval_input_tensor
+            imgs = self.dataset.validation.images
+            total_bs = imgs.shape[0]
+            loglis_buffer = np.zeros([total_bs, k], dtype="float32")
+            with temp_restore(sess, self.ema):
+                for ki in range(k // self.k):
+                    start, end = (ki*self.k), ((ki+1)*self.k)
+                    progress = ProgressBar()
+                    for bi in progress(range(total_bs)):
+                        loglis_buffer[bi, start:end] = sess.run(
+                            logli,
+                            feed_dict={
+                                eval_input: imgs[bi:bi+1, :]
+                            }
+                        )
+                    logger.log("k=%s, logli=%s" % (
+                        end,
+                        np.mean(
+                            np_logsumexp(
+                                loglis_buffer[:, :end]
+                            ) - np.log(end)
+                        )
+                    ))
+                    # if ki == 0:
+                    #     import IPython; IPython.embed()
+
+
 
     def train(self):
         sess = tf.Session()
@@ -687,6 +875,7 @@ class VAE(object):
 
                 # if epoch == 0:
                 #     tf.get_default_graph().finalize()
+            self.eval(self.k*36, init=False)
 
 
     def restore(self):

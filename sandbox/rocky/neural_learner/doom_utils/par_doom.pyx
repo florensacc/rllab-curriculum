@@ -133,6 +133,8 @@ cdef extern from "ViZDoom.h" namespace "vizdoom":
 
         void addAvailableButton(Button button) nogil
 
+        void setButtonMaxValue(Button button, int maxValue) nogil
+
         void clearAvailableButtons() nogil
 
         void setMode(Mode mode) nogil
@@ -285,6 +287,9 @@ cdef class ParDoom(object):
 
     def add_available_button(self, int i, Button button):
         self.games[i].addAvailableButton(button)
+
+    def set_button_max_value(self, int i, Button button, int max_value):
+        self.games[i].setButtonMaxValue(button, max_value)
 
     def clear_available_buttons(self, int i):
         self.games[i].clearAvailableButtons()

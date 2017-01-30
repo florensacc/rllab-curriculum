@@ -16,8 +16,6 @@ env = TfEnv(normalize(CartpoleEnv()))
 policy = GaussianLSTMPolicy(
     name="policy",
     env_spec=env.spec,
-    lstm_layer_cls=L.TfBasicLSTMLayer,
-    # gru_layer_cls=L.GRULayer,
 )
 
 baseline = LinearFeatureBaseline(env_spec=env.spec)

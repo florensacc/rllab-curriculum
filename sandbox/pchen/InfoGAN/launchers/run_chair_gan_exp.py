@@ -1,23 +1,18 @@
 
-
-from distributions import Uniform, Categorical, Gaussian, MeanBernoulli, Bernoulli
-
 import tensorflow as tf
 import os
-from datasets import MnistDataset, LessCatChairDataset, ChairDataset
 from tensorflow.examples.tutorials.mnist import input_data
-from instrument import VariantGenerator, variant
-from regularized_helmholtz_machine import RegularizedHelmholtzMachine
-from vae import VAE
-from regularized_vae import RegularizedVAE
-from regularized_gan import RegularizedGAN
-from gan_trainer import GANTrainer
-from infgan_trainer import InfGANTrainer
-from misc import mkdir_p, set_seed, skip_if_exception
 import dateutil
 import datetime
 import numpy as np
 import sys
+
+from rllab.misc.instrument import VariantGenerator, variant
+from sandbox.pchen.InfoGAN.infogan.algos.infogan_trainer import InfoGANTrainer
+from sandbox.pchen.InfoGAN.infogan.misc.datasets import ChairDataset
+from sandbox.pchen.InfoGAN.infogan.misc.distributions import Uniform, Gaussian, Categorical, Bernoulli, MeanBernoulli
+from sandbox.pchen.InfoGAN.infogan.misc.utils import skip_if_exception, mkdir_p, set_seed
+from sandbox.pchen.InfoGAN.infogan.models.regularized_gan import RegularizedGAN
 
 now = datetime.datetime.now(dateutil.tz.tzlocal())
 timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
@@ -174,7 +169,7 @@ variants = vg.variants(randomized=True)
 
 for v in variants:
 
-    with skip_if_exception():
+    # with skip_if_exception():
 
         tf.reset_default_graph()
         exp_name = "chair_%s_%s" % (vg.to_name_suffix(v), timestamp)
@@ -216,7 +211,7 @@ for v in variants:
                 network_type=v["network"]
             )
 
-            algo = InfGANTrainer(
+            algo = InfoGANTrainer(
                 model=model,
                 dataset=dataset,
                 # scheduled_datasets=datasets,

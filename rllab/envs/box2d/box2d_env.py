@@ -342,13 +342,15 @@ class Box2DEnv(Env):
         return self._compute_com_pos_vel(*com)[2:]
 
     @overrides
-    def render(self, states=None, actions=None, pause=False):
+    def render(self, states=None, actions=None, pause=False, close=False):
+        if close:
+            if self.viewer is not None:
+                self.viewer.finish()
+                self.viewer = None
         if not self.viewer:
             self.viewer = Box2DViewer(self.world)
         if states or actions or pause:
             raise NotImplementedError
-        if not self.viewer:
-            self.start_viewer()
         if self.viewer:
             self.viewer.loop_once()
 
@@ -358,3 +360,8 @@ class Box2DEnv(Env):
     def action_from_keys(self, keys):
         raise NotImplementedError
 
+    def get_param_values(self):
+        return {}
+
+    def set_param_values(self, values):
+        pass

@@ -30,25 +30,25 @@ def load_problem(log_dir, iteration=None, pkl_file=None, json_file=None):
         json_file_path = "%s/%s" % (log_dir, json_file)
 
     if osp.isfile(json_file_path):
-        params = json.load(file(json_file_path, "r"))  # load the json file
+        params = json.load(open(json_file_path, "r"))  # load the json file
     else:
         print("Cannot find %s" % (json_file_path))
         sys.exit(1)
 
     # read algo (a bit cumbersome) ------------------------
-    algo_spec = params["json_args"]["algo"]
-    del algo_spec['hallucinator'], algo_spec['latent_regressor']
-    _name = algo_spec['_name']  # this is always the dot path of the module!
-    script_name = _name.split('.')[-2]
-    class_name = _name.split('.')[-1]
-    print('\n\n' + script_name + '\n\n')
-    algo_class = imp.load_source('%s' % class_name, 'sandbox/carlos_snn/old_my_snn/%s.py' % script_name)
+    # algo_spec = params["json_args"]["algo"]
+    # del algo_spec['hallucinator'], algo_spec['latent_regressor']
+    # _name = algo_spec['_name']  # this is always the dot path of the module!
+    # script_name = _name.split('.')[-2]
+    # class_name = _name.split('.')[-1]
+    # print('\n\n' + script_name + '\n\n')
+    # algo_class = imp.load_source('%s' % class_name, 'sandbox/carlos_snn/old_my_snn/%s.py' % script_name)
 
-    ALGO = getattr(algo_class, class_name)
+    # ALGO = getattr(algo_class, class_name)
 
-    algo = ALGO(env=data["env"], policy=data["policy"], baseline=data["baseline"],
-                hallucinator=data['algo'].hallucinator, latent_regressor=data['algo'].latent_regressor, **algo_spec)
-    data["algo"] = algo
+    # algo = ALGO(env=data["env"], policy=data["policy"], baseline=data["baseline"],
+                # hallucinator=data['algo'].hallucinator, latent_regressor=data['algo'].latent_regressor, **algo_spec)
+    # data["algo"] = algo
 
     data["progress"] = read_csv("%s/progress.csv" % (log_dir))
 

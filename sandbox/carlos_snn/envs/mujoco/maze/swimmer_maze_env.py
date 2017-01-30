@@ -1,10 +1,12 @@
+from sandbox.carlos_snn.envs.mujoco.maze.fast_maze_env import FastMazeEnv  # %^&*&^%
 from sandbox.carlos_snn.envs.mujoco.maze.maze_env import MazeEnv
 from sandbox.carlos_snn.envs.mujoco.swimmer_env import SwimmerEnv
 from rllab.envs.normalized_env import normalize
 from rllab.core.serializable import Serializable
 
 
-class SwimmerMazeEnv(MazeEnv, Serializable):
+class SwimmerMazeEnv(FastMazeEnv, Serializable):
+# class SwimmerMazeEnv(MazeEnv, Serializable):
 
     # MODEL_CLASS = normalize(SwimmerEnv)
     MODEL_CLASS = SwimmerEnv

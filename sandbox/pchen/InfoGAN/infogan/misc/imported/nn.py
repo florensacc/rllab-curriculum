@@ -214,6 +214,23 @@ def conv2d(x, num_filters, filter_size=[3,3], stride=[1,1], pad='SAME', nonlinea
             return x
 
 @scopes.add_arg_scope
+def init_normalization(x, init=False, counters={}, ema=None, **kwargs):
+    name = get_name('init_norm', counters)
+    with tf.variable_scope(name):
+        if init:
+            # data based normalization
+            m_init, v_init = tf.nn.moments(x, [0])
+            mu_init = tf.get_variable('mu', dtype=tf.float32, initializer=m_init, trainable=True)
+            inv_std_init = tf.get_variable('inv_std', dtype=tf.float32, initializer=1./tf.sqrt(v_init+1e-8), trainable=True)
+            mu = mu_init.initialized_value()
+            inv_std = inv_std_init.initialized_value()
+        else:
+            mu, inv_std = get_vars_maybe_avg(['mu', 'inv_std', ], ema)
+            tf.assert_variables_initialized([mu, inv_std])
+
+        return mu, inv_std
+
+@scopes.add_arg_scope
 def deconv2d(x, num_filters, filter_size=[3,3], stride=[1,1], pad='SAME', nonlinearity=None, init_scale=1., counters={}, init=False, ema=None, **kwargs):
     name = get_name('deconv2d', counters)
     xs = int_shape(x)
@@ -266,28 +283,28 @@ def resnet(x, nonlinearity=concat_elu, conv=conv2d, **kwargs):
     c2 = nin(c1, num_filters, nonlinearity=None, init_scale=0.1, **kwargs)
     return x+c2
 
-# @scopes.add_arg_scope
-# def gated_resnet(x, nonlinearity=concat_elu, conv=conv2d, **kwargs):
-#     num_filters = int(x.get_shape()[-1])
-#     c1 = conv(nonlinearity(x), num_filters, nonlinearity=nonlinearity, **kwargs)
-#     c2 = nin(c1, num_filters*2, nonlinearity=None, init_scale=0.1, **kwargs)
-#     c3 = c2[:,:,:,:num_filters] * tf.nn.sigmoid(c2[:,:,:,num_filters:])
-#     return x+c3
-
 @scopes.add_arg_scope
-def gated_resnet(x, nonlinearity=concat_elu, conv=conv2d, **kwargs):
+def gated_resnet(x, nonlinearity=concat_elu, conv=conv2d, context=None, **kwargs):
     num_filters = int(x.get_shape()[-1])
     c1 = conv(nonlinearity(x), num_filters, nonlinearity=None, **kwargs)
     c1 = nonlinearity(c1)
     c2 = nin(c1, num_filters*2, nonlinearity=None, init_scale=0.1, **kwargs)
+    if context is not None:
+        # print("using context!")
+        context = tf.nn.elu(nin(context, num_filters*2))
+        c2 = c2 + context
     c3 = c2[:,:,:,:num_filters] * tf.nn.sigmoid(c2[:,:,:,num_filters:])
     return x+c3
 
 @scopes.add_arg_scope
-def aux_gated_resnet(x, u, nonlinearity=concat_elu, conv=conv2d, **kwargs):
+def aux_gated_resnet(x, u, nonlinearity=concat_elu, conv=conv2d, context=None, **kwargs):
     num_filters = int(x.get_shape()[-1])
     c1 = conv(nonlinearity(x), num_filters, nonlinearity=None, **kwargs) + nin(nonlinearity(u), num_filters, nonlinearity=None, **kwargs)
     c2 = nin(nonlinearity(c1), num_filters*2, nonlinearity=None, init_scale=0.1, **kwargs)
+    if context is not None:
+        # print("using context!")
+        context = tf.nn.elu(nin(context, num_filters*2))
+        c2 = c2 + context
     c3 = c2[:,:,:,:num_filters] * tf.nn.sigmoid(c2[:,:,:,num_filters:])
     return x+c3
 

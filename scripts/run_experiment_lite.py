@@ -111,7 +111,10 @@ def run_experiment(argv):
         data = joblib.load(args.resume_from)
         assert 'algo' in data
         algo = data['algo']
-        algo.train()
+        maybe_iter = algo.train()
+        if is_iterable(maybe_iter):
+            for _ in maybe_iter:
+                pass
     else:
         # read from stdin
         if args.use_cloudpickle:

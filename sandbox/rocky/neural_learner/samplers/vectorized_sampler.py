@@ -31,7 +31,7 @@ class VectorizedSampler(Sampler):
     def shutdown_worker(self):
         self.vec_env.terminate()
 
-    def obtain_samples(self, itr, max_path_length, batch_size):
+    def obtain_samples(self, itr, max_path_length, batch_size, max_n_trajs=None):
         logger.log("Obtaining samples for iteration %d..." % itr)
         paths = []
         n_samples = 0
@@ -48,7 +48,10 @@ class VectorizedSampler(Sampler):
         import time
         while n_samples < batch_size:
             t = time.time()
-            policy.reset(dones)
+            if hasattr(self.vec_env, "handle_policy_reset"):
+                self.vec_env.handle_policy_reset(policy, dones)
+            else:
+                policy.reset(dones)
             actions, agent_infos = policy.get_actions(obses)
 
             policy_time += time.time() - t
@@ -88,8 +91,13 @@ class VectorizedSampler(Sampler):
                         env_infos=tensor_utils.stack_tensor_dict_list(running_paths[idx]["env_infos"]),
                         agent_infos=tensor_utils.stack_tensor_dict_list(running_paths[idx]["agent_infos"]),
                     ))
+
                     n_samples += len(running_paths[idx]["rewards"])
                     running_paths[idx] = None
+
+            if max_n_trajs is not None and len(paths) >= max_n_trajs:
+                break
+
             process_time += time.time() - t
             pbar.inc(len(obses))
             obses = next_obses

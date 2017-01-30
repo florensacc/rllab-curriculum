@@ -1,4 +1,4 @@
-"""The ALEExperiment class handles the logic for training a deep
+sandbox/haoran/deep_q_rl/deep_q_rl/ale_data_set.py"""The ALEExperiment class handles the logic for training a deep
 Q-learning agent in the Arcade Learning Environment.
 
 Author: Nathan Sprague
@@ -10,6 +10,7 @@ import cv2
 import time
 import sys, os
 from .ale_python_interface.ale_python_interface import ALEInterface
+import atari_py
 
 # Number of rows to crop off the bottom of the (downsampled) screen.
 # This is appropriate for breakout, but it may need to be modified
@@ -21,11 +22,13 @@ class ALEExperiment(object):
     def __init__(self, ale_args, agent, resized_width, resized_height,
                  resize_method, num_epochs, epoch_length, test_length,
                  frame_skip, death_ends_episode, max_start_nullops,
-                 length_in_episodes=False, max_episode_length=np.inf, observation_type="image", record_image=True, record_ram=False,
+                 length_in_episodes=False, max_episode_length=np.inf, game='', observation_type="image", record_image=True, record_ram=False,
+                 record_rgb_image=False,
+                 recorded_rgb_image_scale=1.,
                  ):
         self.ale_args = ale_args
         ale = ALEInterface()
-        ale.setInt('random_seed', ale_args["seed"])
+        ale.setInt(b'random_seed', ale_args["seed"])
 
         if ale_args["plot"]:
             if sys.platform == 'darwin':
@@ -33,14 +36,16 @@ class ALEExperiment(object):
                 pygame.init()
                 ale.setBool('sound', False) # Sound doesn't work on OSX
 
-        ale.setBool('display_screen', ale_args["plot"])
-        ale.setFloat('repeat_action_probability',
+        ale.setBool(b'display_screen', ale_args["plot"])
+        ale.setFloat(b'repeat_action_probability',
                      ale_args["repeat_action_probability"])
         rom = ale_args["rom_path"]
+        rom = atari_py.get_game_path(game)
         if not os.path.exists(rom):
             print("Rom file %s does not exist."%(rom))
             sys.exit(1)
-        ale.loadROM(rom)
+        # ale.loadROM(rom)
+        ale.loadROM(str.encode(rom))
         self.ale = ale
 
         self.agent = agent
@@ -80,6 +85,8 @@ class ALEExperiment(object):
         self.record_ram = record_ram
         if record_ram:
             self.ram_state = np.zeros(ale.getRAMSize(), dtype=np.uint8)
+        self.record_rgb_image = record_rgb_image
+        self.recorded_rgb_image_scale = recorded_rgb_image_scale
 
     def run(self):
         """
@@ -210,7 +217,17 @@ class ALEExperiment(object):
         for _ in range(self.frame_skip):
             reward += self._act(action)
 
-        return reward
+        env_info = {}
+        if self.record_ram:
+            env_info["ram_state"] = self.ale.getRAM()
+        if self.record_rgb_image:
+            rgb_img = self.ale.getScreenRGB()
+            scale = self.recorded_rgb_image_scale
+            if abs(scale-1.0) > 1e-4:
+                rgb_img = cv2.resize(rgb_img, dsize=(0,0),fx=scale,fy=scale)
+            env_info["rgb_image"] = rgb_img
+
+        return reward, env_info
 
     def run_episode(self, max_steps, testing):
         """Run a single training episode.
@@ -232,7 +249,7 @@ class ALEExperiment(object):
         num_steps = 0
         total_reward = 0
         while True:
-            reward = self._step(self.min_action_set[action])
+            reward, env_info = self._step(self.min_action_set[action])
             total_reward += reward
             self.terminal_lol = (self.death_ends_episode and not testing and
                                  self.ale.lives() < start_lives)
@@ -240,10 +257,11 @@ class ALEExperiment(object):
             num_steps += 1
 
             if terminal or num_steps >= max_steps and not self.length_in_episodes:
-                self.agent.end_episode(reward, terminal)
+                self.agent.end_episode(reward, terminal, env_info)
                 break
 
-            action = self.agent.step(reward, self.get_observation())
+            action = self.agent.step(reward, self.get_observation(),
+                env_info)
 
         # if the lengths are in episodes, this episode counts as 1 "step"
         if self.length_in_episodes:
