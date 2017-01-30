@@ -1,3 +1,4 @@
+from mujoco_py import glfw
 import numpy as np
 from gym.envs.mujoco import mujoco_env
 from gym import utils
@@ -53,6 +54,7 @@ class HumanoidEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.viewer.cam.distance = self.model.stat.extent * 1.0
         self.viewer.cam.lookat[2] += .8
         self.viewer.cam.elevation = -20
+        glfw.set_window_pos(self.viewer.window,1000,0)
 
     def get_param_values(self):
         return None

@@ -292,6 +292,9 @@ class DDPG(OnlineAlgorithm, Serializable):
 
         # Close and save figs.
         snapshot_dir = logger.get_snapshot_dir()
+        if snapshot_dir is None:
+            snapshot_dir = '/tmp/ddpg/'
+            os.system('mkdir -p %s'%(snapshot_dir))
         img_file = os.path.join(snapshot_dir, 'itr_%d_test_paths.png' % epoch)
 
         plt.draw()

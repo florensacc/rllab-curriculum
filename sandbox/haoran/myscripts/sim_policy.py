@@ -6,9 +6,53 @@ import numpy as np
 from sandbox.haoran.myscripts.myutilities import get_true_env
 from gym.envs.mujoco import mujoco_env
 from sandbox.tuomas.mddpg.policies.stochastic_policy import StochasticNNPolicy
-
-from rllab.sampler.utils import rollout
 from rllab.misc.ext import set_seed
+from rllab.misc import tensor_utils
+import time
+
+def rollout(sess, env, agent, max_path_length=np.inf, animated=False, speedup=1, qf=None):
+    observations = []
+    actions = []
+    rewards = []
+    agent_infos = []
+    env_infos = []
+    o = env.reset()
+    agent.reset()
+    path_length = 0
+    if animated:
+        env.render()
+    while path_length < max_path_length:
+        a, agent_info = agent.get_action(o)
+        next_o, r, d, env_info = env.step(a)
+        observations.append(env.observation_space.flatten(o))
+        rewards.append(r)
+        actions.append(env.action_space.flatten(a))
+        agent_infos.append(agent_info)
+        env_infos.append(env_info)
+        path_length += 1
+        if d:
+            feed = {
+                qf.observations_placeholder: np.array([o]),
+                qf.actions_placeholder: np.array([a]),
+            }
+            qvalue = sess.run(qf.output, feed).ravel()
+            print("terminate value:", qvalue - r)
+            break
+        o = next_o
+        if animated:
+            env.render()
+            timestep = 0.05
+            time.sleep(timestep / speedup)
+    if animated:
+        env.render(close=True)
+
+    return dict(
+        observations=tensor_utils.stack_tensor_list(observations),
+        actions=tensor_utils.stack_tensor_list(actions),
+        rewards=tensor_utils.stack_tensor_list(rewards),
+        agent_infos=tensor_utils.stack_tensor_dict_list(agent_infos),
+        env_infos=tensor_utils.stack_tensor_dict_list(env_infos),
+    )
 
 if __name__ == "__main__":
 
@@ -34,9 +78,11 @@ if __name__ == "__main__":
             else:
                 policy = algo.policy
             env = data["algo"].env
+            qf = data["algo"].qf
         else:
             policy = data['policy']
             env = data['env']
+            qf = data['qf']
         while True:
             if args.seed >= 0:
                 set_seed(args.seed)
@@ -44,5 +90,6 @@ if __name__ == "__main__":
                 if isinstance(true_env, mujoco_env.MujocoEnv):
                     # Gym mujoco env doesn't use the default np seed
                     true_env._seed(args.seed)
-            path = rollout(env, policy, max_path_length=args.max_path_length,
-                           animated=(not args.no_plot), speedup=args.speedup)
+            path = rollout(sess, env, policy, max_path_length=args.max_path_length,
+                           animated=(not args.no_plot), speedup=args.speedup,
+                           qf=qf)
