@@ -59,6 +59,7 @@ if __name__ == "__main__":
         n_parallel = 4
     else:
         mode = 'local'
+        n_parallel = 4
 
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
@@ -147,7 +148,7 @@ if __name__ == "__main__":
                             run_experiment_lite(
                                 stub_method_call=algo.train(),
                                 mode='local',
-                                n_parallel=1,
+                                n_parallel=n_parallel,
                                 # Only keep the snapshot parameters for the last iteration
                                 snapshot_mode="last",
                                 seed=s,
