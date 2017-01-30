@@ -116,8 +116,8 @@ for t in bool_tip:
             # Specifies the seed for the experiment. If this is not provided, a random seed
             # will be used
             # seed=1,
-            mode="local",
-            # mode="ec2",
+            # mode="local",
+            mode="ec2",
             seed=s,
             # log_dir="data/local/train-Lego/trial_pretraining",
             # exp_prefix="train-Lego/RSS/trial",
