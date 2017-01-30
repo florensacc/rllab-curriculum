@@ -76,7 +76,7 @@ for t in taus:
             env=env,
             policy=policy,
             baseline=baseline,
-            batch_size=50,
+            batch_size=50000,
             max_path_length=150,  #100
             n_itr=10000, #50000
             discount=0.95,
@@ -108,8 +108,8 @@ for t in taus:
             # Specifies the seed for the experiment. If this is not provided, a random seed
             # will be used
             # seed=1,
-            mode="local",
-            # mode="ec2",
+            # mode="local",
+            mode="ec2",
             seed=s,
             # log_dir="data/local/train-Lego/trial_pretraining",
             # exp_prefix="train-Lego/RSS/trial",
