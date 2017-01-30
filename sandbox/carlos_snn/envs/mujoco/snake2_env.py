@@ -1,6 +1,5 @@
 from rllab.envs.base import Step
 from rllab.misc.overrides import overrides
-# from rllab.envs.mujoco.mujoco_env import MujocoEnv
 from sandbox.carlos_snn.envs.mujoco.mujoco_env import MujocoEnv_ObsInit as MujocoEnv
 import numpy as np
 from rllab.core.serializable import Serializable
@@ -20,8 +19,8 @@ import matplotlib.pyplot as plt
 from rllab import spaces
 BIG = 1e6
 
-class SwimmerEnv(MujocoEnv, Serializable):
-    FILE = 'swimmer.xml'
+class Snake2Env(MujocoEnv, Serializable):
+    FILE = 'snake2.xml'
     ORI_IND = 2
 
     @autoargs.arg('ctrl_cost_coeff', type=float,
@@ -35,7 +34,7 @@ class SwimmerEnv(MujocoEnv, Serializable):
         self.ctrl_cost_coeff = ctrl_cost_coeff
         self.ego_obs = ego_obs
         self.sparse_rew = sparse_rew
-        super(SwimmerEnv, self).__init__(*args, **kwargs)
+        super(Snake2Env, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
 
     def get_current_obs(self):

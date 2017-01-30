@@ -6,7 +6,7 @@ from rllab.envs.base import Step
 from rllab.envs.proxy_env import ProxyEnv
 from rllab.misc import tensor_utils
 from rllab.misc.overrides import overrides
-from sandbox.carlos_snn.algos.hier_multi_mlp_policy import GaussianMLPPolicy_multi_hier
+from sandbox.carlos_snn.policies.hier_multi_mlp_policy import GaussianMLPPolicy_multi_hier
 from sandbox.carlos_snn.sampler.utils import rollout  # this is a different rollout! (not doing the same: no reset!)
 
 
