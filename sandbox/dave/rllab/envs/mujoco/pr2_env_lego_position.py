@@ -39,6 +39,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             number_actions=1,
             dilate_time=1,
             crop=True,
+            tip=1,
             *args, **kwargs):
 
         self.action_penalty_weight = action_penalty_weight
@@ -84,6 +85,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.beta = 0.1
         self.crop = crop
         self.discount_weights = 0.99
+        self.tip = tip
 
         super(Pr2EnvLego, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())

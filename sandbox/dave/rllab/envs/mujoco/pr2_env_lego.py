@@ -39,6 +39,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             use_vision=False,
             use_depth=False,
             tau=1,
+            tip=1,
             *args, **kwargs):
 
         self.action_penalty_weight = action_penalty_weight
@@ -77,6 +78,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.iter = 0
         self.tau = tau
         self.weight = 1
+        self.tip = tip
 
         super(Pr2EnvLego, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
@@ -188,7 +190,10 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         reward_ctrl = - self.action_penalty_weight * np.square(action).sum()
         # reward = reward_dist + reward_ctrl + self.gamma * phi - phi_prev
         # reward = reward_dist + reward_ctrl + reward_tip
-        reward = reward_dist + reward_ctrl + self.gamma * phi - phi_prev
+        if self.tip:
+            reward = reward_dist + reward_ctrl + reward_tip #reward_ctrl#+ reward_occlusion
+        else:
+            reward = reward_dist + reward_ctrl # reward_ctrl#+ reward_occlusion
         state = self._state
 
         # print(reward_occlusion, reward_angle, reward_tip, reward_dist, )
@@ -445,19 +450,19 @@ class Pr2EnvLego(MujocoEnv, Serializable):
     #     self.iter += 1
     #     self.gamma = self.discount * self.tau ** self.iter
     #     return self.angle_penalty_weight, self.distance_tip_lego_penalty_weight
-
-    def __getstate__(self):
-        d = super(Pr2EnvLego, self).__getstate__()
-        d['_iter'] = self.iter
-        d['_gamma'] = self.gamma
-        return d
-
-    def __setstate__(self, d):
-        super(Pr2EnvLego, self).__setstate__(d)
-        self.update_gamma()
-
-    def update_gamma(self):
-        self.iter += 1
-        self.gamma = self.discount * (1 - np.exp(-self.iter/self.tau))
-        # return self.angle_penalty_weight, self.distance_tip_lego_penalty_weight
+    #
+    # def __getstate__(self):
+    #     d = super(Pr2EnvLego, self).__getstate__()
+    #     d['_iter'] = self.iter
+    #     d['_gamma'] = self.gamma
+    #     return d
+    #
+    # def __setstate__(self, d):
+    #     super(Pr2EnvLego, self).__setstate__(d)
+    #     self.update_gamma()
+    #
+    # def update_gamma(self):
+    #     self.iter += 1
+    #     self.gamma = self.discount * (1 - np.exp(-self.iter/self.tau))
+    #     # return self.angle_penalty_weight, self.distance_tip_lego_penalty_weight
 

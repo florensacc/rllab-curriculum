@@ -140,7 +140,8 @@ class Pr2EnvLego(MujocoEnv, Serializable):
 
             if not self.stop:
                 self.t += 0.05
-                action = self.lego_pos + (self.goal - self.lego_pos) * (self.t - 0.4)
+                lg = self.goal - self.lego_pos
+                action = self.lego_pos + lg * (self.t - 0.2  / np.linalg.norm(lg))
                 action = action[:2]
             else:
                 action = self.model.data.qpos[:2, 0]
@@ -246,7 +247,8 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             print("No goal generator!")
 
         self.lego_pos = self.lego[:3]
-        init_hand = self.lego_pos + (self.goal - self.lego_pos) * (self.t - 0.4)
+        lg = (self.goal - self.lego_pos)
+        init_hand = self.lego_pos + lg * (self.t - 0.2  / np.linalg.norm(lg) )
         qpos[:2, 0] = init_hand[:2]
 
         if self.allow_random_vel_restarts or self.first_time:

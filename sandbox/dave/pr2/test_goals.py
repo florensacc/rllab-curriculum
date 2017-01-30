@@ -121,7 +121,7 @@ if __name__ == "__main__":
     # pkl_file = "data/s3/train-Lego/RSS/fixed-arm-position-ctrl-tip/fixed-arm-position-ctrl-tip1/params.pkl"
     # pkl_file = "data/s3/train-Lego/RSS/fixed-arm-position-ctrl-tip/fixed-arm-position-ctrl-tip1/params.pkl"
     # pkl_file = "upload/fixed-arm-position-ctrl-tip-no-random-restarts/fixed-arm-position-ctrl-tip-no-random-restarts1/params.pkl"
-    pkl_file = "data/s3/train-Lego/RSS/baseline/hand-xy/params.pkl"
+    pkl_file = "data/s3/train-Lego/RSS/baseline/hand-xy-torque/params.pkl"
     # pkl_file = "data/s3/train-Lego/RSS/fine-tune-just-distance-n-control/fine-tune-just-distance-n-control/params.pkl"
     # pkl_file = "data/s3/train-Lego/RSS/position-control-different-orientation/position-control-different-orientation/params.pkl"
     # pkl_file = "data/s3/train-Lego/RSS/comparison-rewards/fixed-arm-lego-phi/params.pkl"
@@ -133,7 +133,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # parser.add_argument('--file', type=str, default=pkl_file,
     #                     help='path to the snapshot file')
-    parser.add_argument('--max_length', type=int, default=100,
+    parser.add_argument('--max_length', type=int, default=200,
                         help='Max length of rollout')
     parser.add_argument('--speedup', type=int, default=1,
                         help='Speedup')

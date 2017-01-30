@@ -136,10 +136,10 @@ class BatchPolopt(RLAlgorithm):
                     if self.pause_for_plot:
                         input("Plotting evaluation run: Press Enter to "
                                   "continue...")
-            self.env._wrapped_env.iter = itr
-            self.env._wrapped_env.gamma = self.env._wrapped_env.discount *\
-                                          (1 - np.exp(-self.env._wrapped_env.iter /
-                                                      self.env._wrapped_env.tau))
+            # self.env._wrapped_env.iter = itr
+            # self.env._wrapped_env.gamma = self.env._wrapped_env.discount *\
+            #                               (1 - np.exp(-self.env._wrapped_env.iter /
+            #                                           self.env._wrapped_env.tau))
 
             # self.env._wrapped_env.gamma = self.env._wrapped_env.discount * self.env._wrapped_env.tau ** itr
             # print(self.env._wrapped_env.iter)
