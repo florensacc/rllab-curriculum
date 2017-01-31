@@ -355,3 +355,16 @@ class DDPG(OnlineAlgorithm, Serializable):
             self.actor_train_counter + 1,
             self.actor_train_frequency,
         )
+
+    def __getstate__(self):
+        d = Serializable.__getstate__(self)
+        d.update({
+            "policy_params": self.policy.get_param_values(),
+            "qf_params": self.qf.get_param_values(),
+        })
+        return d
+
+    def __setstate__(self, d):
+        Serializable.__setstate__(self, d)
+        self.qf.set_param_values(d["qf_params"])
+        self.policy.set_param_values(d["policy_params"])

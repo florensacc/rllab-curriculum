@@ -31,12 +31,13 @@ def rollout(sess, env, agent, max_path_length=np.inf, animated=False, speedup=1,
         env_infos.append(env_info)
         path_length += 1
         if d:
-            feed = {
-                qf.observations_placeholder: np.array([o]),
-                qf.actions_placeholder: np.array([a]),
-            }
-            qvalue = sess.run(qf.output, feed).ravel()
-            print("terminate value:", qvalue - r)
+            if qf is not None:
+                feed = {
+                    qf.observations_placeholder: np.array([o]),
+                    qf.actions_placeholder: np.array([a]),
+                }
+                qvalue = sess.run(qf.output, feed).ravel()
+                print("terminate value:", qvalue - r)
             break
         o = next_o
         if animated:
@@ -66,8 +67,10 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=-1,
         help='Fixed random seed for each rollout. Set for reproducibility.')
     parser.add_argument('--no-plot', default=False, action='store_true')
+    parser.add_argument('--show-qf', default=False, action='store_true')
     args = parser.parse_args()
 
+    qf = None
     with tf.Session() as sess:
         data = joblib.load(args.file)
         if "algo" in data:
@@ -78,11 +81,13 @@ if __name__ == "__main__":
             else:
                 policy = algo.policy
             env = data["algo"].env
-            qf = data["algo"].qf
+            if args.show_qf:
+                qf = data["algo"].qf
         else:
             policy = data['policy']
             env = data['env']
-            qf = data['qf']
+            if args.show_qf:
+                qf = data['qf']
         while True:
             if args.seed >= 0:
                 set_seed(args.seed)

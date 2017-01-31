@@ -873,10 +873,11 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
                         fi
                     done & echo log sync initiated
                 """.format(log_dir=log_dir, remote_log_dir=remote_log_dir))
-        sio.write("""
-            for i in {1..800}; do su -c "nvidia-modprobe -u -c=0" ubuntu && break || sleep 3; done
-            systemctl start nvidia-docker
-        """)
+        if use_gpu:
+            sio.write("""
+                for i in {1..800}; do su -c "nvidia-modprobe -u -c=0" ubuntu && break || sleep 3; done
+                systemctl start nvidia-docker
+            """)
         sio.write("""
             {command}
         """.format(command=to_docker_command(params, docker_image, python_command=python_command, script=script,
@@ -935,6 +936,7 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
         user_data = dedent(sio.getvalue())
     else:
         user_data = full_script
+    print(full_script)
 
     instance_args = dict(
         ImageId=aws_config["image_id"],
