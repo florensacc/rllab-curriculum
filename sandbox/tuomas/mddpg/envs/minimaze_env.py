@@ -231,7 +231,7 @@ class Minimaze(PointMassDynamics):
                                   [-0.5, -4, 4]])
         # Vertical walls (x-coord, y_start, y_end)
         self._v_walls = np.array([[-4, -0.5, 1.5],
-                                  [-0.5, -0.5, 0.5],
+                                  #[-0.5, -0.5, 0.5],
                                   [4, -0.5, 1.5]])
 
     def step(self, action):

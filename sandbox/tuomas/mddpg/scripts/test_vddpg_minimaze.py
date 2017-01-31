@@ -28,6 +28,7 @@ flags.DEFINE_string('alg', 'vddpg', 'Algorithm.')
 flags.DEFINE_string('policy', 'stochastic',
                     'Policy (DETERMINISTIC/stochastic')
 flags.DEFINE_string('output', 'exp00', 'Experiment name.')
+flags.DEFINE_string('plt_backend', 'TkAgg', 'Matplotlib backend.')
 
 temperatures = np.array([[1,  1],
                          [1,  0],
@@ -193,9 +194,9 @@ class AlgTest(Alg):
         logger.record_tabular("avg test ext reward", mean_rewards[1])
 
         snapshot_dir = logger.get_snapshot_dir()
-        env_img_file = os.path.join(snapshot_dir, 'itr_%d_env.png' % epoch)
+        env_img_file = os.path.join(snapshot_dir, 'env_itr_%05d.png' % epoch)
         critic_img_file = os.path.join(snapshot_dir,
-                                       'itr_%d_critic.png' % epoch)
+                                       'critic_itr_%05d.png' % epoch)
         self._critic_fig.savefig(critic_img_file, dpi=100)
         self._env_fig.savefig(env_img_file, dpi=100)
 
@@ -309,6 +310,7 @@ def test():
         qf=qf_multi,
         Ks=Ks,
         temperatures=temperatures,
+	plt_backend=FLAGS.plt_backend,
         **alg_kwargs
     )
     algorithm.train()
