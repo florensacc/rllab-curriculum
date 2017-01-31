@@ -26,7 +26,7 @@ APPLE = 0
 BOMB = 1
 
 
-class FollowEnv(GatherEnv, Serializable):
+class FollowEnv(GatherEnv):
     MODEL_CLASS = None
     ORI_IND = None
 
@@ -39,7 +39,7 @@ class FollowEnv(GatherEnv, Serializable):
             goal_dist_rew=True,
             *args, **kwargs
     ):
-        Serializable.quick_init(self, locals())
+        # Serializable.quick_init(self, locals())
         self.displ_std = displ_std
         self.goal_vector_obs = goal_vector_obs
         self.goal_dist_rew = goal_dist_rew
@@ -51,7 +51,7 @@ class FollowEnv(GatherEnv, Serializable):
         info['dist_rewards'] = 0
         info['follow_rewards'] = 0
         if done:
-            return Step(self.get_current_obs(), -10, done, **info)  # give a -10 rew if the robot dies
+            return Step(self.get_current_obs(), self.dying_cost, done, **info)  # give a -10 rew if the robot dies
         com = self.wrapped_env.get_body_com("torso")
         x, y = com[:2]
         reward = self.coef_inner_rew * inner_rew
@@ -175,7 +175,6 @@ class FollowEnv(GatherEnv, Serializable):
         ub = BIG * np.ones(shp)
         return spaces.Box(ub * -1, ub)
 
-    # CF
     @overrides
     def log_diagnostics(self, paths, *args, **kwargs):
         # we call here any logging related to the follow, strip the maze obs and call log_diag with the stripped paths

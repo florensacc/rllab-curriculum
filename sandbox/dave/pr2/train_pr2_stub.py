@@ -6,7 +6,7 @@ from sandbox.dave.rllab.baselines.linear_feature_baseline import LinearFeatureBa
 
 from rllab.envs.normalized_env import normalize
 from sandbox.dave.rllab.goal_generators.pr2_goal_generators import PR2CrownGoalGeneratorSmall #PR2CrownGoalGeneratorSmall
-from sandbox.dave.rllab.lego_generators.pr2_lego_generators import PR2LegoBoxBlockGeneratorSmall #PR2LegoBoxBlockGeneratorSmall #PR2LegoBoxBlockGeneratorSmall #PR2LegoFixedBlockGenerator
+from sandbox.dave.rllab.lego_generators.pr2_lego_generators import PR2LegoFixedBlockGenerator #PR2LegoBoxBlockGeneratorSmall #PR2LegoBoxBlockGeneratorSmall #PR2LegoFixedBlockGenerator
 from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.dave.rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 # from sandbox.dave.rllab.policies.gaussian_mlp_policy_tanh import GaussianMLPPolicy
@@ -14,7 +14,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 
 
 from sandbox.dave.rllab.envs.mujoco.pr2_env_lego import Pr2EnvLego
-# from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_position import Pr2EnvLego
+# from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_position import   Pr2EnvLego
 # from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_hand import Pr2EnvLego
 # from sandbox.dave.rllab.envs.mujoco.pr2_env_reach import Pr2EnvLego
 # from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_position_different_objects import Pr2EnvLego
@@ -39,12 +39,13 @@ seeds = [1, 11, 21, 31, 41]
 # taus = [1000, 2000]
 # taus = [0.9, 0.95, 0.995]
 # taus = [1]
-bool_tip = [0 ,1]
-for t in bool_tip:
+taus = [2000, 5000, 10000]
+
+for t in taus:
     for s in seeds:
         env = normalize(Pr2EnvLego(
             goal_generator=train_goal_generator,
-            lego_generator=PR2LegoBoxBlockGeneratorSmall(),
+            lego_generator=PR2LegoFixedBlockGenerator(),
             # action_limiter=action_limiter,
             max_action=1,
             pos_normal_sample=True,
@@ -53,8 +54,7 @@ for t in bool_tip:
             # use_depth=True,
             # use_vision=True,
             allow_random_restarts=True,
-            tip=t,
-            # tau=t,
+            tau=t,
             # crop=True,
             # allow_random_vel_restarts=True,
             ))
@@ -78,7 +78,7 @@ for t in bool_tip:
             baseline=baseline,
             batch_size=50000,
             max_path_length=150,  #100
-            n_itr=5000, #50000
+            n_itr=10000, #50000
             discount=0.95,
             gae_lambda=0.98,
             step_size=0.01,
@@ -89,14 +89,6 @@ for t in bool_tip:
             # plot=True,
             # Uncomment both lines (this and the plot parameter below) to enable plotting
             )
-
-        # algo.train()
-
-    ##lambda exp: exp.params['exp_name'].split('_')[-1][:2]
-        if t:
-            exp_name="r_tip_" + str(s)
-        else:
-            exp_name = "r_base_" + str(s)
 
         run_experiment_lite(
             algo.train(),
@@ -116,15 +108,15 @@ for t in bool_tip:
             # Specifies the seed for the experiment. If this is not provided, a random seed
             # will be used
             # seed=1,
-            # mode="local",
-            mode="ec2",
+            mode="local",
+            # mode="ec2",
             seed=s,
             # log_dir="data/local/train-Lego/trial_pretraining",
             # exp_prefix="train-Lego/RSS/trial",
             # exp_name="trial",
             # exp_prefix="train-Lego/RSS/torque-control",
             # exp_name="random_0001_param_torque_eve_fixed" + str(s),
-            exp_prefix="train-Lego/RSS/rewards",
+            exp_prefix="train-Lego/RSS/reward-fixed",
             # exp_name= "decaying-decaying-gamma" + str(t),
-            exp_name=exp_name,
+            exp_name= "r_tau_" + str(t) + '_' +  str(s),
         )

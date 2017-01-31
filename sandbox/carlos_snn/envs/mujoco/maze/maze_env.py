@@ -2,29 +2,19 @@ import os.path as osp
 import tempfile
 import xml.etree.ElementTree as ET
 import math
-from functools import reduce
-
-import matplotlib as mpl
-
-mpl.use('Agg')
-from matplotlib import patches
-from matplotlib import pyplot as plt
 
 import numpy as np
-import collections
 
 from rllab import spaces
 from rllab.envs.base import Step
-
 from rllab.envs.proxy_env import ProxyEnv
-# from sandbox.carlos_snn.envs.proxy_maze_env import ProxyMazeEnv
+from sandbox.carlos_snn.envs.mujoco.maze.maze_env_utils import construct_maze
 
 from rllab.core.serializable import Serializable
 from rllab.envs.mujoco.mujoco_env import MODEL_DIR, BIG
-from rllab.envs.mujoco.maze.maze_env_utils import ray_segment_intersect, point_distance
-from rllab.envs.env_spec import EnvSpec
-
 from rllab.misc.overrides import overrides
+from rllab.envs.mujoco.maze.maze_env_utils import ray_segment_intersect, point_distance
+
 from rllab.misc import logger
 
 
@@ -64,8 +54,9 @@ class MazeEnv(ProxyEnv, Serializable):
         self._sensor_range = sensor_range
         self._sensor_span = sensor_span
         self._maze_id = maze_id
-        self.__class__.MAZE_HEIGHT = maze_height
-        self.__class__.MAZE_SIZE_SCALING = maze_size_scaling
+        self.length = length
+        self.MAZE_HEIGHT = height = maze_height
+        self.MAZE_SIZE_SCALING = size_scaling = maze_size_scaling
         self.coef_inner_rew = coef_inner_rew
         self.goal_rew = goal_rew
 
@@ -76,109 +67,7 @@ class MazeEnv(ProxyEnv, Serializable):
         tree = ET.parse(xml_path)
         worldbody = tree.find(".//worldbody")
 
-        size_scaling = self.__class__.MAZE_SIZE_SCALING
-        height = self.__class__.MAZE_HEIGHT
-
-        # define the maze to use
-        if self._maze_id == 0:
-            structure = self.__class__.MAZE_STRUCTURE
-        elif self._maze_id == 1:  # donuts maze: can reach the single goal by 2 equal paths
-            c = length + 4
-            M = np.ones((c, c))
-            M[1:c - 1, (1, c - 2)] = 0
-            M[(1, c - 2), 1:c - 1] = 0
-            M = M.astype(int).tolist()
-            M[1][c // 2] = 'r'
-            M[c - 2][c // 2] = 'g'
-            structure = M
-            # print(self.__class__.MAZE_STRUCTURE)
-            self.__class__.MAZE_STRUCTURE = structure
-            # print("the new one is", self.__class__.MAZE_STRUCTURE)
-
-        elif self._maze_id == 2:  # spiral maze: need to use all the keys (only makes sense for length >=3)
-            c = length + 4
-            M = np.ones((c, c))
-            M[1:c - 1, (1, c - 2)] = 0
-            M[(1, c - 2), 1:c - 1] = 0
-            M = M.astype(int).tolist()
-            M[1][c // 2] = 'r'
-            # now block one of the ways and put the goal on the other side
-            M[1][c // 2 - 1] = 1
-            M[1][c // 2 - 2] = 'g'
-            structure = M
-            self.__class__.MAZE_STRUCTURE = structure
-            # print(structure)
-
-        elif self._maze_id == 3:  # corridor with goals at the 2 extremes
-            structure = [
-                [1] * (2 * length + 5),
-                [1, 'g'] + [0] * length + ['r'] + [0] * length + ['g', 1],
-                [1] * (2 * length + 5),
-            ]
-            self.__class__.MAZE_STRUCTURE = structure
-            # print(structure)
-
-        elif 4 <= self._maze_id <= 7:  # cross corridor, goal in
-            c = 2 * length + 5
-            M = np.ones((c, c))
-            M = M - np.diag(np.ones(c))
-            M = M - np.diag(np.ones(c - 1), 1) - np.diag(np.ones(c - 1), -1)
-            i = np.arange(c)
-            j = i[::-1]
-            M[i, j] = 0
-            M[i[:-1], j[1:]] = 0
-            M[i[1:], j[:-1]] = 0
-            M[np.array([0, c - 1]), :] = 1
-            M[:, np.array([0, c - 1])] = 1
-            M = M.astype(int).tolist()
-            M[c // 2][c // 2] = 'r'
-            # for i in [1, c - 2]:
-            #     for j in [1, c - 2]:
-            #         M[i][j] = 'g'
-            if self._maze_id == 4:
-                M[1][1] = 'g'
-            if self._maze_id == 5:
-                M[1][c - 2] = 'g'
-            if self._maze_id == 6:
-                M[c - 2][1] = 'g'
-            if self._maze_id == 7:
-                M[c - 2][c - 2] = 'g'
-            structure = M
-            self.__class__.MAZE_STRUCTURE = structure
-            # print(structure)
-
-        elif self._maze_id == 8:  # reflexion of benchmark maze
-            structure = [
-                [1, 1, 1, 1, 1],
-                [1, 'g', 0, 0, 1],
-                [1, 1, 1, 0, 1],
-                [1, 'r', 0, 0, 1],
-                [1, 1, 1, 1, 1],
-            ]
-            self.__class__.MAZE_STRUCTURE = structure
-            # print(structure)
-
-        elif self._maze_id == 9:  # sym benchmark maze
-            structure = [
-                [1, 1, 1, 1, 1],
-                [1, 0, 0, 'r', 1],
-                [1, 0, 1, 1, 1],
-                [1, 0, 0, 'g', 1],
-                [1, 1, 1, 1, 1],
-            ]
-            self.__class__.MAZE_STRUCTURE = structure
-            # print(structure)
-
-        elif self._maze_id == 10:  # reflexion of sym of benchmark maze
-            structure = [
-                [1, 1, 1, 1, 1],
-                [1, 0, 0, 'g', 1],
-                [1, 0, 1, 1, 1],
-                [1, 0, 0, 'r', 1],
-                [1, 1, 1, 1, 1],
-            ]
-            self.__class__.MAZE_STRUCTURE = structure
-            # print(structure)
+        self.MAZE_STRUCTURE = structure = construct_maze(maze_id=self._maze_id, length=self.length)
 
         torso_x, torso_y = self._find_robot()
         self._init_torso_x = torso_x
@@ -269,12 +158,9 @@ class MazeEnv(ProxyEnv, Serializable):
         # environment
         robot_x, robot_y = self.wrapped_env.get_body_com("torso")[:2]
         ori = self.get_ori()
-        # ori = self.wrapped_env.model.data.qpos[self.__class__.ORI_IND]
 
-        # print ori
-
-        structure = self.__class__.MAZE_STRUCTURE
-        size_scaling = self.__class__.MAZE_SIZE_SCALING
+        structure = self.MAZE_STRUCTURE
+        size_scaling = self.MAZE_SIZE_SCALING
 
         segments = []
         # compute the distance of all segments
@@ -354,7 +240,7 @@ class MazeEnv(ProxyEnv, Serializable):
         ub = BIG * np.ones(shp)
         return spaces.Box(ub * -1, ub)
 
-    # CF space of only the robot observations (they go first in the get current obs)
+    # CF space of only the robot observations (they go first in the get current obs) THIS COULD GO IN PROXYENV
     @property
     def robot_observation_space(self):
         shp = self.get_current_robot_obs().shape
@@ -366,16 +252,6 @@ class MazeEnv(ProxyEnv, Serializable):
         shp = self.get_current_maze_obs().shape
         ub = BIG * np.ones(shp)
         return spaces.Box(ub * -1, ub)
-
-    @property
-    @overrides
-    def spec(self):
-        return EnvSpec(
-            observation_space=self.observation_space,
-            # maze_observation_space=self.maze_observation_space,
-            # robot_observation_space=self.robot_observation_space,
-            action_space=self.action_space,
-        )
 
     def action_from_key(self, key):
         return self.wrapped_env.action_from_key(key)

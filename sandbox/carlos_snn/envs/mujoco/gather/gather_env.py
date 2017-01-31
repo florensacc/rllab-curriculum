@@ -58,6 +58,7 @@ class GatherEnv(ProxyEnv, Serializable):
             sensor_range=6.,
             sensor_span=math.pi,
             coef_inner_rew=0.,
+            dying_cost=-10,
             *args, **kwargs
     ):
         Serializable.quick_init(self, locals())
@@ -70,7 +71,9 @@ class GatherEnv(ProxyEnv, Serializable):
         self.sensor_range = sensor_range
         self.sensor_span = sensor_span
         self.coef_inner_rew = coef_inner_rew
+        self.dying_cost = dying_cost
         self.objects = []
+        self.viewer = None
         # super(GatherEnv, self).__init__(*args, **kwargs)
         model_cls = self.__class__.MODEL_CLASS
         if model_cls is None:
@@ -154,7 +157,7 @@ class GatherEnv(ProxyEnv, Serializable):
         info['inner_rewards'] = inner_rew
         info['gather_rewards'] = 0
         if done:
-            return Step(self.get_current_obs(), -10, done, **info)  # give a -10 rew if the robot dies
+            return Step(self.get_current_obs(), self.dying_cost, done, **info)  # give a -10 rew if the robot dies
         com = self.wrapped_env.get_body_com("torso")
         x, y = com[:2]
         reward = self.coef_inner_rew * inner_rew
@@ -258,9 +261,9 @@ class GatherEnv(ProxyEnv, Serializable):
     def action_bounds(self):
         return self.wrapped_env.action_bounds
 
-    @property
-    def viewer(self):
-        return self.wrapped_env.viewer
+    # @property
+    # def viewer(self):
+    #     return self.wrapped_env.viewer
 
     def action_from_key(self, key):
         return self.wrapped_env.action_from_key(key)
@@ -277,8 +280,6 @@ class GatherEnv(ProxyEnv, Serializable):
             self.wrapped_env.viewer.finish()
 
     def render(self, mode='human', close=False):
-        if close:
-            self.stop_viewer()
         if mode == 'rgb_array':
             self.get_viewer().render()
             data, width, height = self.get_viewer().get_image()
@@ -287,11 +288,12 @@ class GatherEnv(ProxyEnv, Serializable):
             # self.get_viewer().loop_once()
             self.get_viewer()
             self.wrapped_env.render()
+        if close:
+            self.stop_viewer()
 
     def get_ori(self):
         return self.wrapped_env.model.data.qpos[self.__class__.ORI_IND]
 
-    # CF
     @overrides
     def log_diagnostics(self, paths, log_prefix='Gather', *args, **kwargs):
         # we call here any logging related to the gather, strip the maze obs and call log_diag with the stripped paths
