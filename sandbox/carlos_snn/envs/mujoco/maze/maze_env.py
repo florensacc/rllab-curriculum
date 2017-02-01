@@ -55,8 +55,6 @@ class MazeEnv(ProxyEnv, Serializable):
         self._sensor_span = sensor_span
         self._maze_id = maze_id
         self.length = length
-        self.MAZE_HEIGHT = height = maze_height
-        self.MAZE_SIZE_SCALING = size_scaling = maze_size_scaling
         self.coef_inner_rew = coef_inner_rew
         self.goal_rew = goal_rew
 
@@ -67,6 +65,8 @@ class MazeEnv(ProxyEnv, Serializable):
         tree = ET.parse(xml_path)
         worldbody = tree.find(".//worldbody")
 
+        self.MAZE_HEIGHT = height = maze_height
+        self.MAZE_SIZE_SCALING = size_scaling = maze_size_scaling
         self.MAZE_STRUCTURE = structure = construct_maze(maze_id=self._maze_id, length=self.length)
 
         torso_x, torso_y = self._find_robot()
@@ -123,35 +123,6 @@ class MazeEnv(ProxyEnv, Serializable):
         inner_env = model_cls(*args, file_path=file_path, **kwargs)  # file to the robot specifications
         ProxyEnv.__init__(self, inner_env)  # here is where the robot env will be initialized
 
-    def reset(self):
-        self.wrapped_env.reset()
-        return self.get_current_obs()
-
-    def step(self, action):
-        if self.MANUAL_COLLISION:
-            old_pos = self.wrapped_env.get_xy()
-            inner_next_obs, inner_rew, done, info = self.wrapped_env.step(action)
-            new_pos = self.wrapped_env.get_xy()
-            if self._is_in_collision(new_pos):
-                self.wrapped_env.set_xy(old_pos)
-                done = False
-        else:
-            inner_next_obs, inner_rew, done, info = self.wrapped_env.step(action)
-        next_obs = self.get_current_obs()
-        x, y = self.wrapped_env.get_body_com("torso")[:2]
-        # ref_x = x + self._init_torso_x
-        # ref_y = y + self._init_torso_y
-        info['maze_rewards'] = 0
-        info['inner_rew'] = inner_rew
-        reward = self.coef_inner_rew * inner_rew
-        minx, maxx, miny, maxy = self._goal_range
-        # print("goal range: x [%s,%s], y [%s,%s], now [%s,%s]" % (str(minx), str(maxx), str(miny), str(maxy),
-        #                                                          str(x), str(y)))
-        if minx <= x <= maxx and miny <= y <= maxy:
-            done = True
-            reward += self.goal_rew
-            info['maze_rewards'] = 1  # we keep here the original one, so that the AvgReturn is directly the freq of success
-        return Step(next_obs, reward, done, **info)
 
     def get_current_maze_obs(self):
         # The observation would include both information about the robot itself as well as the sensors around its
@@ -231,7 +202,23 @@ class MazeEnv(ProxyEnv, Serializable):
                                ])
 
     def get_ori(self):
+        """
+        First it tries to use a get_ori from the wrapped env. If not successfull, falls
+        back to the default based on the ORI_IND specified in Maze (not accurate for quaternions)
+        """
+        try:
+            return self.wrapped_env.wrapped_get_ori()
+        except (NotImplementedError, AttributeError) as e:
+            pass
         return self.wrapped_env.model.data.qpos[self.__class__.ORI_IND]
+
+    def reset(self):
+        self.wrapped_env.reset()
+        return self.get_current_obs()
+
+    @property
+    def viewer(self):
+        return self.wrapped_env.viewer
 
     @property
     @overrides
@@ -240,7 +227,7 @@ class MazeEnv(ProxyEnv, Serializable):
         ub = BIG * np.ones(shp)
         return spaces.Box(ub * -1, ub)
 
-    # CF space of only the robot observations (they go first in the get current obs) THIS COULD GO IN PROXYENV
+    # space of only the robot observations (they go first in the get current obs) THIS COULD GO IN PROXYENV
     @property
     def robot_observation_space(self):
         shp = self.get_current_robot_obs().shape
@@ -253,16 +240,9 @@ class MazeEnv(ProxyEnv, Serializable):
         ub = BIG * np.ones(shp)
         return spaces.Box(ub * -1, ub)
 
-    def action_from_key(self, key):
-        return self.wrapped_env.action_from_key(key)
-
-    @property
-    def viewer(self):
-        return self.wrapped_env.viewer
-
     def _find_robot(self):
-        structure = self.__class__.MAZE_STRUCTURE
-        size_scaling = self.__class__.MAZE_SIZE_SCALING
+        structure = self.MAZE_STRUCTURE
+        size_scaling = self.MAZE_SIZE_SCALING
         for i in range(len(structure)):
             for j in range(len(structure[0])):
                 if structure[i][j] == 'r':
@@ -270,8 +250,8 @@ class MazeEnv(ProxyEnv, Serializable):
         assert False
 
     def _find_goal_range(self):  # this only finds one goal!
-        structure = self.__class__.MAZE_STRUCTURE
-        size_scaling = self.__class__.MAZE_SIZE_SCALING
+        structure = self.MAZE_STRUCTURE
+        size_scaling = self.MAZE_SIZE_SCALING
         for i in range(len(structure)):
             for j in range(len(structure[0])):
                 if structure[i][j] == 'g':
@@ -283,8 +263,8 @@ class MazeEnv(ProxyEnv, Serializable):
 
     def _is_in_collision(self, pos):
         x, y = pos
-        structure = self.__class__.MAZE_STRUCTURE
-        size_scaling = self.__class__.MAZE_SIZE_SCALING
+        structure = self.MAZE_STRUCTURE
+        size_scaling = self.MAZE_SIZE_SCALING
         for i in range(len(structure)):
             for j in range(len(structure[0])):
                 if structure[i][j] == 1:
@@ -296,12 +276,39 @@ class MazeEnv(ProxyEnv, Serializable):
                         return True
         return False
 
+    def step(self, action):
+        if self.MANUAL_COLLISION:
+            old_pos = self.wrapped_env.get_xy()
+            inner_next_obs, inner_rew, done, info = self.wrapped_env.step(action)
+            new_pos = self.wrapped_env.get_xy()
+            if self._is_in_collision(new_pos):
+                self.wrapped_env.set_xy(old_pos)
+                done = False
+        else:
+            inner_next_obs, inner_rew, done, info = self.wrapped_env.step(action)
+        next_obs = self.get_current_obs()
+        x, y = self.wrapped_env.get_body_com("torso")[:2]
+        # ref_x = x + self._init_torso_x
+        # ref_y = y + self._init_torso_y
+        info['outer_rew'] = 0
+        info['inner_rew'] = inner_rew
+        reward = self.coef_inner_rew * inner_rew
+        minx, maxx, miny, maxy = self._goal_range
+        if minx <= x <= maxx and miny <= y <= maxy:
+            done = True
+            reward += self.goal_rew
+            info['rew_rew'] = 1  # we keep here the original one, so that the AvgReturn is directly the freq of success
+        return Step(next_obs, reward, done, **info)
+
+    def action_from_key(self, key):
+        return self.wrapped_env.action_from_key(key)
+
     @overrides
     def log_diagnostics(self, paths, *args, **kwargs):
         # we call here any logging related to the maze, strip the maze obs and call log_diag with the stripped paths
         # we need to log the purely gather reward!!
         with logger.tabular_prefix('Maze_'):
-            gather_undiscounted_returns = [sum(path['env_infos']['maze_rewards']) for path in paths]
+            gather_undiscounted_returns = [sum(path['env_infos']['outer_rew']) for path in paths]
             logger.record_tabular_misc_stat('Return', gather_undiscounted_returns, placement='front')
         stripped_paths = []
         for path in paths:
@@ -313,7 +320,6 @@ class MazeEnv(ProxyEnv, Serializable):
             #  this breaks if the obs of the robot are d>1 dimensional (not a vector)
             stripped_paths.append(stripped_path)
         with logger.tabular_prefix('wrapped_'):
-            if 'env_infos' in paths[0].keys() and 'inner_reward' in paths[0]['env_infos'].keys():
-                wrapped_undiscounted_return = np.mean([np.sum(path['env_infos']['inner_reward']) for path in paths])
-                logger.record_tabular('AverageReturn', wrapped_undiscounted_return)
+            wrapped_undiscounted_return = np.mean([np.sum(path['env_infos']['inner_rew']) for path in paths])
+            logger.record_tabular('AverageReturn', wrapped_undiscounted_return)
             self.wrapped_env.log_diagnostics(stripped_paths, *args, **kwargs)

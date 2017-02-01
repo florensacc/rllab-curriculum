@@ -1,3 +1,4 @@
+from rllab.misc import logger
 import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
@@ -5,10 +6,8 @@ import os.path as osp
 import numpy as np
 import math
 
-from rllab.misc import logger
 
 def construct_maze(maze_id=0, length=1):
-
     # define the maze to use
     if maze_id == 0:
         if length != 1:
@@ -217,15 +216,15 @@ def plot_state(self, name='sensors', state=None):
 
     ax.xaxis.set(ticks=2 * np.arange(len(x_labels)), ticklabels=x_labels)
     ax.yaxis.set(ticks=2 * np.arange(len(y_labels)), ticklabels=y_labels)
-    ########
+
     obs = self.get_current_maze_obs()
 
-    robot_xy = np.array(self.wrapped_env.get_body_com("torso")[:2])  # the coordinates of this are wrt the init!!
+    robot_xy = np.array(self.wrapped_env.get_body_com("torso")[:2])  # the coordinates of this are wrt the init
     ori = self.get_ori()  # for Ant this is computed with atan2, which gives [-pi, pi]
 
     # compute origin cell i_o, j_o coordinates and center of it x_o, y_o (with 0,0 in the top-right corner of struc)
-    o_xy = np.array(self._find_robot())  # this is self.init_torso_x, self.init_torso_y !!: center of the cell xy!
-    o_ij = (o_xy / size_scaling).astype(int)  # this is the position in the grid (check if correct..)
+    o_xy = np.array(self._find_robot())  # this is self.init_torso_x, self.init_torso_y: center of the cell xy!
+    o_ij = (o_xy / size_scaling).astype(int)  # this is the position in the grid
 
     o_xy_plot = o_xy / size_scaling * 2
     robot_xy_plot = o_xy_plot + robot_xy / size_scaling * 2
