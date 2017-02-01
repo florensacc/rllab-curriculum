@@ -154,8 +154,8 @@ class GatherEnv(ProxyEnv, Serializable):
 
     def step(self, action):
         _, inner_rew, done, info = self.wrapped_env.step(action)
-        info['inner_rewards'] = inner_rew
-        info['gather_rewards'] = 0
+        info['inner_rews'] = inner_rew
+        info['outer_rew'] = 0
         if done:
             return Step(self.get_current_obs(), self.dying_cost, done, **info)  # give a -10 rew if the robot dies
         com = self.wrapped_env.get_body_com("torso")
@@ -168,10 +168,10 @@ class GatherEnv(ProxyEnv, Serializable):
             if (ox - x) ** 2 + (oy - y) ** 2 < self.catch_range ** 2:
                 if typ == APPLE:
                     reward = reward + 1
-                    info['gather_rewards'] = 1
+                    info['outer_rew'] = 1
                 else:
                     reward = reward - 1
-                    info['gather_rewards'] = -1
+                    info['outer_rew'] = -1
             else:
                 new_objs.append(obj)
         self.objects = new_objs
@@ -299,7 +299,7 @@ class GatherEnv(ProxyEnv, Serializable):
         # we call here any logging related to the gather, strip the maze obs and call log_diag with the stripped paths
         # we need to log the purely gather reward!!
         with logger.tabular_prefix(log_prefix + '_'):
-            gather_undiscounted_returns = [sum(path['env_infos']['gather_rewards']) for path in paths]
+            gather_undiscounted_returns = [sum(path['env_infos']['outer_rew']) for path in paths]
             logger.record_tabular_misc_stat('Return', gather_undiscounted_returns, placement='front')
         stripped_paths = []
         for path in paths:
@@ -311,8 +311,8 @@ class GatherEnv(ProxyEnv, Serializable):
             #  this breaks if the obs of the robot are d>1 dimensional (not a vector)
             stripped_paths.append(stripped_path)
         with logger.tabular_prefix('wrapped_'):
-            if 'env_infos' in paths[0].keys() and 'inner_reward' in paths[0]['env_infos'].keys():
-                wrapped_undiscounted_return = np.mean([np.sum(path['env_infos']['inner_reward']) for path in paths])
+            if 'env_infos' in paths[0].keys() and 'inner_rew' in paths[0]['env_infos'].keys():
+                wrapped_undiscounted_return = np.mean([np.sum(path['env_infos']['inner_rew']) for path in paths])
                 logger.record_tabular('AverageReturn', wrapped_undiscounted_return)
             self.wrapped_env.log_diagnostics(stripped_paths)  # see swimmer_env.py for a scketch of the maze plotting!
 
