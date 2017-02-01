@@ -21,11 +21,16 @@ from rllab.misc import ext
 from rllab.misc import autoargs
 from rllab.distributions.diagonal_gaussian import DiagonalGaussian
 
-from sandbox.carlos_snn.distributions.categorical import Categorical
+# from rllab.distributions.categorical import Categorical
+from sandbox.carlos_snn.distributions.categorical import Categorical_oneAxis as Categorical
 from sandbox.rocky.snn.distributions.bernoulli import Bernoulli
 
 
-class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # also inherits form Parametrized
+class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):
+    """
+    This stochastic policy allows to pick the latent distribution (Categorical in the paper), its dimension and
+    its integration with the observations.
+    """
     @autoargs.arg('hidden_sizes', type=int, nargs='*',
                   help='list of sizes for the fully-connected hidden layers')
     @autoargs.arg('std_sizes', type=int, nargs='*',
@@ -46,7 +51,6 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
     def __init__(
             self,
             env_spec,
-            ##CF - latents units at the input
             latent_dim=2,
             latent_name='bernoulli',
             bilinear_integration=False,
@@ -62,6 +66,13 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
             output_nonlinearity=None,
             min_std=1e-4,
     ):
+        """
+        :param latent_dim: dimension of the latent variables
+        :param latent_name: distribution of the latent variables
+        :param bilinear_integration: Boolean indicator of bilinear integration or simple concatenation
+        :param resample: Boolean indicator of resampling at every step or only at the start of the rollout (or whenever
+        agent is reset, which can happen several times along the rollout with rollout in utils_snn)
+        """
         self.latent_dim = latent_dim  ##could I avoid needing this self for the get_action?
         self.latent_name = latent_name
         self.bilinear_integration = bilinear_integration
@@ -85,14 +96,12 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
                 self.latent_dist_info = dict(prob=1./self.latent_dim * np.ones(self.latent_dim))
             else:
                 self.latent_dist_info = dict(prob=np.ones(self.latent_dim))
-            print(self.latent_dist_info)
         else:
             raise NotImplementedError
 
         Serializable.quick_init(self, locals())
         assert isinstance(env_spec.action_space, Box)
 
-        ##CF - enlarge obs with the latents
         if self.bilinear_integration:
             obs_dim = env_spec.observation_space.flat_dim + latent_dim +\
                       env_spec.observation_space.flat_dim * latent_dim
@@ -101,7 +110,6 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
 
         action_dim = env_spec.action_space.flat_dim
 
-        # create network
         mean_network = MLP(
             input_shape=(obs_dim,),
             output_dim=action_dim,
@@ -151,28 +159,24 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
             outputs=[mean_var, log_std_var],
         )
 
-#  this is currently not used, although it could, in dist_info_sym and in get_actions. Also we could refactor all..
-        # this would actually be WRONG with the current obs_var definition
-        latent_var = Box(low=-np.inf, high=np.inf, shape=(1,)).new_tensor_variable('latents', extra_dims=1)
+# #  this is currently not used, although it could, in dist_info_sym and in get_actions. Also we could refactor all..
+#         # this would actually be WRONG with the current obs_var definition
+#         latent_var = Box(low=-np.inf, high=np.inf, shape=(1,)).new_tensor_variable('latents', extra_dims=1)
+#
+#         extended_obs_var = TT.concatenate([obs_var, latent_var,
+#                                            TT.flatten(obs_var[:, :, np.newaxis] * latent_var[:, np.newaxis, :],
+#                                                       outdim=2)]
+#                                           , axis=1)
+#         self._extended_obs_var = ext.compile_function(
+#             inputs=[obs_var, latent_var],
+#             outputs=[extended_obs_var]
+#         )
 
-        extended_obs_var = TT.concatenate([obs_var, latent_var,
-                                           TT.flatten(obs_var[:, :, np.newaxis] * latent_var[:, np.newaxis, :],
-                                                      outdim=2)]
-                                          , axis=1)
-        self._extended_obs_var = ext.compile_function(
-            inputs=[obs_var, latent_var],
-            outputs=[extended_obs_var]
-        )
-
-    ##CF
     @property
     def latent_space(self):
         return Box(low=-np.inf, high=np.inf, shape=(1,))
 
-    ##
-
-    ##CF - the mean and var now also depend on the particular latents sampled
-
+    # the mean and var now also depend on the particular latents sampled
     def dist_info_sym(self, obs_var, latent_var=None):  # this is ment to be for one path!
         # now this is not doing anything! And for computing the dist_info_vars of npo_snn_rewardMI it doesn't work
         if latent_var is None:
@@ -197,43 +201,29 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
         actions, outputs = self.get_actions([observation])
         return actions[0], {k: v[0] for k, v in outputs.items()}
 
-    def get_actions(self, observations):  # this is ment to be for (at most) one path!
-        ##CF
-        # how can I impose that I only reset for a whole rollout? before calling get_actions!!
-        # print('what come to get_actions: ', observations)
+    def get_actions(self, observations):
         observations = np.array(observations)  # needed to do the outer product for the bilinear
-        # print('aftera applying np.array: ', observations)
         if self.latent_dim:
             if self.resample:
                 latents = [self.latent_dist.sample(self.latent_dist_info) for _ in observations]
                 print('resampling the latents')
             else:
                 if not np.size(self.latent_fix) == self.latent_dim:  # we decide to reset based on if smthing in the fix
-                    # logger.log('Reset for latents: the latent_fix {} not match latent_dim{}'.format(self.latent_fix, self.latent_dim))
                     self.reset()
                 if len(self.pre_fix_latent) == self.latent_dim:  # If we have a pre_fix, reset will put the latent to it
-                    # logger.log('Reset for latents: we have a pre_fix to fix!')
                     self.reset()  # this overwrites the latent sampled or in latent_fix
                 latents = np.tile(self.latent_fix, [len(observations), 1])  # maybe a broadcast operation better...
-                # print 'not resample, use latent_fix, obtaining: ', latents
             if self.bilinear_integration:
-                # print 'the obs is: ' , observations, '\nwith time length: {}\n'.format(observations.shape[0])
-                # print 'the reshaped bilinear is:\n' , np.reshape(observations[:, np.newaxis, :] * latents[:, :, np.newaxis],
-                #                                    (observations.shape[0], -1) )
                 extended_obs = np.concatenate([observations, latents,
                                                np.reshape(
                                                    observations[:, :, np.newaxis] * latents[:, np.newaxis, :],
                                                    (observations.shape[0], -1))],
                                               axis=1)
-                # print 'Latents: {}, observations: {}'.format(latents, observations), \
-                #     'The extended obs have shape {} and are: '.format(np.shape(extended_obs)), extended_obs, \
-                #     '\ndone with the theano function it is {} and '.format(np.shape(self._extended_obs_var(observations,latents))), self._extended_obs_var(observations,latents)
             else:
                 extended_obs = np.concatenate([observations, latents], axis=1)
         else:
             latents = np.array([[]] * len(observations))
             extended_obs = observations
-        # print 'the extened_obs are of size {}'.format(np.shape(extended_obs))
         # make mean, log_std also depend on the latents (as observ.)
         mean, log_std = self._f_dist(extended_obs)
 
@@ -243,7 +233,6 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
         else:
             rnd = np.random.normal(size=mean.shape)
             actions = rnd * np.exp(log_std) + mean
-        # print "The latents are: {}".format(latents)
         return actions, dict(mean=mean, log_std=log_std, latents=latents)
 
     def set_pre_fix_latent(self, latent):
@@ -276,20 +265,12 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
 
     def log_diagnostics(self, paths):
         log_stds = np.vstack([path["agent_infos"]["log_std"] for path in paths])
-        means = np.vstack([path['agent_infos']['mean'] for path in paths])
-        # print('exp of the log std', np.exp(log_stds[0]))
-        # std_param_value = L.get_all_param_values(self._l_log_std)
-        # print('params of the std layer:', std_param_value)
         logger.record_tabular('MaxPolicyStd', np.max(np.exp(log_stds)))
         logger.record_tabular('MinPolicyStd', np.min(np.exp(log_stds)))
         logger.record_tabular('AveragePolicyStd', np.mean(np.exp(log_stds)))
 
     @property
     def distribution(self):
-        """
-        We set the distribution to the policy itself since we need some behavior different from a usual diagonal
-        Gaussian distribution.
-        """
         return self._dist
 
     def log_likelihood(self, actions, agent_infos, action_only=True):
