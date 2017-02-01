@@ -1,4 +1,4 @@
-from sandbox.carlos_snn.envs.mujoco.gather.gather_env import GatherEnv
+from rllab.envs.mujoco.gather.gather_env import GatherEnv
 from sandbox.carlos_snn.envs.mujoco.swimmer_env import SwimmerEnv
 
 

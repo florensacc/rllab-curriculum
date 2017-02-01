@@ -1,32 +1,30 @@
+import json
+import os
+from contextlib import contextmanager
+
+import joblib
 import lasagne
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
+import numpy as np
 import theano
 import theano.tensor as TT
-import numpy as np
-from contextlib import contextmanager
 
+from rllab import config
 from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.network import MLP
-from sandbox.carlos_snn.core.lasagne_layers import CropLayer, SumProdLayer
-from rllab.spaces import Box
-
-from rllab.envs.normalized_env import NormalizedEnv  # this is just to check if the env passed is a normalized maze
-from sandbox.carlos_snn.envs.mujoco.maze.maze_env import MazeEnv
-from sandbox.carlos_snn.envs.mujoco.gather.gather_env import GatherEnv
-
 from rllab.core.serializable import Serializable
-from rllab.policies.base import StochasticPolicy
-from rllab.misc.overrides import overrides
-from rllab.misc import logger
-from rllab.misc import ext
 from rllab.distributions.diagonal_gaussian import DiagonalGaussian
-
-import joblib
-import json
-import os
-from rllab import config
+from rllab.envs.mujoco.gather.gather_env import GatherEnv
+from rllab.envs.mujoco.maze.maze_env import MazeEnv
+from rllab.envs.normalized_env import NormalizedEnv  # this is just to check if the env passed is a normalized maze
+from rllab.misc import ext
+from rllab.misc import logger
+from rllab.misc.overrides import overrides
+from rllab.policies.base import StochasticPolicy
+from rllab.spaces import Box
+from sandbox.carlos_snn.core.lasagne_layers import CropLayer, SumProdLayer
 
 
 class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializable):  # also inherits form Parametrized

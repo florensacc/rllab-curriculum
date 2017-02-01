@@ -1,13 +1,13 @@
 import math
-import numpy as np
 from contextlib import contextmanager
 
-from rllab.misc.overrides import overrides
+import numpy as np
+
 from rllab import spaces
 from rllab.core.serializable import Serializable
-from rllab.envs.mujoco.mujoco_env import MODEL_DIR, BIG
-from sandbox.carlos_snn.envs.mujoco.maze.maze_env import MazeEnv
-from sandbox.carlos_snn.envs.mujoco.maze.maze_env_utils import plot_ray
+from rllab.envs.mujoco.maze.maze_env import MazeEnv
+from rllab.envs.mujoco.mujoco_env import BIG
+from rllab.misc.overrides import overrides
 
 
 class FastMazeEnv(MazeEnv, Serializable):

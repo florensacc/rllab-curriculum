@@ -1,11 +1,13 @@
 import math
+
 import numpy as np
-from rllab.misc import logger
+
 from rllab import spaces
 from rllab.envs.base import Step
+from rllab.envs.mujoco.gather.gather_env import GatherEnv
 from rllab.envs.mujoco.mujoco_env import BIG
+from rllab.misc import logger
 from rllab.misc.overrides import overrides
-from sandbox.carlos_snn.envs.mujoco.gather.gather_env import GatherEnv
 
 APPLE = 0
 BOMB = 1
