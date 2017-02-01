@@ -224,6 +224,9 @@ class PR2TestGoalGenerator(GoalGenerator):
             for j in range(num_goals_x):
                 goal = np.array([j * self.delta - self.range/2, i * self.delta - self.range/2, 0])
                 self.goals.append(goal)
+        from random import shuffle
+        shuffle(self.goals)
+
 
     def generate_goal(self, obs):
         if self.goal_index != -1:

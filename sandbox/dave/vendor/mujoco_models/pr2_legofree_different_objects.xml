@@ -43,11 +43,6 @@
 		<mesh file="l_finger.stl"/>
 		<mesh file="l_finger_tip.stl"/>
 
-		<mesh file="noddlesoup.stl"/>
-		<mesh file="windex.stl"/>
-		<mesh file="white_rain.stl"/>
-
-
 		<material name="MatGnd" specular=".3" shininess=".3" reflectance="0.3" rgba=".5 .55 .5 1"/>
 	</asset>
 
@@ -59,10 +54,21 @@
 		<pair geom1="base" geom2="r_forearm"/>
 		<pair geom1="base" geom2="l_forearm"/>
 		<pair geom1="table_geom" geom2="l_forearm"/>
-          <pair geom1="l_gripper_l_finger_tip" geom2="brick"/>
+        <pair geom1="l_gripper_l_finger_tip" geom2="brick"/>
         <pair geom1="l_gripper_r_finger_tip" geom2="brick"/>
         <pair geom1="l_forearm" geom2="brick"/>
         <pair geom1="table_geom" geom2="brick"/>
+
+
+        <pair geom1="l_gripper_l_finger_tip" geom2="sph"/>
+        <pair geom1="l_gripper_r_finger_tip" geom2="sph"/>
+        <pair geom1="l_forearm" geom2="sph"/>
+        <pair geom1="table_geom" geom2="sph"/>
+
+          <pair geom1="l_gripper_l_finger_tip" geom2="cyl"/>
+        <pair geom1="l_gripper_r_finger_tip" geom2="cyl"/>
+        <pair geom1="l_forearm" geom2="cyl"/>
+        <pair geom1="table_geom" geom2="cyl"/>
 
         <!--<pair geom1="l_gripper_l_finger_tip" geom2="brick1_base"/>
         <pair geom1="l_gripper_r_finger_tip" geom2="brick1_base"/>
@@ -365,13 +371,13 @@
 
                                                             </body>
                                                             <body name="l_gripper_r_finger_link" pos="0.07691 -0.01 0">
-                                                                <site name="tip" pos="0 0 0" size="0.01"/>
                                                                 <inertial pos="0.03576 -0.01736 -0.00095" quat="0.474684 0.510909 0.446353 0.560727" mass="0.17389" diaginertia="0.000199 0.000181 0.000077" />
                                                                 <!--<joint name="l_gripper_r_finger_joint" type="hinge" pos="0 0 0" axis="0 0 -1" limited="true" range="0 0.548"/>-->
                                                                 <geom name="geom63" euler="3.14 0 0" rgba="0.7 0.7 0.7 1" mesh="l_finger" />
 
 
                                                                 <body name="l_gripper_r_finger_tip_link" pos="0.09137 -0.00495 0">
+                                                                    <site name="tip" pos="0 0 0" size="0.01"/>
                                                                     <inertial pos="0.00423 -0.00284 0" quat="-0.249588 0.661594 0.249588 0.661594" mass="0.04419" diaginertia="0.000015 0.000015 0.000003" />
                                                                     <!--<joint name="l_gripper_r_finger_tip_joint" type="hinge" pos="0 0 0" axis="0 0 -1" limited="true" range="-.548 0"/>-->
                                                                     <geom name="l_gripper_r_finger_tip" euler="3.14 0 0" rgba="0.7 0.7 0.7 1" mesh="l_finger_tip" />
@@ -439,7 +445,7 @@
                                 <!--geom name="geom34f" type="capsule" pos="0.12961979 -0.00000014 0" quat="1 -0.00001340 0.00000169 -0.00000728" size="0.07297432 0.00139096" group="1"/-->
                                 <body name="r_upper_arm_link" pos="0 0 0">
                                     <inertial pos="0.21398 -0.01621 -0.0002" quat="-0.045020 0.697462 -0.088537 0.709705" mass="6.01769" diaginertia="0.076138 0.074931 0.015133" />
-                                    <geom name="geom35" rgba="0.7 0.7 0.7 1" mesh="upper_arm" contype="0"/>
+                                    <geom name="geom35"rgba="0.7 0.7 0.7 1" mesh="upper_arm" contype="0"/>
                                     <!--geom name="geom35f" type="capsule" pos="0.21533518 0.00017574 -0.00229182" quat="0.50005025 0.49945472 0.50003903 0.50045548" size="0.09823026 0.18895381" rgba="0 0.8 0 1" group="1"/-->
                                     <body name="r_elbow_flex_link" pos="0.4 0 0">
                                         <inertial pos="0.01014 0.00032 -0.01211" quat="0.308784 0.646797 0.639077 0.279083" mass="1.90327" diaginertia="0.004419 0.003965 0.003090" />
@@ -549,7 +555,7 @@
         </body>
         <body name="table" pos="0 0 0">
             <inertial pos="0 0 0" mass="100.0" diaginertia="1.0 1.0 1.0"/>
-            <geom name="table_geom" type="box" pos="0.6 0 0.42" size="0.25 1.0 0.05" rgba="0 0.3 0 1" contype="1" conaffinity="1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+            <geom name="table_geom" type="box" pos="0.6 0 0.42" size="0.5 1.0 0.05" rgba="0 0.3 0 1" contype="1" conaffinity="1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
         </body>
         <!--<body name="OBJ_brick1" pos ="0.6 0.2 0.5249">
             <joint type="free" />
@@ -566,7 +572,7 @@
             <geom name="brick1_cross2" pos="0.045 0 0" type="box" size="0.01 0.01 0.055" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
         </body>-->
 
-        <body name="OBJ_brick1" pos ="0.6 0.2 0.5025">
+        <body name="OBJ_brick1" pos ="10 10 10">
             <joint type="free" />
             <site name="lego_target" pos="0 0 0" size="0.005"/>
 
@@ -575,21 +581,21 @@
 
         </body>
 
-        <body name="noddlesoup" pos ="0.6 0.2 0.5025">
+        <body name="OBJ_CYL" pos ="10 10 10">
             <joint type="free" />
-            <site name="noddlesoup" pos="0 0 0" size="0.005"/>
+            <site name="cyl_target" pos="0 0 0" size="0.005"/>
 
             <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>  #mass was 0.00001
-            <geom name="noddlesoup" mesh="noddlesoup" pos="0 0 0" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+            <geom name="cyl" pos="0 0 0" type="cylinder" size="0.07 0.0322" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
 
         </body>
 
-        <body name="white_rain" pos ="0.6 0.2 0.5025">
+            <body name="OBJ_SPH" pos ="10 10 10">
             <joint type="free" />
-            <site name="white_rain" pos="0 0 0" size="0.005"/>
+            <site name="sph_target" pos="0 0 0" size="0.005"/>
 
             <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>  #mass was 0.00001
-            <geom name="white_rain" mesh="white_rain" pos="0 0 0" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001" quat="0.707 0 0.707 0"/>
+            <geom name="sph" pos="0 0 0" type="sphere" size="0.07" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
         </body>
 
 
@@ -630,8 +636,8 @@
 
     </worldbody>
 <actuator>
-    <position ctrllimited="true" ctrlrange="-0.714602 2.285398" forcelimited="true" forcerange="-10 10" joint="l_shoulder_pan_joint" kp="75"/>
-    <position ctrllimited="true" ctrlrange="-0.5236 1.3963" forcelimited="true" forcerange="-10 10" joint="l_shoulder_lift_joint" kp="1000"/>
+    <position ctrllimited="true" ctrlrange="-0.714602 2.285398" forcelimited="true" forcerange="-10 10" joint="l_shoulder_pan_joint" kp="125"/>
+    <position ctrllimited="true" ctrlrange="-0.5236 1.3963" forcelimited="true" forcerange="-10 10" joint="l_shoulder_lift_joint" kp="100"/>
     <position ctrllimited="true" ctrlrange="-0.8 3.9" forcelimited="true" forcerange="-10 10" joint="l_upper_arm_roll_joint" kp="10"/>
     <position ctrllimited="true" ctrlrange="-2.3213 0" forcelimited="true" forcerange="-10 10" joint="l_elbow_flex_joint" kp="50"/>
     <position joint="l_forearm_roll_joint" forcelimited="true" forcerange="-10 10" kp="10"/>

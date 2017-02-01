@@ -1,6 +1,7 @@
 """
 :author: Vitchyr Pong
 """
+import os
 import abc
 import time
 import gtimer as gt
@@ -45,6 +46,7 @@ class OnlineAlgorithm(RLAlgorithm):
             scale_reward_annealer=None,
             render=False,
             epoch_full_paths=False,  # TH: I'm good without this. Remove?
+            profiling=False,
     ):
         """
         :param env: Environment
@@ -82,6 +84,7 @@ class OnlineAlgorithm(RLAlgorithm):
         self.scale_reward_annealer = scale_reward_annealer
         self.render = render
         self.epoch_full_paths = epoch_full_paths
+        self.profiling = profiling
 
         self.observation_dim = self.env.observation_space.flat_dim
         self.action_dim = self.env.action_space.flat_dim
@@ -260,7 +263,26 @@ class OnlineAlgorithm(RLAlgorithm):
 
 
         # TH: First train, then finalize. This can be suboptimal.
-        self.sess.run(self._get_training_ops(), feed_dict=feed_dict)
+        if self.profiling:
+            from tensorflow.python.client import timeline
+            run_metadata = tf.RunMetadata()
+            run_kwargs = dict(
+                options=tf.RunOptions(
+                    trace_level=tf.RunOptions.FULL_TRACE),
+                run_metadata=run_metadata,
+            )
+            self.sess.run(self._get_training_ops(), feed_dict=feed_dict,
+                **run_kwargs)
+            tl = timeline.Timeline(run_metadata.step_stats)
+            ctf = tl.generate_chrome_trace_format()
+            timeline_file = os.path.join(
+                logger.get_snapshot_dir(),
+                "timeline.json",
+            )
+            with open(timeline_file, 'w') as f:
+                f.write(ctf)
+        else:
+            self.sess.run(self._get_training_ops(), feed_dict=feed_dict)
         self.sess.run(self._get_finalize_ops(), feed_dict=feed_dict)
 
     def get_epoch_snapshot(self, epoch):

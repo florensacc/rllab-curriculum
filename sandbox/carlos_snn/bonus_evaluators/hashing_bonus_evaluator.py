@@ -1,9 +1,10 @@
 import numpy as np
 import itertools
 from rllab.misc import logger
+from sandbox.carlos_snn.bonus_evaluators.base import BonusEvaluator
 
 
-class HashingBonusEvaluator(object):
+class HashingBonusEvaluator(BonusEvaluator):
     def __init__(self, env_spec, dim_key=128, bucket_sizes=None):
         # Hashing function: SimHash
         if bucket_sizes is None:

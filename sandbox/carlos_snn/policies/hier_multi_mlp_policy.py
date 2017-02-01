@@ -1,56 +1,38 @@
+import json
+import os
+from contextlib import contextmanager
+
+import joblib
 import lasagne
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
+import numpy as np
 import theano
 import theano.tensor as TT
-import numpy as np
-from contextlib import contextmanager
 
+from rllab import config
 from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.network import MLP
-from sandbox.carlos_snn.core.lasagne_layers import CropLayer, ConstOutputLayer, SumProdLayer
-from rllab.spaces import Box
-
-from rllab.envs.normalized_env import NormalizedEnv  # this is just to check if the env passed is a normalized maze
-from sandbox.carlos_snn.envs.mujoco.maze.maze_env import MazeEnv
-from sandbox.carlos_snn.envs.mujoco.gather.gather_env import GatherEnv
-
-from rllab.sampler.utils import \
-    rollout  # I need this for logging the diagnostics: run the policy with all diff selectors
-
 from rllab.core.serializable import Serializable
-from rllab.policies.base import StochasticPolicy
-from rllab.misc.overrides import overrides
-from rllab.misc import logger
-from rllab.misc import ext
-from rllab.misc import autoargs
 from rllab.distributions.diagonal_gaussian import DiagonalGaussian
-
-import joblib
-import json
-import os
-from rllab import config
+from rllab.envs.mujoco.gather.gather_env import GatherEnv
+from rllab.envs.mujoco.maze.maze_env import MazeEnv
+from rllab.envs.normalized_env import NormalizedEnv  # this is just to check if the env passed is a normalized maze
+from rllab.misc import ext
+from rllab.misc import logger
+from rllab.misc.overrides import overrides
+from rllab.policies.base import StochasticPolicy
+from rllab.spaces import Box
+from sandbox.carlos_snn.core.lasagne_layers import CropLayer, SumProdLayer
 
 
 class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializable):  # also inherits form Parametrized
-    @autoargs.arg('hidden_sizes', type=int, nargs='*',
-                  help='list of sizes for the fully-connected hidden layers')
-    @autoargs.arg('std_sizes', type=int, nargs='*',
-                  help='list of sizes for the fully-connected layers for std, note'
-                       'there is a difference in semantics than above: here an empty'
-                       'list means that std is independent of input and the last size is ignored')
-    @autoargs.arg('initial_std', type=float,
-                  help='Initial std')
-    @autoargs.arg('std_trainable', type=bool,
-                  help='Is std trainable')
-    @autoargs.arg('output_nl', type=str,
-                  help='nonlinearity for the output layer')
-    @autoargs.arg('nonlinearity', type=str,
-                  help='nonlinearity used for each hidden layer, can be one '
-                       'of tanh, sigmoid')
-    @autoargs.arg('bn', type=bool,
-                  help='whether to apply batch normalization to hidden layers')
+    """
+    Policy that joins several pre-trained policies and performs a linear combination of their output.
+    If a selector is provided, the coeficients of the LC are externally given. Otherwise it's a MLP, in which case it
+    can be trained end-to-end.
+    """
     def __init__(
             self,
             env_spec,
@@ -59,9 +41,8 @@ class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializabl
             json_paths=(),
             npz_paths=(),
             trainable_old=True,
-            hidden_sizes_old=(32, 32),
-            hidden_sizes_selector=(10, 10),
             external_selector=False,
+            hidden_sizes_selector=(10, 10),
             learn_std=True,
             init_std=1.0,
             adaptive_std=False,
@@ -72,6 +53,25 @@ class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializabl
             output_nonlinearity=None,
             min_std=1e-4,
     ):
+        """
+        :param pkl_paths: tuple/list of pkl paths
+        :param json_paths: tuple/list of json paths
+        :param npz_paths: tuple/list of npz paths
+        :param trainable_old: Are the old policies still trainable
+        :param external_selector: is the linear combination of the old policies outputs fixed externally
+        :param hidden_sizes: list of sizes for the fully-connected hidden layers
+        :param learn_std: Is std trainable
+        :param init_std: Initial std
+        :param adaptive_std:
+        :param std_share_network:
+        :param std_hidden_sizes: list of sizes for the fully-connected layers for std
+        :param min_std: whether to make sure that the std is at least some threshold value, to avoid numerical issues
+        :param std_hidden_nonlinearity:
+        :param hidden_nonlinearity: nonlinearity used for each hidden layer
+        :param output_nonlinearity: nonlinearity for the output layer
+        :param mean_network: custom network for the output mean
+        :param std_network: custom network for the output log std
+        """
         # define where are the old policies to use and what to do with them:
         self.trainable_old = trainable_old  # whether to keep training the old policies loaded here
         self.pkl_paths = pkl_paths
@@ -91,18 +91,11 @@ class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializabl
         self.action_dim = env_spec.action_space.flat_dim  # not checking that all the old policies have this act_dim
 
         self.old_hidden_sizes = []
-        # self.old_min_stds = []
-        # self.old_adaptive_stds = []
-        # self.old_std_hidden_sizes = []
         # assume json always given
         for json_path in self.json_paths:
             data = json.load(open(os.path.join(config.PROJECT_PATH, json_path), 'r'))
             old_json_policy = data['json_args']["policy"]
             self.old_hidden_sizes.append(old_json_policy['hidden_sizes'])
-            # self.old_min_stds.append(old_json_policy['min_std'])
-            # self.old_adaptive_stds.append(old_json_policy['adaptive_std'])
-            # self.old_std_hidden_sizes.append(old_json_policy['std_hidden_sizes'])
-        print("Final attributes: ", self.selector_dim, self.old_hidden_sizes)
 
         # retrieve dimensions and check consistency
         if isinstance(env, MazeEnv) or isinstance(env, GatherEnv):
@@ -118,7 +111,7 @@ class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializabl
         else:
             self.obs_robot_dim = env.observation_space.flat_dim
             self.obs_maze_dim = 0
-        print("the dims of the env are(rob/maze): ", self.obs_robot_dim, self.obs_maze_dim)
+        # print("the dims of the env are(rob/maze): ", self.obs_robot_dim, self.obs_maze_dim)
         all_obs_dim = env_spec.observation_space.flat_dim
         assert all_obs_dim == self.obs_robot_dim + self.obs_maze_dim
         Serializable.quick_init(self, locals())
@@ -127,7 +120,6 @@ class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializabl
         if self.external_selector:  # in case we want to fix the selector externally
             l_all_obs_var = L.InputLayer(shape=(None,) + (self.obs_robot_dim + self.obs_maze_dim,))
             all_obs_var = l_all_obs_var.input_var
-            # l_selection = ConstOutputLayer(incoming=l_all_obs_var, output_var=self.shared_selector_var)
             l_selection = ParamLayer(incoming=l_all_obs_var, num_units=self.selector_dim, param=self.shared_selector_var,
                                      trainable=False)
             selection_var = L.get_output(l_selection)
@@ -170,18 +162,6 @@ class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializabl
             self.old_l_means.append(mean_network.output_layer)
             self.old_layers += mean_network.layers
 
-            # if self.old_adaptive_stds[i]:
-            #     log_std_network = MLP(
-            #         input_layer=l_obs_robot,
-            #         output_dim=self.action_dim,
-            #         hidden_sizes=self.old_std_hidden_sizes[i],
-            #         hidden_nonlinearity=std_hidden_nonlinearity,
-            #         output_nonlinearity=None,
-            #         name="log_stdMLP{}".format(i),
-            #     )
-            #     self.old_l_log_stds.append(log_std_network.output_layer)
-            #     self.old_layers += log_std_network.layers
-            # else:
             l_log_std = ParamLayer(
                 incoming=mean_network.input_layer,
                 num_units=self.action_dim,
@@ -271,7 +251,7 @@ class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializabl
     def set_old_params(self, old_params):
         if type(old_params) is dict:  # if the old_params are a dict with the param name as key and a numpy array as value
             params_value_by_name = old_params
-        elif type(old_params) is list:  # if the old_params are a list of theano variables  **NOT CHECKING THIS!!**
+        elif type(old_params) is list:  # if the old_params are a list of theano variables
             params_value_by_name = {}
             for param in old_params:
                 params_value_by_name[param.name] = param.get_value()
@@ -280,7 +260,6 @@ class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializabl
             print("The old_params was not understood!")
 
         local_params = self.get_old_params()
-        # print(local_params)
         for param in local_params:
             param.set_value(params_value_by_name[param.name])
 
@@ -305,7 +284,6 @@ class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializabl
         else:
             rnd = np.random.normal(size=mean.shape)
             actions = rnd * np.exp(log_std) + mean
-        # print(selector_output)
         return actions, dict(mean=mean, log_std=log_std, selectors=selector_output)
 
     def set_pre_fix_selector(self, selector):
@@ -330,7 +308,7 @@ class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializabl
     def reset(self):  # executed at the start of every rollout. Will fix the selector if needed.
         if self.pre_fix_selector.size > 0:
             self.selector_fix = self.pre_fix_selector
-        # this is needed for the external selector!!
+        # this is needed for the external selector
         self.shared_selector_var.set_value(np.array(self.selector_fix))
 
     def log_diagnostics(self, paths):
@@ -341,10 +319,6 @@ class GaussianMLPPolicy_multi_hier(StochasticPolicy, LasagnePowered, Serializabl
 
     @property
     def distribution(self):
-        """
-        We set the distribution to the policy itself since we need some behavior different from a usual diagonal
-        Gaussian distribution.
-        """
         return self._dist
 
     def log_likelihood(self, actions, agent_infos, action_only=True):

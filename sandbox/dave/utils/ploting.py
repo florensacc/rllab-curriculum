@@ -7,9 +7,8 @@ from rllab.misc import logger
 from os import path as osp
 from pylab import *
 
-def plot_heatmap(paths, type, prefix=''):
+def plot_heatmap(paths, prefix=''):
     # fig, ax = plt.subplots()
-    import pdb; pdb.set_trace()
     x_goal = [path["env_infos"]["x_goal"] for path in paths]
     xsg = np.array([x[0] for x in x_goal])
     n = np.round(np.sqrt(len(xsg)))
@@ -36,6 +35,8 @@ def plot_heatmap(paths, type, prefix=''):
     zmax = 0.3
     zs[(zs<zmin) | (zs>zmax)] = None
 
+    import pdb; pdb.set_trace()
+
     # Create the contour plot
     CS = plt.contourf(xs, ys, zs, 15, cmap=plt.cm.rainbow,
                       vmax=zmax, vmin=zmin)
@@ -50,13 +51,14 @@ def plot_heatmap(paths, type, prefix=''):
 
 
     log_dir = logger.get_snapshot_dir()
+    print(log_dir)
 
 
-    plt.savefig(osp.join(log_dir, prefix + 'heatmap_ '+ type + '.png'))
+    plt.savefig(osp.join(log_dir, prefix + 'heatmap_ ' + '.png'))
     # plt.close()
 
 
-def plot_finaldistance_hist(paths, furthest, prefix=''):
+def plot_finaldistance_hist(paths, prefix=''):
 
     distances_to_goal = [path["env_infos"]["distance_to_goal"] for path in paths]
     zs = [d[-1] for d in distances_to_goal]
@@ -65,6 +67,11 @@ def plot_finaldistance_hist(paths, furthest, prefix=''):
     zs_std = np.std(zs)
     zs_min = np.min(zs)
     zs_max = np.max(zs)
+
+    print("mean:   ", zs_mean)
+    print("std:   ", zs_std)
+    print("min:   ", zs_min)
+    print("max:   ", zs_max)
 
     plt.hist(zs)
     plt.title("Final distance object-goal Histogram")
@@ -129,6 +136,6 @@ def plot_scatter_heatmap(paths, type, prefix=''):
     log_dir = logger.get_snapshot_dir()
 
 
-    plt.savefig(osp.join(log_dir, prefix + 'heatmap_ '+ type + '.png'))
+    plt.savefig(osp.join(log_dir, prefix + 'scatter_heatmap_ '+ type + '.png'))
     # plt.close()
 

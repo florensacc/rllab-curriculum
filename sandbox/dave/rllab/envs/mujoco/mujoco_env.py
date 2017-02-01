@@ -166,7 +166,7 @@ class MujocoEnv(Env):
         noise = 0.5 * (ub - lb) * noise
         return action + noise
 
-    def forward_dynamics(self, action, qvel=None, qpos=None, position_ctrl=False, range=0.1):
+    def forward_dynamics(self, action, qvel=None, qpos=None, position_ctrl=False, range_pos=0.1):
         self.model.data.ctrl = self.inject_action_noise(action)
         action_dim = len(action)
         i = 0
@@ -177,7 +177,7 @@ class MujocoEnv(Env):
             while True:
                 self.model.step()
                 # self.render()
-                error = abs(action - self.model.data.qpos[:action_dim, 0])/range
+                error = abs(action - self.model.data.qpos[:action_dim, 0])/range_pos
                 if (error < 0.1).all() or i > 29:
                     break
                 i += 1

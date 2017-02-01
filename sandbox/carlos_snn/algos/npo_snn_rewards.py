@@ -3,61 +3,49 @@ from rllab.misc.overrides import overrides
 from rllab.algos.batch_polopt import BatchPolopt, BatchSampler
 from rllab.algos.npo import NPO
 from rllab.sampler import parallel_sampler
-
+from rllab.misc import tensor_utils
 import rllab.misc.logger as logger
-import theano
-import theano.tensor as TT
-from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
+
 # latent regressor to log the MI with other variables
 from sandbox.carlos_snn.regressors.latent_regressor import Latent_regressor
 from sandbox.carlos_snn.hallucinators.base import BaseHallucinator as Hallucinator
 from sandbox.carlos_snn.distributions.categorical import from_index, from_onehot
+from sandbox.carlos_snn.sampler.utils import rollout
 
-# for logging hierarchy
-from sandbox.carlos_snn.envs.hierarchized_snn_env import hierarchize_snn
-
-# imports from batch_polopt I might need as not I use here process_samples and others
+import theano
 import numpy as np
-from rllab.algos.base import RLAlgorithm
-from rllab.sampler import parallel_sampler
-
-from rllab.misc import special
-from rllab.misc import tensor_utils
-from rllab.algos import util
-import os.path as osp
-from rllab.sampler.utils import rollout
+import theano.tensor as TT
 import collections
-import gc
+
 
 
 class BatchSampler_snn(BatchSampler):
+    """
+    Allows giving bonus for MI and other bonus_evaluators, hallucinate if needed (not used in the paper)
+    and switching latent every certain number of time-steps.
+    """
     def __init__(self,
                  *args,  # this collects algo, passing it to BatchSampler in the super __init__
-                 reward_coef_mi=0,  # this is for the regressor bonus, not the grid
+                 reward_regressor_mi=0,  # this is for the regressor bonus, not the grid
                  reward_coef_bonus=None,  # this is the total bonus from the bonus evaluator. it's a LIST
                  bonus_evaluator=None,  # list of bonus evals
                  latent_regressor=None,
                  logged_MI=None,  # a list of tuples specifying the (obs,actions) that are regressed to find the latents
                  hallucinator=None,
                  n_hallu=0,
-                 self_normalize=False, # this is for the hallucinated samples importance weight
-                 # virtual_reset=False,
+                 self_normalize=False,  # this is for the hallucinated samples importance weight
                  switch_lat_every=0,
                  **kwargs
                  ):
-        """
-        :type algo: BatchPolopt
-        """
         super(BatchSampler_snn, self).__init__(*args, **kwargs)  # this should be giving a self.algo
         self.bonus_evaluator = bonus_evaluator if bonus_evaluator else []
         self.reward_coef_bonus = reward_coef_bonus if reward_coef_bonus else [0] * len(self.bonus_evaluator)
-        self.reward_coef_mi = reward_coef_mi
+        self.reward_regressor_mi = reward_regressor_mi
         self.latent_regressor = latent_regressor
         self.logged_MI = logged_MI  # a list of tuples specifying the (obs,actions) that are regressed to find the latents
         self.hallucinator = hallucinator
         self.n_hallu = n_hallu
         self.self_normalize = self_normalize
-        # self.virtual_reset = virtual_reset
         self.switch_lat_every = switch_lat_every
 
         # see what are the MI that want to be logged (it has to be done after initializing the super to have self.env)
@@ -154,12 +142,12 @@ class BatchSampler_snn(BatchSampler):
             with logger.prefix(' Latent_regressor '):
                 self.latent_regressor.fit(paths)
 
-                if self.reward_coef_mi:
+                if self.reward_regressor_mi:
                     for i, path in enumerate(paths):
                         path['logli_latent_regressor'] = self.latent_regressor.predict_log_likelihood(
                             [path], [path['agent_infos']['latents']])[0]  # this is for paths usually..
 
-                        path['rewards'] += self.reward_coef_mi * path[
+                        path['rewards'] += self.reward_regressor_mi * path[
                             'logli_latent_regressor']  # the logli of the latent is the variable of the mutual information
 
         # for the extra bonus
@@ -197,18 +185,21 @@ class BatchSampler_snn(BatchSampler):
             b_eval.log_diagnostics(paths)
 
         if isinstance(self.latent_regressor, Latent_regressor):
-            with logger.prefix(
-                    ' Latent regressor logging | '):  # this is mostly useless as log_diagnostics is only tabular
+            with logger.prefix(' Latent regressor logging | '):
                 self.latent_regressor.log_diagnostics(paths)
         # log the MI with other obs and action
         for i, lat_reg in enumerate(self.other_regressors):
-            with logger.prefix(' Extra latent regressor {} | '.format(i)):  # same as above
+            with logger.prefix(' Extra latent regressor {} | '.format(i)):
                 lat_reg.fit(paths)
                 lat_reg.log_diagnostics(paths)
 
+
 class NPO_snn(NPO):
     """
-    Natural Policy Optimization.
+    Natural Policy Optimization for SNNs:
+    - differentiable reward bonus for L2 or KL between conditional distributions (commented out: not used in paper).
+    - allows to give rewards for serveral divergence metrics among conditional distributions (through BatchSampler_snn)
+    - logg individually for every latent as well as some "hierarchy" metric or the deterministic policy
     """
 
     def __init__(
@@ -221,14 +212,13 @@ class NPO_snn(NPO):
             KL_ub=1e6,
             reward_coef_l2=0,
             reward_coef_kl=0,
-            reward_coef_mi=0,   # kwargs to the sampler (that also processes)
+            reward_regressor_mi=0,   # kwargs to the sampler (that also processes)
             reward_coef_bonus=None,
             bonus_evaluator=None,
             latent_regressor=None,
             logged_MI=None,  # a list of tuples specifying the (obs,actions) that are regressed to find the latents
             hallucinator=None,
             n_hallu=0,
-            # virtual_reset=False,
             switch_lat_every=0,
             **kwargs):
         # some logging
@@ -243,14 +233,13 @@ class NPO_snn(NPO):
 
         sampler_cls = BatchSampler_snn
         sampler_args = {'switch_lat_every': switch_lat_every,
-                        # 'virtual_reset': virtual_reset,
                         'hallucinator': hallucinator,
                         'n_hallu': n_hallu,
                         'latent_regressor': latent_regressor,
                         'logged_MI': logged_MI,
                         'bonus_evaluator': bonus_evaluator,
                         'reward_coef_bonus': reward_coef_bonus,
-                        'reward_coef_mi': reward_coef_mi,
+                        'reward_regressor_mi': reward_regressor_mi,
                         }
         super(NPO_snn, self).__init__(sampler_cls=sampler_cls, sampler_args=sampler_args, **kwargs)
 
@@ -299,12 +288,12 @@ class NPO_snn(NPO):
 
         kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
         lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, dist_info_vars)
-        # if is_recurrent:
-        #     mean_kl = TT.sum(kl * valid_var) / TT.sum(valid_var)
-        #     surr_loss = - TT.sum(lr * advantage_var * valid_var) / TT.sum(valid_var)
-        # else:
-        mean_kl = TT.mean(kl * importance_weights)
-        surr_loss = - TT.mean(lr * advantage_var * importance_weights)
+        if is_recurrent:
+            mean_kl = TT.sum(kl * valid_var) / TT.sum(valid_var)
+            surr_loss = - TT.sum(lr * advantage_var * valid_var) / TT.sum(valid_var)
+        else:
+            mean_kl = TT.mean(kl * importance_weights)
+            surr_loss = - TT.mean(lr * advantage_var * importance_weights)
 
         # # now we compute the kl with respect to all other possible latents:
         # list_all_latent_vars = []

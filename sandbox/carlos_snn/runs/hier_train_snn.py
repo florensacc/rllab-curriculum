@@ -70,11 +70,10 @@ for dir in os.listdir(exp_dir):
                 step_size=0.01,
             )
 
-            for s in [0, 100]:  # range(10, 110, 10):  # [10, 20, 30, 40, 50]:
-                exp_prefix = 'Atest4-hier-snn-egoSnake'
-                exp_name = exp_prefix + '_{}agg_{}pl_{}rewcoef_{}mesh_PRE{}_{}'.format(
+            for s in [0, 100]:
+                exp_prefix = 'hier-snn-egoSnake'
+                exp_name = exp_prefix + '_{}agg_{}pl_PRE{}_{}'.format(
                     time_step_agg, int(5e3 / time_step_agg),
-                    # reward_coef, mesh_density,
                     pkl_path.split('/')[-2], s)
 
                 run_experiment_lite(

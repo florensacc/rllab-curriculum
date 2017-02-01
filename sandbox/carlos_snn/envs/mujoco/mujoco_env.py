@@ -1,6 +1,3 @@
-import matplotlib as mpl
-mpl.use('Agg')
-import matplotlib.pyplot as plt
 from functools import reduce
 import os.path as osp
 import collections
@@ -12,16 +9,25 @@ from rllab import spaces
 from rllab.misc.overrides import overrides
 from rllab.misc import logger
 
+import matplotlib as mpl
+mpl.use('Agg')
+import matplotlib.pyplot as plt
+
 BIG = 1e6
 
 
 class MujocoEnv_ObsInit(MujocoEnv):
+    """
+    - add plot_visitation (possibly used by robots moving in 2D). Compatible with latents.
+    - get_ori() base method, to implement in each robot
+    - Cached observation_space at initialization to speed up training (x2)
+    """
 
     def __init__(self,
                  visit_axis_bound=None,
                  *args, **kwargs):
         super(MujocoEnv_ObsInit, self).__init__(*args, **kwargs)
-        # quick fix
+
         shp = self.get_current_obs().shape
         ub = BIG * np.ones(shp)
         self._observation_space = spaces.Box(ub * -1, ub)
@@ -36,9 +42,8 @@ class MujocoEnv_ObsInit(MujocoEnv):
         raise NotImplementedError
 
     def plot_visitations(self, paths, mesh_density=20, visit_prefix='', visit_axis_bound=None, maze=None, scaling=2):
-        """
-        This supposes that path['env_infos']['com'] exists!!
-        """
+        if 'env_infos' not in paths[0].keys() or 'com' not in paths[0]['env_infos'].keys():
+            raise KeyError("No 'com' key in your path['env_infos']: please change you step function")
         fig, ax = plt.subplots()
         # now we will grid the space and check how much of it the policy is covering
         x_max = np.int(np.ceil(np.max(np.abs(np.concatenate([path["env_infos"]['com'][:, 0] for path in paths])))))

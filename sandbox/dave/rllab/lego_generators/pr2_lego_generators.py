@@ -32,8 +32,8 @@ class PR2LegoFixedBlockGenerator(FixedGoalGenerator):
         # import pdb
         # pdb.set_trace()
         if block is None:
-            # block = (0.6, 0.2, 0.5025, 1, 0, 0, 0)
-            block = (0.6, 0.35, 0.5025, 1, 0, 0, 0)
+            block = (0.6, 0.2, 0.5025, 1, 0, 0, 0)
+            # block = (0.6, 0.35, 0.5025, 1, 0, 0, 0)
         block = np.array(block)
         super(PR2LegoFixedBlockGenerator, self).__init__(block)
 
