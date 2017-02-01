@@ -11,6 +11,12 @@ import math
 
 
 class AntEnv(MujocoEnv, Serializable):
+    """
+    This AntEnv differs from the one in rllab.envs.mujoco.ant_env in the additional initialization options
+    that fix the rewards and observation space.
+    The 'com' is added to the env_infos.
+    Also the get_ori() method is added for the Maze and Gather tasks.
+    """
     FILE = 'ant.xml'
     ORI_IND = 3
 
@@ -91,7 +97,6 @@ class AntEnv(MujocoEnv, Serializable):
         else:
             reward = forward_reward - ctrl_cost - contact_cost + survive_reward
 
-        # print("Forward reward: {}\nCtrl_cost: {}\nContact_cost: {}\n".format(forward_reward, ctrl_cost, contact_cost))
         state = self._state
         notdone = np.isfinite(state).all() \
                   and state[2] >= 0.3 and state[2] <= 1.0  # this was 0.2 and 1.0
@@ -109,8 +114,5 @@ class AntEnv(MujocoEnv, Serializable):
             np.linalg.norm(path["env_infos"]["com"][-1] - path["env_infos"]["com"][0])
             for path in paths
             ]
-        logger.record_tabular('AverageForwardProgress', np.mean(progs))
-        logger.record_tabular('MaxForwardProgress', np.max(progs))
-        logger.record_tabular('MinForwardProgress', np.min(progs))
-        logger.record_tabular('StdForwardProgress', np.std(progs))
+        logger.record_tabular_misc_stat('Progress', progs, 'front')
         self.plot_visitations(paths, visit_prefix=prefix)

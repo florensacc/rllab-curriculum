@@ -2,39 +2,16 @@ import numpy as np
 
 from rllab.core.serializable import Serializable
 from rllab.envs.base import Step
-# from rllab.envs.mujoco.mujoco_env import MujocoEnv
-from sandbox.carlos_snn.envs.mujoco.mujoco_env import MujocoEnv_ObsInit as MujocoEnv
+from rllab.envs.mujoco.half_cheetah_env import HalfCheetahEnv
 from rllab.misc import logger
 from rllab.misc.overrides import overrides
 
 
-def smooth_abs(x, param):
-    return np.sqrt(np.square(x) + np.square(param)) - param
-
-
-class HalfCheetahEnv(MujocoEnv, Serializable):
-
-    FILE = 'half_cheetah.xml'
-
-    def __init__(self, *args, **kwargs):
-        super(HalfCheetahEnv, self).__init__(*args, **kwargs)
-        Serializable.__init__(self, *args, **kwargs)
-
-    def get_current_obs(self):
-        return np.concatenate([
-            self.model.data.qpos.flatten()[1:],
-            self.model.data.qvel.flat,
-            self.get_body_com("torso").flat,
-        ])
-
-    def get_body_xmat(self, body_name):
-        idx = self.model.body_names.index(body_name)
-        return self.model.data.xmat[idx].reshape((3, 3))
-
-    def get_body_com(self, body_name):
-        idx = self.model.body_names.index(body_name)
-        return self.model.data.com_subtree[idx]
-
+class HalfCheetah_biMod_Env(HalfCheetahEnv):
+    """
+    Change reward to abs value of the CoMvel: forward and backward equally rewarded
+    Add logging of bimodality progress
+    """
     def step(self, action):
         self.forward_dynamics(action)
         next_obs = self.get_current_obs()
@@ -47,21 +24,13 @@ class HalfCheetahEnv(MujocoEnv, Serializable):
         done = False
         return Step(next_obs, reward, done)
 
-    def reset(self):
-        obs = MujocoEnv.reset(self)
-        # xxxxxx
-        return obs
-
-    # @overrides
+    @overrides
     def log_diagnostics(self, paths):
         progs = [
             path["observations"][-1][-3] - path["observations"][0][-3]
             for path in paths
         ]
-        logger.record_tabular('AverageForwardProgress', np.mean(progs))
-        logger.record_tabular('MaxForwardProgress', np.max(progs))
-        logger.record_tabular('MinForwardProgress', np.min(progs))
-        logger.record_tabular('StdForwardProgress', np.std(progs))
+        logger.record_tabular_misc_stat('Progress', progs, 'front')
 
         largest_positive_prog = max(0, np.max(progs))
         largest_negative_prog = min(0, np.min(progs))

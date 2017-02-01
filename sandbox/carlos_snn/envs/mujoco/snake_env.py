@@ -1,23 +1,13 @@
 from rllab.envs.base import Step
 from rllab.misc.overrides import overrides
 from sandbox.carlos_snn.envs.mujoco.mujoco_env import MujocoEnv_ObsInit as MujocoEnv
-import numpy as np
 from rllab.core.serializable import Serializable
 from rllab.misc import logger
 from rllab.misc import autoargs
-import gc
-from functools import reduce
-import os.path as osp
-import collections
+import numpy as np
 
-import matplotlib as mpl
-mpl.use('Agg')
-import matplotlib.pyplot as plt
-
-
-
-from rllab import spaces
 BIG = 1e6
+
 
 class SnakeEnv(MujocoEnv, Serializable):
     FILE = 'snake.xml'
@@ -74,16 +64,11 @@ class SnakeEnv(MujocoEnv, Serializable):
         return Step(next_obs, reward, done, com=com, ori=ori)
 
     @overrides
-    def log_diagnostics(self, paths, log_prefix=''):
+    def log_diagnostics(self, paths, prefix=''):
         progs = [
-            np.linalg.norm(path["env_infos"]['com'][-1] - path["env_infos"]['com'][0])
+            np.linalg.norm(path["env_infos"]["com"][-1] - path["env_infos"]["com"][0])
             for path in paths
             ]
-        with logger.tabular_prefix(log_prefix):
-            logger.record_tabular('AverageForwardProgress', np.mean(progs))
-            logger.record_tabular('MaxForwardProgress', np.max(progs))
-            logger.record_tabular('MinForwardProgress', np.min(progs))
-            logger.record_tabular('StdForwardProgress', np.std(progs))
-
-        self.plot_visitations(paths, visit_prefix=log_prefix)
+        logger.record_tabular_misc_stat('Progress', progs, 'front')
+        self.plot_visitations(paths, visit_prefix=prefix)
 
