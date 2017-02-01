@@ -1,25 +1,10 @@
 import math
-import os.path as osp
-import tempfile
-import xml.etree.ElementTree as ET
-from ctypes import byref
-from rllab.misc import logger
-
 import numpy as np
-import theano
-
+from rllab.misc import logger
 from rllab import spaces
-from rllab.core.serializable import Serializable
-from rllab.envs.proxy_env import ProxyEnv
-from rllab.envs.env_spec import EnvSpec
-from rllab.envs.base import Env, Step
-from rllab.envs.mujoco.gather.embedded_viewer import EmbeddedViewer
-from rllab.envs.mujoco.mujoco_env import MODEL_DIR, BIG
-from rllab.misc import autoargs
+from rllab.envs.base import Step
+from rllab.envs.mujoco.mujoco_env import BIG
 from rllab.misc.overrides import overrides
-from rllab.mujoco_py import MjViewer, MjModel, mjcore, mjlib, \
-    mjextra, glfw
-from rllab.envs.mujoco.gather.gather_env import GatherViewer
 from sandbox.carlos_snn.envs.mujoco.gather.gather_env import GatherEnv
 
 APPLE = 0
@@ -47,9 +32,9 @@ class FollowEnv(GatherEnv):
 
     def step(self, action):
         _, inner_rew, done, info = self.wrapped_env.step(action)
-        info['inner_rewards'] = inner_rew
-        info['dist_rewards'] = 0
-        info['follow_rewards'] = 0
+        info['inner_rew'] = inner_rew
+        info['dist_rew'] = 0
+        info['outer_rew'] = 0
         if done:
             return Step(self.get_current_obs(), self.dying_cost, done, **info)  # give a -10 rew if the robot dies
         com = self.wrapped_env.get_body_com("torso")
@@ -62,10 +47,10 @@ class FollowEnv(GatherEnv):
             if (ox - x) ** 2 + (oy - y) ** 2 < self.catch_range ** 2:
                 if typ == APPLE:
                     reward += 1
-                    info['follow_rewards'] = 1
+                    info['outer_rew'] = 1
                 else:
                     reward -= 1
-                    info['follow_rewards'] = -1
+                    info['outer_rew'] = -1
             else:
                 new_objs.append(obj)
 
@@ -74,7 +59,7 @@ class FollowEnv(GatherEnv):
             if np.sum(goal_vector) > 0:  # only give the dist rew if you see the goal!
                 ox, oy, typ = self.objects[0]
                 dist_reward = self.goal_dist_rew * 1. / max((ox - x) ** 2 + (oy - y) ** 2, 1)
-                info['dist_rewards'] = dist_reward
+                info['dist_rew'] = dist_reward
                 reward += dist_reward
 
         # move objects randomly
@@ -180,9 +165,9 @@ class FollowEnv(GatherEnv):
         # we call here any logging related to the follow, strip the maze obs and call log_diag with the stripped paths
         # we need to log the purely follow reward!!
         with logger.tabular_prefix('Follow_'):
-            follow_undiscounted_returns = [sum(path['env_infos']['follow_rewards']) for path in paths]
+            follow_undiscounted_returns = [sum(path['env_infos']['outer_rew']) for path in paths]
             logger.record_tabular_misc_stat('Return', follow_undiscounted_returns, placement='front')
-            dist_undiscounted_returns = [sum(path['env_infos']['dist_rewards']) for path in paths]
+            dist_undiscounted_returns = [sum(path['env_infos']['dist_rew']) for path in paths]
             logger.record_tabular_misc_stat('DistReturn', dist_undiscounted_returns, placement='front')
         stripped_paths = []
         for path in paths:
@@ -194,7 +179,7 @@ class FollowEnv(GatherEnv):
             #  this breaks if the obs of the robot are d>1 dimensional (not a vector)
             stripped_paths.append(stripped_path)
         with logger.tabular_prefix('wrapped_'):
-            if 'env_infos' in paths[0].keys() and 'inner_reward' in paths[0]['env_infos'].keys():
-                wrapped_undiscounted_return = np.mean([np.sum(path['env_infos']['inner_reward']) for path in paths])
+            if 'env_infos' in paths[0].keys() and 'inner_rew' in paths[0]['env_infos'].keys():
+                wrapped_undiscounted_return = np.mean([np.sum(path['env_infos']['inner_rew']) for path in paths])
                 logger.record_tabular('AverageReturn', wrapped_undiscounted_return)
             self.wrapped_env.log_diagnostics(stripped_paths)  # see swimmer_env.py for a scketch of the maze plotting!
