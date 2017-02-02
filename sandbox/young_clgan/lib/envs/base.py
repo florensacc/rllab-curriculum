@@ -1,7 +1,9 @@
 import random
+from rllab import spaces
 
 import numpy as np
 
+from rllab.envs.mujoco.mujoco_env import MODEL_DIR, BIG
 from rllab.core.serializable import Serializable
 from rllab.envs.proxy_env import ProxyEnv
 from rllab.envs.base import Step
@@ -84,7 +86,7 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         self.update_goal_generator(goal_generator)
         self._distance_metric = distance_metric
         self._goal_reward = goal_reward
-        self.goal_weights = goal_weights
+        self.goal_weight = goal_weight
 
     def reset(self):
         self.update_goal()
@@ -94,13 +96,10 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         observation, reward, done, info = ProxyEnv.step(self, action)
         return (
             self._append_observation(observation),
-            self._compute_reward(reward),
+            self._compute_reward(observation[-3:-1], reward),  # assumes the COM is last 3 coord, z being last
             done,
             info
         )
-
-    def _append_observation(self, obs):
-        return np.concatentate(obs, np.array(self.current_goal))
 
     def _compute_reward(self, obs, reward):
         if self._distance_metric == 'L1':
@@ -119,7 +118,23 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         else:
             raise NotImplementedError('Unsupported goal_reward type.')
 
-        return goal_weight * intrinsic_reward + reward
+        return self.goal_weight * intrinsic_reward + reward
+
+    def get_current_obs(self):
+        obj = self
+        while hasattr(obj, "wrapped_env"):  # try to go through "Normalize and Proxy and whatever wrapper"
+            obj = obj.wrapped_env
+        return self._append_observation(obj.get_current_obs())
+
+    def _append_observation(self, obs):
+        return np.concatenate([obs, np.array(self.current_goal)])
+
+    @property
+    @overrides
+    def observation_space(self):
+        shp = self.get_current_obs().shape
+        ub = BIG * np.ones(shp)
+        return spaces.Box(ub * -1, ub)
 
 
 def update_env_goal_generator(env, goal_generator):
