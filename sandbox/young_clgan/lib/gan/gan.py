@@ -5,7 +5,6 @@ import numpy as np
 import tensorflow as tf
 import tflearn
 
-
 DEFAULT_GAN_CONFIGS = {
     'batch_size': 64,
     'generator_activation': 'relu',
@@ -23,9 +22,7 @@ DEFAULT_GAN_CONFIGS = {
 }
 
 
-
 class FCGAN(object):
-
     def __init__(self, generator_output_size, discriminator_output_size,
                  generator_layers, discriminator_layers, noise_size,
                  tf_session, configs=None):
@@ -116,7 +113,6 @@ class FCGAN(object):
 
         return np.vstack(generator_noise)
 
-
     def sample_generator(self, size):
         tflearn.config.is_training(is_training=False, session=self.tf_session)
         generator_samples = []
@@ -133,7 +129,6 @@ class FCGAN(object):
                 )
             )
         return np.vstack(generator_samples), np.vstack(generator_noise)
-
 
     def train(self, X, Y, outer_iters, generator_iters, discriminator_iters, suppress_generated_goals=False):
         sample_size = X.shape[0]
@@ -168,9 +163,14 @@ class FCGAN(object):
             self.train_discriminator(feed_X, feed_Y, discriminator_iters)
             self.train_generator(random_noise, generator_iters)
 
-
-
     def train_discriminator(self, X, Y, iters):
+        """
+        :param X: goal that we know lables of
+        :param Y: labels of those goals
+        :param iters: of the discriminator trainig
+        The batch size is given by the configs of the class!
+        discriminator_batch_noise_stddev > 0: check that std on each component is at least this. (if com: 2)
+        """
         tflearn.config.is_training(is_training=True, session=self.tf_session)
         batch_size = self.configs['batch_size']
         for i in range(iters):
@@ -182,7 +182,7 @@ class FCGAN(object):
                 noise_indices = np.var(train_X, axis=0) < self.configs['discriminator_batch_noise_stddev']
                 noise = np.random.randn(*train_X.shape)
                 noise[np.logical_not(noise_indices)] = 0
-                train_X = train_X + noise * self.configs['discriminator_batch_noise_stddev']
+                train_X += noise * self.configs['discriminator_batch_noise_stddev']
 
             self.tf_session.run(
                 self.discriminator_train_op,
@@ -200,8 +200,12 @@ class FCGAN(object):
                 # if loss < 1e-3:
                 #     break
 
-
     def train_generator(self, X, iters):
+        """
+        :param X: These are the latent variables that were used to generate??
+        :param iters:
+        :return:
+        """
         tflearn.config.is_training(is_training=False, session=self.tf_session)
         batch_size = self.configs['batch_size']
         for i in range(iters):
@@ -222,7 +226,6 @@ class FCGAN(object):
                 # if loss < 1e-3:
                 #     break
 
-
     def discriminator_predict(self, X):
         tflearn.config.is_training(is_training=False, session=self.tf_session)
         batch_size = self.configs['batch_size']
@@ -238,10 +241,7 @@ class FCGAN(object):
         return np.vstack(output)
 
 
-
-
 class Generator(object):
-
     def __init__(self, output_size, hidden_layers, noise_size, configs):
         self.configs = configs
         self._input = tf.placeholder(tf.float32, shape=[None, noise_size])
@@ -272,16 +272,15 @@ class Generator(object):
 
 
 class Discriminator(object):
-
     def __init__(self, generator_output, input_size,
                  hidden_layers, output_size, configs):
         self._generator_input = generator_output
         self._sample_input = tf.placeholder(tf.float32, shape=[None, input_size])
         self._label = tf.placeholder(tf.float32, shape=[None, output_size])
         self.configs = configs
+        # we initialize??
         generator_out = self._generator_input
         sample_out = self._sample_input
-
 
         if callable(configs['discriminator_activation']):
             activation = configs['discriminator_activation']()
@@ -318,11 +317,12 @@ class Discriminator(object):
 
         self._discriminator_loss = tf.reduce_mean(
             -tf.reduce_sum(
-                self._label * tf.log(self._sample_output + 1e-10) + (1 - self._label) * tf.log(1 - self._sample_output + 1e-10),
+                self._label * tf.log(self._sample_output + 1e-10) + (1 - self._label) * tf.log(
+                    1 - self._sample_output + 1e-10),
                 reduction_indices=[1]
             )
         )
-        
+
         generator_loss_weights = configs['generator_loss_weights']
         if generator_loss_weights is None:
             generator_loss_weights = 1

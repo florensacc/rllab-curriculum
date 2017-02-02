@@ -12,16 +12,23 @@ from matplotlib import pyplot as plt
 
 
 def plot_policy_reward(policy, env, limit, horizon=200, max_reward=6000, fname=None, grid_size=60):
+    """
+    Complete evaluation of the policy to reach all points in a 2D grid
+    :param limit: in a 2D square of this side-length
+    :param grid_size: compute the difficulty of reaching every of these grid points
+    :param horizon: in this many steps
+    :param max_reward: should be high enough to mean it has reached the goal for several steps (just for plot)
+    :param fname: where to save the pcolormesh
+    :return also return the image
+    """
     x, y = np.meshgrid(np.linspace(-limit, limit, grid_size), np.linspace(-limit, limit, grid_size))
     grid_shape = x.shape
     goals = np.hstack([
         x.flatten().reshape(-1, 1),
         y.flatten().reshape(-1, 1)
     ])
-    z = evaluate_goals(goals, env, policy, horizon, 1)
-    print("Min return: ", np.min(z))
-    print("Max return: ", np.max(z))
-    print("Mean return: ", np.mean(z))
+    z = evaluate_goals(goals, env, policy, horizon, 1)  # try out every goal in the grid
+    print("Min return: {}\nMax return: {}\nMean return: {}".format(np.min(z), np.max(z), np.mean(z)))
 
     z = z.reshape(grid_shape)
     plt.clf()
@@ -85,6 +92,7 @@ def plot_labeled_samples(samples, sample_classes, text_labels, limit,
 
 
 def plot_gan_samples(gan, limit, fname=None, size=500):
+    """Scatter size samples of the gan: no evaluation"""
     samples, _ = gan.sample_goals(size)
     plt.clf()
     plt.scatter(samples[:, 0], samples[:, 1])
