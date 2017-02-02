@@ -12,12 +12,15 @@ from sandbox.young_clgan.lib.envs.rewards import linear_threshold_reward
 
 
 class PointEnv(GoalEnv, MujocoEnv, Serializable):
-
     FILE = 'point2.xml'
 
     def __init__(self, goal_generator, reward_dist_threshold=0.3,
-            control_mode='linear', *args, **kwargs):
-
+                 control_mode='linear', *args, **kwargs):
+        """
+        :param goal_generator: Proceedure to sample the and keep the goals
+        :param reward_dist_threshold:
+        :param control_mode:
+        """
         self.control_mode = control_mode
         self.update_goal_generator(goal_generator)
         self.reward_dist_threshold = reward_dist_threshold
@@ -26,6 +29,7 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
 
     @overrides
     def get_current_obs(self):
+        """Prepend obs with current_goal"""
         pos = self.model.data.qpos.flat[:2]
         vel = self.model.data.qvel.flat[:2]
         return np.concatenate([
@@ -35,20 +39,23 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
         ])
 
     @overrides
-    def reset(self):
+    def reset(self, *args, **kwargs):
+        """This does both the reset of mujoco, the forward and reset goal"""
         self.update_goal()
+        # this should be reset_mujoco(init_state) and model.forward()
         qpos = np.zeros((self.model.nq, 1))
-        qpos[2:, :] = np.array(self.current_goal).reshape((2, 1))
-        qvel = np.zeros((self.model.nv, 1))
+        qpos[2:, :] = np.array(self.current_goal).reshape((2, 1))  # ??
+        qvel = np.zeros((self.model.nv, 1))  # 0 velocity
         self.set_state(qpos, qvel)
+        # this is usually the usual reset
         self.current_com = self.model.data.com_subtree[0]
         self.dcom = np.zeros_like(self.current_com)
         return self.get_current_obs()
 
     def step(self, action):
-        if self.control_mode == 'linear':
+        if self.control_mode == 'linear':  # action is directly the acceleration
             self.forward_dynamics(action)
-        elif self.control_mode == 'angular':
+        elif self.control_mode == 'angular':  # action[0] is accel in forward (vel) direction, action[1] in orthogonal.
             vel = self.model.data.qvel.flat[:2]
 
             # Get the unit vector for velocity
@@ -63,7 +70,7 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
         else:
             raise NotImplementedError("Control mode not supported!")
 
-        reward_dist = self._compute_dist_reward()
+        reward_dist = self._compute_dist_reward()  # 1000 * self.reward_dist_threshold at goal, decreases with 1000 coef
         reward_ctrl = - np.square(action).sum()
         # reward = reward_dist + reward_ctrl
         reward = reward_dist
@@ -79,10 +86,10 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
             reward_dist=reward_dist,
             reward_ctrl=reward_ctrl,
             distance=dist,
-            goal_distance=np.linalg.norm(np.array(self.current_goal)),
         )
 
     def _compute_dist_reward(self):
+        """Transforms dist to goal with linear_threshold_reward: gets threshold * coef at dist=0, and decreases to 0"""
         dist = np.linalg.norm(
             self.get_body_com("torso") - self.get_body_com("target")
         )
@@ -101,19 +108,18 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
         distances = [
             np.mean(path['env_infos']['distance'])
             for path in paths
-        ]
+            ]
         goal_distances = [
-            np.mean(path['env_infos']['goal_distance'])
-            for path in paths
-        ]
+            path['env_infos']['distance'][0] for path in paths
+            ]
         reward_dist = [
             np.mean(path['env_infos']['reward_dist'])
             for path in paths
-        ]
+            ]
         reward_ctrl = [
             np.mean(path['env_infos']['reward_ctrl'])
             for path in paths
-        ]
+            ]
         # Process by trajectories
         logger.record_tabular('GoalDistance', np.mean(goal_distances))
         logger.record_tabular('MeanDistance', np.mean(distances))
