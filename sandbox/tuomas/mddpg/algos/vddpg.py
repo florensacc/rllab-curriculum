@@ -52,6 +52,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
             kernel,
             qf,
             K,
+            # Number of static particles (used only if actor_sparse_update=True)
+            K_fixed=1,
             Ks=None,  # Use different number of particles for different temps.
             q_prior=None,
             q_target_type="max",
@@ -63,6 +65,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             temperatures=None,
             train_critic=True,
             train_actor=True,
+            actor_sparse_update=False,
             resume=False,
             n_eval_paths=2,
             svgd_target="action",
@@ -90,6 +93,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.q_prior = q_prior
         self.prior_coeff = 0.#1.
         self.K = K
+        self.K_static = K_fixed
         self.Ks = Ks
         self.q_target_type = q_target_type
         self.critic_lr = qf_learning_rate
@@ -99,6 +103,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.qf_extra_training = qf_extra_training
         self.train_critic = train_critic
         self.train_actor = train_actor
+        self.actor_sparse_update = actor_sparse_update
         self.resume = resume
         self.temperatures = temperatures
 
@@ -158,11 +163,24 @@ class VDDPG(OnlineAlgorithm, Serializable):
         # Note: need to reshape policy output from N*K x Da to N x K x Da
         shape = tf_shape((-1, self.K_pl, Da))
         if self.svgd_target == "action":
-            actions_reshaped = tf.reshape(self.policy.output, shape)
-            self.kernel.kappa = self.kernel.get_kappa(actions_reshaped)
-            self.kernel.kappa_grads = self.kernel.get_kappa_grads(
-                actions_reshaped)
+            if self.actor_sparse_update:
+                updated_actions = tf.reshape(self.policy.output, shape)
+                self.kernel.kappa = self.kernel.get_asymmetric_kappa(
+                    updated_actions
+                )
+                self.kernel.kappa_grads = (
+                    self.kernel.get_asymmetric_kappa_grads(updated_actions)
+                )
+
+            else:
+                actions_reshaped = tf.reshape(self.policy.output, shape)
+                self.kernel.kappa = self.kernel.get_kappa(actions_reshaped)
+                self.kernel.kappa_grads = self.kernel.get_kappa_grads(
+                    actions_reshaped)
         elif self.svgd_target == "pre-action":
+            if self.actor_sparse_update:
+                raise NotImplementedError
+
             pre_actions_reshaped = tf.reshape(self.policy.pre_output, shape)
             self.kernel.kappa = self.kernel.get_kappa(pre_actions_reshaped)
             self.kernel.kappa_grads = self.kernel.get_kappa_grads(
@@ -209,11 +227,19 @@ class VDDPG(OnlineAlgorithm, Serializable):
         all_dummy_params = self.dummy_policy.get_params_internal()
         Da = self.env.action_space.flat_dim
 
+        # TODO: not sure if this is needed
         self.critic_with_policy_input = self.qf.get_weight_tied_copy(
             action_input=self.policy.output,
             observation_input=self.policy.observations_placeholder,
         )
+        self.critic_with_static_actions = self.qf.get_weight_tied_copy(
+            action_input=self.kernel.fixed_actions_pl,
+            observation_input=self.policy.observations_placeholder,
+        )
+
         if self.svgd_target == "action":
+            if self.q_prior is not None and self.actor_sparse_update:
+                raise NotImplementedError
             if self.q_prior is not None:
                 self.prior_with_policy_input = self.q_prior.get_weight_tied_copy(
                     action_input=self.policy.output,
@@ -222,12 +248,23 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 p = self.prior_coeff_placeholder
                 log_p = ((1.0 - p) * self.critic_with_policy_input.output
                          + p * self.prior_with_policy_input.output)
+            elif self.actor_sparse_update:
+                log_p = self.critic_with_static_actions.output
             else:
                 log_p = self.critic_with_policy_input.output
             log_p = tf.squeeze(log_p)
-            grad_log_p = tf.gradients(log_p, self.policy.output)
-            grad_log_p = tf.reshape(grad_log_p,
-                                    tf_shape((-1, self.K_pl, 1, Da)))
+
+            if self.actor_sparse_update:
+                grad_log_p = tf.gradients(log_p,
+                                          self.critic_with_static_actions.action_input)
+
+                grad_log_p = tf.reshape(grad_log_p,
+                                        tf_shape((-1, self.K_static, 1, Da)))
+            else:
+                grad_log_p = tf.gradients(log_p, self.policy.output)
+
+                grad_log_p = tf.reshape(grad_log_p,
+                                        tf_shape((-1, self.K_pl, 1, Da)))
             # N x K x 1 x Da
 
             kappa = tf.expand_dims(
@@ -355,7 +392,6 @@ class VDDPG(OnlineAlgorithm, Serializable):
         else:
             raise NotImplementedError
         # q_next: N x M
-        # q_next = tf.Print(q_next, [tf.shape(q_next)], 'Shape of q_next: ')
 
         assert_op = tf.assert_equal(
             tf.shape(self.rewards_placeholder), tf.shape(q_next)
@@ -367,8 +403,6 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 self.rewards_placeholder + (1 - self.terminals_placeholder) *
                 self.discount * q_next
             )  # N x M
-
-        # self.ys = tf.Print(self.ys, [tf.shape(self.ys)], 'Shape of ys: ')
 
         self.critic_loss = tf.reduce_mean(tf.reduce_mean(
             tf.square(self.ys - q_curr)
@@ -454,10 +488,27 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         feeds = dict()
         if self.train_actor:
-            feeds.update(self._actor_feed_dict(obs, temp, K))
-            feeds.update(
-                self.kernel.update(self, feeds, multiheaded=False, K=K)
-            )
+            if self.actor_sparse_update:
+                # Update feed dict first with larger number of fixed particles
+                feeds.update(self._actor_feed_dict_for(
+                    self.critic_with_static_actions, obs, temp, self.K_static))
+                feeds.update(
+                    self.kernel.update(self,
+                                       feeds,
+                                       multiheaded=False,
+                                       K=self.K_static)
+                )
+
+                # Then update the feeds again with smaller number of particles.
+                feeds.update(self._actor_feed_dict_for(None, obs, temp, self.K))
+            else:
+                feeds.update(self._actor_feed_dict_for(
+                    self.critic_with_policy_input, obs, temp, K)
+                )
+                feeds.update(
+                    self.kernel.update(self, feeds, multiheaded=False, K=K)
+                )
+
         if self.train_critic:
             feeds.update(self._critic_feed_dict(
                 rewards, terminals, obs, actions, next_obs, temp, K
@@ -467,7 +518,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         return feeds
 
-    def _actor_feed_dict(self, obs, temp, K):
+    def _actor_feed_dict_for(self, critic, obs, temp, K):
         # Note that we want K samples for each observation. Therefore we
         # first need to replicate the observations.
         obs = self._replicate_rows(obs, K)
@@ -479,7 +530,10 @@ class VDDPG(OnlineAlgorithm, Serializable):
         critic_inputs = (obs,) if temp is None else (obs, None, temp)
 
         feed = self.policy.get_feed_dict(*actor_inputs)
-        feed.update(self.critic_with_policy_input.get_feed_dict(*critic_inputs))
+        #feed.update(self.critic_with_policy_input.get_feed_dict(*critic_inputs))
+        if critic is not None:
+            feed.update(critic.get_feed_dict(*critic_inputs))
+        #feed.update(self.critic_with_static_actions.get_feed_dict(*critic_inputs))
         feed[self.alpha_placeholder] = self.alpha
         feed[self.prior_coeff_placeholder] = self.prior_coeff
         return feed

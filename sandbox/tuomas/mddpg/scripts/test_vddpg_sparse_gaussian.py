@@ -8,6 +8,7 @@ flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_float('learning_rate', 0.01, 'Base learning rate.')
 flags.DEFINE_integer('K', 100, 'Number of particles.')
+flags.DEFINE_integer('K_fixed', 100, 'Number of particles.')
 flags.DEFINE_integer('K_test', 500, 'Number of particles.')
 flags.DEFINE_integer('modes', 2, 'Number of modes.')
 flags.DEFINE_boolean('fixed', False, 'Fixed target distribution(s).')
@@ -200,7 +201,9 @@ def test():
         policy_learning_rate=FLAGS.learning_rate,  # note: this is higher than DDPG's 1e-4
         batch_size=64,  # only need recent samples, though it's slow
         alpha=1,  # 1 is the SVGD default
-        train_critic=False
+        train_critic=False,
+        actor_sparse_update=True,
+        K_fixed=FLAGS.K_fixed,
     )
     q_target_type = "none"  # do not update the critic
 
@@ -264,6 +267,7 @@ def test():
             "kernel",
             dim=env.action_space.flat_dim,
             h_min=0,
+            sparse_update=True
         )
     else:
         diag_constructor = SimpleDiagonalConstructor(
