@@ -90,7 +90,7 @@ def run_task(v):
 
     blocks = 4
     filters = 32
-    nr_mix = 8
+    nr_mix = 1
     def go(x):
         shp = int_shape(x)
         chns = shp[3]

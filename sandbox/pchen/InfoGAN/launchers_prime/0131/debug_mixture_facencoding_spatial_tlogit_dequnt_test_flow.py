@@ -90,7 +90,7 @@ def run_task(v):
 
     blocks = 4
     filters = 32
-    nr_mix = 8
+    nr_mix = 6
     def go(x):
         shp = int_shape(x)
         chns = shp[3]
@@ -115,8 +115,8 @@ def run_task(v):
         dataset=dataset,
         dist=dist,
         init_batch_size=1024,
-        train_batch_size=256 // 1, # also testing resuming from diff bs
-        optimizer=AdamaxOptimizer(learning_rate=2e-4),
+        train_batch_size=256 // 4, # also testing resuming from diff bs
+        optimizer=AdamaxOptimizer(learning_rate=1e-4),
         save_every=20,
         # # for debug
         debug=False,
@@ -141,7 +141,7 @@ for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="0130_mixture_fac_encoding_spatial_tlogit_dequnt",
+        exp_prefix="0131_numerics_mixture_fac_encoding_spatial_tlogit_dequnt",
         variant=v,
 
         mode="local",

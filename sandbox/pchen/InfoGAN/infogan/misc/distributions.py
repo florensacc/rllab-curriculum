@@ -468,8 +468,8 @@ THRESHOLD = 1e-3
 class TruncatedLogistic(Distribution):
     def __init__(
             self, shape, lo, hi,
-            # init_scale=0.3, init_mean=2.,
-            init_scale=1, init_mean=1.,
+            init_scale=0.3, init_mean=2.,
+            # init_scale=1, init_mean=1.,
     ):
         Serializable.quick_init(self, locals())
 
@@ -500,7 +500,7 @@ class TruncatedLogistic(Distribution):
     def cdf(self, x_var, dist_info):
         mu = dist_info["mu"]
         scale = dist_info["scale"]
-        return tf.nn.sigmoid((x_var - mu) / scale)
+        return tf.nn.sigmoid((x_var - mu) / (scale + 1e-7))
 
     def inverse_cdf(self, p, dist_info):
         mu = dist_info["mu"]
@@ -509,28 +509,48 @@ class TruncatedLogistic(Distribution):
         return mu + scale * (tf.log(p) - tf.log(1 - p))
 
     def logli(self, x_var, dist_info):
+        x_var = tf.reshape(x_var, [-1, self.dim])
         mu = dist_info["mu"]
         scale = dist_info["scale"]
         bs = int_shape(mu)[0]
         p_lo, p_hi = self.cdf(self._lo, dist_info), self.cdf(self._hi, dist_info)
         span = p_hi - p_lo
         # untruncated logprob calculation
-        neg_standardized = -(x_var - mu)/scale
-        log_exp_approx = tf.select(
-            neg_standardized > 70.,
-            neg_standardized,
-            tf.select(
-                neg_standardized < -10.,
-                tf.exp(neg_standardized),
-                tf.log(1. + tf.exp(neg_standardized))
-            )
-        )
-        raw_logli = neg_standardized - tf.log(scale) \
+        neg_standardized = -(x_var - mu)/(scale + 1e-7)
+        neg_standardized = tf.check_numerics(neg_standardized, "neg_std")
+        # neg_standardized = tf.Print(
+        #     neg_standardized, [
+        #         "neg_std_max", tf.reduce_max(neg_standardized),
+        #         "scale_min", tf.reduce_min(scale),
+        #         "mu_max", tf.reduce_max(mu),
+        #     ]
+        # )
+        # log_exp_approx = tf.select(
+        #     neg_standardized > 70.,
+        #     neg_standardized,
+        #     tf.select(
+        #         neg_standardized < -10.,
+        #         tf.exp(neg_standardized),
+        #         tf.log(1. + tf.exp(neg_standardized))
+        #     )
+        # )
+        log_exp_approx = tf.nn.softplus(neg_standardized)
+        # log_exp_approx = tf.Print(
+        #     log_exp_approx, [
+        #         "span_min", tf.reduce_min(span),
+        #         "softplux_approx_mu", tf.reduce_mean(log_exp_approx),
+        #         "softplux_approx_min", tf.reduce_min(log_exp_approx),
+        #         "softplux_approx_max", tf.reduce_max(log_exp_approx),
+        #     ]
+        # )
+        raw_logli = neg_standardized - tf.log(scale + 1e-20) \
                     - 2. * log_exp_approx
 
         logli_out = tf.select(
             span > THRESHOLD,
-            raw_logli - tf.log(span),
+            raw_logli - tf.log(
+                tf.clip_by_value(span, 1e-7, 1.)
+            ),
             tf.tile(-tf.log(self._hi - self._lo), [bs, 1])
         )
         return tf.reduce_sum(logli_out, reduction_indices=[1])
@@ -552,24 +572,18 @@ class TruncatedLogistic(Distribution):
         span = p_hi - p_lo
         p_delta = tf.random_uniform(
             shape=universal_int_shape(mu),
-            maxval=span,
-        )
+            maxval=1.,
+        ) * span
         samples = self.inverse_cdf(p_lo+p_delta, dist_info)
 
         # untruncated logprob calculation
-        neg_standardized = -(samples - mu)/scale
-        log_exp_approx = tf.select(
-            neg_standardized > 70.,
-            neg_standardized,
-            tf.select(
-                neg_standardized < -10.,
-                tf.exp(neg_standardized),
-                tf.log(1. + tf.exp(neg_standardized))
-            )
-        )
-        raw_logli = neg_standardized - tf.log(scale) \
+        neg_standardized = -(samples - mu)/(scale + 1e-7)
+        neg_standardized = tf.check_numerics(neg_standardized, "neg_std")
+        log_exp_approx = tf.nn.softplus(neg_standardized)
+        raw_logli = neg_standardized - tf.log(scale + 1e-20) \
                     - 2. * log_exp_approx
 
+        span = tf.check_numerics(span, "cdf_span")
         samples_out = tf.select(
             span > THRESHOLD,
             samples,
@@ -2947,7 +2961,7 @@ class FactorizedEncodingSpatialTruncatedLogisticDequant(DequantizationDistributi
             shape,
             nn_builder,
             width=1. / 256,
-            nr_mixtures=5,
+            nr_mixtures=1,
     ):
         global G_IDX
         G_IDX += 1
@@ -2958,20 +2972,22 @@ class FactorizedEncodingSpatialTruncatedLogisticDequant(DequantizationDistributi
         self._shape = shape
         self._dim = dim
         self._nr_mixtures = nr_mixtures
-        if nr_mixtures == 1:
-            self._delegate_dist = TruncatedLogistic(shape, -1., 1.)
-        else:
-            self._delegate_dist = Mixture(
-               [
-                   (
-                       TruncatedLogistic(
-                           shape, -1., 1.,
-                       ),
-                       1./nr_mixtures
-                   )
-                   for _ in range(nr_mixtures)
-               ]
-            )
+
+        # self._delegate_dist = TruncatedLogistic(shape, -1., 1.)
+        # if nr_mixtures == 1:
+        #     self._delegate_dist = truncatedlogistic(shape, -1., 1.)
+        # else:
+        self._delegate_dist = Mixture(
+           [
+               (
+                   TruncatedLogistic(
+                       shape, -1., 1.,
+                   ),
+                   1./nr_mixtures
+               )
+               for _ in range(nr_mixtures)
+           ]
+        )
 
         self.init_mode()
 

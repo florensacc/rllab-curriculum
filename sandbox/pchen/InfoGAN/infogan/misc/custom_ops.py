@@ -1672,6 +1672,19 @@ def cached_assign(var):
         pass
     return var_assignments[var]
 
+def restore(sess, ema):
+    assert ema
+    ema_keys = list(ema._averages.keys())
+    ema_avgs = [ema._averages[k] for k in ema_keys]
+    avg_vals = sess.run(ema_avgs)
+    ops = []
+    feed = {}
+    for var, avg in zip(ema_keys, avg_vals):
+        holder, op = cached_assign(var)
+        ops.append(op)
+        feed[holder] = avg
+    sess.run(ops, feed)
+
 @contextmanager
 def temp_restore(sess, ema):
     if ema is None:

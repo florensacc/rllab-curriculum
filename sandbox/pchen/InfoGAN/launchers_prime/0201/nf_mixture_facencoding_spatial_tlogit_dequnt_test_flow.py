@@ -18,7 +18,7 @@ import tensorflow as tf
 import cloudpickle
 
 
-# test if logit transofmration is useful
+# hopefully numerics are fully fixed?
 
 class VG(VariantGenerator):
     @variant
@@ -90,7 +90,7 @@ def run_task(v):
 
     blocks = 4
     filters = 32
-    nr_mix = 8
+    nr_mix = 6
     def go(x):
         shp = int_shape(x)
         chns = shp[3]
@@ -116,7 +116,10 @@ def run_task(v):
         dist=dist,
         init_batch_size=1024,
         train_batch_size=256 // 1, # also testing resuming from diff bs
-        optimizer=AdamaxOptimizer(learning_rate=2e-4),
+        optimizer=AdamaxOptimizer(
+            learning_rate=2e-4,
+            beta1=0., # try turning off momentum
+        ),
         save_every=20,
         # # for debug
         debug=False,
@@ -141,7 +144,7 @@ for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="0130_mixture_fac_encoding_spatial_tlogit_dequnt",
+        exp_prefix="0201_nf_mixture_fac_encoding_spatial_tlogit_dequnt",
         variant=v,
 
         mode="local",
