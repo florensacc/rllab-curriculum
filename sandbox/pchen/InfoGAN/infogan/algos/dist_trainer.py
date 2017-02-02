@@ -13,7 +13,7 @@ from rllab.misc.ext import delete
 import sys
 import sandbox.pchen.InfoGAN.infogan.misc.imported.plotting as plotting
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp, flatten, assign_to_gpu, \
-    average_grads, temp_restore, np_logsumexp, get_available_gpus
+    average_grads, temp_restore, np_logsumexp, get_available_gpus, restore
 
 
 class DistTrainer(object):
@@ -32,6 +32,7 @@ class DistTrainer(object):
             checkpoint_dir=None,
             resume_from=None,
             debug=False,
+            restart_from_nan=False,
     ):
         self._dist = dist
         self._optimizer = optimizer
@@ -53,6 +54,7 @@ class DistTrainer(object):
         assert self._checkpoint_dir, "checkpoint can't be none"
         self._resume_from = resume_from
         self._debug = debug
+        self._restart_from_nan = restart_from_nan
 
     def construct_init(self):
         self._dist.init_mode()
@@ -93,6 +95,16 @@ class DistTrainer(object):
                 logprobs.append(logprob)
                 tower_loss = -logprob
                 tower_grads = self._optimizer.compute_gradients(tower_loss)
+                # # clipping attempt
+                # tower_grads = [
+                #     (tf.clip_by_value(grad, -1., 1.), var)
+                #     for grad, var in tower_grads
+                # ]
+                # # gradient numerics check
+                tower_grads = [
+                    (tf.check_numerics(grad, var.name), var)
+                    for grad, var in tower_grads
+                ]
                 tower_grads_lst.append(tower_grads)
 
         with tf.variable_scope("optim"):
@@ -229,7 +241,10 @@ class DistTrainer(object):
 
                     except BaseException as e:
                         print("exception caught: %s" % e)
-                        import IPython; IPython.embed()
+                        if "NaN" in e.message and self._restart_from_nan:
+                            restore(sess, ema)
+                        else:
+                            import IPython; IPython.embed()
 
                 if itr % self._eval_every == 0:
                     # same eval strategy for now
