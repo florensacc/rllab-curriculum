@@ -1,11 +1,15 @@
 import numpy as np
-from rllab.misc import tensor_utils
 import time
+from rllab.misc import tensor_utils
 from rllab.envs.normalized_env import NormalizedEnv  # to check if env is normalized => no method get_current_obs()
 
 
 def rollout_snn(env, agent, max_path_length=np.inf, reset_start_rollout=True,
                 switch_lat_every=0, animated=False, speedup=1):
+    """
+    :param reset_start_rollout: whether to reset at the start of every rollout
+    :param switch_lat_every: potential change in latents (by resetting the agent with forced resample lat)
+    """
     observations = []
     actions = []
     rewards = []

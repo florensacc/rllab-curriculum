@@ -1,17 +1,22 @@
 import math
-import numpy as np
 from contextlib import contextmanager
 
-from rllab.misc.overrides import overrides
+import numpy as np
+
 from rllab import spaces
 from rllab.core.serializable import Serializable
-from rllab.envs.mujoco.mujoco_env import MODEL_DIR, BIG
-from sandbox.carlos_snn.envs.mujoco.maze.maze_env import MazeEnv
-from rllab.envs.mujoco.maze.maze_env_utils import ray_segment_intersect, point_distance
-from sandbox.carlos_snn.envs.mujoco.maze.maze_env_utils import plot_ray
+from rllab.envs.mujoco.maze.maze_env import MazeEnv
+from rllab.envs.mujoco.mujoco_env import BIG
+from rllab.misc.overrides import overrides
 
 
 class FastMazeEnv(MazeEnv, Serializable):
+    """
+    Changes the MazeEnv for speed. It has to be a maze defined with a grid (horizontal/vertical walls)
+    - cache all the different observation spaces in the __init__
+    - get_current_maze_obs now uses efficient intersection method for readings
+    - The option
+    """
 
     def __init__(
             self,

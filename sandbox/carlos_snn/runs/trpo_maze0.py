@@ -5,23 +5,21 @@ train baseline
 # parallel_sampler.initialize(n_parallel=2)
 # parallel_sampler.set_seed(1)
 
+import math
+
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+from rllab.config_personal import *
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
-from rllab.config_personal import *
-import math
-
-# from rllab.envs.mujoco.swimmer_env import SwimmerEnv
-# from sandbox.carlos_snn.envs.mujoco.snake_env import SnakeEnv
 from sandbox.carlos_snn.envs.mujoco.maze.snake_maze_env import SnakeMazeEnv
+
 # from rllab.envs.mujoco.maze.ant_maze_env import AntMazeEnv
 # from sandbox.carlos_snn.envs.mujoco.swimmer_env import SwimmerEnv
 # from rllab.envs.mujoco.maze.swimmer_maze_env import SwimmerMazeEnv
 # from sandbox.carlos_snn.envs.mujoco.maze.swimmer_maze_env import SwimmerMazeEnv
 # from sandbox.carlos_snn.envs.mujoco.gather.gather_env import GatherEnv
-from sandbox.carlos_snn.envs.mujoco.gather.gather_env import GatherEnv
 
 stub(globals())
 

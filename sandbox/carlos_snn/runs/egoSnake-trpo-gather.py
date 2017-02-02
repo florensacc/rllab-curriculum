@@ -2,13 +2,14 @@
 # parallel_sampler.initialize(n_parallel=2)
 # parallel_sampler.set_seed(1)
 
+import math
+
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+from rllab.config_personal import *
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
-from rllab.config_personal import *
-import math
 
 # from rllab.envs.mujoco.swimmer_env import SwimmerEnv
 # from sandbox.carlos_snn.envs.mujoco.snake_env import SnakeEnv
@@ -19,7 +20,7 @@ import math
 # from sandbox.carlos_snn.envs.mujoco.maze.swimmer_maze_env import SwimmerMazeEnv
 # from sandbox.carlos_snn.envs.mujoco.gather.gather_env import GatherEnv
 # from sandbox.carlos_snn.envs.mujoco.gather.gather_env import GatherEnv
-from sandbox.carlos_snn.envs.mujoco.gather.gather_env import GatherEnv
+from sandbox.carlos_snn.envs.mujoco.gather.snake_gather_env import SnakeGatherEnv
 
 stub(globals())
 
@@ -29,7 +30,7 @@ stub(globals())
 # env = SwimmerMazeEnv(sensor_span=math.pi*2, ctrl_cost_coeff=1)
 
 # exp setup --------------------------------------------------------
-mode = "ec2"
+mode = "local"
 ec2_instance = "m4.4xlarge"
 # subnets =[
 #     "us-west-1b"
@@ -51,7 +52,7 @@ aws_config = dict(
 for time_step_agg in [10, 50, 100]:
 
     for activity_range in [6, 10, 15]:
-        env = normalize(SnakeGatherEnv(maze_id=0, sensor_span=math.pi * 2, ego_obs=True))
+        env = normalize(SnakeGatherEnv(sensor_span=math.pi * 2, ego_obs=True))
 
         policy = GaussianMLPPolicy(
             env_spec=env.spec,
@@ -78,7 +79,7 @@ for time_step_agg in [10, 50, 100]:
             run_experiment_lite(
                 algo.train(),
                 # where to launch the instances
-                mode='ec2',
+                mode='local',
                 # Number of parallel workers for sampling
                 n_parallel=4,
                 # Only keep the snapshot parameters for the last iteration

@@ -85,3 +85,9 @@ class Categorical(Distribution):
     @property
     def dist_info_keys(self):
         return ["prob"]
+
+    def sample(self, dist_info):
+        probs = dist_info["prob"]  # here this has to be of shape (dim,) OR (dim, 1); NO larger than 1!!
+        if isinstance(probs[0], (list, tuple, np.ndarray)):
+            probs = probs[0]
+        return np.random.multinomial(n=1, pvals=probs)  # this gives a one-hot of shape (1, dim)

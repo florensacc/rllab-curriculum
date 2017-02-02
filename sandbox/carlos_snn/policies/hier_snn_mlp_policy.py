@@ -1,38 +1,33 @@
+import json
+import os
+from contextlib import contextmanager
+
+import joblib
 import lasagne
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
+import numpy as np
 import theano
 import theano.tensor as TT
-import numpy as np
-from contextlib import contextmanager
 
+from rllab import config
 from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.network import MLP
-from sandbox.carlos_snn.core.lasagne_layers import BilinearIntegrationLayer, CropLayer, ConstOutputLayer
-from rllab.spaces import Box
-
-from rllab.envs.normalized_env import NormalizedEnv  # this is just to check if the env passed is a normalized maze
-from sandbox.carlos_snn.envs.mujoco.maze.maze_env import MazeEnv
-from sandbox.carlos_snn.envs.mujoco.gather.gather_env import GatherEnv
-
-from rllab.sampler.utils import rollout  # I need this for logging the diagnostics: run the policy with all diff latents
-
 from rllab.core.serializable import Serializable
-from rllab.policies.base import StochasticPolicy
-from rllab.misc.overrides import overrides
-from rllab.misc import logger
-from rllab.misc import ext
-from rllab.misc import autoargs
 from rllab.distributions.diagonal_gaussian import DiagonalGaussian
-
-from sandbox.carlos_snn.distributions.categorical import Categorical
+from rllab.envs.mujoco.gather.gather_env import GatherEnv
+from rllab.envs.mujoco.maze.maze_env import MazeEnv
+from rllab.envs.normalized_env import NormalizedEnv  # this is just to check if the env passed is a normalized maze
+from rllab.misc import autoargs
+from rllab.misc import ext
+from rllab.misc import logger
+from rllab.misc.overrides import overrides
+from rllab.policies.base import StochasticPolicy
+from rllab.spaces import Box
+from sandbox.carlos_snn.core.lasagne_layers import BilinearIntegrationLayer, CropLayer
+from sandbox.carlos_snn.distributions.categorical import Categorical_oneAxis as Categorical
 from sandbox.rocky.snn.distributions.bernoulli import Bernoulli
-
-import joblib
-import json
-import os
-from rllab import config
 
 
 class GaussianMLPPolicy_snn_hier(StochasticPolicy, LasagnePowered, Serializable):  # also inherits form Parametrized
@@ -100,7 +95,6 @@ class GaussianMLPPolicy_snn_hier(StochasticPolicy, LasagnePowered, Serializable)
         self.old_policy = None
 
         if self.json_path:  # there is another one after defining all the NN to warm-start the params of the SNN
-            print("there is a json file so I will change the default args")
             data = json.load(
                 open(os.path.join(config.PROJECT_PATH, self.json_path), 'r'))  # I should do this with the json file
             self.old_policy_json = data['json_args']["policy"]
@@ -111,7 +105,6 @@ class GaussianMLPPolicy_snn_hier(StochasticPolicy, LasagnePowered, Serializable)
             self.min_std = self.old_policy_json['min_std']
             self.hidden_sizes_snn = self.old_policy_json['hidden_sizes']
         elif self.pkl_path:
-            print("there is a pkl file so I will change the default args")
             data = joblib.load(os.path.join(config.PROJECT_PATH, self.pkl_path))
             self.old_policy = data["policy"]
             self.latent_dim = self.old_policy.latent_dim
@@ -120,7 +113,6 @@ class GaussianMLPPolicy_snn_hier(StochasticPolicy, LasagnePowered, Serializable)
             self.resample = self.old_policy.resample  # this could not be needed...
             self.min_std = self.old_policy.min_std
             self.hidden_sizes_snn = self.old_policy.hidden_sizes
-        print("Final attributes: ", self.latent_dim, self.hidden_sizes_snn, self.bilinear_integration)
 
         if self.latent_name == 'normal':
             self.latent_dist = DiagonalGaussian(self.latent_dim)
@@ -134,7 +126,6 @@ class GaussianMLPPolicy_snn_hier(StochasticPolicy, LasagnePowered, Serializable)
                 self.latent_dist_info = dict(prob=1. / self.latent_dim * np.ones(self.latent_dim))
             else:
                 self.latent_dist_info = dict(prob=np.ones(self.latent_dim))  # this is an empty array
-            print(self.latent_dist_info)
         else:
             raise NotImplementedError
 
@@ -155,7 +146,7 @@ class GaussianMLPPolicy_snn_hier(StochasticPolicy, LasagnePowered, Serializable)
         else:
             self.obs_robot_dim = env.observation_space.flat_dim
             self.obs_maze_dim = 0
-        print("the dims of the env are(rob/maze): ", self.obs_robot_dim, self.obs_maze_dim)
+        # print("the dims of the env are(rob/maze): ", self.obs_robot_dim, self.obs_maze_dim)
         all_obs_dim = env_spec.observation_space.flat_dim
         assert all_obs_dim == self.obs_robot_dim + self.obs_maze_dim
 
@@ -242,7 +233,6 @@ class GaussianMLPPolicy_snn_hier(StochasticPolicy, LasagnePowered, Serializable)
         if self.json_path and self.npz_path:
             warm_params_dict = dict(np.load(os.path.join(config.PROJECT_PATH, self.npz_path)))
             # keys = list(param_dict.keys())
-            # print('the npz has the arrays:', keys)
             self.set_params_snn(warm_params_dict)
         elif self.pkl_path:
             data = joblib.load(os.path.join(config.PROJECT_PATH, self.pkl_path))
@@ -329,11 +319,6 @@ class GaussianMLPPolicy_snn_hier(StochasticPolicy, LasagnePowered, Serializable)
     def get_actions(self, observations):
 
         selector_output = self._f_select(observations)
-        # # Debug
-        # print("the selector output is: ", selector_output)
-        # obs_snn = self._l_obs_snn(observations)
-        # print("the snn obs is: ", obs_snn)
-
         mean, log_std = self._f_dist(observations)
 
         if self._set_std_to_0:

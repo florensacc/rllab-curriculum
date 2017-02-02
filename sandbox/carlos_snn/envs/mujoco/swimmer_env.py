@@ -1,26 +1,21 @@
 from rllab.envs.base import Step
 from rllab.misc.overrides import overrides
-# from rllab.envs.mujoco.mujoco_env import MujocoEnv
 from sandbox.carlos_snn.envs.mujoco.mujoco_env import MujocoEnv_ObsInit as MujocoEnv
 import numpy as np
 from rllab.core.serializable import Serializable
 from rllab.misc import logger
 from rllab.misc import autoargs
-import gc
-from functools import reduce
-import os.path as osp
-import collections
 
-import matplotlib as mpl
-mpl.use('Agg')
-import matplotlib.pyplot as plt
-
-
-
-from rllab import spaces
 BIG = 1e6
 
+
 class SwimmerEnv(MujocoEnv, Serializable):
+    """
+    This SwimmerEnv differs from the one in rllab.envs.mujoco.swimmer_env in the additional initialization options
+    that fix the rewards and observation space.
+    The 'com' is added to the env_infos.
+    Also the get_ori() method is added for the Maze and Gather tasks.
+    """
     FILE = 'swimmer.xml'
     ORI_IND = 2
 
@@ -77,14 +72,9 @@ class SwimmerEnv(MujocoEnv, Serializable):
     @overrides
     def log_diagnostics(self, paths, prefix=''):
         progs = [
-            np.linalg.norm(path["env_infos"]['com'][-1] - path["env_infos"]['com'][0])
+            np.linalg.norm(path["env_infos"]["com"][-1] - path["env_infos"]["com"][0])
             for path in paths
             ]
-        with logger.tabular_prefix(prefix):
-            logger.record_tabular('AverageForwardProgress', np.mean(progs))
-            logger.record_tabular('MaxForwardProgress', np.max(progs))
-            logger.record_tabular('MinForwardProgress', np.min(progs))
-            logger.record_tabular('StdForwardProgress', np.std(progs))
-
-        self.plot_visitations(paths, prefix=prefix)
+        logger.record_tabular_misc_stat('Progress', progs, 'front')
+        self.plot_visitations(paths, visit_prefix=prefix)
 
