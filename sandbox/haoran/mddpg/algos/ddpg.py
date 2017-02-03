@@ -70,6 +70,7 @@ class DDPG(OnlineAlgorithm, Serializable):
         self.update_target_frequency = update_target_frequency
         self.update_target_counter = 0
         self.update_target = True
+        self.debug_mode = debug_mode
 
         super().__init__(env, policy, exploration_strategy, **kwargs)
 
@@ -171,40 +172,44 @@ class DDPG(OnlineAlgorithm, Serializable):
         ops = []
         if self.train_actor:
             ops.append(self.train_actor_op)
-            ops.append(
-                tf.Print(
-                    self.actor_surrogate_loss,
-                    [self.actor_surrogate_loss],
-                    message="Actor minibatch loss: ",
+            if self.debug_mode:
+                ops.append(
+                    tf.Print(
+                        self.actor_surrogate_loss,
+                        [self.actor_surrogate_loss],
+                        message="Actor minibatch loss: ",
+                    )
                 )
-            )
             if self.update_target:
                 ops.append(self.update_target_actor_op)
-                ops.append(
-                    tf.Print(
-                        self.tau,
-                        [self.tau],
-                        message="Update target actor with tau: "
+                if self.debug_mode:
+                    ops.append(
+                        tf.Print(
+                            self.tau,
+                            [self.tau],
+                            message="Update target actor with tau: "
+                        )
                     )
-                )
         if self.train_critic:
             ops.append(self.train_critic_op)
-            ops.append(
-                tf.Print(
-                    self.critic_total_loss,
-                    [self.critic_total_loss],
-                    message="Critic minibatch loss: ",
-                )
-            )
-            if self.update_target:
-                ops.append(self.update_target_critic_op)
+            if self.debug_mode:
                 ops.append(
                     tf.Print(
-                        self.tau,
-                        [self.tau],
-                        message="Update target critic with tau: "
+                        self.critic_total_loss,
+                        [self.critic_total_loss],
+                        message="Critic minibatch loss: ",
                     )
                 )
+            if self.update_target:
+                ops.append(self.update_target_critic_op)
+                if self.debug_mode:
+                    ops.append(
+                        tf.Print(
+                            self.tau,
+                            [self.tau],
+                            message="Update target critic with tau: "
+                        )
+                    )
         return ops
 
     @overrides
