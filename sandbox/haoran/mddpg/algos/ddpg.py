@@ -13,7 +13,7 @@ from sandbox.haoran.mddpg.algos.online_algorithm import OnlineAlgorithm
 from sandbox.haoran.mddpg.misc.data_processing import create_stats_ordered_dict
 from sandbox.haoran.mddpg.misc.rllab_util import split_paths
 from sandbox.haoran.myscripts.myutilities import get_true_env
-
+from sandbox.haoran.myscripts.tf_utils import adam_clipped_op
 from sandbox.haoran.mddpg.misc.simple_replay_pool import SimpleReplayPool
 from rllab.misc import logger
 from rllab.misc import special
@@ -42,6 +42,8 @@ class DDPG(OnlineAlgorithm, Serializable):
             actor_train_frequency=1,
             update_target_frequency=1,
             debug_mode=False,
+            critic_grad_clip=0,
+            actor_grad_clip=0,
             **kwargs
     ):
         """
@@ -71,6 +73,8 @@ class DDPG(OnlineAlgorithm, Serializable):
         self.update_target_counter = 0
         self.update_target = True
         self.debug_mode = debug_mode
+        self.critic_grad_clip = critic_grad_clip
+        self.actor_grad_clip = actor_grad_clip
 
         super().__init__(env, policy, exploration_strategy, **kwargs)
 
@@ -112,10 +116,20 @@ class DDPG(OnlineAlgorithm, Serializable):
         )
         self.critic_total_loss = (
             self.critic_loss + self.Q_weight_decay * self.Q_weights_norm)
-        self.train_critic_op = tf.train.AdamOptimizer(
-            self.critic_learning_rate).minimize(
-            self.critic_total_loss,
-            var_list=self.qf.get_params_internal())
+        if self.critic_grad_clip > 0:
+            # copied from http://stackoverflow.com/questions/36498127/how-to-effectively-apply-gradient-clipping-in-tensor-flow
+            self.critic_optimizer, self.train_critic_op = adam_clipped_op(
+                loss=self.critic_total_loss,
+                var_list=self.qf.get_params_internal(),
+                lr=self.critic_learning_rate,
+                clip=self.critic_grad_clip,
+            )
+        else:
+            self.train_critic_op = tf.train.AdamOptimizer(
+                self.critic_learning_rate).minimize(
+                self.critic_total_loss,
+                var_list=self.qf.get_params_internal())
+
 
     def _init_actor_ops(self):
         # To compute the surrogate loss function for the critic, it must take
@@ -128,6 +142,14 @@ class DDPG(OnlineAlgorithm, Serializable):
             # remember that the critic takes no action input at the beginning
         self.actor_surrogate_loss = - tf.reduce_mean(
             self.critic_with_action_input.output)
+
+        if self.actor_grad_clip > 0:
+            self.actor_optimizer, self.train_actor_op = adam_clipped_op(
+                loss=self.actor_surrogate_loss,
+                var_list=self.policy.get_params_internal(),
+                lr=self.actor_learning_rate,
+                clip=self.actor_grad_clip,
+            )
         self.train_actor_op = tf.train.AdamOptimizer(
             self.actor_learning_rate).minimize(
             self.actor_surrogate_loss,
