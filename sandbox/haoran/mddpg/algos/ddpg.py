@@ -41,6 +41,7 @@ class DDPG(OnlineAlgorithm, Serializable):
             critic_train_frequency=1,
             actor_train_frequency=1,
             update_target_frequency=1,
+            debug_mode=False,
             **kwargs
     ):
         """
@@ -170,19 +171,40 @@ class DDPG(OnlineAlgorithm, Serializable):
         ops = []
         if self.train_actor:
             ops.append(self.train_actor_op)
+            ops.append(
+                tf.Print(
+                    self.actor_surrogate_loss,
+                    [self.actor_surrogate_loss],
+                    message="Actor minibatch loss: ",
+                )
+            )
             if self.update_target:
                 ops.append(self.update_target_actor_op)
+                ops.append(
+                    tf.Print(
+                        self.tau,
+                        [self.tau],
+                        message="Update target actor with tau: "
+                    )
+                )
         if self.train_critic:
             ops.append(self.train_critic_op)
-            # ops.append(
-            #     tf.Print(
-            #         self.critic_total_loss,
-            #         [self.critic_total_loss],
-            #         message="Critic minibatch loss: ",
-            #     )
-            # )
+            ops.append(
+                tf.Print(
+                    self.critic_total_loss,
+                    [self.critic_total_loss],
+                    message="Critic minibatch loss: ",
+                )
+            )
             if self.update_target:
                 ops.append(self.update_target_critic_op)
+                ops.append(
+                    tf.Print(
+                        self.tau,
+                        [self.tau],
+                        message="Update target critic with tau: "
+                    )
+                )
         return ops
 
     @overrides
