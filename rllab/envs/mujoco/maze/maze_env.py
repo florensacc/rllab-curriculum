@@ -46,6 +46,9 @@ class MazeEnv(ProxyEnv, Serializable):
             goal_rew=1.,  # reward obtained when reaching the goal
             *args,
             **kwargs):
+        print(kwargs)
+        print(locals())
+        Serializable.quick_init(self, locals())
 
         Serializable.quick_init(self, locals())
         self._n_bins = n_bins

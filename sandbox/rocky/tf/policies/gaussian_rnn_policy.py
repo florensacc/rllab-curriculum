@@ -203,7 +203,10 @@ class GaussianRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
             all_input = flat_obs
         action_means, state_vec, log_std = self.f_step(all_input, self.prev_states)
         log_stds = np.tile(np.expand_dims(log_std, axis=0), (len(observations), 1))
-        actions = np.random.normal(size=action_means.shape) * np.exp(log_stds) + action_means
+        if self.deterministic:
+            actions = action_means
+        else:
+            actions = np.random.normal(size=action_means.shape) * np.exp(log_stds) + action_means
         prev_actions = self.prev_actions
         agent_info = dict(mean=action_means, log_std=log_stds)
         if self.state_include_action:
@@ -222,6 +225,10 @@ class GaussianRNNPolicy(StochasticPolicy, LayersPowered, Serializable):
     @property
     def distribution(self):
         return self.dist
+
+    def configure(self, **kwargs):
+        if 'deterministic' in kwargs:
+            self.deterministic = kwargs['deterministic']
 
     @property
     def state_info_specs(self):

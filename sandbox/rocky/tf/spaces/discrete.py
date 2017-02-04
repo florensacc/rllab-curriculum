@@ -67,3 +67,4 @@ class Discrete(Space):
 
     def __hash__(self):
         return hash(self.n)
+

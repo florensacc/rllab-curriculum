@@ -109,8 +109,8 @@ class VecRandomTabularMDPEnv(object):
             dones = self.ts >= max_path_length
         else:
             dones = np.asarray([False] * self.n_envs)
-        if np.any(dones):
-            self.reset(dones)
+        # if np.any(dones):
+        #     self.reset(dones)
         return self.states, rewards, dones, dict()
 
 

@@ -152,17 +152,14 @@ class VecMultiEnv(object):
         self.trial_seeds = np.zeros((self.n_envs,), dtype=np.int)
         self.episode_t = np.zeros((self.n_envs,))
         self.ts = np.zeros((self.n_envs,))
-        self.reset()
+        self.reset([True] * self.n_envs)
 
     @property
     def num_envs(self):
         return self.n_envs
 
-    def reset(self, dones=None):
-        if dones is None:
-            dones = np.asarray([True] * self.n_envs)
-        else:
-            dones = np.cast['bool'](dones)
+    def reset(self, dones, seeds=None, *args, **kwargs):
+        dones = np.cast['bool'](dones)
         self.last_rewards[dones] = 0
         default_action = self.env.wrapped_env.action_space.default_value
         self.last_actions[dones] = default_action
@@ -170,8 +167,11 @@ class VecMultiEnv(object):
         self.cnt_episodes[dones] = 0
         self.episode_t[dones] = 0
         self.ts[dones] = 0
-        self.trial_seeds[dones] = np.random.randint(low=0, high=np.iinfo(np.int32).max, size=np.sum(dones))
-        return self.convert_obs(self.vec_env.reset_trial(dones, seeds=self.trial_seeds[dones]))
+        if seeds is None:
+            self.trial_seeds[dones] = np.random.randint(low=0, high=np.iinfo(np.int32).max, size=np.sum(dones))
+        else:
+            self.trial_seeds[dones] = seeds
+        return self.convert_obs(self.vec_env.reset_trial(dones, seeds=self.trial_seeds[dones], *args, **kwargs))
 
     def step(self, actions, max_path_length):
         next_obs, rewards, dones, infos = self.vec_env.step(actions, max_path_length=None)
@@ -198,13 +198,13 @@ class VecMultiEnv(object):
 
         next_obs = self.convert_obs(next_obs)
 
-        if np.any(trial_done):
-            reset_obs = self.reset(trial_done)
-            reset_idx = 0
-            for idx, done in enumerate(trial_done):
-                if done:
-                    next_obs[idx] = reset_obs[reset_idx]
-                    reset_idx += 1
+        # if np.any(trial_done):
+        #     reset_obs = self.reset(trial_done)
+        #     reset_idx = 0
+        #     for idx, done in enumerate(trial_done):
+        #         if done:
+        #             next_obs[idx] = reset_obs[reset_idx]
+        #             reset_idx += 1
 
         infos = dict(
             infos,

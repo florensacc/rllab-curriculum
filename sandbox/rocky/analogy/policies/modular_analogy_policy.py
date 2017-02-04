@@ -47,17 +47,6 @@ class ModularAnalogyPolicy(AnalogyPolicy, Parameterized, Serializable):
         action_inputs = [action_obs_var, summary_valids_var]
         action_input_args = dict(obs_var=action_obs_var, demo_valids_var=summary_valids_var)
 
-        # if action_network.recurrent:
-        #     prev_action_var = env_spec.action_space.new_tensor_variable(
-        #         "prev_action",
-        #         extra_dims=1,
-        #     )
-        # prev_state_var = tf.placeholder(tf.float32, (None, action_network.state_dim), "prev_state")
-        # action_inputs.append(prev_action_var)
-        # action_inputs.append(prev_state_var)
-        # action_input_args["prev_action_var"] = prev_action_var
-        # action_input_args["prev_state_var"] = prev_state_var
-
         self.f_action = tensor_utils.compile_function(
             action_inputs,
             action_network.get_step_op(

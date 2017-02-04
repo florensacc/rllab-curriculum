@@ -108,6 +108,11 @@ class PPOSGD(BatchPolopt):
                 state_dim = rnn_network.state_dim
                 recurrent_layer = rnn_network.recurrent_layer
                 state_init_param = rnn_network.state_init_param
+            elif hasattr(self.policy, "head_network"):
+                rnn_network = self.policy.head_network
+                state_dim = rnn_network.state_dim
+                recurrent_layer = rnn_network.recurrent_layer
+                state_init_param = rnn_network.state_init_param
             else:
                 state_dim = self.policy.l_rnn.state_dim
                 recurrent_layer = self.policy.l_rnn
@@ -125,7 +130,7 @@ class PPOSGD(BatchPolopt):
 
             state_output = recurrent_state_output[recurrent_layer]
 
-            if hasattr(self.policy, "prob_network"):
+            if hasattr(self.policy, "prob_network") or hasattr(self.policy, "head_network"):
                 final_state = tf.reverse(state_output, [False, True, False])[:, 0, :]
             else:
                 final_state = state_output
