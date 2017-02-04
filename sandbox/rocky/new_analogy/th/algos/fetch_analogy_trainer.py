@@ -80,20 +80,16 @@ class AnalogyDataset(object):
                     size=demo_cnt * per_demo_batch_size,
                     replace=True
                 )
-                batch_obs[demo_mask] = self.flat_obs[task_id][batch_ids].reshape(
-                    (demo_cnt, per_demo_batch_size, obs_dim)
-                )
+                try:
+                    batch_obs[demo_mask] = self.flat_obs[task_id][batch_ids].reshape(
+                        (demo_cnt, per_demo_batch_size, obs_dim)
+                    )
+                except Exception as e:
+                    import ipdb; ipdb.set_trace()
                 batch_actions[demo_mask] = self.flat_actions[task_id][batch_ids].reshape(
                     (demo_cnt, per_demo_batch_size, disc_action_dim)
                 )
 
-        # batch_obs = torch.from_numpy(batch_obs).float()
-        # batch_actions = torch.from_numpy(batch_actions).float()
-        # if ops.is_cuda():
-        #     batch_obs = batch_obs.cuda()
-        #     batch_actions = batch_actions.cuda()
-        # batch_obs = Variable(batch_obs, requires_grad=False)
-        # batch_actions = Variable(batch_actions, requires_grad=False)
         return demo_paths, batch_obs, batch_actions
 
 
@@ -111,7 +107,11 @@ def FetchAnalogyTrainer(
         optimizer=None,
         evaluate_policy=True,
         n_train_tasks=16,
-        n_test_tasks=4):
+        n_test_tasks=4,
+        train_dataset=None,
+        test_dataset=None,
+        xinits=None,
+):
     from bin.tower_copter_policy import get_task_from_text
     from sandbox.rocky.new_analogy import fetch_utils
 
@@ -157,36 +157,34 @@ def FetchAnalogyTrainer(
 
     def train():
         import numpy as np
+        nonlocal train_dataset
+        nonlocal test_dataset
+        nonlocal xinits
 
-        all_task_ids = list(map("".join, itertools.permutations("abcde", 2)))
-        np.random.RandomState(0).shuffle(all_task_ids)
+        if train_dataset is None or test_dataset is None or xinits is None:
+            all_task_ids = list(map("".join, itertools.permutations("abcde", 2)))
+            np.random.RandomState(0).shuffle(all_task_ids)
 
-        train_task_ids = all_task_ids[:n_train_tasks]
-        test_task_ids = all_task_ids[n_train_tasks:n_train_tasks + n_test_tasks]
+            train_task_ids = all_task_ids[:n_train_tasks]
+            test_task_ids = all_task_ids[n_train_tasks:n_train_tasks + n_test_tasks]
 
-        xinits_file_name = resource_manager.get_file("fetch_1000_xinits_{}_boxes.pkl".format(n_boxes))
-        xinits = joblib.load(xinits_file_name)
+            xinits_file_name = resource_manager.get_file("fetch_1000_xinits_{}_boxes.pkl".format(n_boxes))
+            xinits = joblib.load(xinits_file_name)
 
-        train_dataset = AnalogyDataset()
-        test_dataset = AnalogyDataset()
+            train_dataset = AnalogyDataset()
+            test_dataset = AnalogyDataset()
 
-        logger.log("Generating initial demonstrations")
-        for task_id in train_task_ids:
-            train_env, train_paths = load_task_paths(task_id)
-            train_dataset.add_paths(task_id=task_id, env=train_env, paths=train_paths)
+            logger.log("Generating initial demonstrations")
+            for task_id in train_task_ids:
+                train_env, train_paths = load_task_paths(task_id)
+                train_dataset.add_paths(task_id=task_id, env=train_env, paths=train_paths)
 
-        if evaluate_policy:
-            for task_id in test_task_ids:
-                test_env, test_paths = load_task_paths(task_id)
-                test_dataset.add_paths(task_id=task_id, env=test_env, paths=test_paths)
+            if evaluate_policy:
+                for task_id in test_task_ids:
+                    test_env, test_paths = load_task_paths(task_id)
+                    test_dataset.add_paths(task_id=task_id, env=test_env, paths=test_paths)
 
-        logger.log("Generated")
-
-        # logger.log("Constructing policy")
-        #
-        # if ops.is_cuda():
-        #     logger.log("Uploading policy to cuda")
-        #     policy.cuda()
+            logger.log("Generated")
 
         eval_policy = fetch_utils.DeterministicPolicy(
             env_spec=env_spec,
@@ -207,8 +205,6 @@ def FetchAnalogyTrainer(
 
         nonlocal optimizer
         optimizer = optimizer.bind(policy.get_params(trainable=True))
-
-        # import ipdb; ipdb.set_trace()
 
         for epoch_idx in itertools.count():
 

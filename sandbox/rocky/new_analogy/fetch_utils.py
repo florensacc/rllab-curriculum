@@ -32,6 +32,7 @@ from sandbox.rocky.tf.misc import tensor_utils
 from sandbox.rocky.tf.policies.base import Policy
 from sandbox.rocky.tf.spaces import Discrete, Product
 from sandbox.rocky.tf.samplers.vectorized_sampler import VectorizedSampler
+from gpr_package.bin.tower_copter_policy import get_task_from_text
 
 
 def fetch_env(horizon=1000, height=2, seed=None, usage="prescribed", task_id=None):

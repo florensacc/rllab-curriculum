@@ -2,10 +2,10 @@ from cached_property import cached_property
 from torch import nn
 
 from rllab.core.serializable import Serializable
+from sandbox.rocky.th import ops
 from sandbox.rocky.th.core.module_powered import ModulePowered
 from sandbox.rocky.th.core.modules import MLP
 from sandbox.rocky.th.distributions.utils import space_to_dist_dim, output_to_info, space_to_distribution
-# from torch.autograd import Variable
 import numpy as np
 import torch
 

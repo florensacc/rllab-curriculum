@@ -4,7 +4,7 @@ import torch
 
 from rllab.core.serializable import Serializable
 from rllab.misc.tensor_utils import flatten_tensors, unflatten_tensors
-from sandbox.rocky.th import tensor_utils
+from sandbox.rocky.th import ops
 
 load_params = True
 
@@ -45,7 +45,7 @@ class Parameterized(object):
         tag_tuple = tuple(sorted(list(tags.items()), key=lambda x: x[0]))
         if tag_tuple not in self._cached_param_dtypes:
             params = self.get_params(**tags)
-            param_values = list(map(tensor_utils.to_numpy, params))
+            param_values = list(map(ops.to_numpy, params))
             self._cached_param_dtypes[tag_tuple] = [val.dtype for val in param_values]
         return self._cached_param_dtypes[tag_tuple]
 
@@ -53,13 +53,13 @@ class Parameterized(object):
         tag_tuple = tuple(sorted(list(tags.items()), key=lambda x: x[0]))
         if tag_tuple not in self._cached_param_shapes:
             params = self.get_params(**tags)
-            param_values = list(map(tensor_utils.to_numpy, params))
+            param_values = list(map(ops.to_numpy, params))
             self._cached_param_shapes[tag_tuple] = [val.shape for val in param_values]
         return self._cached_param_shapes[tag_tuple]
 
     def get_param_values(self, **tags):
         params = self.get_params(**tags)
-        param_values = list(map(tensor_utils.to_numpy, params))
+        param_values = list(map(ops.to_numpy, params))
         return flatten_tensors(param_values)
 
     def set_param_values(self, flattened_params, **tags):
