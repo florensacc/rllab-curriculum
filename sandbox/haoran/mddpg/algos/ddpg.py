@@ -40,6 +40,8 @@ class DDPG(OnlineAlgorithm, Serializable):
             plt_backend="MacOSX",
             critic_train_frequency=1,
             actor_train_frequency=1,
+            update_target_frequency=1,
+            debug_mode=False,
             **kwargs
     ):
         """
@@ -61,10 +63,14 @@ class DDPG(OnlineAlgorithm, Serializable):
         plt.switch_backend(plt_backend)
         self.critic_train_frequency = critic_train_frequency
         self.critic_train_counter = 0
+        self.train_critic = True # shall be modified later
         self.actor_train_frequency = actor_train_frequency
         self.actor_train_counter = 0
         self.train_actor = True # shall be modified later
-        self.train_critic = True # shall be modified later
+        self.update_target_frequency = update_target_frequency
+        self.update_target_counter = 0
+        self.update_target = True
+        self.debug_mode = debug_mode
 
         super().__init__(env, policy, exploration_strategy, **kwargs)
 
@@ -155,25 +161,55 @@ class DDPG(OnlineAlgorithm, Serializable):
 
     @overrides
     def _get_training_ops(self):
-        return [
-            self.train_actor_op,
-            self.train_critic_op,
-            self.update_target_critic_op,
-            self.update_target_actor_op,
-        ]
+        # return [
+        #     self.train_actor_op,
+        #     self.train_critic_op,
+        #     self.update_target_critic_op,
+        #     self.update_target_actor_op,
+        # ]
 
         # notice that the order of these ops are different from above
         ops = []
         if self.train_actor:
-            ops += [
-                self.train_actor_op,
-                self.update_target_actor_op,
-            ]
+            ops.append(self.train_actor_op)
+            if self.debug_mode:
+                ops.append(
+                    tf.Print(
+                        self.actor_surrogate_loss,
+                        [self.actor_surrogate_loss],
+                        message="Actor minibatch loss: ",
+                    )
+                )
+            if self.update_target:
+                ops.append(self.update_target_actor_op)
+                if self.debug_mode:
+                    ops.append(
+                        tf.Print(
+                            self.tau,
+                            [self.tau],
+                            message="Update target actor with tau: "
+                        )
+                    )
         if self.train_critic:
-            ops += [
-                self.train_critic_op,
-                self.update_target_critic_op,
-            ]
+            ops.append(self.train_critic_op)
+            if self.debug_mode:
+                ops.append(
+                    tf.Print(
+                        self.critic_total_loss,
+                        [self.critic_total_loss],
+                        message="Critic minibatch loss: ",
+                    )
+                )
+            if self.update_target:
+                ops.append(self.update_target_critic_op)
+                if self.debug_mode:
+                    ops.append(
+                        tf.Print(
+                            self.tau,
+                            [self.tau],
+                            message="Update target critic with tau: "
+                        )
+                    )
         return ops
 
     @overrides
@@ -328,6 +364,10 @@ class DDPG(OnlineAlgorithm, Serializable):
             self.actor_train_counter,
             self.actor_train_frequency,
         ) == 0)
+        self.update_target = (np.mod(
+            self.update_target_counter,
+            self.update_target_frequency,
+        ) == 0)
 
         minibatch = self.pool.random_batch(self.batch_size)
         sampled_obs = minibatch['observations']
@@ -354,6 +394,10 @@ class DDPG(OnlineAlgorithm, Serializable):
         self.actor_train_counter = np.mod(
             self.actor_train_counter + 1,
             self.actor_train_frequency,
+        )
+        self.update_target_counter = np.mod(
+            self.update_target_counter + 1,
+            self.update_target_frequency,
         )
 
     def __getstate__(self):

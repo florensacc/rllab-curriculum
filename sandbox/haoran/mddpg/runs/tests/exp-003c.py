@@ -1,8 +1,9 @@
 """
-Variational DDPG (online, consevative)
+Test whether training the critic more often than the actor can achieve equally
+good performance
 
-Test DDPG on the gym_swimmer.
-The environment uses com instead of body frame to compute velocity and pos.
+Continue exp-003. Note that 003 is not comparable to vddpg/exp008, because the
+    horizons are different.
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
@@ -29,10 +30,10 @@ from rllab.misc.instrument import VariantGenerator, variant
 
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
-exp_prefix = "mddpg/vddpg/" + exp_index
+exp_prefix = "mddpg/tests/" + exp_index
 mode = "ec2"
 ec2_instance = "c4.2xlarge"
-subnet = "us-west-1c"
+subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 config.AWS_IMAGE_ID = "ami-85d181e5" # with docker already pulled
 
@@ -46,12 +47,12 @@ plot = False
 class VG(VariantGenerator):
     @variant
     def zzseed(self):
-        return [0, 100, 200, 300, 400, 500, 600, 700, 800, 900]
+        return [0, 100, 200, 300, 400]
 
     @variant
     def env_name(self):
         return [
-            "swimmer_undirected"
+            "gym_humanoid_standup"
         ]
     @variant
     def max_path_length(self):
@@ -74,8 +75,37 @@ class VG(VariantGenerator):
         return [1e-2]
 
     @variant
-    def dist_reward(self):
-        return [1.]
+    def use_forward_reward(self):
+        return [False]
+
+    @variant
+    def train_frequency(self):
+        return [
+            dict(
+                actor_train_frequency=8,
+                critic_train_frequency=1,
+                update_traget_frequency=8,
+                train_repeat=8,
+            ),
+            dict(
+                actor_train_frequency=4,
+                critic_train_frequency=1,
+                update_traget_frequency=4,
+                train_repeat=4,
+            ),
+            dict(
+                actor_train_frequency=2,
+                critic_train_frequency=1,
+                update_traget_frequency=2,
+                train_repeat=2,
+            ),
+            dict(
+                actor_train_frequency=1,
+                critic_train_frequency=1,
+                update_traget_frequency=1,
+                train_repeat=1,
+            ),
+        ]
 
 
 variants = VG().variants()
@@ -92,8 +122,11 @@ for v in variants:
         scale_reward=v["scale_reward"],
         qf_learning_rate=v["qf_learning_rate"],
         soft_target_tau=v["tau"],
+        train_repeat=v["train_frequency"]["train_repeat"],
+        actor_train_frequency=v["train_frequency"]["actor_train_frequency"],
+        critic_train_frequency=v["train_frequency"]["critic_train_frequency"],
     )
-    if "local" in mode and sys.platform == 'darwin':
+    if "local" in mode and "local_docker" not in mode:
         shared_ddpg_kwargs["plt_backend"] = "MacOSX"
     else:
         shared_ddpg_kwargs["plt_backend"] = "Agg"
@@ -103,12 +136,11 @@ for v in variants:
             epoch_length = 100,
             min_pool_size = 100,
             eval_samples = 100,
-            n_epochs = 1,
         )
     else:
         ddpg_kwargs = dict(
             epoch_length=10000,
-            n_epochs=1000,
+            n_epochs=2000,
             eval_samples=v["max_path_length"] * 10,
                 # deterministic env and policy: only need 1 traj sample
         )
@@ -119,8 +151,7 @@ for v in variants:
         }
     elif env_name in ["swimmer_undirected", "tuomas_hopper"]:
         env_kwargs = {
-            "random_init_state": False,
-            "dist_reward": v["dist_reward"],
+            "random_init_state": False
         }
     elif env_name == "gym_hopper":
         env_kwargs = {

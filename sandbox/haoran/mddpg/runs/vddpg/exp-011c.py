@@ -3,6 +3,7 @@ Variational DDPG (online, consevative)
 
 Test DDPG on the gym_swimmer.
 The environment uses com instead of body frame to compute velocity and pos.
+Somehow the dist_reward in exp-011b wasn't working, b/c I forgot to add it.
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
@@ -108,7 +109,7 @@ for v in variants:
     else:
         ddpg_kwargs = dict(
             epoch_length=10000,
-            n_epochs=1000,
+            n_epochs=500,
             eval_samples=v["max_path_length"] * 10,
                 # deterministic env and policy: only need 1 traj sample
         )

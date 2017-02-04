@@ -937,6 +937,8 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
     else:
         user_data = full_script
     print(full_script)
+    with open("/tmp/full_script", "w") as f:
+        f.write(full_script)
 
     instance_args = dict(
         ImageId=aws_config["image_id"],

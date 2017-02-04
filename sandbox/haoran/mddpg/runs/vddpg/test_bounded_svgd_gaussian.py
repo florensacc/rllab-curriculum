@@ -11,6 +11,7 @@ flags.DEFINE_integer('modes', 2, 'Number of modes.')
 flags.DEFINE_boolean('fixed', True, 'Fixed target distribution.')
 flags.DEFINE_string('svgd_target', 'pre-action', 'Where SVGD operates.')
 flags.DEFINE_integer("K", 100, 'Number of particles')
+flags.DEFINE_string('backend', 'MacOSX', 'Backend for matplotlib')
 
 class MultimodalGaussianEnv(Env):
 
@@ -303,6 +304,7 @@ def test():
         q_prior=None,
         K=K,
         q_target_type=q_target_type,
+        plt_backend=FLAGS.backend,
         **ddpg_kwargs
     )
     algorithm.train()
