@@ -13,19 +13,19 @@ def get_gpu_type(host):
             "-oStrictHostKeyChecking=no",
             "-oConnectTimeout=10",
             "rocky@" + host,
-            """
-            if [ ! -d "/local_home/rocky/anaconda" ]; then
-                wget https://repo.continuum.io/archive/Anaconda3-4.2.0-Linux-x86_64.sh -O /tmp/anaconda.sh
-                bash /tmp/anaconda.sh -b -p /local_home/rocky/anaconda
-            fi
-            """
+            'docker pull dementrock/rocky-rllab3-gpr-gpu-pascal:20170129',
+            # """
+            # if [ ! -d "/local_home/rocky/anaconda" ]; then
+            #     wget https://repo.continuum.io/archive/Anaconda3-4.2.0-Linux-x86_64.sh -O /tmp/anaconda.sh
+            #     bash /tmp/anaconda.sh -b -p /local_home/rocky/anaconda
+            # fi
+            # """
             # wget https://repo.continuum.io/archive/Anaconda3-4.2.0-Linux-x86_64.sh -O /tmp/anaconda.sh
             # bash /tmp/anaconda.sh -b -p ~/anaconda
             # ''
             # " && ".join([
             #     "wget https://repo.continuum.io/archive/Anaconda3-4.2.0-Linux-x86_64.sh -O /tmp/anaconda.sh",
             #     "bash /tmp/anaconda.sh -b -p ~/anaconda",
-            #     # 'docker pull quay.io/openai/rocky-rllab3-gpr-gpu-pascal:20170112',
             #     # 'mkdir -p /local_home/rocky/.docker',
             #     # 'cp /home/rocky/.docker/config.json /local_home/rocky/.docker/config.json',
             #     # "sudo usermod -aG docker rocky",

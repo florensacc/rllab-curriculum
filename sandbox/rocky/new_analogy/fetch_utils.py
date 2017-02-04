@@ -6,11 +6,12 @@ import pyprind
 import tensorflow as tf
 from gym.spaces import prng
 
+from gpr.core import ObservationParams
 from gpr.utils.rotation import mat2euler_batch, euler2mat_batch
 from gpr import Trajectory
 from gpr.envs import fetch_rl
 from gpr.envs import fetch_bc
-from gpr.worldgen.world import is_in_prescribed, is_in_rl
+import gpr.env
 from rllab.core.serializable import Serializable
 from rllab.envs.base import Env
 from rllab.envs.env_spec import EnvSpec
@@ -23,32 +24,32 @@ from rllab.sampler.stateful_pool import singleton_pool
 from rllab.sampler.utils import rollout
 from sandbox.rocky.new_analogy.envs.gpr_env import GprEnv, gpr, VecGprEnv
 import gpr_package.bin.tower_fetch_policy as tower
+from sandbox.rocky.tf.core.parameterized import Parameterized
 from sandbox.rocky.tf.distributions.diagonal_gaussian import DiagonalGaussian
 from sandbox.rocky.tf.envs.base import TfEnv, VecTfEnv
 from sandbox.rocky.tf.envs.vec_env import VecEnv
+from sandbox.rocky.tf.misc import tensor_utils
 from sandbox.rocky.tf.policies.base import Policy
 from sandbox.rocky.tf.spaces import Discrete, Product
 from sandbox.rocky.tf.samplers.vectorized_sampler import VectorizedSampler
 
 
-def fetch_env(horizon=1000, height=2, seed=None, usage="prescribed"):
+def fetch_env(horizon=1000, height=2, seed=None, usage="prescribed", task_id=None):
     if usage == "prescribed":
-        # assert is_in_prescribed()
         env = TfEnv(
             GprEnv(
                 "fetch_bc",
                 experiment_args=dict(horizon=horizon),
-                make_args=dict(height=height),
+                make_args=dict(height=height, task_id=task_id),
                 seed=seed
             )
         )
     elif usage == "rl":
-        # assert is_in_rl()
         env = TfEnv(
             GprEnv(
                 "fetch_bc",
                 experiment_args=dict(horizon=horizon),
-                make_args=dict(delta_reward=True, height=height),
+                make_args=dict(delta_reward=True, height=height, task_id=task_id),
                 seed=seed
             )
         )
@@ -126,6 +127,52 @@ class RelativeFetchPolicy(Serializable):
         pass
 
 
+def absolute2relative_wrapper(policy):
+    def get_action(env):
+        world = env.world
+        assert world.nmocap == 1
+        assert world.dimu == 8
+
+        params_copy = world.params
+        world.params = world.params._replace(observation=ObservationParams(flatten=False,
+                                                                           qpos=False,
+                                                                           qvel=False,
+                                                                           qpos_robot=True,
+                                                                           qvel_robot=True,
+                                                                           site_xpos=True,
+                                                                           sites_relative_to=None,
+                                                                           skip_sites=1))
+        obs = world.observe(env.x)[0]
+        env.world.params = params_copy
+        abs_action = policy(obs).reshape(1, 8)
+        mocap, ctrl = np.split(np.copy(abs_action), [world.nmocap * 6], axis=-1)
+
+        # gripper
+        assert ctrl[:, 0] == ctrl[:, 1]
+
+        # mocap
+        mocap_xpos, mocap_euler = np.split(np.copy(mocap), 2, axis=1)
+        gripper_xpos, gripper_xmat = world.get_relative_frame(env.x.reshape(1, -1))
+        gripper_xmat_inv = np.linalg.inv(gripper_xmat)
+
+        mocap_xpos = np.matmul(gripper_xmat_inv, (mocap_xpos - gripper_xpos).reshape(-1, 3, 1)).reshape(-1, 3)
+        mocap_euler = mat2euler_batch(np.matmul(gripper_xmat_inv, euler2mat_batch(mocap_euler)))
+
+        mocap = np.concatenate((mocap_xpos, mocap_euler), axis=-1)
+
+        if world.params.action.mocap_fix_orientation:
+            mocap[:, 3:] = 0
+
+        # test
+        rel_action = np.concatenate((mocap, ctrl), axis=-1)
+        preprocessed_rel_action = np.concatenate(world.preprocess_action(env.x.reshape(1, -1), rel_action), axis=-1)
+        assert np.linalg.norm(preprocessed_rel_action - abs_action) < 1e-3
+
+        return rel_action[0]
+
+    return get_action
+
+
 class VecRelativeFetchPolicy(Serializable):
     def __init__(self, vec_env, abs_policy):
         self.vec_env = vec_env
@@ -143,13 +190,22 @@ class VecRelativeFetchPolicy(Serializable):
         qvel = np.asarray(qvel, dtype=np.float64, order='C')
         vec_gpr_env = self.vec_env.vec_env
         world = vec_gpr_env.fast_forward_dynamics.env.world
-        world.params = world.params._replace(obs_type='full_state')
+
+        params_copy = world.params
+        world.params = world.params._replace(observation=ObservationParams(flatten=False,
+                                                                           qpos=False,
+                                                                           qvel=False,
+                                                                           qpos_robot=True,
+                                                                           qvel_robot=True,
+                                                                           site_xpos=True,
+                                                                           sites_relative_to=None,
+                                                                           skip_sites=1))
         full_state_obs, _ = vec_gpr_env.fast_forward_dynamics.get_obs(qpos=qpos, qvel=qvel)
-        world.params = world.params._replace(obs_type='relative')
+        world.params = params_copy
 
         abs_actions = []
         for o in full_state_obs:
-            o = (o[0], o[1], o[2][3:])
+            # o = (o[0], o[1], o[2][3:])
             abs_actions.append(self.abs_policy.get_action(o))
         abs_actions = np.asarray(abs_actions)
 
@@ -157,27 +213,20 @@ class VecRelativeFetchPolicy(Serializable):
 
         # gripper
         assert np.allclose(ctrl[..., 0], ctrl[..., 1])
-        # ctrl /= 0.04
-        # ctrl -= 0.5
-
 
         # mocap
         mocap_xpos, mocap_euler = np.split(np.copy(mocap), 2, axis=-1)
 
-        gripper_xpos, gripper_xmat = vec_gpr_env.fast_forward_dynamics.get_relative_frame(qpos, qvel)
+        origin_xpos, origin_xmat = vec_gpr_env.fast_forward_dynamics.get_relative_frame(qpos, qvel)
 
-        # gripper_xpos, gripper_xmat = world.get_relative_frame(env.x.reshape(1, -1))
-        gripper_xmat_inv = np.linalg.inv(gripper_xmat)
+        origin_xmat_inv = np.linalg.inv(origin_xmat)
 
-        mocap_xpos = np.matmul(gripper_xmat_inv, (mocap_xpos - gripper_xpos).reshape(-1, 3, 1)).reshape(-1, 3)
-        mocap_euler = mat2euler_batch(np.matmul(gripper_xmat_inv, euler2mat_batch(mocap_euler)))
-
-        # mocap_xpos /= world.params.mocap_move_speed
-        # mocap_euler /= world.params.mocap_rot_speed
+        mocap_xpos = np.matmul(origin_xmat_inv, (mocap_xpos - origin_xpos).reshape(-1, 3, 1)).reshape(-1, 3)
+        mocap_euler = mat2euler_batch(np.matmul(origin_xmat_inv, euler2mat_batch(mocap_euler)))
 
         mocap = np.concatenate((mocap_xpos, mocap_euler), axis=-1)
 
-        if world.params.mocap_fix_orientation:
+        if world.params.action.mocap_fix_orientation:
             mocap[:, 3:] = 0
 
         # test
@@ -207,7 +256,7 @@ class VecRelativeFetchPolicy(Serializable):
         assert np.allclose(check_obs, observations)
 
         world = vec_gpr_env.fast_forward_dynamics.env.world
-        assert world.params.obs_type == 'relative'
+        assert world.params.observation.sites_relative_to is not None
         assert world.nmocap == 1
         assert world.dimu == 8
 
@@ -216,14 +265,21 @@ class VecRelativeFetchPolicy(Serializable):
 
 def fetch_prescribed_policy(env):
     gpr_env = get_gpr_env(env)
-    assert gpr_env.world.params.obs_type == "relative"
+    assert gpr_env.world.params.observation.sites_relative_to is not None
     return RelativeFetchPolicy(env)
 
 
 def fetch_discretized_prescribed_policy(env, disc_intervals):
     gpr_env = get_gpr_env(env)
-    assert gpr_env.world.params.obs_type == "relative"
+    assert gpr_env.world.params.observation.sites_relative_to is not None
     return DiscretizedRelativeFetchPolicy(RelativeFetchPolicy(env), disc_intervals)
+
+
+disc_intervals = np.asarray([
+    [-0.3, -0.1, -0.03, -0.01, -0.003, -0.001, -0.0003, 0, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3],
+    [-0.3, -0.1, -0.03, -0.01, -0.003, -0.001, -0.0003, 0, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3],
+    [-0.3, -0.1, -0.03, -0.01, -0.003, -0.001, -0.0003, 0, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3],
+])
 
 
 class DiscretizedRelativeFetchPolicy(object):
@@ -549,11 +605,12 @@ class FetchWrapperPolicy(Policy, Serializable):
 
 
 class DiscretizedFetchWrapperPolicy(Policy, Serializable):
-    def __init__(self, wrapped_policy, disc_intervals):
+    def __init__(self, wrapped_policy, disc_intervals, expectation=None):
         Serializable.quick_init(self, locals())
         Policy.__init__(self, wrapped_policy.env_spec)
         self.wrapped_policy = wrapped_policy
         self.disc_intervals = list(map(np.asarray, disc_intervals))
+        self.expectation = expectation
 
     def get_params_internal(self, **tags):
         return self.wrapped_policy.get_params_internal(**tags)
@@ -564,12 +621,41 @@ class DiscretizedFetchWrapperPolicy(Policy, Serializable):
     def get_actions(self, observations):
         actions, agent_infos = self.wrapped_policy.get_actions(observations)
         actions = np.asarray(actions)
-        numeric_actions = []
-        for idx in range(3):
-            numeric_actions.append(self.disc_intervals[idx][actions[:, idx]])
-        numeric_actions.extend(np.zeros((3, len(observations))))
-        numeric_actions.append(np.asarray([-1, 1])[actions[:, -1]])
-        numeric_actions.append(np.asarray([-1, 1])[actions[:, -1]])
+        if self.expectation == 'mean':
+            numeric_actions = []
+            for idx in range(3):
+                numeric_actions.append(
+                    np.sum(
+                        np.asarray(self.disc_intervals[idx]) * np.asarray(agent_infos['id_{}_prob'.format(idx)]),
+                        axis=-1
+                    )
+                )
+            numeric_actions.extend(np.zeros((3, len(observations))))
+            numeric_actions.append(np.sum(np.asarray([-1, 1]) * np.asarray(agent_infos['id_3_prob']), -1))
+            numeric_actions.append(np.sum(np.asarray([-1, 1]) * np.asarray(agent_infos['id_3_prob']), -1))
+        if self.expectation == 'log_mean':
+            numeric_actions = []
+            for idx in range(3):
+                import ipdb;
+                ipdb.set_trace()
+                numeric_actions.append(
+                    np.sum(
+                        np.log(self.disc_intervals[idx]) * np.asarray(agent_infos['id_{}_prob'.format(idx)]),
+                        axis=-1
+                    )
+                )
+            numeric_actions.extend(np.zeros((3, len(observations))))
+            numeric_actions.append(np.sum(np.asarray([-1, 1]) * np.asarray(agent_infos['id_3_prob']), -1))
+            numeric_actions.append(np.sum(np.asarray([-1, 1]) * np.asarray(agent_infos['id_3_prob']), -1))
+        elif self.expectation is None:
+            numeric_actions = []
+            for idx in range(3):
+                numeric_actions.append(self.disc_intervals[idx][actions[:, idx]])
+            numeric_actions.extend(np.zeros((3, len(observations))))
+            numeric_actions.append(np.asarray([-1, 1])[actions[:, -1]])
+            numeric_actions.append(np.asarray([-1, 1])[actions[:, -1]])
+        else:
+            raise NotImplementedError
         return np.asarray(numeric_actions).T, agent_infos
 
     def get_action(self, observation):
@@ -604,8 +690,6 @@ def discretized_env_spec(spec, disc_intervals):
         observation_space=spec.observation_space,
         action_space=Product(components),
     )
-
-
 
 
 class CircularQueue(object):
@@ -756,51 +840,6 @@ def bc_trainer(env, policy, max_n_samples=None, clip_square_loss=None):
     )
 
 
-def absolute2relative_wrapper(policy):
-    def get_action(env):
-        world = env.world
-        assert world.params.obs_type == 'relative'
-        assert world.nmocap == 1
-        assert world.dimu == 8
-
-        world.params = world.params._replace(obs_type='full_state')
-        obs = world.observe(env.x)[0]
-        obs = (obs[0], obs[1], obs[2][3:])
-        env.world.params = world.params._replace(obs_type='relative')
-        abs_action = policy(obs).reshape(1, 8)
-        mocap, ctrl = np.split(np.copy(abs_action), [world.nmocap * 6], axis=-1)
-
-        # gripper
-        assert ctrl[:, 0] == ctrl[:, 1]
-        # ctrl /= 0.04
-        # ctrl -= 0.5
-
-        # mocap
-        mocap_xpos, mocap_euler = np.split(np.copy(mocap), 2, axis=1)
-        gripper_xpos, gripper_xmat = world.get_relative_frame(env.x.reshape(1, -1))
-        gripper_xmat_inv = np.linalg.inv(gripper_xmat)
-
-        mocap_xpos = np.matmul(gripper_xmat_inv, (mocap_xpos - gripper_xpos).reshape(-1, 3, 1)).reshape(-1, 3)
-        mocap_euler = mat2euler_batch(np.matmul(gripper_xmat_inv, euler2mat_batch(mocap_euler)))
-
-        # mocap_xpos /= world.params.mocap_move_speed
-        # mocap_euler /= world.params.mocap_rot_speed
-
-        mocap = np.concatenate((mocap_xpos, mocap_euler), axis=-1)
-
-        if world.params.mocap_fix_orientation:
-            mocap[:, 3:] = 0
-
-        # test
-        rel_action = np.concatenate((mocap, ctrl), axis=-1)
-        preprocessed_rel_action = np.concatenate(world.preprocess_action(env.x.reshape(1, -1), rel_action), axis=-1)
-        assert np.linalg.norm(preprocessed_rel_action - abs_action) < 1e-3
-
-        return rel_action[0]
-
-    return get_action
-
-
 class DeterministicPolicy(Policy, Serializable):
     def __init__(self, env_spec, wrapped_policy):
         Serializable.quick_init(self, locals())
@@ -853,9 +892,7 @@ def compute_stage(env, site_xpos):
     gpr_env = get_gpr_env(env)
     block_order = gpr_env.task_id[0]
     geom_xpos = geom_xpos[block_order]
-
-    completed = np.empty((n_geoms - 1, len(site_xpos)), dtype=np.bool)
-
+    completed = np.empty((len(geom_xpos) - 1, len(site_xpos)), dtype=np.bool)
     for idx, (xpos0, xpos1) in enumerate(zip(geom_xpos, geom_xpos[1:])):
         completed[idx, :] = np.logical_and(
             np.logical_and(
@@ -868,10 +905,7 @@ def compute_stage(env, site_xpos):
     return stages
 
 
-
-
 class DiscretizedEnvWrapper(ProxyEnv, Serializable):
-
     def __init__(self, wrapped_env, disc_intervals):
         Serializable.quick_init(self, locals())
         ProxyEnv.__init__(self, wrapped_env)
@@ -888,8 +922,13 @@ class DiscretizedEnvWrapper(ProxyEnv, Serializable):
         return self._action_space
 
     def step(self, action):
-        action = np.asarray([x[id] for x, id in zip(self.disc_intervals, action)] + [[-1, 1][action[-1]]])
-        return self.wrapped_env.step(action)
+        numeric_action = []
+        for idx in range(3):
+            numeric_action.append(self.disc_intervals[idx][action[idx]])
+        numeric_action.extend([0, 0, 0])
+        numeric_action.append([-1, 1][action[-1]])
+        numeric_action.append([-1, 1][action[-1]])
+        return self.wrapped_env.step(np.asarray(numeric_action))
 
     @property
     def vectorized(self):
@@ -900,17 +939,350 @@ class DiscretizedEnvWrapper(ProxyEnv, Serializable):
 
 
 class VecDiscretizedEnv(VecEnv):
-
-    def __init__(self, env:DiscretizedEnvWrapper, n_envs):
+    def __init__(self, env: DiscretizedEnvWrapper, n_envs):
         self.env = env
-        self.vec_env = env.vec_env_executor(n_envs)
+        self.vec_env = env.wrapped_env.vec_env_executor(n_envs)
         self.n_envs = n_envs
 
     def reset(self, dones, seeds=None, *args, **kwargs):
         return self.vec_env.reset(dones=dones, seeds=seeds, *args, **kwargs)
 
-    def step(self, action_n, max_path_length):
-        import ipdb; ipdb.set_trace()
+    def step(self, action_n, max_path_length=None):
+        action_n = np.asarray(action_n)
+        numeric_actions = []
+        for idx in range(3):
+            numeric_actions.append(self.env.disc_intervals[idx][action_n[:, idx]])
+        numeric_actions.extend(np.zeros((3, len(action_n))))
+        numeric_actions.append(np.asarray([-1, 1])[action_n[:, -1]])
+        numeric_actions.append(np.asarray([-1, 1])[action_n[:, -1]])
+        numeric_actions = np.asarray(numeric_actions).T
+        return self.vec_env.step(numeric_actions, max_path_length)
 
 
+custom_py_cnt = 0
 
+
+class SoftmaxExactEntropy(Parameterized, Serializable):
+    """
+    Directly parametrize the entropy of the softmax function.
+
+    TODO
+    """
+
+    def __init__(self, dim, input_dependent=False, initial_entropy_percentage=0.99, bias=3.0):
+        Serializable.quick_init(self, locals())
+        Parameterized.__init__(self)
+        self.dim = dim
+        self.max_ent = np.log(dim)
+        self.input_dependent = input_dependent
+        self.bias = bias
+        if input_dependent:
+            self.p = None
+        else:
+            # we parametrize the entropy as max_ent * sigmoid(lambda)
+            self.p = tf.Variable(initial_value=logit(initial_entropy_percentage), name="p", dtype=tf.float32)
+
+    @property
+    def flat_dim(self):
+        if self.input_dependent:
+            return self.dim + 1
+        else:
+            return self.dim
+
+    def activate(self, x):
+        global custom_py_cnt
+        custom_py_cnt += 1
+
+        if self.input_dependent:
+            desired_ent = self.max_ent * tf.nn.sigmoid(x[:, self.dim] + self.bias)
+            desired_ent = 0.01 + 0.98 * desired_ent
+            x = x[:, :self.dim]
+        else:
+            desired_ent = self.max_ent * tf.nn.sigmoid(self.p)
+            desired_ent = 0.01 + 0.98 * desired_ent
+
+            desired_ent = tf.tile(tf.pack([desired_ent]), tf.pack([tf.shape(x)[0]]))
+
+        func_name = "CustomPyFunc%d" % custom_py_cnt
+
+        @tf.RegisterGradient(func_name)
+        def _grad(op, grad):
+            dx, dh = tf.py_func(exact_softmax_t_grad, [op.inputs[0], op.inputs[1], grad], [op.inputs[0].dtype,
+                                                                                           op.inputs[1].dtype])
+            dx.set_shape(op.inputs[0].get_shape())
+            dh.set_shape(op.inputs[1].get_shape())
+            return dx, dh
+
+        @tf.RegisterShape(func_name)
+        def _shape(op):
+            return op.inputs[0].get_shape()
+
+        g = tf.get_default_graph()
+        with g.gradient_override_map({"PyFunc": func_name}):
+            ts, = tf.py_func(exact_softmax_t, [x, desired_ent], [x.dtype])
+            # ts.set_shape(x.get_shape()[:-1])
+            ret = tf.nn.softmax(x / tf.expand_dims(ts, -1))
+            ret.set_shape(x.get_shape())
+            return ret
+
+    def get_params_internal(self, **tags):
+        if not self.input_dependent and tags.get('trainable', True):
+            return [self.p]
+        return []
+
+
+def softmax(x):
+    x = x - np.max(x, axis=-1, keepdims=True)
+    x = np.exp(x)
+    x = x / np.sum(x, axis=-1, keepdims=True)
+    return x
+
+
+def ent(x):
+    return np.sum(-x * np.log(x + 1e-8), axis=-1)
+
+
+def exact_softmax_op(x, desired_ents):
+    global custom_py_cnt
+    custom_py_cnt += 1
+    func_name = "CustomPyFunc%d" % custom_py_cnt
+
+    @tf.RegisterGradient(func_name)
+    def _grad(op, grad):
+        dx, dh = tf.py_func(exact_softmax_t_grad, [op.inputs[0], op.inputs[1], grad], [op.inputs[0].dtype,
+                                                                                       op.inputs[1].dtype])
+        dx.set_shape(op.inputs[0].get_shape())
+        dh.set_shape(op.inputs[1].get_shape())
+        return dx, dh
+
+    @tf.RegisterShape(func_name)
+    def _shape(op):
+        return op.inputs[0].get_shape()
+
+    g = tf.get_default_graph()
+    with g.gradient_override_map({"PyFunc": func_name}):
+        ts, = tf.py_func(exact_softmax_t, [x, desired_ents], [x.dtype])
+        ret = tf.nn.softmax(x / tf.expand_dims(ts, -1))
+        ret.set_shape(x.get_shape())
+        return ret
+
+
+def exact_softmax_t(x, desired_ents):
+    # solve for t (separate t for each componetn) such that ent(softmax(x/t)) ~ desired_ent
+
+    low_ts = np.zeros(x.shape[:-1])
+    high_ts = np.ones(x.shape[:-1])
+
+    # increase high_ts until lowest ent is greater than desired_ent
+
+    n_itrs = 0
+
+    for _ in range(10):
+        # while True:
+        n_itrs += 1
+        cur_ent = ent(softmax(x / high_ts[:, np.newaxis]))
+        if np.any(cur_ent < desired_ents):
+            high_ts *= 2
+        else:
+            break
+
+    for _ in range(40):
+
+        # while True:
+        n_itrs += 1
+        ts = (low_ts + high_ts) / 2
+        cur_ent = ent(softmax(x / ts[:, np.newaxis]))
+        # if cur_ent < desired_ent, should decrease temp to make it more random
+        high_mask = cur_ent > desired_ents
+        low_mask = cur_ent <= desired_ents
+        high_ts[high_mask] = ts[high_mask]
+        low_ts[low_mask] = ts[low_mask]
+        if np.max(np.abs(cur_ent - desired_ents)) < 1e-6:
+            break
+
+    return np.cast['float32'](ts)
+
+
+def exact_softmax_t_grad(x, desired_ents, grad_output):
+    # Implementation of the gradient has been checked against sympy, and should be correct
+    ts = np.expand_dims(exact_softmax_t(x, desired_ents), -1)
+
+    xts = x / ts
+    # same numerical stability trick as softmax
+    expxts = np.exp(xts - np.max(xts, axis=-1, keepdims=True))
+    sumexpxts = np.sum(expxts, axis=-1, keepdims=True)
+    sumxexpxts = np.sum(x * expxts, axis=-1, keepdims=True)
+    sumx2expxts = np.sum(np.square(x) * expxts, axis=-1, keepdims=True)
+
+    # compute grad w.r.t. x
+    numerator = ts * (x * sumexpxts - sumxexpxts) * expxts
+    denominator = sumx2expxts * sumexpxts - sumxexpxts ** 2
+
+    x_grads = np.cast['float32'](numerator / (denominator + 1e-8))
+
+    ent_grads = np.cast['float32'](- ts ** 3 * (sumexpxts ** 2) / (sumxexpxts ** 2 - sumx2expxts * sumexpxts))
+    ent_grads = ent_grads[:, 0]
+
+    return x_grads * grad_output[:, np.newaxis], ent_grads * grad_output
+
+
+def sigmoid(x): return 1. / (1 + np.exp(-x))
+
+
+def logit(x): return np.log(x / (1 - x))
+
+
+class EntropyControlledPolicy(Policy, Serializable):
+    def __init__(self, wrapped_policy: Policy, initial_entropy):
+        Serializable.quick_init(self, locals())
+        Policy.__init__(self, wrapped_policy.env_spec)
+        self.wrapped_policy = wrapped_policy
+        # parameterize entropy by max_ent * tf.sigmoid(p)
+        max_ents = np.log([x.n for x in self.wrapped_policy.action_space.components])
+
+        initial_entropy = np.asarray(initial_entropy)
+        # solve for the initiaal ent param
+        initial_ent_param = logit((np.maximum(0.0011, initial_entropy) - 0.001) / 0.998 / max_ents)
+
+        # assert np.allclose(initial_entropy, max_ents * sigmoid(initial_ent_param) * 0.998 + 0.001)
+
+        self.ent_param = tf.Variable(initial_value=initial_ent_param, dtype=tf.float32, trainable=True, name="ent")
+        desired_ent = max_ents * tf.sigmoid(self.ent_param)
+        # lower and upper bound the entropy
+        desired_ent = 0.001 + 0.998 * desired_ent
+        self.desired_ent = desired_ent
+
+        obs_var = self.wrapped_policy.env_spec.observation_space.new_tensor_variable(extra_dims=1, name="obs")
+        self._f_dist_info = tensor_utils.compile_function(
+            [obs_var],
+            self.dist_info_sym(obs_var)
+        )
+
+    def get_params_internal(self, **tags):
+        params = self.wrapped_policy.get_params_internal(**tags)
+        if tags.get('trainable', True):
+            params = params + [self.ent_param]
+        return params
+
+    @property
+    def distribution(self):
+        return self.wrapped_policy.distribution
+
+    def dist_info_sym(self, obs_var, state_info_vars=None):
+        dist_infos = self.wrapped_policy.dist_info_sym(obs_var)
+        for idx, (k, v) in enumerate(sorted(list(dist_infos.items()))):
+            logits = tf.log(dist_infos[k])
+            desired_ent = tf.tile(tf.pack([self.desired_ent[idx]]), tf.pack([tf.shape(obs_var)[0]]))
+            dist_infos[k] = exact_softmax_op(logits, desired_ent)  # self.desired_ent[idx])
+        return dist_infos
+
+    def get_action(self, observation):
+        actions, agent_infos = self.get_actions([observation])
+        return actions[0], {k: v[0] for k, v in agent_infos.items()}
+
+    def get_actions(self, observations):
+        flat_obs = self.observation_space.flatten_n(observations)
+        dist_info = self._f_dist_info(flat_obs)
+        return np.asarray(self.distribution.sample(dist_info)), dist_info
+
+    @property
+    def vectorized(self):
+        return self.wrapped_policy.vectorized
+
+
+def worker_collect_xinit(G, height, seed):
+    env = gpr_fetch_env(horizon=1, height=height)
+    env.seed(int(seed))
+    env.reset()
+    return env.x
+
+
+def collect_xinits(height, seeds):
+    xs = []
+    pbar = pyprind.ProgBar(len(seeds))
+    for x in singleton_pool.run_imap_unordered(worker_collect_xinit, [(height, seed) for seed in seeds]):
+        xs.append(x)
+        pbar.update()
+    if pbar.active:
+        pbar.stop()
+    return np.asarray(xs)
+
+
+def analogy_bc_trainer(env_spec, policy, max_n_samples=None, clip_square_loss=None):
+    obs_var = env_spec.observation_space.new_tensor_variable(extra_dims=1, name="obs")
+    obs_dim = env_spec.observation_space.flat_dim
+
+    if isinstance(policy, DiscretizedFetchWrapperPolicy):
+        action_var = policy.wrapped_policy.action_space.new_tensor_variable(extra_dims=1, name="action")
+        action_dim = policy.wrapped_policy.action_space.flat_dim
+        pol_dist_info_vars = policy.wrapped_policy.dist_info_sym(obs_var)
+        logli_var = policy.wrapped_policy.distribution.log_likelihood_sym(action_var, pol_dist_info_vars)
+        loss_var = -tf.reduce_mean(logli_var)
+    else:
+        action_var = env_spec.action_space.new_tensor_variable(extra_dims=1, name="action")
+        action_dim = env_spec.action_space.flat_dim
+        pol_action_var = policy.dist_info_sym(obs_var)["mean"]
+
+        if clip_square_loss is not None:
+            loss_var = tf.reduce_mean(clipped_square_loss(action_var - pol_action_var, clip_square_loss))
+        else:
+            loss_var = tf.reduce_mean(0.5 * tf.square(action_var - pol_action_var))
+
+    train_op = tf.train.AdamOptimizer().minimize(loss_var, var_list=policy.get_params())
+
+    # traj_pool =
+
+    data_pool = CircularQueue(max_size=max_n_samples, data_shape=(obs_dim + action_dim,))
+
+    def add_paths(new_paths):
+        if isinstance(policy, DiscretizedFetchWrapperPolicy):
+            intervals = policy.disc_intervals
+
+            for p in new_paths:
+                disc_actions = []
+                for disc_idx in range(3):
+                    cur_actions = p["actions"][:, disc_idx]
+                    bins = np.asarray(intervals[disc_idx])
+                    disc_actions.append(np.argmin(np.abs(cur_actions[:, None] - bins[None, :]), axis=1))
+                disc_actions.append(np.cast['uint8'](p["actions"][:, -1] == 1))  # p["actions"][:, -1])
+                flat_actions = policy.wrapped_policy.action_space.flatten_n(np.asarray(disc_actions).T)
+                data_pool.extend(np.concatenate([p["observations"], flat_actions], axis=1))
+        else:
+            for p in new_paths:
+                data_pool.extend(np.concatenate([p["observations"], p["actions"]], axis=1))
+
+    def train_loop(batch_size, n_updates_per_epoch):
+
+        with tf.Session() as sess:
+            sess.run(tf.initialize_all_variables())
+            for epoch_idx in itertools.count():
+                logger.log("Starting epoch {}".format(epoch_idx))
+                loss_vals = []
+                logger.log("Start training")
+                progbar = pyprind.ProgBar(n_updates_per_epoch)
+
+                for batch in data_pool.iterate(n_batches=n_updates_per_epoch, batch_size=batch_size):
+                    batch_obs = batch[..., :obs_dim]
+                    batch_actions = batch[..., obs_dim:]
+                    _, loss_val = sess.run(
+                        [train_op, loss_var],
+                        feed_dict={obs_var: batch_obs, action_var: batch_actions}
+                    )
+                    loss_vals.append(loss_val)
+                    progbar.update()
+
+                logger.log("Finished training")
+                if progbar.active:
+                    progbar.stop()
+                logger.record_tabular('Epoch', epoch_idx)
+                logger.record_tabular('Loss', np.mean(loss_vals))
+                logger.record_tabular('NSamples', data_pool.size)
+                logger.save_itr_params(epoch_idx, params=dict(
+                    env=env, policy=policy
+                ))
+                yield epoch_idx
+
+    return AttrDict(
+        add_paths=add_paths,
+        train_loop=train_loop,
+    )

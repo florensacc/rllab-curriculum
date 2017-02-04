@@ -94,7 +94,7 @@ class GprEnv(Env, Serializable):
     def reset(self):
         if self.xinits is not None:
             xinit = random.choice(self.xinits)
-            xinit = xinit[:self.gpr_env.world.dimx]
+            # xinit = xinit[:self.gpr_env.world.dimx]
             return copy.deepcopy(self.gpr_env.reset_to(xinit))
         if self.seed is None:
             seed = np.random.randint(low=0, high=np.iinfo(np.int32).max)
@@ -215,25 +215,13 @@ class GprEnv(Env, Serializable):
         return True
 
 
-class CachedWorldBuilder(object):
-    def __init__(self, gpr_env):
-        self.gpr_env = gpr_env
-
-    def to_world(self, seed=0):
-        return self.gpr_env.world
-
-    @property
-    def world_params(self):
-        return self.gpr_env.world_builder.world_params
-
-
 class VecGprEnv(VecEnvExecutor):
     def __init__(self, env, n_envs):
         gpr_env = env.gpr_env
         envs = [
             GprEnv(
                 env_name=env.env_name,
-                gpr_env=gpr.env.Env(world_builder=CachedWorldBuilder(gpr_env), reward=gpr_env.reward,
+                gpr_env=gpr.env.Env(world_builder=gpr_env.world, reward=gpr_env.reward,
                                     horizon=gpr_env.horizon, task_id=gpr_env.task_id, delta_reward=gpr_env.delta_reward,
                                     delta_obs=gpr_env.delta_obs, clip_reward=gpr_env.clip_reward,
                                     max_reward=gpr_env.max_reward),
@@ -244,6 +232,10 @@ class VecGprEnv(VecEnvExecutor):
             )
             for _ in range(n_envs)
             ]
+        # from sandbox.rocky.new_analogy import fetch_utils
+        # for env in envs:
+        #     fetch_utils.patch_reset(env)
+
         VecEnvExecutor.__init__(self, envs)
 
         self.fast_forward_dynamics = FastForwardDynamics(env=gpr_env, n_parallel=multiprocessing.cpu_count())
@@ -259,8 +251,11 @@ class VecGprEnv(VecEnvExecutor):
         results = []
         for idx, (env, seed, done) in enumerate(zip(self.envs, seeds, dones)):
             if done:
+                if seed is not None:
+                    seed = int(seed)
                 env.seed = seed
                 env.xinits = self.xinits
+                prng.seed(seed)
                 results.append(env.reset())
         self.ts[dones] = 0
         self.prev_stages[dones] = 0
@@ -279,7 +274,7 @@ class VecGprEnv(VecEnvExecutor):
         self.xinits = xinits
 
     def step(self, action_n, max_path_length):
-        action_n = action_n.astype(np.float64)
+        action_n = np.cast['float64'](action_n)
         action_n = action_n + self.noise_levels[:, None] * np.random.randn(*action_n.shape)
         gpr_env = self.envs[0].gpr_env
         for action in action_n:
@@ -289,17 +284,6 @@ class VecGprEnv(VecEnvExecutor):
         xs = np.asarray([env.gpr_env.x for env in self.envs])
 
         xnext, rewards, senses, obs_list, diverged_list = self.fast_forward_dynamics(xs, action_n, get_obs=True)
-
-        # r = [None]
-        # # coparison
-        # def lambda_over_sense(s, i):
-        #     r[0] = gpr_env.reward.compute_reward(s)
-        # gpr_env.world.forward_dynamics(xs, action_n, lambda_over_sense=lambda_over_sense)
-        # print(r[0][0])
-        # print(rewards[0])
-        # import ipdb; ipdb.set_trace()
-        # assert r[0] == rewards[0]
-        # exit()
 
         out_obs = []
         out_rewards = []

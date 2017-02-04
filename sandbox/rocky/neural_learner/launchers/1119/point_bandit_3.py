@@ -1,13 +1,10 @@
-import random
-
-from rllab.envs.normalized_env import normalize
-from rllab.misc.instrument import run_experiment_lite
-from rllab import config
-from rllab.misc.instrument import VariantGenerator, variant
 import numpy as np
 
+from rllab import config
+from rllab.envs.normalized_env import normalize
+from rllab.misc.instrument import VariantGenerator, variant
+from rllab.misc.instrument import run_experiment_lite
 from sandbox.rocky.cirrascale.launch_job import launch_cirrascale
-from sandbox.rocky.neural_learner.envs.mab_env import MABEnv
 from sandbox.rocky.neural_learner.envs.multi_env import MultiEnv
 
 """
@@ -127,7 +124,7 @@ for vv in variants:
         from sandbox.rocky.tf.policies.rnn_utils import NetworkType
 
         from sandbox.rocky.neural_learner.envs.point_bandit_env import PointBanditEnv
-        from sandbox.rocky.new_analogy.policies.gaussian_rnn_actor_critic import GaussianRNNActorCritic
+        from sandbox.rocky.new_analogy.tf.policies.gaussian_rnn_actor_critic import GaussianRNNActorCritic
 
         env = TfEnv(MultiEnv(
             wrapped_env=normalize(PointBanditEnv(

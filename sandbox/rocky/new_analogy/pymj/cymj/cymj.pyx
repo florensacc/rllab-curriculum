@@ -304,159 +304,6 @@ cdef void euler2quat_nogil(double* vec, double* result) nogil:
     result[3] = x*cy*sz + sx*cz*sy
 
 
-# _FLOAT_EPS_4 = np.finfo(np.float_).eps * 4.0
-#
-#
-#
-# cdef np.ndarray[double, ndim=2] euler2mat(np.ndarray[double, ndim=1] euler) nogil:
-#     ''' Return matrix for rotations around z, y and x axes
-#     Uses the z, then y, then x convention above
-#     Parameters
-#     ----------
-#     z : scalar
-#        Rotation angle in radians around z-axis (performed first)
-#     y : scalar
-#        Rotation angle in radians around y-axis
-#     x : scalar
-#        Rotation angle in radians around x-axis (performed last)
-#     Returns
-#     -------
-#     M : array shape (3,3)
-#        Rotation matrix giving same rotation as for given angles
-#     Examples
-#     --------
-#     >>> zrot = 1.3 # radians
-#     >>> yrot = -0.1
-#     >>> xrot = 0.2
-#     >>> M = euler2mat(zrot, yrot, xrot)
-#     >>> M.shape == (3, 3)
-#     True
-#     The output rotation matrix is equal to the composition of the
-#     individual rotations
-#     >>> M1 = euler2mat(zrot)
-#     >>> M2 = euler2mat(0, yrot)
-#     >>> M3 = euler2mat(0, 0, xrot)
-#     >>> composed_M = np.dot(M3, np.dot(M2, M1))
-#     >>> np.allclose(M, composed_M)
-#     True
-#     You can specify rotations by named arguments
-#     >>> np.all(M3 == euler2mat(x=xrot))
-#     True
-#     When applying M to a vector, the vector should column vector to the
-#     right of M.  If the right hand side is a 2D array rather than a
-#     vector, then each column of the 2D array represents a vector.
-#     >>> vec = np.array([1, 0, 0]).reshape((3,1))
-#     >>> v2 = np.dot(M, vec)
-#     >>> vecs = np.array([[1, 0, 0],[0, 1, 0]]).T # giving 3x2 array
-#     >>> vecs2 = np.dot(M, vecs)
-#     Rotations are counter-clockwise.
-#     >>> zred = np.dot(euler2mat(z=np.pi/2), np.eye(3))
-#     >>> np.allclose(zred, [[0, -1, 0],[1, 0, 0], [0, 0, 1]])
-#     True
-#     >>> yred = np.dot(euler2mat(y=np.pi/2), np.eye(3))
-#     >>> np.allclose(yred, [[0, 0, 1],[0, 1, 0], [-1, 0, 0]])
-#     True
-#     >>> xred = np.dot(euler2mat(x=np.pi/2), np.eye(3))
-#     >>> np.allclose(xred, [[1, 0, 0],[0, 0, -1], [0, 1, 0]])
-#     True
-#     Notes
-#     -----
-#     The direction of rotation is given by the right-hand rule (orient
-#     the thumb of the right hand along the axis around which the rotation
-#     occurs, with the end of the thumb at the positive end of the axis;
-#     curl your fingers; the direction your fingers curl is the direction
-#     of rotation).  Therefore, the rotations are counterclockwise if
-#     looking along the axis of rotation from positive to negative.
-#     '''
-#     cdef double z = euler[0]
-#     cdef double y = euler[1]
-#     cdef double x = euler[2]
-#     cdef np.ndarray[double, ndim=2] ret = np.eye(3)#(3, 3))
-#     # ret[0, 0] = 1
-#     # ret[1, 1] = 1
-#     # ret[2, 2] = 1
-#     # Ms = []
-#     if z:
-#         cosz = math.cos(z)
-#         sinz = math.sin(z)
-#         ret = np.dot(np.array([[cosz, -sinz, 0],
-#                             [sinz, cosz, 0],
-#                             [0, 0, 1]]), ret)
-#     if y:
-#         cosy = math.cos(y)
-#         siny = math.sin(y)
-#         ret = np.dot(np.array([[cosy, 0, siny],
-#                             [0, 1, 0],
-#                             [-siny, 0, cosy]]), ret)
-#     if x:
-#         cosx = math.cos(x)
-#         sinx = math.sin(x)
-#         ret = np.dot(np.array([[1, 0, 0],
-#                             [0, cosx, -sinx],
-#                             [0, sinx, cosx]]), ret)
-#     return ret
-#
-#
-# cdef np.ndarray[double, ndim=2] mat2euler(np.ndarray[double, ndim=2] M) nogil:
-#     ''' Discover Euler angle vector from 3x3 matrix
-#     Uses the conventions above.
-#     Parameters
-#     ----------
-#     M : array-like, shape (3,3)
-#     cy_thresh : None or scalar, optional
-#        threshold below which to give up on straightforward arctan for
-#        estimating x rotation.  If None (default), estimate from
-#        precision of input.
-#     Returns
-#     -------
-#     z : scalar
-#     y : scalar
-#     x : scalar
-#        Rotations in radians around z, y, x axes, respectively
-#     Notes
-#     -----
-#     If there was no numerical error, the routine could be derived using
-#     Sympy expression for z then y then x rotation matrix, which is::
-#       [                       cos(y)*cos(z),                       -cos(y)*sin(z),         sin(y)],
-#       [cos(x)*sin(z) + cos(z)*sin(x)*sin(y), cos(x)*cos(z) - sin(x)*sin(y)*sin(z), -cos(y)*sin(x)],
-#       [sin(x)*sin(z) - cos(x)*cos(z)*sin(y), cos(z)*sin(x) + cos(x)*sin(y)*sin(z),  cos(x)*cos(y)]
-#     with the obvious derivations for z, y, and x
-#        z = atan2(-r12, r11)
-#        y = asin(r13)
-#        x = atan2(-r23, r33)
-#     Problems arise when cos(y) is close to zero, because both of::
-#        z = atan2(cos(y)*sin(z), cos(y)*cos(z))
-#        x = atan2(cos(y)*sin(x), cos(x)*cos(y))
-#     will be close to atan2(0, 0), and highly unstable.
-#     The ``cy`` fix for numerical instability below is from: *Graphics
-#     Gems IV*, Paul Heckbert (editor), Academic Press, 1994, ISBN:
-#     0123361559.  Specifically it comes from EulerAngles.c by Ken
-#     Shoemake, and deals with the case where cos(y) is close to zero:
-#     See: http://www.graphicsgems.org/
-#     The code appears to be licensed (from the website) as "can be used
-#     without restrictions".
-#     '''
-#     # M = np.asarray(M)
-#     if cy_thresh is None:
-#         # try:
-#         #     cy_thresh = np.finfo(M.dtype).eps * 4
-#         # except ValueError:
-#         cy_thresh = _FLOAT_EPS_4
-#     r11, r12, r13, r21, r22, r23, r31, r32, r33 = M.flat
-#     # cy: sqrt((cos(y)*cos(z))**2 + (cos(x)*cos(y))**2)
-#     cy = cmath.sqrt(r33 * r33 + r23 * r23)
-#     if cy > cy_thresh:  # cos(y) not close to zero, standard form
-#         z = cmath.atan2(-r12, r11)  # atan2(cos(y)*sin(z), cos(y)*cos(z))
-#         y = cmath.atan2(r13, cy)  # atan2(sin(y), cy)
-#         x = cmath.atan2(-r23, r33)  # atan2(cos(y)*sin(x), cos(x)*cos(y))
-#     else:  # cos(y) (close to) zero, so x -> 0.0 (see above)
-#         # so r21 -> sin(z), r22 -> cos(z) and
-#         z = cmath.atan2(r21, r22)
-#         y = cmath.atan2(r13, cy)  # atan2(sin(y), cy)
-#         x = 0.0
-#     return z, y, x
-
-
 cdef class MjParallelLite(object):
     cdef mjModel *_model
     cdef mjData ** data
@@ -470,7 +317,6 @@ cdef class MjParallelLite(object):
 
     cdef readonly tuple site_names, joint_names
 
-    cdef str obs_type
     # # cdef readonly PyMjData data
     # cdef readonly tuple body_names, joint_names, geom_names, site_names
 
@@ -479,7 +325,6 @@ cdef class MjParallelLite(object):
             str xml,
             int n_parallel,
             int num_substeps,
-            str obs_type,
     ):
         logger.debug('mj_loadXML')
         cdef char errstr[300]
@@ -516,64 +361,12 @@ cdef class MjParallelLite(object):
         self.num_substeps = num_substeps
         self.site_names = _extract_mj_names(self._model.names, self._model.name_siteadr, self._model.nsite)
         self.joint_names = _extract_mj_names(self._model.names, self._model.name_jntadr, self._model.njnt)
-        self.obs_type = obs_type
 
     def __del__(self):
         for i in range(self.n_parallel):
             mju_free(self.data[i])
 
         free(self.data)
-    # cdef get_relative_frame_i(self):
-    #     # TODO: cache
-    #     gripper_xpos = np.empty((x.shape[0], 3))
-    #     gripper_xmat = np.empty((x.shape[0], 3, 3))
-    #
-    #     def set_gripper_pos(sense, i):
-    #         gripper_xpos[i] = sense["site_stall_mocap_xpos"]
-    #         gripper_xmat[i] = sense["site_stall_mocap_xmat"].reshape(3, 3)
-    #
-    #     self.model.forward(x[:, :self.dimq], x[:, self.dimq:], lambda_over_sense=set_gripper_pos)
-    #
-    #     import ipdb; ipdb.set_trace()
-    #
-    #     gripper_xpos = gripper_xpos.reshape(-1, 3)
-    #     gripper_xmat = gripper_xmat.reshape(-1, 3, 3)
-    #
-    #     return gripper_xpos, gripper_xmat
-
-    # cdef preprocess_mocap(self, mjData* data_i, double* mocap) nogil:
-    #     # mocapdim = mocap.shape[0] / 2
-    #     # mocap_xpos = mocap[..., :mocapdim]
-    #     # mocap_euler = mocap[..., mocapdim:]
-    #
-    #     cdef int site_idx = list(self._model.site_names).index("stall_mocap")
-    #     cdef int i
-    #
-    #     if self.obs_type == "relative":
-    #         gripper_xpos = data_i.site_xpos[site_idx*3:site_idx*3+3]
-    #         gripper_xmat = data_i.site_xmat[site_idx*9:site_idx*9+9].reshape((3, 3))
-    #
-    #         for i in range(3): # mocap_xpos
-    #             mocap[i] *= self.mocap_move_speed
-    #         for i in range(3, 6): # mocap_euler
-    #             mocap[i] *= self.mocap_rot_speed
-    #
-    #         # mocap_xpos *= self.mocap_move_speed
-    #         # mocap_euler *= self.mocap_rot_speed
-    #
-    #         mocap_xpos[:] = gripper_xpos + np.matmul(gripper_xmat, mocap_xpos.reshape(3, 1)).reshape(3)
-    #         mocap_euler[:] = mat2euler(np.matmul(gripper_xmat, euler2mat(mocap_euler)))
-    #     elif self.obs_type == "flatten":
-    #         mocap_xpos[:] = [0.3, 0.0, 0.7] + [0.15, 0.2, 0.1] * mocap_xpos  # TODO: refactor FIXME
-    #
-    #     if self.params.mocap_fix_orientation:
-    #         mocap_euler[0] = 0
-    #         mocap_euler[1] = 0.5 * cmath.pi
-    #         mocap_euler[2] = 0
-
-        # mocap = np.concatenate((mocap_xpos, mocap_euler), axis=1)
-        #
-        # return mocap
 
     @cython.boundscheck(False)
     def forward_dynamics(
@@ -616,8 +409,6 @@ cdef class MjParallelLite(object):
             assert mocap.shape[mocap.ndim-1] == 6, "mocap should consist of 3 position dimensions, and 3 rotation " \
                                                "dimensions"
             assert qpos.shape[0] == mocap.shape[0]
-
-        # mocap = self.preprocess_mocap(x, mocap)
 
         cdef double[3] mocap_pos_i
         cdef double[4] mocap_quat_i
@@ -688,6 +479,5 @@ cdef class MjParallelLite(object):
                         jacp = &site_jac[i, 0] + (site_i * nv3 * 2)
                         jacr = jacp + nv3
                         mj_jacSite(self._model, data_i, jacp, jacr, site_i)
-                    # mju_copy(&site_jac[i, 0], data_i.site)
 
         return np.concatenate([qpos_next, qvel_next], axis=1), sense

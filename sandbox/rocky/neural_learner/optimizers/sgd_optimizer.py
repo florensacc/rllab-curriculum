@@ -136,10 +136,13 @@ class SGDOptimizer(Serializable):
             progbar = pyprind.ProgBar(N)
             losses = []
             diags = OrderedDict([(k, []) for k in self.diagnostic_vars.keys()])
+            input_ids = np.arange(len(inputs[0]))
+            np.random.shuffle(input_ids)
             for batch_idx in range(0, N, batch_size):
                 # must permute inputs first; otherwise minibatches are correlated
-                raise NotImplementedError
-                batch_sliced_inputs = [x[batch_idx:batch_idx + self.batch_size] for x in inputs]
+                # raise NotImplementedError
+                batch_ids = input_ids[batch_idx:batch_idx + self.batch_size]
+                batch_sliced_inputs = [x[batch_ids] for x in inputs]
                 _, loss, *diagnostics = self.f_train(*(batch_sliced_inputs + extra_inputs + [self.learning_rate]))
                 losses.append(loss)
                 for k, diag_val in zip(self.diagnostic_vars.keys(), diagnostics):

@@ -59,6 +59,16 @@ class ProductDistribution(Distribution):
             ret += dist_i.log_likelihood_sym(x_var_i, dist_info_var_i)
         return ret
 
+    def likelihood_ratio_sym(self, x_var, old_dist_info_vars, new_dist_info_vars):
+        splitted_x_vars = self._split_x(x_var)
+        old_dist_info_vars = self._split_dist_info(old_dist_info_vars)
+        new_dist_info_vars = self._split_dist_info(new_dist_info_vars)
+        ret = 1
+        for x_var_i, old_dist_info_i, new_dist_info_i, dist_i in \
+                zip(splitted_x_vars, old_dist_info_vars, new_dist_info_vars, self.distributions):
+            ret *= dist_i.likelihood_ratio_sym(x_var_i, old_dist_info_i, new_dist_info_i)
+        return ret
+
     def kl_sym(self, old_dist_info_vars, new_dist_info_vars):
         old_dist_info_vars = self._split_dist_info(old_dist_info_vars)
         new_dist_info_vars = self._split_dist_info(new_dist_info_vars)
@@ -92,6 +102,22 @@ class ProductDistribution(Distribution):
         for dist_i, dist_info_i in zip(self.distributions, dist_infos):
             components.append(dist_i.sample(dist_info_i))
         return list(zip(*components))
+
+    def entropy(self, dist_info):
+        # get the components
+        dist_infos = self._split_dist_info(dist_info)
+        ent = 0
+        for dist_i, dist_info_i in zip(self.distributions, dist_infos):
+            ent += dist_i.entropy(dist_info_i)
+        return ent
+
+    def entropy_sym(self, dist_info):
+        # get the components
+        dist_infos = self._split_dist_info(dist_info)
+        ent = 0
+        for dist_i, dist_info_i in zip(self.distributions, dist_infos):
+            ent += dist_i.entropy_sym(dist_info_i)
+        return ent
 
     def maximum_a_posteriori(self, dist_info):
         components = []

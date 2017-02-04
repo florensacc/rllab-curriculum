@@ -126,7 +126,7 @@ for vv in variants:
         from sandbox.rocky.tf.policies.rnn_utils import NetworkType
 
         from sandbox.rocky.neural_learner.envs.point_bandit_env import PointBanditEnv
-        from sandbox.rocky.new_analogy.policies.gaussian_rnn_actor_critic import GaussianRNNActorCritic
+        from sandbox.rocky.new_analogy.tf.policies.gaussian_rnn_actor_critic import GaussianRNNActorCritic
         from sandbox.rocky.tf.policies.gaussian_rnn_policy import GaussianRNNPolicy
 
         env = TfEnv(MultiEnv(

@@ -21,8 +21,8 @@ def get_directory():
 
 CACHED_GPUS = None
 
-FORBIDDEN = [4, 5, 6, 7, 8, 9, 30, 46, 49, 54, 56] + [32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44,
-                                                     45]  # cirrakube
+FORBIDDEN = [4, 5, 6, 7, 8, 9, 30, 46, 49, 52, 54, 56] + [32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46
+                                                      ]  # cirrakube
 
 
 def get_first_available_gpu(type_filter=None):

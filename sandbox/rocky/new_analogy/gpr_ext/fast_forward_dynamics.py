@@ -9,7 +9,6 @@ import functools
 import operator
 
 from gpr.utils.rotation import mat2euler_batch, euler2mat_batch
-from gpr.worldgen.world import is_in_rl, is_in_pi2
 from sandbox.rocky.new_analogy.gpr_ext.rewards import SenseDistReward
 from sandbox.rocky.new_analogy.pymj import MjParallelLite
 
@@ -54,15 +53,21 @@ def collect_specs(reward):
         specs = {"use_{0}".format(reward.key)}
     elif isinstance(reward, gpr.reward.ZeroReward):
         specs = set()
-    elif isinstance(reward, (int, float)):
-        return set()
+
     elif isinstance(reward, gpr.reward.DisplacementReward):
-        return {"use_site_xpos"}
+        specs = {"use_site_xpos"}
     elif isinstance(reward, gpr.reward.GripReward):
-        return set()  # {}#["use_joint_qpos"}
+        specs = set()  # {}#["use_joint_qpos"}
     elif isinstance(reward, gpr.reward.CoordinateReward):
         assert reward.field.startswith("site_") and reward.field.endswith("_xpos")
-        return {"use_site_xpos"}
+        specs = {"use_site_xpos"}
+    elif isinstance(reward, gpr.reward.AbsReward):
+        specs = collect_specs(reward.a_reward)
+    elif isinstance(reward, gpr.reward.AndCond):
+        spec_list = [collect_specs(x) for x in reward.conds]
+        specs = set.union(*spec_list)
+    elif isinstance(reward, (int, float)):
+        return set()
     else:
         import ipdb;
         ipdb.set_trace()
@@ -127,7 +132,7 @@ def compute_reward(reward, sense, mjparallel):
             b = resolve_site_xpos(mjparallel, sense["site_xpos"], reward.b)
             x = a - b
             if reward.offset is not None:
-                x -= reward.offset.reshape(1,-1)
+                x -= reward.offset.reshape(1, -1)
             if reward.weights is not None:
                 x *= reward.weights
             return residual2reward_n(x, reward.metric)
@@ -174,6 +179,10 @@ def compute_reward(reward, sense, mjparallel):
         elif isinstance(reward, gpr.reward.CoordinateReward):
             assert reward.field.startswith("site_") and reward.field.endswith("_xpos")
             return resolve_site_xpos(mjparallel, sense["site_xpos"], reward.field)[..., reward.coordinate]
+        elif isinstance(reward, gpr.reward.AbsReward):
+            return np.abs(_compute_reward(reward.a_reward))
+        elif isinstance(reward, gpr.reward.AndCond):
+            return np.logical_and.reduce([_compute_reward(x) for x in reward.conds], axis=0)
         elif isinstance(reward, (int, float)):
             return reward
         else:
@@ -194,8 +203,6 @@ class FastForwardDynamics(object):
             xml,
             n_parallel=n_parallel,
             num_substeps=env.world.params.num_substeps,
-            obs_type=env.world.params.obs_type,
-
         )
         self.env = env
         self.reward = env.reward
@@ -228,29 +235,30 @@ class FastForwardDynamics(object):
                     qpos=qpos,
                     qvel=qvel, ctrl=None, mocap=None, step=False, use_site_xpos=True, use_site_xmat=True)
 
-        gripper_xpos = resolve_site_xpos(self.mjparallel, senses["site_xpos"], "site_stall_mocap_xpos")
-        gripper_xmat = resolve_site_xmat(self.mjparallel, senses["site_xmat"], "site_stall_mocap_xmat")
+        origin_xpos = resolve_site_xpos(self.mjparallel, senses["site_xpos"], "site_%s_xpos" %
+                                        self.env.world.params.action.mocap_relative_to)
+        origin_xmat = resolve_site_xmat(self.mjparallel, senses["site_xmat"], "site_%s_xmat" %
+                                        self.env.world.params.action.mocap_relative_to)
 
-        gripper_xpos = gripper_xpos.reshape(-1, 3)
-        gripper_xmat = gripper_xmat.reshape(-1, 3, 3)
+        origin_xpos = origin_xpos.reshape(-1, 3)
+        origin_xmat = origin_xmat.reshape(-1, 3, 3)
 
-        return gripper_xpos, gripper_xmat
+        return origin_xpos, origin_xmat
 
     def preprocess_mocap(self, qpos, qvel, mocap):
         mocap_xpos, mocap_euler = np.split(mocap, 2, axis=1)
+        world = self.env.world
 
-        if self.env.world.params.obs_type == "relative":
-            gripper_xpos, gripper_xmat = self.get_relative_frame(qpos, qvel)
+        if world.params.action.mocap_relative_to is not None:
+            origin_xpos, origin_xmat = self.get_relative_frame(qpos, qvel)
 
-            mocap_xpos *= self.env.world.params.mocap_move_speed
-            mocap_euler *= self.env.world.params.mocap_rot_speed
+            mocap_xpos *= world.params.action.mocap_move_speed
+            mocap_euler *= world.params.action.mocap_rot_speed
 
-            mocap_xpos = gripper_xpos + np.matmul(gripper_xmat, mocap_xpos.reshape(-1, 3, 1)).reshape(-1, 3)
-            mocap_euler = mat2euler_batch(np.matmul(gripper_xmat, euler2mat_batch(mocap_euler)))
-        elif self.env.world.params.obs_type == "flatten":
-            mocap_xpos = [0.3, 0.0, 0.7] + [0.15, 0.2, 0.1] * mocap_xpos  # TODO: refactor FIXME
+            mocap_xpos = origin_xpos + np.matmul(origin_xmat, mocap_xpos.reshape(-1, 3, 1)).reshape(-1, 3)
+            mocap_euler = mat2euler_batch(np.matmul(origin_xmat, euler2mat_batch(mocap_euler)))
 
-        if self.env.world.params.mocap_fix_orientation:
+        if world.params.action.mocap_fix_orientation:
             mocap_euler[:, 0].fill(0)
             mocap_euler[:, 1].fill(0.5 * math.pi)
             mocap_euler[:, 2].fill(0)
@@ -267,12 +275,10 @@ class FastForwardDynamics(object):
 
         if world.nmocap == 1:
             mocap = self.preprocess_mocap(qpos, qvel, mocap)
-
-            if ctrl.shape[1] == 2:  # gipper
+            if ctrl.shape[1] == 2:  # gripper
                 ctrl[:, 1] = ctrl[:, 0]
-                if is_in_rl() or is_in_pi2():
-                    ctrl += 0.5
-                    ctrl *= 0.04  # FIXME FIXME FIXME
+                ctrl += self.env.world.params.action.gripper_offset
+                ctrl *= self.env.world.params.action.gripper_scale
 
         return mocap, ctrl
 
@@ -289,19 +295,21 @@ class FastForwardDynamics(object):
 
     def __call__(self, x, u, t=None, get_obs=False):
 
-        qpos, qvel = np.split(x, [self.env.world.dimq], axis=-1)
+        world = self.env.world
+
+        qpos, qvel = np.split(x, [world.dimq], axis=-1)
         qpos = np.asarray(qpos, dtype=np.float64, order='C')
         qvel = np.asarray(qvel, dtype=np.float64, order='C')
-        assert qpos.shape[-1] == self.env.world.dimq
-        assert qvel.shape[-1] == self.env.world.dimv
+        assert qpos.shape[-1] == world.dimq
+        assert qvel.shape[-1] == world.dimv
         mocap, ctrl = self.preprocess_action(qpos, qvel, u)
 
         if np.prod(qpos.shape) > 0 and np.prod(u.shape) > 0:
-            mask = self.env.world._get_robot_indices()
-            ctrl = self.env.world.control_preprocessor.normalize_action(
+            mask = world._get_robot_indices()
+            ctrl = world.control_preprocessor.normalize_action(
                 qpos[..., mask], ctrl)
             qpos[..., mask], qvel[..., mask] = \
-                self.env.world.control_preprocessor.normalize_observation(
+                world.control_preprocessor.normalize_observation(
                     qpos[..., mask], qvel[..., mask])
 
         qpos = np.asarray(qpos, dtype=np.float64, order='C')
@@ -310,17 +318,21 @@ class FastForwardDynamics(object):
         mocap = np.asarray(mocap, dtype=np.float64, order='C')
 
         sense_specs = self.sense_specs
-        if self.env.world.params.obs_type == "relative" or get_obs:
+
+        if world.params.action.mocap_relative_to is not None:
             sense_specs = sense_specs.union({"use_site_xpos", "use_site_xmat"})
-            if get_obs:
-                sense_specs = sense_specs.union({"use_site_jac"})  # , "use_joint_qpos"})
+        if get_obs:
+            if world.params.observation.sites_relative_to is not None:
+                sense_specs = sense_specs.union({"use_site_xpos", "use_site_xmat"})
+            if world.params.observation.site_xvel:
+                sense_specs = sense_specs.union({"use_site_jac"})
 
         xnext, sense = self.mjparallel.forward_dynamics(
             qpos=qpos, qvel=qvel, ctrl=ctrl, mocap=mocap,
             **dict([(x, True) for x in sense_specs]))
 
-        qpos_next = xnext[..., :self.env.world.dimq]
-        qvel_next = xnext[..., self.env.world.dimq:]
+        qpos_next = xnext[..., :world.dimq]
+        qvel_next = xnext[..., world.dimq:]
         sense = dict(sense, qpos=qpos_next, qvel=qvel_next)
         if self.custom_reward is not None:
             rewards = self.custom_reward(xprev=x, xnext=xnext, sense=sense, mjparallel=self.mjparallel, t=t, u=u)
@@ -338,96 +350,100 @@ class FastForwardDynamics(object):
             return xnext, rewards, sense
 
     def get_obs(self, qpos, qvel, sense=None):
+        world = self.env.world
         if sense is None:
             # Need to run a pass to get senses
-            if self.env.world.params.obs_type == "relative":
-                sense_specs = {"use_site_xpos", "use_site_xmat", "use_site_jac"}
-            else:
-                sense_specs = {"use_site_xpos"}
+            sense_specs = set()
+            if world.params.action.mocap_relative_to is not None:
+                sense_specs = sense_specs.union({"use_site_xpos", "use_site_xmat"})
+            if world.params.observation.sites_relative_to is not None:
+                sense_specs = sense_specs.union({"use_site_xpos", "use_site_xmat"})
+            if world.params.observation.site_xvel:
+                sense_specs = sense_specs.union({"use_site_jac"})
+
             _, sense = self.mjparallel.forward_dynamics(
                 qpos=qpos, qvel=qvel, ctrl=None, mocap=None,
                 step=False, **dict([(x, True) for x in sense_specs]))
 
-        if self.env.world.params.obs_type in ["full_state", "flatten", "relative"]:
-            qpos_robot, qvel_robot = self._extract_robot_pos(qpos, qvel)
+        params = world.params.observation
 
+        if params.type == 'state':
+            qpos_robot, qvel_robot = self._extract_robot_pos(qpos, qvel)
             site_xpos = sense["site_xpos"]
             nsite = self.mjparallel.model.nsite
+            site_xmat = sense["site_xmat"]
+            N = len(qpos)
+            rel_site = params.sites_relative_to
+            if rel_site is not None:
+                rel_site_idx = self.mjparallel.site_names.index(rel_site)
+            if params.site_xpos:
+                if rel_site is not None:
+                    origin_xpos = resolve_site_xpos(self.mjparallel, site_xpos, "site_%s_xpos" % rel_site).reshape(
+                        (-1, 3, 1))
+                    origin_xmat = resolve_site_xmat(self.mjparallel, site_xmat, "site_%s_xmat" % rel_site).reshape(
+                        (-1, 3, 3))
+                else:
+                    origin_xpos = np.zeros((N, 3, 1))
+                    origin_xmat = np.eye(3)[np.newaxis, :, :]
+                inv_rot = np.linalg.inv(origin_xmat).reshape((-1, 3, 3))
+                site_xpos = site_xpos.reshape((-1, nsite, 3, 1)) - origin_xpos[:, None, :, :]
+                site_xpos = np.matmul(inv_rot[:, None, :, :], site_xpos)
 
-            if self.env.world.params.obs_type == "full_state":
-                obs = list(zip(qpos_robot, qvel_robot, site_xpos))
-            elif self.env.world.params.obs_type == "flatten":
-                obs = np.concatenate([qpos, qvel, site_xpos], axis=1)
-            elif self.env.world.params.obs_type == "relative":
-                site_xmat = sense["site_xmat"]
-                N = len(qpos)
-
-                stall_mocap_idx = self.mjparallel.site_names.index("stall_mocap")
-                gripper_xpos = resolve_site_xpos(self.mjparallel, site_xpos, "site_stall_mocap_xpos").reshape((-1, 3, 1))
-                gripper_xmat = resolve_site_xmat(self.mjparallel, site_xmat, "site_stall_mocap_xmat").reshape((-1, 3, 3))
-
-                inv_rot = np.linalg.inv(gripper_xmat).reshape((-1, 3, 3))
-
-                site_xpos = site_xpos.reshape((-1, nsite, 3, 1)) - gripper_xpos[:, None, :, :]
-                site_xpos = np.matmul(inv_rot[:, None, :, :], site_xpos).reshape((N, -1))
-
-                # site_xmat = np.matmul(inv_rot[:, None, :, :], site_xmat.reshape(-1, nsite, 3, 3))
-                # site_euler = mat2euler_batch(site_xmat.reshape((-1, 3, 3))).reshape((N, -1))
-
+            # velocities
+            # N*1*3
+            if params.site_xvel:
                 site_jac_reshaped = sense['site_jac']
                 # this is equivalent to reshape(...), # but errors if creating a copy is necessary
                 site_jac_reshaped.shape = (N, nsite, 2, 3, self.mjparallel.model.nv)
                 site_jacp = site_jac_reshaped[:, :, 0, :, :]
 
+                if rel_site is not None:
+                    origin_xvel = np.matmul(site_jacp[:, rel_site_idx], qvel.reshape(N, -1, 1)).reshape(N, -1, 3)
+                else:
+                    origin_xvel = np.zeros((N, 1, 3))
 
-                # velocities
-
-                # N*1*3
-                gripper_xvel = np.matmul(site_jacp[:, stall_mocap_idx], qvel.reshape(N, -1, 1)).reshape(N, -1, 3)
                 site_xvel = np.matmul(site_jacp, qvel.reshape((N, -1, 1))[:, None, :, :]).reshape(N, -1, 3)
-                # site_xvel = np.matmul(site_jacp, sense['qvel'].reshape(1, -1, 1)).reshape(-1,
-                #                                                                                       3)  # world coordinates
                 site_xvel = np.matmul(inv_rot[:, None, :, :],
-                                      (site_xvel - gripper_xvel).reshape(N, -1, 3, 1))  # mocap coordinates
+                                      (site_xvel - origin_xvel).reshape(N, -1, 3, 1))  # mocap coordinates
 
-                # TODO: the same for angular velocities
-                # gripper state # TODO: change to one scalar when the finger are synchronized
+            # TODO: the same for angular velocities
+            # gripper state # TODO: change to one scalar when the finger are synchronized
+            if params.gripper_state:
                 grip_l = 25. * resolve_joint_qpos(self.mjparallel, qpos, "joint_robot:l_gripper_finger_joint_1_qpos")
                 grip_r = 25. * resolve_joint_qpos(self.mjparallel, qpos, "joint_robot:r_gripper_finger_joint_1_qpos")
-
-                site_xpos = site_xpos.reshape((N, -1))
-                site_xvel = site_xvel.reshape((N, -1))
                 grip_l = grip_l.reshape((N, -1))
                 grip_r = grip_r.reshape((N, -1))
+                gripper_state = np.concatenate([grip_l, grip_r], axis=1)
 
-                obs = np.concatenate([site_xpos, site_xvel, grip_l, grip_r], axis=1)
-            else:
-                raise NotImplementedError
-            # elif isinstance(self.env.world.params.obs_type, tuple) and self.env.world.params.obs_type[0] == "image":
-            #     qpos_robot, qvel_robot = self._extract_robot_pos(x)
-            #     if self.renderer is None:
-            #         wh = (self.params.obs_type[1], self.params.obs_type[2])
-            #         self.renderer = MujocoRenderer(self.local_xml, wh=wh)
-            #     obs = (qpos_robot, qvel_robot, np.squeeze(
-            #         self.renderer.render(np.expand_dims(x, 0))))
-            # elif isinstance(self.params.obs_type, tuple) and self.params.obs_type[0] == "custom":
-            #     obs = self.params.obs_type[2](self, x)
-            # else:
-            #     assert False
+            obs = []
 
-            # assert self.observation_space().contains(obs), \
-            #     'Value should be in observation space:\nOBS=%s,shape=%s\n\nSPACE=%s' % \
-            #     (obs, str([o.shape for o in obs]), self.observation_space())
+            for key in world.obs_parts:
+                if getattr(params, key):
+                    value = vars()[key]
+                    if key.startswith('site_'):
+                        value = value[:, params.skip_sites:].reshape((N, -1, 3))
+                    obs.append(value)
 
-            if self.env.world.params.divergence_obs_threshold is not None:
-                obs_space = self.env.world.observation_space()
+            obs = list(zip(*obs))
+
+            if params.flatten:
+                obs = np.asarray([
+                    np.concatenate([oi.flatten() for oi in o])
+                    for o in obs
+                ])
+
+            if world.params.divergence_obs_threshold is not None:
+                obs_space = world.observation_space()
                 diverged = []
                 for obs_i in obs:
                     flatten_obs = obs_space.flatten(obs_i)
-                    if len(flatten_obs) > 0 and abs(flatten_obs).max() > self.env.world.params.divergence_obs_threshold:
+                    if len(flatten_obs) > 0 and abs(
+                            flatten_obs).max() > self.env.world.params.divergence_obs_threshold:
                         diverged.append(True)
                     else:
                         diverged.append(False)
                 return obs, diverged
 
             return obs, [False] * len(obs)
+        else:
+            raise NotImplementedError

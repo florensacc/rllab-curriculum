@@ -1,13 +1,9 @@
 import pickle
 
-from gpr_package.bin import tower_copter_policy as tower
-import numpy as np
-import gpr
-import gpr.policy
-
 import matplotlib.pyplot as plt
+import numpy as np
 
-from rllab.envs.gym_env import convert_gym_space
+from gpr_package.bin import tower_copter_policy as tower
 from rllab.sampler.utils import rollout
 from sandbox.rocky.new_analogy.scripts.tower.crippled_policy import CrippledPolicy
 from sandbox.rocky.s3.resource_manager import resource_manager
@@ -39,7 +35,6 @@ def gen_data():
 
 
 def analyze_data():
-    import matplotlib.pyplot as plt
     file_name = resource_manager.get_file("tower_copter_paths_ab")
     with open(file_name, "rb") as f:
         paths = pickle.load(f)
@@ -240,7 +235,7 @@ def fit_crippled_policy():
     from sandbox.rocky.tf.policies.gaussian_mlp_policy import GaussianMLPPolicy
     from sandbox.rocky.new_analogy.envs.gpr_env import GprEnv
     from sandbox.rocky.tf.envs.base import TfEnv
-    from sandbox.rocky.new_analogy.algos.ff_bc_trainer import Trainer
+    from sandbox.rocky.new_analogy.tf.algos import Trainer
 
     task_id = tower.get_task_from_text("ab")
     expr = tower.Experiment(2, 2500)
