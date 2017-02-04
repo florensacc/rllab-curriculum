@@ -1,6 +1,6 @@
 import argparse
+
 import joblib
-import uuid
 import tensorflow as tf
 
 from rllab.sampler.utils import rollout
