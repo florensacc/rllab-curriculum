@@ -16,6 +16,7 @@ from rllab.core.serializable import Serializable
 
 from collections import OrderedDict
 import numpy as np
+import scipy.stats
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import os
@@ -95,6 +96,10 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.K = K
         self.K_static = K_fixed
         self.Ks = Ks
+        self.K_critic = 99  # Number of actions used to estimate the target.
+        Da = env.action_space.flat_dim
+        self.critic_proposal_sigma = np.ones((Da,))
+        self.critic_proposal_mu = np.zeros((Da,))
         self.q_target_type = q_target_type
         self.critic_lr = qf_learning_rate
         self.critic_weight_decay = Q_weight_decay
@@ -115,6 +120,15 @@ class VDDPG(OnlineAlgorithm, Serializable):
                                                       shape=(),
                                                       name='prior_coeff')
         self.K_pl = tf.placeholder(tf.int32, shape=(), name='K')
+        # # Number of particles for computing critic target.
+        # self.K_critic_pl = tf.placeholder(tf.int32, shape=(), name='K')
+
+        if q_target_type == 'soft':
+            self.importance_weights_pl = tf.placeholder(
+                tf.float32, shape=(None, self.K_critic, None),
+                name='importance_weights'
+            )
+
         self.svgd_target = svgd_target
         if svgd_target == "pre-action":
             assert policy.output_nonlinearity == tf.nn.tanh
@@ -152,10 +166,16 @@ class VDDPG(OnlineAlgorithm, Serializable):
             scope_name="dummy_" + self.policy.scope_name,
         )
 
-        self.target_qf = self.qf.get_copy(
-            scope_name=TARGET_PREFIX + self.qf.scope_name,
-            action_input=self.target_policy.output
-        )
+        if self.q_target_type == 'soft':
+            # For soft target, we don't feed in the actions from the policy.
+            self.target_qf = self.qf.get_copy(
+                scope_name=TARGET_PREFIX + self.qf.scope_name,
+            )
+        else:
+            self.target_qf = self.qf.get_copy(
+                scope_name=TARGET_PREFIX + self.qf.scope_name,
+                action_input=self.target_policy.output
+            )
 
         # TH: It's a bit weird to set class attributes (kernel.kappa and
         # kernel.kappa_grads) outside the class. Could we do this somehow
@@ -232,7 +252,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
             action_input=self.policy.output,
             observation_input=self.policy.observations_placeholder,
         )
-        self.critic_with_static_actions = self.qf.get_weight_tied_copy(
+        if self.actor_sparse_update:
+            self.critic_with_static_actions = self.qf.get_weight_tied_copy(
             action_input=self.kernel.fixed_actions_pl,
             observation_input=self.policy.observations_placeholder,
         )
@@ -377,7 +398,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
             q_next = self.target_qf.output
             q_curr = self.qf.output
 
-        q_next = tf.reshape(q_next, tf_shape((-1, self.K_pl, M)))  # N x K x M
+        # N x K x M
+        q_next = tf.reshape(q_next, tf_shape((-1, self.K_critic, M)))
         q_curr = tf.reshape(q_curr, (-1, M))  # N x M
 
         if self.q_target_type == 'mean':
@@ -389,6 +411,14 @@ class VDDPG(OnlineAlgorithm, Serializable):
             # pick a single action and stick with that for all critics.
             q_next = tf.reduce_max(q_next, reduction_indices=1, name='q_next',
                                    keep_dims=False)  # N x M
+        elif self.q_target_type == 'soft':
+            # Note: q_next is actually soft V!
+            exp_q_next = tf.exp(q_next)  # N x K x M
+            # N x K x M
+            weighted_exp_q_samples = exp_q_next / self.importance_weights_pl
+            # N x M
+            q_next = tf.log(tf.reduce_mean(weighted_exp_q_samples, axis=1))
+
         else:
             raise NotImplementedError
         # q_next: N x M
@@ -506,12 +536,13 @@ class VDDPG(OnlineAlgorithm, Serializable):
                     self.critic_with_policy_input, obs, temp, K)
                 )
                 feeds.update(
-                    self.kernel.update(self, feeds, multiheaded=False, K=K)
+                    self.kernel.update(self, feeds, multiheaded=False,
+                                       K=self.K)
                 )
 
         if self.train_critic:
             feeds.update(self._critic_feed_dict(
-                rewards, terminals, obs, actions, next_obs, temp, K
+                rewards, terminals, obs, actions, next_obs, temp, self.K_critic
             ))
 
         feeds[self.K_pl] = K
@@ -540,6 +571,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
     def _critic_feed_dict(self, rewards, terminals, obs, actions, next_obs,
                           temp, K):
+        N = obs.shape[0]
+        Da = self.env.action_space.flat_dim
+        feed = {}
         # Again, we'll need to replicate next_obs.
         next_obs = self._replicate_rows(next_obs, K)
 
@@ -549,7 +583,22 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         target_policy_input = [next_obs]
         critic_input = [obs, actions]
-        target_critic_input = [next_obs, None]
+
+        if self.q_target_type == 'soft':
+            # We'll use the same actions for each sample (first dimension).
+            actions = (np.random.randn(N, self.K_critic, Da)
+                       * self.critic_proposal_sigma + self.critic_proposal_mu)
+            weights = scipy.stats.multivariate_normal(
+                mean=self.critic_proposal_mu,
+                cov=self.critic_proposal_sigma**2,
+            ).pdf(actions)
+            # N*K_critic x Da
+            actions = np.reshape(actions, (N*self.K_critic, Da))
+
+            feed[self.importance_weights_pl] = weights[:, :, None]
+            target_critic_input = [next_obs, actions]
+        else:
+            target_critic_input = [next_obs, None]
 
         if temp is not None:
             target_policy_input.append(temp)
@@ -559,9 +608,10 @@ class VDDPG(OnlineAlgorithm, Serializable):
         #curr_inputs = (obs, actions) if temp is None else (obs, actions, temp)
         #next_inputs = (next_obs,) if temp is None else (next_obs, temp)
 
-        feed = self.target_policy.get_feed_dict(*target_policy_input)
+        feed.update(self.target_policy.get_feed_dict(*target_policy_input))
         feed.update(self.qf.get_feed_dict(*critic_input))
         feed.update(self.target_qf.get_feed_dict(*target_critic_input))
+
 
         # Adjust rewards dims for backward compatibility.
         if rewards.ndim == 1:
