@@ -29,7 +29,7 @@ def run_task(_):
 
     policy = GroundTruthAnalogyPolicy(
         env_spec=env_spec,
-        hidden_sizes=(64, 64),
+        hidden_sizes=(256, 256),
         # embedding doesn't matter here
         embedding_dim=1,
     )
