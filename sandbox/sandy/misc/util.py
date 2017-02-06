@@ -9,3 +9,9 @@ def create_dir_if_needed(directory):
     import os
     if not os.path.exists(directory):
         os.makedirs(directory)
+
+def to_iterable(obj):
+    if not hasattr(obj, '__iter__') or type(obj) == str:
+        return [obj]
+    return obj
+

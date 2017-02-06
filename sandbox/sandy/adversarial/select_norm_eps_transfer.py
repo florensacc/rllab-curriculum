@@ -13,12 +13,17 @@ AVG_RETURN_KEY = "avg_return"
 NORM_KEY = "norm"
 EPS_KEY = "fgsm_eps"
 POLICY_ADV_KEY = "policy_adv"
+SELECTION_TYPE = 'lower_than'  # Options: "in_range", "lower_than"
 
-def select_interesting_norm_eps(h5_file, range_ratio=0.7):
+def select_interesting_norm_eps(h5_file, range_ratio=0.7, lower_than_ratios=[0.25, 0.5, 0.75, 0.9]):
     # "Interesting" is defined as where the agent's performance starts to decrease,
     # but it hasn't completely broken yet
-    # range_ratio defines the percentage of the range (centered between max and
-    # min performance) that we consider interesting.
+    # range_ratio: percentage of the range (centered between max and
+    #              min performance) that we consider interesting.
+    #              Only used if SELECTION_TYPE == 'in_range'
+    # lower_than_ratio: percentage of max performance that agent
+    #                   performance should be lower than, for selected epsilon,
+    #                   Only used if SELECTION_TYPE == "lower_than"
     param_names = get_param_names(h5_file)
     norm_idx = param_names.index(NORM_KEY)
     eps_idx = param_names.index(EPS_KEY)
@@ -56,23 +61,41 @@ def select_interesting_norm_eps(h5_file, range_ratio=0.7):
             avg_returns[key].append((eps, avg_return))
 
     chosen_epsilons = {}
-    for key in avg_returns:
+    avg_return_keys = sorted(avg_returns.keys())
+    for key in avg_return_keys:
         eps_avg_returns = avg_returns[key]
         max_avg_return = np.max([x[1] for x in eps_avg_returns])
         min_avg_return = np.min([x[1] for x in eps_avg_returns])
-
-        # Figure out which epsilons fall within interesting range of performance
         range_size = (max_avg_return - min_avg_return)
-        range_max = max_avg_return - range_size * (0.5 - range_ratio/2.0)
-        range_min = min_avg_return + range_size * (0.5 - range_ratio/2.0)
-        interesting_eps = [x for x in eps_avg_returns if x[1] <= range_max and x[1] >= range_min]
-        interesting_eps = sorted(interesting_eps, key=lambda x: x[0])
-        print(key)
-        print("Avg return max and min:", max_avg_return, min_avg_return)
-        print("Range max and min:", range_max, range_min)
-        print("\t", len(interesting_eps))
-        print("\t", interesting_eps)
-        chosen_epsilons[key] = [x[0] for x in interesting_eps]
+
+        if SELECTION_TYPE == "in_range":
+            # Figure out which epsilons fall within interesting range of performance
+            range_max = max_avg_return - range_size * (0.5 - range_ratio/2.0)
+            range_min = min_avg_return + range_size * (0.5 - range_ratio/2.0)
+            interesting_eps = [x for x in eps_avg_returns if x[1] <= range_max and x[1] >= range_min]
+            interesting_eps = sorted(interesting_eps, key=lambda x: x[0])
+            print(key)
+            print("Avg return max and min:", max_avg_return, min_avg_return)
+            print("Range max and min:", range_max, range_min)
+            print("\t", len(interesting_eps))
+            print("\t", interesting_eps)
+            chosen_epsilons[key] = [x[0] for x in interesting_eps]
+        elif SELECTION_TYPE == "lower_than":
+            # Pick first epsilon that's below 50% of max performance, and the
+            # one after that
+            chosen_epsilons[key] = []
+            lower_than_ratios = sorted(lower_than_ratios)
+            print(key)
+            print("Avg return max and min:", max_avg_return, min_avg_return)
+            for ratio in lower_than_ratios:
+                range_max = max_avg_return - ratio * range_size
+                interesting_eps = [x for x in eps_avg_returns \
+                                   if x[1] <= range_max]
+                interesting_eps = sorted(interesting_eps, key=lambda x: x[0])
+                if interesting_eps[0][0] not in chosen_epsilons[key]:
+                    chosen_epsilons[key].append(interesting_eps[0][0])
+                print("\tRange max:", range_max)
+                print("\t", interesting_eps)
 
     f.close()
 
@@ -87,6 +110,7 @@ def select_interesting_norm_eps(h5_file, range_ratio=0.7):
     exp_to_run = sorted(exp_to_run, key=lambda x: (x[0]+x[1],x[2]))
 
     output_fname = osp.join(osp.dirname(h5_file), 'transfer_exp_to_run_' + get_time_stamp() + '.p')
+    print("Saving in", output_fname)
     pickle.dump(exp_to_run, open(output_fname, "wb"))
     # pickle.load(open(output_fname, 'rb'))
 
