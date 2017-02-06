@@ -10,12 +10,7 @@ from sandbox.sandy.adversarial.io_util import init_output_file, \
         save_performance, save_video_file, init_all_output_file, save_performance_to_all
 from sandbox.sandy.adversarial.shared import get_average_return, load_model, load_models
 from sandbox.sandy.adversarial.vis import visualize_adversary
-from sandbox.sandy.misc.util import get_time_stamp
-
-def to_iterable(obj):
-    if not hasattr(obj, '__iter__') or type(obj) == str:
-        return [obj]
-    return obj
+from sandbox.sandy.misc.util import get_time_stamp, to_iterable
 
 class AdvExperiment(object):
     def __init__(self, games, norms, fgsm_eps, experiments, model_dir, \
@@ -64,8 +59,11 @@ class AdvExperiment(object):
                     policy_adv[1].set_adversary_fn(None)
                     if not self.test_transfer and policy_target[3] != policy_adv[3]:
                         continue
+                    logger.record_tabular("Game", game)
                     logger.record_tabular("AdversaryPolicy", policy_adv[3])
                     logger.record_tabular("TargetPolicy", policy_target[3])
+                    logger.record_tabular("Norm", norm)
+                    logger.record_tabular("FGSMEps", fgsm_eps)
                     output_h5 = None
                     if self.save_rollouts:
                         output_fname = "{exp_index}_{norm}_{eps}_{policy_adv}_{policy_target}.h5".format(
