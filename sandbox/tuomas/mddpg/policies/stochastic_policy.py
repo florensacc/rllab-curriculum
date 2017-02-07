@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+import scipy.stats
 
 from rllab.misc.overrides import overrides
 
@@ -129,9 +130,29 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
             temperature = np.reshape(temperature, (1, -1))
         return self.get_actions(observation, temperature)
 
-    def get_actions(self, observations, temperatures=None):
+    def get_actions(self, observations, temperatures=None, with_prob=False):
         feed = self.get_feed_dict(observations, temperatures)
-        return self.sess.run(self.output, feed), {}
+        if not with_prob:
+            actions = self.sess.run(self.output, feed)
+            info = {}
+        else:
+            actions, jacobians = self.sess.run(
+                [self.output, self._Doutput_Dsample],
+                feed,
+            )
+            samples = feed[self._sample_pl]
+            Ds = self._sample_dim
+            gauss_pdf = scipy.stats.multivariate_normal(
+                mean=np.zeros(Ds),
+                cov=np.ones(Ds),
+            ).pdf(samples)
+            coeffs = np.array([np.abs(np.linalg.det(J)) for J in jacobians])
+            action_pdf = gauss_pdf / coeffs
+            info = {
+                "prob": action_pdf,
+            }
+
+        return actions, info
 
     def _get_input_samples(self, N):
         """

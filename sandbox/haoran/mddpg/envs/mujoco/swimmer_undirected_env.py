@@ -103,7 +103,7 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
 
         return reward
 
-    def log_stats(self, algo, epoch, paths):
+    def log_stats(self, algo, epoch, paths, ax):
         # forward distance
         progs = []
         for path in paths:
@@ -138,22 +138,22 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
             variant = json.load(vf)
         img_file = os.path.join(
             snapshot_dir,
-            "itr_%d_test_paths.png"%(epoch),
+            "itr_%d_plots.png"%(epoch),
         )
         SwimmerUndirectedEnv.plot_paths(algo, paths, variant, img_file)
 
         return stats
 
-    @staticmethod
-    def plot_paths(paths, ax):
-        for path in paths:
-            pos = path['env_infos']['com']
-            xx = pos[:, 0]
-            yy = pos[:, 1]
-            ax.plot(xx, yy, 'b')
-        xlim = np.ceil(np.max(np.abs(xx)))
-        ax.set_xlim((-xlim, xlim))
-        ax.set_ylim((-2, 2))
+    # @staticmethod
+    # def plot_paths(paths, ax):
+    #     for path in paths:
+    #         pos = path['env_infos']['com']
+    #         xx = pos[:, 0]
+    #         yy = pos[:, 1]
+    #         ax.plot(xx, yy, 'b')
+    #     xlim = np.ceil(np.max(np.abs(xx)))
+    #     ax.set_xlim((-xlim, xlim))
+    #     ax.set_ylim((-2, 2))
 
     @staticmethod
     def eval_qf(sess, qf, o, lim):
@@ -172,7 +172,7 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
     @staticmethod
     def plot_paths(algo, paths, variant, img_file):
         # plot the test paths
-        fig = plt.figure(figsize=(9, 14))
+        fig = plt.figure(figsize=(14, 14))
             # don't ask me how I figured out this ratio
         ax_paths = fig.add_subplot(211)
         ax_paths.grid(True)
@@ -198,7 +198,10 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
             alpha = algo.alpha
         else:
             alpha = 1
-        log_prob = (Q - np.max(Q.ravel())) / alpha
+        ## if the Q values get too big and makes it difficult to see the
+        ## landscape, then subtract the max (which does not change the distribution)
+        # log_prob = (Q - np.max(Q.ravel())) / alpha
+        log_prob = Q / alpha
         ax_qf.clear()
         cs = ax_qf.contour(X, Y, log_prob, 20)
         ax_qf.clabel(cs, inline=1, fontsize=10, fmt='%.2f')

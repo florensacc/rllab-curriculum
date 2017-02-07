@@ -142,8 +142,12 @@ class MultiGoalEnv(Env, Serializable):
         point = self.ax.plot(x,y,'b*')
         self.dynamic_plots = point
 
+        plt.draw()
+        plt.pause(0.001)
         if close:
             self.fixed_plots = None
+            self.fig = None
+
 
     def plot_position_cost(self,ax):
         delta = 0.01

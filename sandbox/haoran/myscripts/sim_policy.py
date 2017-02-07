@@ -3,6 +3,7 @@ import joblib
 import uuid
 import tensorflow as tf
 import numpy as np
+import matplotlib.pyplot as plt
 from sandbox.haoran.myscripts.myutilities import get_true_env
 from gym.envs.mujoco import mujoco_env
 from sandbox.tuomas.mddpg.policies.stochastic_policy import StochasticNNPolicy
@@ -68,6 +69,7 @@ if __name__ == "__main__":
         help='Fixed random seed for each rollout. Set for reproducibility.')
     parser.add_argument('--no-plot', default=False, action='store_true')
     parser.add_argument('--show-qf', default=False, action='store_true')
+    parser.add_argument('--plt-backend', type=str, default="")
     args = parser.parse_args()
 
     qf = None
@@ -89,6 +91,8 @@ if __name__ == "__main__":
             if args.show_qf:
                 qf = data['qf']
         while True:
+            if args.plt_backend != "":
+                plt.switch_backend('MacOSX')
             if args.seed >= 0:
                 set_seed(args.seed)
                 true_env = get_true_env(env)
