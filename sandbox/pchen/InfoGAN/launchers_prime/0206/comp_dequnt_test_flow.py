@@ -18,30 +18,33 @@ import tensorflow as tf
 import cloudpickle
 
 
-# test if weight norm on flow has an effect
-
-# normalizing the flow improves both train and vali by 0.04 bits
+# kuma hopefully numerically stable
 
 class VG(VariantGenerator):
     @variant
-    def wnorm(self):
+    def dequant(self):
         return [
-            True, False
+            "uniform",
+            "kuma",
         ]
+
+    @variant
+    def nr_mixture(self, detaunt):
+        if detaunt == "uniform":
+            return [1]
+        else:
+            return [1, 3, 5, 10]
 
     @variant
     def seed(self):
         return [42,]
 
 def run_task(v):
-    wnorm = v["wnorm"]
-    if wnorm:
-        f = normalize
-    else:
-        f = lambda x: x
+    logit = True
+    f = normalize
     hybrid = False
 
-    dataset = Cifar10Dataset(dequantized=True)
+    dataset = Cifar10Dataset(dequantized=False) # dequantization left to flow
     flat_dim = dataset.image_dim
 
     noise = Gaussian(flat_dim)
@@ -90,15 +93,48 @@ def run_task(v):
             combine_fn=merge,
         )
 
-    dist = OldDequantizedFlow(f(cur))
+    if logit:
+        cur = shift(logitize(cur))
+
+    blocks = 4
+    filters = 32
+    nr_mix = v["nr_mix"]
+    def go(x):
+        shp = int_shape(x)
+        chns = shp[3]
+        x = nn.conv2d(x, filters)
+        for _ in range(blocks):
+            x = nn.gated_resnet(x)
+        temp = nn.conv2d(x, chns * 2 * nr_mix)
+        return tf.reshape(
+            temp,
+            shp[:3] + [chns*2, nr_mix]
+        ) * 0.1
+    if v["dequant"] == "uniform":
+        noise_dist = UniformDequant()
+    else:
+        noise_dist=FactorizedEncodingSpatialKumaraswamyDequant(
+            shape=[32, 32, 3],
+            nn_builder=go,
+            nr_mixtures=nr_mix,
+        )
+    dist = DequantizedFlow(
+        base_dist=cur,
+        # noise_dist=UniformDequant(),
+        noise_dist=noise_dist,
+    )
 
     algo = DistTrainer(
         dataset=dataset,
         dist=dist,
         init_batch_size=1024,
         train_batch_size=64, # also testing resuming from diff bs
-        optimizer=AdamaxOptimizer(learning_rate=1e-3),
+        optimizer=AdamaxOptimizer(
+            learning_rate=1e-3,
+        ),
         save_every=20,
+        # # for debug
+        debug=False,
         # resume_from="/home/peter/rllab-private/data/local/global_proper_deeper_flow/"
         # checkpoint_dir="data/local/test_debug",
     )
@@ -120,8 +156,10 @@ for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="normal_nn_wnorm_test",
+        exp_prefix="0206_dequnt_test",
         variant=v,
+
+        # mode="local",
 
         # mode="local_docker",
         # env=dict(
@@ -129,7 +167,7 @@ for v in variants[:]:
         # ),
 
         mode="ec2",
-
+        #
         use_gpu=True,
         snapshot_mode="last",
         docker_image="dementrock/rllab3-shared-gpu-cuda80",
