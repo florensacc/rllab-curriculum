@@ -154,7 +154,9 @@ class DistTrainer(object):
         return imgs
 
     def interact(self, embed=True):
-        sess = tf.Session()
+        sess = tf.Session(
+            config=tf.ConfigProto(allow_soft_placement=True) if self._debug else None
+        )
 
         assert self._resume_from
         init_inp = self.construct_init()
@@ -232,16 +234,17 @@ class DistTrainer(object):
             for itr in range(self._max_iter):
                 for update_i in ProgressBar()(range(self._updates_per_iter)):
                     try:
+                        this_batch = self.train_batch()
                         log_vals = sess.run(
                             (trainer,) + train_log_vars,
-                            {train_inp: self.train_batch()}
+                            {train_inp: this_batch}
                         )[1:]
                         train_log_vals.append(log_vals)
                         assert not np.any(np.isnan(log_vals))
 
                     except BaseException as e:
                         print("exception caught: %s" % e)
-                        if "NaN" in e.message and self._restart_from_nan:
+                        if ("NaN" in e.message) and self._restart_from_nan:
                             restore(sess, ema)
                         else:
                             import IPython; IPython.embed()
