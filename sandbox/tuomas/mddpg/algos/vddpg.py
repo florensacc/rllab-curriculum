@@ -55,6 +55,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             K,
             # Number of static particles (used only if actor_sparse_update=True)
             K_fixed=1,
+            K_critic=99,
             Ks=None,  # Use different number of particles for different temps.
             q_prior=None,
             q_target_type="max",
@@ -96,7 +97,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.K = K
         self.K_static = K_fixed
         self.Ks = Ks
-        self.K_critic = 99  # Number of actions used to estimate the target.
+        self.K_critic = K_critic  # Number of actions used to estimate the target.
         Da = env.action_space.flat_dim
         self.critic_proposal_sigma = np.ones((Da,))
         self.critic_proposal_mu = np.zeros((Da,))
@@ -402,6 +403,15 @@ class VDDPG(OnlineAlgorithm, Serializable):
         q_next = tf.reshape(q_next, tf_shape((-1, self.K_critic, M)))
         q_curr = tf.reshape(q_curr, (-1, M))  # N x M
 
+        # average across reward dims of max Q - min Q, where max and min are
+        # over sampled actions
+        # logging this allows us to know roughly how close are softmax and max
+        self.q_next_avg_diff = tf.reduce_mean(
+            tf.reduce_max(q_next, reduction_indices=1)\
+            - tf.reduce_min(q_next, reduction_indices=1),
+            reduction_indices=1,
+        ) # N
+
         if self.q_target_type == 'mean':
             q_next = tf.reduce_mean(q_next, reduction_indices=1, name='q_next',
                                     keep_dims=False)  # N x M
@@ -413,11 +423,19 @@ class VDDPG(OnlineAlgorithm, Serializable):
                                    keep_dims=False)  # N x M
         elif self.q_target_type == 'soft':
             # Note: q_next is actually soft V!
-            exp_q_next = tf.exp(q_next)  # N x K x M
-            # N x K x M
-            weighted_exp_q_samples = exp_q_next / self.importance_weights_pl
-            # N x M
-            q_next = tf.log(tf.reduce_mean(weighted_exp_q_samples, axis=1))
+            q_next_max = tf.reduce_max(
+                q_next,
+                axis=1,
+                keep_dims=True,
+                name="q_next_max",
+            ) # N x 1 x M
+            exp_q_next_minus_max = tf.exp(q_next - q_next_max)  # N x K x M
+            q_next = q_next_max[:,0,:] + tf.log(tf.reduce_mean(
+                exp_q_next_minus_max / self.importance_weights_pl,
+                axis=1,
+                keep_dims=False,
+                name="q_next",
+            ))
 
         else:
             raise NotImplementedError
@@ -586,12 +604,21 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         if self.q_target_type == 'soft':
             # We'll use the same actions for each sample (first dimension).
-            actions = (np.random.randn(N, self.K_critic, Da)
-                       * self.critic_proposal_sigma + self.critic_proposal_mu)
-            weights = scipy.stats.multivariate_normal(
-                mean=self.critic_proposal_mu,
-                cov=self.critic_proposal_sigma**2,
-            ).pdf(actions)
+
+            ## new uniform sampling
+            scale = self.policy.output_scale
+            actions = np.random.uniform(
+                low=-scale, high=scale, size=(N, self.K_critic, Da))
+            weights = np.power(2. * scale, Da) * np.ones((N, self.K_critic))
+                # 1/p = volume of the action space
+
+            ## old Gaussian sampling: may accidentally get low prob samples
+            # actions = (np.random.randn(N, self.K_critic, Da)
+            #            * self.critic_proposal_sigma + self.critic_proposal_mu)
+            # weights = scipy.stats.multivariate_normal(
+            #     mean=self.critic_proposal_mu,
+            #     cov=self.critic_proposal_sigma**2,
+            # ).pdf(actions)
             # N*K_critic x Da
             actions = np.reshape(actions, (N*self.K_critic, Da))
 
@@ -660,6 +687,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             target_qf_outputs,
             ys,
             kappa,  # N x K x K
+            qf_next_avg_diff,
         ) = self.sess.run(
             [
                 self.actor_surrogate_loss,
@@ -670,6 +698,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 self.target_qf.output,
                 self.ys,
                 self.kernel.kappa,
+                self.q_next_avg_diff,
             ],
             feed_dict=feed_dict)
         average_discounted_return = np.mean(
@@ -711,6 +740,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
         )
         self.last_statistics.update(
             create_stats_ordered_dict('KappaSum',kappa_sum)
+        )
+        self.last_statistics.update(
+            create_stats_ordered_dict('TargetQfAvgDiff',qf_next_avg_diff)
         )
 
         es_path_returns = train_info["es_path_returns"]
@@ -783,3 +815,42 @@ class VDDPG(OnlineAlgorithm, Serializable):
         Serializable.__setstate__(self, d)
         self.qf.set_param_values(d["qf_params"])
         self.policy.set_param_values(d["policy_params"])
+
+## Use the following code to test whether the exp(Q-Qmax) code works
+# import tensorflow as tf
+# import numpy as np
+#
+# q_next = tf.placeholder(shape=(2,3,4),dtype=tf.float32)
+# weights = tf.placeholder(shape=(2,3,1),dtype=tf.float32)
+#
+#
+# q_next_max = tf.reduce_max(
+#     q_next,
+#     axis=1,
+#     keep_dims=True,
+#     name="q_next_max",
+# ) # N x 1 x M
+# exp_q_next_minus_max = tf.exp(q_next - q_next_max)  # N x K x M
+# q_next1 = q_next_max[:,0,:] + tf.log(tf.reduce_mean(
+#     exp_q_next_minus_max / weights,
+#     axis=1,
+#     keep_dims=False,
+#     name="q_next1",
+# ))
+#
+#
+# ## inf errors?
+# exp_q_next = tf.exp(q_next)  # N x K x M
+# weighted_exp_q_samples = exp_q_next / weights
+# # N x M
+# q_next2 = tf.log(tf.reduce_mean(weighted_exp_q_samples, axis=1), name="q_next2")
+#
+# diff = q_next1 - q_next2
+#
+# with tf.Session() as sess:
+#     feed = {
+#         q_next: np.random.randn(2,3,4) * 1,
+#         weights: np.random.uniform(low=1,high=2,size=(2,3,1)),
+#     }
+#     results = sess.run([q_next1,q_next2, diff], feed)
+#     print(results)
