@@ -1,10 +1,10 @@
 import math
-
 import numpy as np
 
 from rllab import spaces
 from rllab.envs.base import Step
 from rllab.envs.mujoco.gather.gather_env import GatherEnv
+from rllab.core.serializable import Serializable
 from rllab.envs.mujoco.mujoco_env import BIG
 from rllab.misc import logger
 from rllab.misc.overrides import overrides
@@ -13,7 +13,7 @@ APPLE = 0
 BOMB = 1
 
 
-class FollowEnv(GatherEnv):
+class FollowEnv(GatherEnv, Serializable):
     MODEL_CLASS = None
     ORI_IND = None
 
@@ -26,7 +26,7 @@ class FollowEnv(GatherEnv):
             goal_dist_rew=True,
             *args, **kwargs
     ):
-        # Serializable.quick_init(self, locals())
+        Serializable.quick_init(self, locals())
         self.displ_std = displ_std
         self.goal_vector_obs = goal_vector_obs
         self.goal_dist_rew = goal_dist_rew
