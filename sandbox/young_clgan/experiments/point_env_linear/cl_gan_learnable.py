@@ -27,7 +27,7 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 
-from sandbox.young_clgan.lib.envs.base import UniformGoalGenerator, FixedGoalGenerator, update_env_goal_generator
+from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator
 from sandbox.young_clgan.lib.envs.point_env import PointEnv
 from sandbox.young_clgan.lib.goal import *
 from sandbox.young_clgan.lib.logging import *
@@ -155,7 +155,7 @@ if __name__ == '__main__':
         with ExperimentLogger(log_config.log_dir, outer_iter):
             update_env_goal_generator(
                 env,
-                UniformGoalGenerator(
+                UniformListGoalGenerator(
                     goals.tolist()
                 )
             )
