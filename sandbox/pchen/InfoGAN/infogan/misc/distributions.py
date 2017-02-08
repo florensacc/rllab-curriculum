@@ -3375,6 +3375,90 @@ class FactorizedEncodingSpatialTruncatedLogisticDequant(DequantizationDistributi
         scaling = self._width / 2.
         return (eps+1.) * scaling, logli_eps - tf.log(scaling) * self._dim
 
+class FlowBasedDequant(DequantizationDistribution):
+    def __init__(
+            self,
+            shape,
+            width=1. / 256,
+    ):
+        global G_IDX
+        G_IDX += 1
+        self._name = "FlowBasedDequant_%s" % (G_IDX)
+        self._width = width
+        dim = np.prod(shape)
+
+        self._shape = shape
+        self._dim = dim
+
+        flat_dim = dim
+        from sandbox.pchen.InfoGAN.infogan.models.real_nvp import *
+        noise = Gaussian(flat_dim)
+        shape = [-1, 16, 16, 12]
+        shaped_noise = ReshapeFlow(
+            noise,
+            forward_fn=lambda x: tf.reshape(x, shape),
+            backward_fn=lambda x: tf_go(x).reshape([-1, noise.dim]).value,
+        )
+
+        cur = shaped_noise
+        for i in range(4):
+            cf, ef, merge = checkerboard_condition_fn_gen(i, (i<2) )
+            cur = ShearingFlow(
+                f(cur),
+                nn_builder=resnet_blocks_gen(),
+                condition_fn=cf,
+                effect_fn=ef,
+                combine_fn=merge,
+            )
+
+        for i in range(4):
+            cf, ef, merge = channel_condition_fn_gen(i, )
+            cur = ShearingFlow(
+                f(cur),
+                nn_builder=resnet_blocks_gen(),
+                condition_fn=cf,
+                effect_fn=ef,
+            combine_fn=merge,
+        )
+
+        self.init_mode()
+
+    @overrides
+    def init_mode(self):
+        self._custom_phase = CustomPhase.init
+        self._delegate_dist.init_mode()
+
+    @overrides
+    def train_mode(self):
+        self._custom_phase = CustomPhase.train
+        self._delegate_dist.train_mode()
+
+    def sample_logli(self, dist_info):
+        condition = dist_info["condition"]
+        with scopes.default_arg_scope(
+                counters={}, init=self._custom_phase == CustomPhase.init,
+                ema=None
+        ):
+            info_tensor = self._nn_template(condition)
+            if self._nr_mixtures != 1:
+                # ensure the mixture reshape is correct
+                shp = int_shape(info_tensor)
+                ndim = len(shp)
+                assert shp[-1] == self._nr_mixtures
+                info_tensor = tf.transpose(
+                    info_tensor,
+                    [0, ndim-1, ] + list(range(1, ndim-1))
+                )
+            delegate_info_flat = tf.reshape(
+                info_tensor,
+                [-1, self._delegate_dist.dist_flat_dim]
+            )
+        eps, logli_eps = self._delegate_dist.sample_logli(
+            self._delegate_dist.activate_dist(delegate_info_flat)
+        )
+        scaling = self._width
+        return (eps) * scaling, logli_eps - tf.log(scaling) * self._dim
+
 # TODO: this has wrong impl for sampling
 def normalize(dist):
     def normalize_per_dim(x):
