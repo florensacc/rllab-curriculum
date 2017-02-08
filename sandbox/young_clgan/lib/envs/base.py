@@ -27,17 +27,32 @@ class GoalGenerator(Serializable):
         return self._goal
 
 
-class UniformGoalGenerator(GoalGenerator):
+class UniformListGoalGenerator(GoalGenerator):
     """ Generating goals uniformly from a goal list. """
 
     def __init__(self, goal_list):
         self.goal_list = goal_list
         random.seed()
         Serializable.quick_init(self, locals())
-        self.update()
+        super(UniformListGoalGenerator, self).__init__()
 
     def update(self):
         self._goal = random.choice(self.goal_list)
+        return self.goal
+
+
+class UniformGoalGenerator(GoalGenerator):
+    """ Generating goals uniformly from a goal list. """
+
+    def __init__(self, goal_dim, bound=2):
+        self.goal_dim = goal_dim
+        self.bound = bound
+        Serializable.quick_init(self, locals())
+        super(UniformGoalGenerator, self).__init__()
+
+    def update(self):
+        self._goal = np.random.uniform(low=-self.bound, high=self.bound, size=self.goal_dim)
+        # print("new goal: ", self._goal)
         return self.goal
 
 
@@ -47,6 +62,7 @@ class FixedGoalGenerator(GoalGenerator):
     def __init__(self, goal):
         self._goal = goal
         Serializable.quick_init(self, locals())
+        super(FixedGoalGenerator, self).__init__()
 
 
 class GoalEnv(Serializable):
@@ -77,9 +93,8 @@ class GoalEnv(Serializable):
 
 
 class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
-
-    def __init__(self, env, goal_generator, goal_weight, distance_metric='L2',
-            goal_reward='Negative Distance'):
+    def __init__(self, env, goal_generator, goal_weight, inner_weight=0, distance_metric='L2',
+                 goal_reward='NegativeDistance'):
 
         Serializable.quick_init(self, locals())
         ProxyEnv.__init__(self, env)
@@ -87,21 +102,29 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         self._distance_metric = distance_metric
         self._goal_reward = goal_reward
         self.goal_weight = goal_weight
+        self.inner_weight = inner_weight
 
-    def reset(self):
-        self.update_goal()
-        return self._append_observation(ProxyEnv.reset(self))
+    def reset(self, reset_goal=True, reset_inner=True):
+        if reset_goal:
+            self.update_goal()
+        if reset_inner:
+            return self._append_observation(ProxyEnv.reset(self))
+        return self.get_current_obs()
 
     def step(self, action):
         observation, reward, done, info = ProxyEnv.step(self, action)
+        body_com = observation[-3:-1]  # assumes the COM is last 3 coord, z being last
+        info['distance'] = np.linalg.norm(body_com - self.current_goal)
+        reward_dist = self._compute_dist_reward(body_com)
+        info['reward_dist'] = reward_dist
         return (
             self._append_observation(observation),
-            self._compute_reward(observation[-3:-1], reward),  # assumes the COM is last 3 coord, z being last
+            reward_dist + self.inner_weight * reward,
             done,
             info
         )
 
-    def _compute_reward(self, obs, reward):
+    def _compute_dist_reward(self, obs):
         if self._distance_metric == 'L1':
             goal_distance = np.sum(np.abs(obs - self.current_goal))
         elif self._distance_metric == 'L2':
@@ -111,14 +134,16 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         else:
             raise NotImplementedError('Unsupported distance metric type.')
 
-        if self._goal_reward == 'Negative Distance':
+        if self._goal_reward == 'NegativeDistance':
             intrinsic_reward = - goal_distance
+        elif self._goal_reward == 'InverseDistance':
+            intrinsic_reward = 1. / (goal_distance + 0.1)
         elif callable(self._goal_reward):
             intrinsic_reward = self._goal_reward(goal_distance)
         else:
             raise NotImplementedError('Unsupported goal_reward type.')
 
-        return self.goal_weight * intrinsic_reward + reward
+        return self.goal_weight * intrinsic_reward
 
     def get_current_obs(self):
         obj = self
@@ -135,6 +160,25 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         shp = self.get_current_obs().shape
         ub = BIG * np.ones(shp)
         return spaces.Box(ub * -1, ub)
+
+    @overrides
+    def log_diagnostics(self, paths, *args, **kwargs):
+        # Process by time steps
+        distances = [
+            np.mean(path['env_infos']['distance'])
+            for path in paths
+            ]
+        initial_goal_distances = [
+            path['env_infos']['distance'][0] for path in paths
+            ]
+        reward_dist = [
+            np.mean(path['env_infos']['reward_dist'])
+            for path in paths
+            ]
+        # Process by trajectories
+        logger.record_tabular('InitGoalDistance', np.mean(initial_goal_distances))
+        logger.record_tabular('MeanDistance', np.mean(distances))
+        logger.record_tabular('MeanRewardDist', np.mean(reward_dist))
 
 
 def update_env_goal_generator(env, goal_generator):
