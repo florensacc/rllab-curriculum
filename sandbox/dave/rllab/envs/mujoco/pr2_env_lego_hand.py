@@ -175,7 +175,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         # Penalize the robot for large actions.f
         # reward_occlusion = self.occlusion_weight * self.get_reward_occlusion()
         # reward_ctrl = - self.action_penalty_weight * np.square(action).sum()
-        reward = reward_tip + reward_dist + reward_angle #reward_ctrl#+ reward_occlusion
+        reward = reward_dist
         state = self._state
         notdone = np.isfinite(state).all()
         done = not notdone
@@ -248,7 +248,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
 
         self.lego_pos = self.lego[:3]
         lg = (self.goal - self.lego_pos)
-        init_hand = self.lego_pos + lg * (self.t - 0.2  / np.linalg.norm(lg) )
+        init_hand = self.lego_pos + lg * (self.t - 0.25/np.linalg.norm(lg) )
         qpos[:2, 0] = init_hand[:2]
 
         if self.allow_random_vel_restarts or self.first_time:
@@ -306,7 +306,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.viewer.cam.lookat[0] = self.model.stat.center[0]
         self.viewer.cam.lookat[1] = self.model.stat.center[1]
         self.viewer.cam.lookat[2] = self.model.stat.center[2]
-        self.viewer.cam.distance = self.model.stat.extent * 1.5
+        # self.viewer.cam.distance = self.model.stat.extent * 1.5
 
     #     if self.use_vision:
     #         self.viewer.cam.camid = -1

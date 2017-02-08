@@ -33,13 +33,12 @@ def plot_heatmap(paths, prefix=''):
 
     zmin = 0
     zmax = 0.3
-    zs[(zs<zmin) | (zs>zmax)] = None
-
-    import pdb; pdb.set_trace()
+    zs[(zs<zmin)] = 0
+    zs[(zs > zmax)] = 0.3
 
     # Create the contour plot
     CS = plt.contourf(xs, ys, zs, 15, cmap=plt.cm.rainbow,
-                      vmax=zmax, vmin=zmin)
+                      vmax=zmax, vmin=zmin, interpolation='nearest')
     plt.colorbar()
     plt.show()
 
@@ -92,7 +91,9 @@ def plot_finaldistance_hist(paths, prefix=''):
     plt.savefig(osp.join(log_dir, prefix + 'histogram.png'))
     plt.close()
 
-def plot_scatter_heatmap(paths, type, prefix=''):
+
+
+def plot_scatter_heatmap(paths, prefix=''):
     fig, ax = plt.subplots()
 
     x_goal = [path["env_infos"]["x_goal"] for path in paths]
@@ -101,13 +102,13 @@ def plot_scatter_heatmap(paths, type, prefix=''):
     ysg = np.array([y[0] for y in y_goal])
 
     x_lego = [path["env_infos"]["x_lego"] for path in paths]
-    xsl = np.array([x[0] for x in x_lego])
+    xsl = np.array([x[-1] for x in x_lego])
     y_lego = [path["env_infos"]["y_lego"] for path in paths]
-    ysl = np.array([y[0] for y in y_lego])
+    ysl = np.array([y[-1] for y in y_lego])
     distances_to_goal = [path["env_infos"]["distance_to_goal"] for path in paths]
 
-    xs = xsg - xsl
-    ys = ysg - ysl
+    xs = xsl - xsg
+    ys = ysl - ysg
     zs = [d[-1] for d in distances_to_goal]
 
     furthest = np.max(np.maximum(abs(xs), abs(ys)))
@@ -115,15 +116,15 @@ def plot_scatter_heatmap(paths, type, prefix=''):
     colmap = cm.ScalarMappable(cmap=cm.CMRmap)
     colmap.set_array(zs)
 
-    yg = ax.scatter(xs, ys, c=cm.CMRmap(zs / max(zs)))
+    yg = ax.scatter(ys, xs, c=cm.CMRmap(zs / max(zs)))
     cb = fig.colorbar(colmap)
 
     ax.set_title(prefix + 'Final distance object - goal (m)')
-    ax.set_xlabel('distance to object (m)')
-    ax.set_ylabel('distance to object (m)')
+    ax.set_xlabel('y distance to object (m)')
+    ax.set_ylabel('x distance to object (m)')
 
-    ax.set_xlim([-furthest, furthest])
-    ax.set_ylim([-furthest, furthest])
+    ax.set_xlim([0.05, -0.05])
+    ax.set_ylim([-0.05, 0.05])
 
     plt.show()
     #
@@ -131,11 +132,12 @@ def plot_scatter_heatmap(paths, type, prefix=''):
     # plt.clf()
     # plt.close('all')
     # gc.collect()
+    import pdb; pdb.set_trace()
 
 
-    log_dir = logger.get_snapshot_dir()
-
-
-    plt.savefig(osp.join(log_dir, prefix + 'scatter_heatmap_ '+ type + '.png'))
+    # log_dir = logger.get_snapshot_dir()
+    #
+    #
+    # plt.savefig(osp.join(log_dir, prefix + 'scatter_heatmap_ '+ '.png'))
     # plt.close()
 

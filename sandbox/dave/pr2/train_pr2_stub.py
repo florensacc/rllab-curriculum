@@ -5,7 +5,7 @@ from sandbox.dave.rllab.algos.trpo import TRPO
 from sandbox.dave.rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 
 from rllab.envs.normalized_env import normalize
-from sandbox.dave.rllab.goal_generators.pr2_goal_generators import PR2CrownGoalGeneratorSmall #PR2CrownGoalGeneratorSmall
+from sandbox.dave.rllab.goal_generators.pr2_goal_generators import PR2FixedGoalGenerator #PR2CrownGoalGeneratorSmall
 from sandbox.dave.rllab.lego_generators.pr2_lego_generators import PR2LegoFixedBlockGenerator #PR2LegoBoxBlockGeneratorSmall #PR2LegoBoxBlockGeneratorSmall #PR2LegoFixedBlockGenerator
 from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.dave.rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
@@ -13,8 +13,8 @@ from sandbox.dave.rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.misc.instrument import VariantGenerator, variant
 
 
-from sandbox.dave.rllab.envs.mujoco.pr2_env_lego import Pr2EnvLego
-# from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_position import   Pr2EnvLego
+# from sandbox.dave.rllab.envs.mujoco.pr2_env_lego import Pr2EnvLego
+from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_position import Pr2EnvLego
 # from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_hand import Pr2EnvLego
 # from sandbox.dave.rllab.envs.mujoco.pr2_env_reach import Pr2EnvLego
 # from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_position_different_objects import Pr2EnvLego
@@ -24,99 +24,89 @@ import os
 
 stub(globals())
 
-train_goal_generator = PR2CrownGoalGeneratorSmall()
+train_goal_generator = PR2FixedGoalGenerator()
 action_limiter = FixedActionLimiter()
 
 
+env = normalize(Pr2EnvLego(
+    goal_generator=train_goal_generator,
+    lego_generator=PR2LegoFixedBlockGenerator(),
+    # action_limiter=action_limiter,
+    max_action=1,
+    pos_normal_sample=True,
+    qvel_init_std=0.01,
+    pos_normal_sample_std=.01,  #0.5
+    # use_depth=True,
+    # use_vision=True,
+    allow_random_restarts=True,
+    # tip=t,
+    # tau=t,
+    # crop=True,
+    # allow_random_vel_restarts=True,
+))
 
-# seeds = [1]
-seeds = [1, 11, 21, 31, 41]
-# seeds = [11, 21, 31, 41]
-# seeds = [11, 21, 31, 41]
-# std = [0.05, 0.1]
-# num_actions = [2, 5, 7, 10, 15, 20]
-# num_actions = [1]
-# taus = [1000, 2000]
-# taus = [0.9, 0.95, 0.995]
-# taus = [1]
-taus = [2000, 5000, 10000]
+policy = GaussianMLPPolicy(
+    env_spec=env.spec,
+    # The neural network policy should have n hidden layers, each with k hidden units.
+    hidden_sizes=(64, 64, 64),
+    init_std=0.1,
+    output_gain=0.1,
+    pkl_path= "data/local/train-Lego/IROS/3Dangle/exp_2/params.pkl"
+    # json_path="/home/ignasi/GitRepos/rllab-goals/data/local/train-Lego/rand_init_angle_reward_shaping_continuex2_2016_10_17_12_48_20_0001/params.json",
+    )
 
-for t in taus:
-    for s in seeds:
-        env = normalize(Pr2EnvLego(
-            goal_generator=train_goal_generator,
-            lego_generator=PR2LegoFixedBlockGenerator(),
-            # action_limiter=action_limiter,
-            max_action=1,
-            pos_normal_sample=True,
-            qvel_init_std=0.01,
-            pos_normal_sample_std=.01,  #0.5
-            # use_depth=True,
-            # use_vision=True,
-            allow_random_restarts=True,
-            tau=t,
-            # crop=True,
-            # allow_random_vel_restarts=True,
-            ))
+baseline = LinearFeatureBaseline(env_spec=env.spec)
 
-        policy = GaussianMLPPolicy(
-            env_spec=env.spec,
-            # The neural network policy should have n hidden layers, each with k hidden units.
-            hidden_sizes=(64, 64, 64),
-            # init_std=0.1,
-            # output_gain=0.1,
-            # beta=0.05,
-            # pkl_path= "upload/fixed-arm-position-ctrl-tip-no-random-restarts/fixed-arm-position-ctrl-tip-no-random-restarts1/params.pkl"
-            # json_path="/home/ignasi/GitRepos/rllab-goals/data/local/train-Lego/rand_init_angle_reward_shaping_continuex2_2016_10_17_12_48_20_0001/params.json",
-            )
+algo = TRPO(
+    env=env,
+    policy=policy,
+    baseline=baseline,
+    batch_size=5000,
+    max_path_length=100,  #100
+    n_itr=15000, #50000
+    discount=0.95,
+    gae_lambda=0.98,
+    step_size=0.01,
+    goal_generator=train_goal_generator,
+    action_limiter=None,
+    optimizer_args={'subsample_factor': 0.1},
+    # discount_weights={'angle': 0.1, 'tip': .1},
+    # plot=True,
+    # Uncomment both lines (this and the plot parameter below) to enable plotting
+    )
 
-        baseline = LinearFeatureBaseline(env_spec=env.spec)
+# algo.train()
 
-        algo = TRPO(
-            env=env,
-            policy=policy,
-            baseline=baseline,
-            batch_size=50000,
-            max_path_length=150,  #100
-            n_itr=10000, #50000
-            discount=0.95,
-            gae_lambda=0.98,
-            step_size=0.01,
-            goal_generator=train_goal_generator,
-            action_limiter=None,
-            optimizer_args={'subsample_factor': 0.1},
-            # discount_weights={'angle': 0.1, 'tip': .1},
-            # plot=True,
-            # Uncomment both lines (this and the plot parameter below) to enable plotting
-            )
+##lambda exp: exp.params['exp_name'].split('_')[-1][:2]
+exp_name="exp_4"
 
-        run_experiment_lite(
-            algo.train(),
-            use_gpu=False,
-            # Number of parallel workers for sampling
-            n_parallel=32,
-            # n_parallel=8,
-            # n_parallel=1,
-            # pre_commands=['pip install --upgrade pip',
-            #               'pip install --upgrade theano'],
-            sync_s3_pkl=True,
-            periodic_sync=True,
-            # sync_s3_png=True,
-            aws_config={"spot_price": '1.25', 'instance_type': 'm4.16xlarge'},
-            # Only keep the snapshot parameters for the last iteration
-            snapshot_mode="last",
-            # Specifies the seed for the experiment. If this is not provided, a random seed
-            # will be used
-            # seed=1,
-            mode="local",
-            # mode="ec2",
-            seed=s,
-            # log_dir="data/local/train-Lego/trial_pretraining",
-            # exp_prefix="train-Lego/RSS/trial",
-            # exp_name="trial",
-            # exp_prefix="train-Lego/RSS/torque-control",
-            # exp_name="random_0001_param_torque_eve_fixed" + str(s),
-            exp_prefix="train-Lego/RSS/reward-fixed",
-            # exp_name= "decaying-decaying-gamma" + str(t),
-            exp_name= "r_tau_" + str(t) + '_' +  str(s),
-        )
+run_experiment_lite(
+    algo.train(),
+    use_gpu=False,
+    # Number of parallel workers for sampling
+    n_parallel=12,
+    # n_parallel=8,
+    # n_parallel=1,
+    # pre_commands=['pip install --upgrade pip',
+    #               'pip install --upgrade theano'],
+    sync_s3_pkl=True,
+    periodic_sync=True,
+    # sync_s3_png=True,
+    aws_config={"spot_price": '1.25', 'instance_type': 'm4.16xlarge'},
+    # Only keep the snapshot parameters for the last iteration
+    snapshot_mode="last",
+    # Specifies the seed for the experiment. If this is not provided, a random seed
+    # will be used
+    # seed=1,
+    mode="local",
+    # mode="ec2",
+    seed=1,
+    # log_dir="data/local/train-Lego/trial_pretraining",
+    # exp_prefix="train-Lego/RSS/trial",
+    # exp_name="trial",
+    # exp_prefix="train-Lego/RSS/torque-control",
+    # exp_name="random_0001_param_torque_eve_fixed" + str(s),
+    exp_prefix="train-Lego/IROS/3Dangle",
+    # exp_name= "decaying-decaying-gamma" + str(t),
+    exp_name=exp_name,
+)
