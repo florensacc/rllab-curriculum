@@ -22,25 +22,17 @@ import cloudpickle
 
 class VG(VariantGenerator):
     @variant
-    def dequant(self):
+    def logit(self):
         return [
-            "uniform",
-            "kuma",
+            True,
         ]
-
-    @variant
-    def nr_mix(self, dequant):
-        if dequant == "uniform":
-            return [1]
-        else:
-            return [1, 3, 5, 10]
 
     @variant
     def seed(self):
         return [42,]
 
 def run_task(v):
-    logit = True
+    logit = v["logit"]
     f = normalize
     hybrid = False
 
@@ -98,7 +90,7 @@ def run_task(v):
 
     blocks = 4
     filters = 32
-    nr_mix = v["nr_mix"]
+    nr_mix = 4
     def go(x):
         shp = int_shape(x)
         chns = shp[3]
@@ -110,32 +102,29 @@ def run_task(v):
             temp,
             shp[:3] + [chns*2, nr_mix]
         ) * 0.1
-    if v["dequant"] == "uniform":
-        noise_dist = UniformDequant()
-    else:
+    dist = DequantizedFlow(
+        base_dist=cur,
+        # noise_dist=UniformDequant(),
         noise_dist=FactorizedEncodingSpatialKumaraswamyDequant(
             shape=[32, 32, 3],
             nn_builder=go,
             nr_mixtures=nr_mix,
-        )
-    dist = DequantizedFlow(
-        base_dist=cur,
-        # noise_dist=UniformDequant(),
-        noise_dist=noise_dist,
+        ),
     )
 
     algo = DistTrainer(
         dataset=dataset,
         dist=dist,
+        max_iter=3000,
         init_batch_size=1024,
-        train_batch_size=64, # also testing resuming from diff bs
+        train_batch_size=256, # also testing resuming from diff bs
         optimizer=AdamaxOptimizer(
             learning_rate=1e-3,
         ),
         save_every=20,
         # # for debug
         debug=False,
-        # resume_from="/home/peter/rllab-private/data/local/global_proper_deeper_flow/"
+        resume_from="/home/peter/rllab-private/data/local/0205-kuma-nf-mixture-fac-encoding-spatial-dequnt/0205_kuma_nf_mixture_fac_encoding_spatial_dequnt_2017_02_06_21_58_08_0001/"
         # checkpoint_dir="data/local/test_debug",
     )
     algo.train()
@@ -149,30 +138,30 @@ config.AWS_SPOT = True
 config.AWS_SPOT_PRICE = '1.23'
 config.AWS_REGION_NAME = 'us-west-2'
 config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[config.AWS_REGION_NAME]
-config.AWS_IMAGE_ID = "ami-31b43151" #config.ALL_REGION_AWS_IMAGE_IDS[config.AWS_REGION_NAME]
+config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[config.AWS_REGION_NAME]
 config.AWS_SECURITY_GROUP_IDS = config.ALL_REGION_AWS_SECURITY_GROUP_IDS[config.AWS_REGION_NAME]
 
-for v in variants[1:]:
+for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="0208_dequnt_test_hopeful_again",
+        exp_prefix="0207_resume_kuma_nf_mixture_fac_encoding_spatial_dequnt",
         variant=v,
 
-        # mode="local",
+        mode="local",
 
         # mode="local_docker",
         # env=dict(
         #     CUDA_VISIBLE_DEVICES="5"
         # ),
 
-        mode="ec2",
+        # mode="ec2",
         #
         use_gpu=True,
         snapshot_mode="last",
         docker_image="dementrock/rllab3-shared-gpu-cuda80",
         seed=v["seed"],
-        # terminate_machine=False,
+        terminate_machine=True,
         # pre_commands=[
         #     "nvidia-modprobe -u -c=0",
         # ],
