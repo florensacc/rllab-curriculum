@@ -12,7 +12,7 @@ from rllab.misc import logger
 from rllab.misc.overrides import overrides
 
 
-class GoalGenerator(Serializable):
+class GoalGenerator(object):
     """ Base class for goal generator. """
 
     def __init__(self):
@@ -27,13 +27,13 @@ class GoalGenerator(Serializable):
         return self._goal
 
 
-class UniformListGoalGenerator(GoalGenerator):
+class UniformListGoalGenerator(GoalGenerator, Serializable):
     """ Generating goals uniformly from a goal list. """
 
     def __init__(self, goal_list):
+        Serializable.quick_init(self, locals())
         self.goal_list = goal_list
         random.seed()
-        Serializable.quick_init(self, locals())
         super(UniformListGoalGenerator, self).__init__()
 
     def update(self):
@@ -41,13 +41,13 @@ class UniformListGoalGenerator(GoalGenerator):
         return self.goal
 
 
-class UniformGoalGenerator(GoalGenerator):
+class UniformGoalGenerator(GoalGenerator, Serializable):
     """ Generating goals uniformly from a goal list. """
 
     def __init__(self, goal_dim, bound=2):
+        Serializable.quick_init(self, locals())
         self.goal_dim = goal_dim
         self.bound = bound
-        Serializable.quick_init(self, locals())
         super(UniformGoalGenerator, self).__init__()
 
     def update(self):
@@ -56,13 +56,13 @@ class UniformGoalGenerator(GoalGenerator):
         return self.goal
 
 
-class FixedGoalGenerator(GoalGenerator):
+class FixedGoalGenerator(GoalGenerator, Serializable):
     """ Generating a fixed goal. """
 
     def __init__(self, goal):
-        self._goal = goal
         Serializable.quick_init(self, locals())
         super(FixedGoalGenerator, self).__init__()
+        self._goal = goal
 
 
 class GoalEnv(Serializable):
@@ -93,16 +93,16 @@ class GoalEnv(Serializable):
 
 
 class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
-    def __init__(self, env, goal_generator, goal_weight, inner_weight=0, distance_metric='L2',
-                 goal_reward='NegativeDistance'):
+    def __init__(self, env, goal_generator, goal_weight, distance_metric='L2',
+                 goal_reward='NegativeDistance', inner_weight=0):
 
         Serializable.quick_init(self, locals())
-        ProxyEnv.__init__(self, env)
         self.update_goal_generator(goal_generator)
         self._distance_metric = distance_metric
         self._goal_reward = goal_reward
         self.goal_weight = goal_weight
         self.inner_weight = inner_weight
+        ProxyEnv.__init__(self, env)
 
     def reset(self, reset_goal=True, reset_inner=True):
         if reset_goal:
@@ -113,13 +113,14 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
 
     def step(self, action):
         observation, reward, done, info = ProxyEnv.step(self, action)
+        info['reward_inner'] = reward_inner = self.inner_weight * reward
         body_com = observation[-3:-1]  # assumes the COM is last 3 coord, z being last
         info['distance'] = np.linalg.norm(body_com - self.current_goal)
         reward_dist = self._compute_dist_reward(body_com)
         info['reward_dist'] = reward_dist
         return (
             self._append_observation(observation),
-            reward_dist + self.inner_weight * reward,
+            reward_dist + reward_inner,
             done,
             info
         )
@@ -175,10 +176,15 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
             np.mean(path['env_infos']['reward_dist'])
             for path in paths
             ]
+        reward_inner = [
+            np.mean(path['env_infos']['reward_inner'])
+            for path in paths
+            ]
         # Process by trajectories
         logger.record_tabular('InitGoalDistance', np.mean(initial_goal_distances))
         logger.record_tabular('MeanDistance', np.mean(distances))
         logger.record_tabular('MeanRewardDist', np.mean(reward_dist))
+        logger.record_tabular('MeanRewardInner', np.mean(reward_inner))
 
 
 def update_env_goal_generator(env, goal_generator):
