@@ -1,5 +1,5 @@
 from rllab.sampler.utils import rollout
-from sandbox.carlos_snn.sampler.utils_snn import rollout_snn
+# from sandbox.carlos_snn.sampler.utils_snn import rollout_snn
 from rllab.sampler.stateful_pool import singleton_pool, SharedGlobal
 from rllab.misc import ext
 from rllab.misc import logger
@@ -95,10 +95,10 @@ def _worker_collect_one_path(G, max_path_length, scope=None):
     path = rollout(G.env, G.policy, max_path_length)
     return path, len(path["rewards"])
 
-def _worker_collect_one_path_snn(G, max_path_length, switch_lat_every=0, scope=None):
-    G = _get_scoped_G(G, scope)
-    path = rollout_snn(G.env, G.policy, max_path_length, switch_lat_every=switch_lat_every)
-    return path, len(path["rewards"])
+# def _worker_collect_one_path_snn(G, max_path_length, switch_lat_every=0, scope=None):
+#     G = _get_scoped_G(G, scope)
+#     path = rollout_snn(G.env, G.policy, max_path_length, switch_lat_every=switch_lat_every)
+#     return path, len(path["rewards"])
 
 def sample_paths(
         policy_params,
