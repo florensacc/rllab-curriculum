@@ -39,7 +39,7 @@ def save_performance_to_all(output_h5, avg_return, adv_params, n_paths):
     g['n_paths'] = n_paths
     f.close()
 
-def init_output_file(output_dir, prefix, adv_name, adv_params, fname=None):
+def init_output_file(output_dir, prefix, adv_name, adv_params, fname=None, algo_name=None):
     create_dir_if_needed(output_dir)
     if fname is None:
         fname = prefix + '_' + get_time_stamp() + '.h5'
@@ -48,13 +48,16 @@ def init_output_file(output_dir, prefix, adv_name, adv_params, fname=None):
     f = h5py.File(output_h5, 'w')
     f.create_group('rollouts')
     f['adv_type'] = adv_name
+    if algo_name is not None:
+        f['algo'] = algo_name
     f.create_group('adv_params')
     for k,v in adv_params.items():
         f['adv_params'][k] = v
     f.close()
     return output_h5
 
-def save_rollout_step(output_h5, eta, unscaled_eta, obs, adv_obs):
+def save_rollout_step(output_h5, eta, unscaled_eta, obs, adv_obs, action_probs):
+    # action_probs: (action_prob_orig, action_prob_adv)
     output_f = h5py.File(output_h5, 'r+')
     idx = len(output_f['rollouts'])
     g = output_f['rollouts'].create_group(str(idx))
@@ -62,12 +65,15 @@ def save_rollout_step(output_h5, eta, unscaled_eta, obs, adv_obs):
     g['change_unscaled'] = unscaled_eta
     g['orig_input'] = obs
     g['adv_input'] = adv_obs
+    g['action_prob_orig'] = action_probs[0]
+    g['action_prob_adv'] = action_probs[1]
     output_f.close()
 
-def save_performance(output_h5, avg_return, n_paths):
+def save_performance(output_h5, avg_return, n_paths, path_lengths):
     f = h5py.File(output_h5, 'r+')
     f['avg_return'] = avg_return
     f['n_paths'] = n_paths
+    f['path_lengths'] = path_lengths
     f.close()
 
 def save_video_file(output_h5, video_file):

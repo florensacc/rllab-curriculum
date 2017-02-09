@@ -89,7 +89,7 @@ def get_average_return_a3c(algo, seed, N=10, horizon=10000):
 def sample_dqn(algo, n_paths=1):  # Based on deep_q_rl/ale_experiment.py, run_episode
     env = algo.env
     #paths = [{'rewards':[], 'states':[], 'actions':[]} for i in range(n_paths)]
-    rewards = [0]*n_paths
+    rewards = [[] for i in range(n_paths)]
     timesteps = 0
     for i in range(n_paths):
         env.reset()
@@ -104,9 +104,9 @@ def sample_dqn(algo, n_paths=1):  # Based on deep_q_rl/ale_experiment.py, run_ep
             env.step(action)
             #paths[i]['rewards'].append(env.reward)
             total_reward += env.reward
+            rewards[i].append(env.reward)
             action = algo.agent.step(env.reward, env.last_state, {})
             timesteps += 1
-        rewards[i] = total_reward
     return rewards, timesteps
 
 def get_average_return_dqn(algo, seed, N=10):
@@ -114,17 +114,17 @@ def get_average_return_dqn(algo, seed, N=10):
     set_seed(algo, seed)
     curr_seed = seed + 1
 
-    rewards = [0]*N
+    paths = [{} for i in range(N)]
     total_timesteps = 0
     for i in range(N):
-        new_rewards, timesteps = sample_dqn(algo, n_paths=1)  # Returns single path
-        rewards[i] = new_rewards[0]
+        rewards, timesteps = sample_dqn(algo, n_paths=1)  # Returns single path
+        paths[i]['rewards'] = rewards[0]
         total_timesteps += timesteps
         set_seed(algo, curr_seed)
         curr_seed += 1
 
     avg_return = np.mean(rewards)
-    return avg_return, rewards, total_timesteps
+    return avg_return, paths, total_timesteps
     
 def get_average_return(algo, seed, N=10, return_timesteps=False):
     algo_name = type(algo).__name__
@@ -195,8 +195,18 @@ def load_model(params_file, batch_size):
     else:
         raise NotImplementedError
 
+def get_latest_param_file(params_dir):
+    params_files = [x for x in os.listdir(params_dir) \
+                    if x.startswith('itr') and x.endswith('pkl')]
+    # Get the latest parameters
+    params_file = sorted(params_files,
+                         key=lambda x: int(x.split('.')[0].split('_')[1]),
+                         reverse=True)[0]
+    itr = int(params_file.split('.')[0].split('_')[1])
+    return osp.join(params_dir, params_file)
+
 def load_models(games, experiments, base_dir, batch_size, threshold=0, \
-                num_threshold=5, score_window=10):
+                num_threshold=5, score_window=10, load_model=True):
     # each entry in experiments should have the format "algo-name_exp-index"
     # If threshold is in [0,1], then discard all policies which have a score
     # less than threshold * the best policy's score - for each game and
@@ -216,15 +226,10 @@ def load_models(games, experiments, base_dir, batch_size, threshold=0, \
             params_dirs = [osp.join(params_parent_dir, x) for x in os.listdir(params_parent_dir)]
             params_dirs = [x for x in params_dirs if osp.isdir(x)]
             for params_dir in params_dirs:
-                params_files = [x for x in os.listdir(params_dir) \
-                                if x.startswith('itr') and x.endswith('pkl')]
-                # Get the latest parameters
-                params_file = sorted(params_files,
-                                     key=lambda x: int(x.split('.')[0].split('_')[1]),
-                                     reverse=True)[0]
-                itr = int(params_file.split('.')[0].split('_')[1])
-                params_file = osp.join(params_dir, params_file)
-                algo, env = load_model(params_file, batch_size)
+                algo = None
+                env = None
+                if load_model:
+                    algo, env = load_model(params_file, batch_size)
                 
                 # Calculate average score starting from saved iteration and
                 # going back score_window iterations

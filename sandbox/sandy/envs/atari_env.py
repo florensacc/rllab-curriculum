@@ -52,7 +52,11 @@ class AtariEnv(GymEnv):
         # Overwrite self._observation_space since preprocessing changes it
         # and Theano requires axes to be in the order (batch size, # channels,
         # # rows, # cols) instead of (batch size, # rows, # cols, # channels)
-        self._observation_space = Box(-1.,1.,(self.n_frames,self.img_height,self.img_width))
+        if self.scale_neg1_1:
+            self._observation_space = Box(-1.,1.,(self.n_frames,self.img_height,self.img_width))
+        else:
+            self._observation_space = Box(0.,1.,(self.n_frames,self.img_height,self.img_width))
+
         self.update_last_frames(None)
         self._is_terminal = True  # Need to call self.reset() to set this to False
         self._reward = 0
