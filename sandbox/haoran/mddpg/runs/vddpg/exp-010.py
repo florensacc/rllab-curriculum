@@ -38,20 +38,32 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/vddpg/" + exp_index
-mode = "local"
-subnet = "us-west-2b"
-ec2_instance = "p2.xlarge"
-config.DOCKER_IMAGE = "tsukuyomi2044/rllab3-tf-gpu" # needs psutils
-config.AWS_IMAGE_ID = "ami-bc0cb5dc" # with docker already pulled
-config.AWS_REGION_NAME = "us-west-2"
-config.AWS_KEY_NAME = "hrtang-us-west-2-new"
-config.TF_USE_GPU = True
+mode = "ec2_test"
+
+use_gpu = True
+if use_gpu:
+    subnet = "us-west-2b"
+    ec2_instance = "p2.xlarge"
+    config.DOCKER_IMAGE = "tsukuyomi2044/rllab3-tf-gpu" # needs psutils
+    config.AWS_IMAGE_ID = "ami-3756ee57" # with docker already pulled
+    config.AWS_REGION_NAME = "us-west-2"
+    config.AWS_KEY_NAME = "hrtang-us-west-2-new"
+    config.TF_USE_GPU = True
+    config.TF_GPU_ALLOW_GROWTH = False
+else:
+    subnet = "us-west-1b"
+    ec2_instance = "c4.4xlarge"
+    config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
+    config.AWS_IMAGE_ID = "ami-85d181e5" # with docker already pulled
+    config.AWS_REGION_NAME = "us-west-1"
+    config.TF_USE_GPU = False
 
 n_task_per_instance = 1
 n_parallel = 2 # only for local exp
 snapshot_mode = "gap"
 snapshot_gap = 10
 plot = False
+profiling=False
 
 # variant params ---------------------------------------------------
 class VG(VariantGenerator):
@@ -119,7 +131,7 @@ for v in variants:
         qf_learning_rate=1e-3,
         policy_learning_rate=1e-4,
         soft_target_tau=v["tau"],
-        profiling=True,
+        profiling=profiling,
     )
     if ("local" in mode) and (sys.platform == "darwin"):
         shared_alg_kwargs["plt_backend"] = "MacOSX"

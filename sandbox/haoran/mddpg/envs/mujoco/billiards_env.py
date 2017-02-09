@@ -20,6 +20,13 @@ class BilliardsEnv(MujocoEnv, Serializable):
         super().__init__(file_path=FILE, **kwargs)
         self.frame_skip = 100
         Serializable.quick_init(self, locals())
+        self.window_config = dict(
+            title="billiards",
+            xpos=0,
+            ypos=0,
+            width=500,
+            height=500,
+        )
 
     @overrides
     def get_current_obs(self):
@@ -29,7 +36,19 @@ class BilliardsEnv(MujocoEnv, Serializable):
     def step(self, action):
         self.forward_dynamics(action)
         next_obs = self.get_current_obs()
-        reward = 0
+        n_billiards = 8
+        qpos = self.model.data.qvel.ravel()
+        pos_list = [
+            qpos[i: i+2]
+            for i in range(0, n_billiards * 7, 7)
+        ]
+        qvel = self.model.data.qvel
+        vel_list = [
+            qvel[i: i+2]
+            for i in range(0, n_billiards * 6, 6)
+        ]
+        reward = np.sum([np.linalg.norm(vel) for vel in vel_list])
+        print(reward)
         done = False
         return Step(next_obs, reward, done)
 
@@ -38,5 +57,5 @@ class BilliardsEnv(MujocoEnv, Serializable):
         super().get_viewer(config=self.window_config)
         self.viewer.cam.trackbodyid = 0
         self.viewer.cam.distance = 20
-        self.viewer.cam.elevation = -90 # look down
+        self.viewer.cam.elevation = -90 # look down; must do this to avoid aliasing
         return self.viewer

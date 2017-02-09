@@ -39,6 +39,22 @@
       <joint type="free" limited='false'/>
       <geom type="sphere" pos="0 0 0" size="0.3"/>
     </body>
+    <body name="ball_4" pos="2 -2 0.3">
+      <joint type="free" limited='false'/>
+      <geom type="sphere" pos="0 0 0" size="0.3"/>
+    </body>
+    <body name="ball_5" pos="-2 -2 0.3">
+      <joint type="free" limited='false'/>
+      <geom type="sphere" pos="0 0 0" size="0.3"/>
+    </body>
+    <body name="ball_6" pos="-2 2 0.3">
+      <joint type="free" limited='false'/>
+      <geom type="sphere" pos="0 0 0" size="0.3"/>
+    </body>
+    <body name="ball_7" pos="2 2 0.3">
+      <joint type="free" limited='false'/>
+      <geom type="sphere" pos="0 0 0" size="0.3"/>
+    </body>
 
     <!-- box -->
     <body name="box" pos="0 0 0">
