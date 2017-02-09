@@ -2,8 +2,16 @@ import gym
 import gym.wrappers
 import gym.envs
 import gym.spaces
-from gym.monitoring import monitor_manager
-from gym.wrappers.monitoring import _Monitor
+import traceback
+import logging
+
+try:
+    from gym.wrappers.monitoring import logger as monitor_logger
+
+    monitor_logger.setLevel(logging.WARNING)
+except Exception as e:
+    traceback.print_exc()
+
 import os
 import os.path as osp
 from rllab.envs.base import Env, Step
@@ -12,7 +20,6 @@ from rllab.spaces.box import Box
 from rllab.spaces.discrete import Discrete
 from rllab.spaces.product import Product
 from rllab.misc import logger
-import logging
 
 
 def convert_gym_space(space):
@@ -27,8 +34,12 @@ def convert_gym_space(space):
 
 
 class CappedCubicVideoSchedule(object):
+    # Copied from gym, since this method is frequently moved around
     def __call__(self, count):
-        return monitor_manager.capped_cubic_video_schedule(count)
+        if count < 1000:
+            return int(round(count ** (1. / 3))) ** 3 == count
+        else:
+            return count % 1000 == 0
 
 
 class FixedIntervalVideoSchedule(object):
@@ -57,8 +68,6 @@ class GymEnv(Env, Serializable):
         env = gym.envs.make(env_name)
         self.env = env
         self.env_id = env.spec.id
-
-        monitor_manager.logger.setLevel(logging.WARNING)
 
         assert not (not record_log and record_video)
 

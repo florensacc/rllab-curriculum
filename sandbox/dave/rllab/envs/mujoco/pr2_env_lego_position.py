@@ -40,6 +40,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             dilate_time=1,
             crop=True,
             tip=1,
+            noise=0,
             *args, **kwargs):
 
         self.action_penalty_weight = action_penalty_weight
@@ -86,6 +87,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.crop = crop
         self.discount_weights = 0.99
         self.tip = tip
+        self.noise = noise
 
         super(Pr2EnvLego, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
@@ -123,13 +125,18 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         else:
             idxpos = list(range(7)) + list(range(14, dim))  # TODO: Hacky
             idxvel = list(range(7)) + list(range(14, dim - 3 - 1))
+            positions = self.model.data.qpos.flat[idxpos]
+            noise = np.zeros_like(positions)
+            if self.noise:
+                noise[7:10] = np.random.normal(0, self.noise, 3)
+            positions += noise
             obs = np.concatenate([
                 self.model.data.qpos.flat[idxpos],  # We do not need to explicitly include the goal
                 #                                  # since we already have the vec to the goal.
                 self.model.data.qvel.flat[idxvel],  # Do not include the velocity of the target (should be 0).
-                self.get_tip_position(),
-                self.get_vec_tip_to_lego(),
-                vec_to_goal,
+                # self.get_tip_position(),
+                self.get_vec_tip_to_lego() + noise[7:10],
+                vec_to_goal + noise[7:10],
             ]).reshape(-1)
             # dim = obs.shape[0]
             # obs += np.random.multivariate_normal(np.zeros((dim,)), 0.01 * np.eye(dim))
@@ -159,10 +166,9 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         vec_tip_to_lego = self.get_vec_tip_to_lego()
         vec_to_goal = self.get_vec_to_goal()
         return np.dot(vec_to_goal, vec_tip_to_lego) / (
-            np.linalg.norm(vec_to_goal[:2]) * np.linalg.norm(vec_tip_to_lego[:2]))
+            np.linalg.norm(vec_to_goal) * np.linalg.norm(vec_tip_to_lego))
 
     def step(self, action):
-        #action /= 10
         # Limit actions to the specified range.
         reward_ctrl = -self.action_penalty_weight * np.sum(np.square(action))
         apply_action = copy.copy(action)
@@ -228,13 +234,12 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         # Penalize the robot for large actions.f
         # reward_occlusion = self.occlusion_weight * self.get_reward_occlusion()
         # reward_ctrl = - self.action_penalty_weight * np.square(action).sum()
-        reward = reward_dist + reward_angle + reward_tip #reward_ctrl#+ reward_occlusion
+        reward = reward_dist + reward_angle + reward_tip
         state = self._state
         notdone = np.isfinite(state).all()
         done = not notdone
 
         ob = self.get_current_obs()
-
         # Viewer
         if self.use_vision:
             self.viewer.loop_once()
