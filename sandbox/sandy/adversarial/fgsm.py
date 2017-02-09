@@ -5,6 +5,7 @@ import numpy as np
 
 from sandbox.sandy.adversarial.io_util import init_output_file, save_rollout_step
 from sandbox.sandy.adversarial.shared import get_average_return, load_model
+from sandbox.sandy.misc.util import get_softmax
 
 SUPPORTED_NORMS = ['l1', 'l2', 'l-inf']
 SAVE_OUTPUT = True  # Save adversarial perturbations to time-stamped h5 file
@@ -93,6 +94,60 @@ def get_grad_x_trpo(obs, algo):
     #print("TRPO:", abs(grad_x).max(), abs(grad_x).sum() / grad_x.size, ce_loss_x)
     return grad_x
 
+def get_grad_x(obs, algo):
+    algo_name = type(algo).__name__
+    if algo_name in ['TRPO', 'ParallelTRPO']:
+        return get_grad_x_trpo(obs, algo)
+    elif algo_name in ['A3CALE']:
+        return get_grad_x_a3c(obs, algo)
+    elif algo_name in ['DQNAlgo']:
+        return get_grad_x_dqn(obs, algo)
+    else:
+        assert False, "Algorithm type " + algo_name + " is not supported."
+
+def get_action_probs_a3c(algo, obs, adv_obs):
+    import chainer
+    from chainer import functions as F
+    statevar = chainer.Variable(np.expand_dims(algo.cur_agent.preprocess(obs), 0))
+    action_prob_orig = algo.cur_agent.model.pi.compute_logits(algo.cur_agent.model.head(statevar)).data
+
+    statevar_adv = chainer.Variable(np.expand_dims(algo.cur_agent.preprocess(adv_obs), 0))
+    action_prob_adv = algo.cur_agent.model.pi.compute_logits(algo.cur_agent.model.head(statevar_adv)).data
+
+    if np.sum(action_prob_orig) != 1:
+        action_prob_orig = get_softmax(action_prob_orig)
+    if np.sum(action_prob_adv) != 1:
+        action_prob_adv = get_softmax(action_prob_adv)
+
+    return (action_prob_orig, action_prob_adv)
+
+def get_action_probs_dqn(algo, obs, adv_obs):
+    q_vals_obs = algo.agent.network.f_obs_q_vals(obs[np.newaxis,...])
+    q_vals_adv_obs = algo.agent.network.f_obs_q_vals(adv_obs[np.newaxis,...])
+
+    return (q_vals_obs, q_vals_adv_obs)  # Take softmax in later processing, if desired
+
+def get_action_probs_trpo(algo, obs, adv_obs):
+    flat_obs = algo.policy.observation_space.flatten(obs)[np.newaxis,:]
+    action_prob_orig = algo.policy.dist_info(flat_obs)['prob']
+
+    flat_adv_obs = algo.policy.observation_space.flatten(adv_obs)[np.newaxis,:]
+    action_prob_adv = algo.policy.dist_info(flat_adv_obs)['prob']
+
+    return (action_prob_orig, action_prob_adv)
+
+def get_action_probs(algo, obs, adv_obs):
+    # Returns (action_prob_orig, action_prob_adv)
+    algo_name = type(algo).__name__
+    if algo_name in ['TRPO', 'ParallelTRPO']:
+        return get_action_probs_trpo(algo, obs, adv_obs)
+    elif algo_name in ['A3CALE']:
+        return get_action_probs_a3c(algo, obs, adv_obs)
+    elif algo_name in ['DQNAlgo']:
+        return get_action_probs_dqn(algo, obs, adv_obs)
+    else:
+        assert False, "Algorithm type " + algo_name + " is not supported."
+
 def fgsm_perturbation(obs, algo, **kwargs):
     # Apply fast gradient sign method (FGSM):
     # For l-inf norm,
@@ -116,15 +171,7 @@ def fgsm_perturbation(obs, algo, **kwargs):
         raise
 
     # Calculate \grad_x J(\theta, x, y)
-    algo_name = type(algo).__name__
-    if algo_name in ['TRPO', 'ParallelTRPO']:
-        grad_x = get_grad_x_trpo(obs, algo)
-    elif algo_name in ['A3CALE']:
-        grad_x = get_grad_x_a3c(obs, algo)
-    elif algo_name in ['DQNAlgo']:
-        grad_x = get_grad_x_dqn(obs, algo)
-    else:
-        assert False, "Algorithm type " + algo_name + " is not supported."
+    grad_x = get_grad_x(obs, algo)
     grad_x_current = grad_x[-1,:,:]
 
     if norm == 'l-inf':
@@ -144,8 +191,11 @@ def fgsm_perturbation(obs, algo, **kwargs):
     # Clip pixels to be within range [obs_min, obs_max]
     adv_obs = np.minimum(obs_max, np.maximum(obs_min, adv_obs))
 
+    # Calculate action probabilities before and after perturbation
+    action_probs = get_action_probs(algo, obs, adv_obs)
+
     if output_h5 is not None:
-        save_rollout_step(output_h5, eta, unscaled_eta, obs[-1,:,:], adv_obs[-1,:,:])
+        save_rollout_step(output_h5, eta, unscaled_eta, obs[-1,:,:], adv_obs[-1,:,:], action_probs)
     return adv_obs
 
 def main():
