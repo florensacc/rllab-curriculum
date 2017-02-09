@@ -30,7 +30,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/vddpg/" + exp_index
-mode = "local"
+mode = "ec2"
 ec2_instance = "c4.2xlarge"
 subnet = "us-west-1c"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
@@ -46,7 +46,7 @@ plot = False
 class VG(VariantGenerator):
     @variant
     def zzseed(self):
-        return [0, 100, 200, 300, 400]
+        return [0, 100, 200, 300, 400, 500, 600, 700, 800, 900]
 
     @variant
     def env_name(self):
@@ -72,6 +72,10 @@ class VG(VariantGenerator):
     @variant
     def tau(self):
         return [1e-2]
+
+    @variant
+    def dist_reward(self):
+        return [1.]
 
 
 variants = VG().variants()
@@ -115,7 +119,8 @@ for v in variants:
         }
     elif env_name in ["swimmer_undirected", "tuomas_hopper"]:
         env_kwargs = {
-            "random_init_state": False
+            "random_init_state": False,
+            "dist_reward": v["dist_reward"],
         }
     elif env_name == "gym_hopper":
         env_kwargs = {

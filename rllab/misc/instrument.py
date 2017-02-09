@@ -359,7 +359,7 @@ def run_experiment_lite(
         periodic_sync=True,
         periodic_sync_interval=15,
         sync_all_data_node_to_s3=True,
-        use_cloudpickle=False,
+        use_cloudpickle=True,
         pre_commands=None,
         **kwargs):
     """
@@ -435,6 +435,8 @@ def run_experiment_lite(
             del task["variant"]
         task["remote_log_dir"] = osp.join(
             config.AWS_S3_PATH, exp_prefix.replace("_", "-"), task["exp_name"])
+        task["env"] = task.get("env", dict()) or dict()
+        task["env"]["RLLAB_USE_GPU"] = str(use_gpu)
 
     if mode not in ["local", "local_docker"] and not remote_confirmed and not dry and confirm_remote:
         remote_confirmed = query_yes_no(
@@ -937,6 +939,8 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
     else:
         user_data = full_script
     print(full_script)
+    with open("/tmp/full_script", "w") as f:
+        f.write(full_script)
 
     instance_args = dict(
         ImageId=aws_config["image_id"],
@@ -950,6 +954,7 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
         IamInstanceProfile=dict(
             Name=aws_config["iam_instance_profile_name"],
         ),
+        **config.AWS_EXTRA_CONFIGS,
     )
 
     if len(instance_args["NetworkInterfaces"]) > 0:

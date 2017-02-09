@@ -38,8 +38,8 @@ class VecEnv(object):
 
     def step(self, action_n, max_path_length):
         """
-        Advance all environments. This method automatically handles resets of environments which terminate due to
-        actual termination or maximum horizon is reached.
+        Advance all environments. This method should not handle resets of environments, but should indicate termination
+        due to actual termination or maximum horizon is reached.
         :param action_n: A list of actions for each environment.
         :param max_path_length: Maximum horizon of execution.
         :return: A 4-tuple (next_obs, rewards, dones, infos). infos is provided as a single dictionary,

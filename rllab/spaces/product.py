@@ -34,7 +34,7 @@ class Product(Space):
 
     @property
     def flat_dim(self):
-        return np.sum([c.flat_dim for c in self._components])
+        return int(np.sum([c.flat_dim for c in self._components]))
 
     def flatten(self, x):
         return np.concatenate([c.flatten(xi) for c, xi in zip(self._components, x)])
@@ -55,6 +55,10 @@ class Product(Space):
         unflat_xs = [c.unflatten_n(xi) for c, xi in zip(self.components, flat_xs)]
         unflat_xs_grouped = list(zip(*unflat_xs))
         return unflat_xs_grouped
+
+    @property
+    def default_value(self):
+        return tuple([x.default_value for x in self.components])
 
     def __eq__(self, other):
         if not isinstance(other, Product):

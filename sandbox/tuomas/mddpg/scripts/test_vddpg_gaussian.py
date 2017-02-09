@@ -7,8 +7,11 @@ import numpy as np
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_float('learning_rate', 0.01, 'Base learning rate.')
+flags.DEFINE_integer('K', 100, 'Number of particles.')
+flags.DEFINE_integer('K_test', 500, 'Number of particles.')
 flags.DEFINE_integer('modes', 2, 'Number of modes.')
-flags.DEFINE_boolean('fixed', False, 'Fixed target distribution.')
+flags.DEFINE_boolean('fixed', False, 'Fixed target distribution(s).')
+flags.DEFINE_boolean('static', False, 'Fit to a static distribution.')
 
 
 class MultimodalGaussianEnv(Env):
@@ -24,8 +27,11 @@ class MultimodalGaussianEnv(Env):
 
     def observe(self):
         if self._fixed_observations is not None:
-            n_cases = self._fixed_observations.shape[0]
-            i = np.random.randint(low=0, high=n_cases)
+            if FLAGS.static:
+                i = 0
+            else:
+                n_cases = self._fixed_observations.shape[0]
+                i = np.random.randint(low=0, high=n_cases)
             return self._fixed_observations[i]
 
         modes = self._n_modes
@@ -127,7 +133,7 @@ class VDDPGTest(VDDPG):
 
         # Replicate observations to get more action samples
         #obs = np.expand_dims(obs, axis=0)
-        obs = np.tile(obs_single, (100, 1))
+        obs = np.tile(obs_single, (FLAGS.K_test, 1))
         #import pdb; pdb.set_trace()
         feed_dict = self.policy.get_feed_dict(obs)
 
@@ -180,7 +186,7 @@ def test():
     from sandbox.tuomas.mddpg.policies.stochastic_policy \
         import StochasticNNPolicy
 
-    K = 100 # number of particles
+    K = FLAGS.K  # number of particles
 
     adaptive_kernel = True
 

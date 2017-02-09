@@ -20,3 +20,13 @@ def create_session(**kwargs):
     if "config" not in kwargs:
         kwargs["config"] = config
     return tf.InteractiveSession(**kwargs)
+
+"""
+WARNING: don't use this code as it doesn't clip the actual step
+"""
+def adam_clipped_op(loss, var_list, lr, clip):
+    optimizer = tf.train.AdamOptimizer(learning_rate=lr)
+    gvs = optimizer.compute_gradients(loss, var_list=var_list)
+    capped_gvs = [(tf.clip_by_value(grad, -clip, clip), var) for grad, var in gvs]
+    train_op = optimizer.apply_gradients(capped_gvs)
+    return optimizer, train_op

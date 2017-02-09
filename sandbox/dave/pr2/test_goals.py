@@ -14,7 +14,7 @@ from rllab import config
 from rllab.envs.normalized_env import normalize
 import os.path as osp
 
-from sandbox.dave.rllab.goal_generators.pr2_goal_generators import PR2TestGoalGenerator #PR2BoxGoalGeneratorSmall #PR2FixedGoalGenerator #PR2CrownGoalGeneratorSmall #PR2TestGoalGenerator
+from sandbox.dave.rllab.goal_generators.pr2_goal_generators import PR2FixedGoalGenerator #PR2BoxGoalGeneratorSmall #PR2FixedGoalGenerator #PR2CrownGoalGeneratorSmall #PR2TestGoalGenerator
 from sandbox.dave.rllab.lego_generators.pr2_lego_generators import PR2LegoFixedBlockGenerator #PR2LegoBoxBlockGeneratorSmall #PR2LegoFixedBlockGenerator #PR2TestGoalGenerator
 # from sandbox.dave.rllab.policies.pretrain_gaussian_mlp_policy import PretrainGaussianMLPPolicy
 
@@ -24,7 +24,7 @@ from sandbox.dave.rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from sandbox.dave.rllab.envs.mujoco.pr2_env_lego import Pr2EnvLego
 from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_position import Pr2EnvLego
 # from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_position_different_objects import Pr2EnvLego
-from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_hand import Pr2EnvLego
+# from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_hand import Pr2EnvLego
 # from sandbox.dave.rllab.envs.mujoco.pr2_env_reach import Pr2EnvLego
 from rllab.sampler.utils import rollout
 from sandbox.dave.utils.ploting import *
@@ -34,6 +34,7 @@ filename = str(uuid.uuid4())
 
 def do_test(env, policy, num_test_goals, max_path_length):
     paths = []
+    print(num_test_goals)
     for itr in range(num_test_goals):
         with logger.prefix('itr #%d | ' % itr):
             path = rollout(env, policy, animated=False, max_path_length=max_path_length, speedup=10)
@@ -123,7 +124,9 @@ if __name__ == "__main__":
     # pkl_file = "upload/fixed-arm-position-ctrl-tip-no-random-restarts/fixed-arm-position-ctrl-tip-no-random-restarts1/params.pkl"
     # pkl_file = "data/s3/train-Lego/RSS/fine-tune-just-distance-different-orient-no-time/fine-tune-just-distance-different-orient-no-time/params.pkl"
     # pkl_file = "data/s3/train-Lego/RSS/fine-tune-just-distance-n-control/fine-tune-just-distance-n-control/params.pkl"
-    pkl_file = "data/local/train-Lego/RSS/baseline/lego_hand_no_torque_limitation/params.pkl"
+    pkl_file = "data/local/train-Lego/IROS/3Dangle/exp_2/params.pkl"
+    # pkl_file = "data/s3/train-Lego/RSS/fine-tune-just-distance-different-orient-no-time/fine-tune-just-distance-different-orient-no-time/params.pkl"
+    # pkl_file = "data/local/train-Lego/RSS/baseline/lego_hand_no_torque_limitation/params.pkl"
     # pkl_file = "data/s3/train-Lego/RSS/position-control-different-orientation/position-control-different-orientation/params.pkl"
     # pkl_file = "data/s3/train-Lego/RSS/comparison-rewards/fixed-arm-lego-phi/params.pkl"
 
@@ -134,13 +137,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # parser.add_argument('--file', type=str, default=pkl_file,
     #                     help='path to the snapshot file')
-    parser.add_argument('--max_length', type=int, default=200,
+    parser.add_argument('--max_length', type=int, default=100,
                         help='Max length of rollout')
     parser.add_argument('--speedup', type=int, default=1,
                         help='Speedup')
-    parser.add_argument('--num_goals', type=int, default=np.int(np.square(0.4/0.01)),
+    parser.add_argument('--num_goals', type=int, default=200, #1 * np.int(np.square(0.3/0.02))
                         help='Number of test goals')
-    parser.add_argument('--num_tests', type=int, default=10,
+    parser.add_argument('--num_tests', type=int, default=1,
                         help='Number of test goals')
     args = parser.parse_args()
 
@@ -152,7 +155,7 @@ if __name__ == "__main__":
     # TODO - fix this hack.
 
     for _ in range(args.num_tests):
-        test_goal_generator = PR2TestGoalGenerator() #PR2TestGoalGenerator()  #PR2TestGoalGenerator(
+        test_goal_generator = PR2FixedGoalGenerator() #PR2TestGoalGenerator()  #PR2TestGoalGenerator(
         test_lego_generator = PR2LegoFixedBlockGenerator()
 
         # env = normalize(Pr2Env(
@@ -190,13 +193,13 @@ if __name__ == "__main__":
             lego_generator=test_lego_generator,
             action_limiter=action_limiter,
             allow_random_restarts=True,
-            allow_random_vel_restarts=False,
+            allow_random_vel_restarts=True,
             distance_thresh=0.01,  # 1 cm
             qvel_init_std=0.01,
             pos_normal_sample=True, # Uniform sampling
             pos_normal_sample_std=0,
             # model="pr2_legofree.xml",
-            use_vision=True,
+            use_vision=False,
             # crop=True,
             # beta=0.1,
             # number_actions=5
@@ -227,6 +230,8 @@ if __name__ == "__main__":
         #setup_logging()
         path = do_test(env, policy, args.num_goals, args.max_length)
         paths.extend(path)
-    plot_heatmap(paths)
+    # plot_heatmap(paths)
+    plot_scatter_heatmap(paths)
+    import pdb; pdb.set_trace()
     plot_finaldistance_hist(paths)
 

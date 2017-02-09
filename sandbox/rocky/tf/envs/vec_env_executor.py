@@ -18,6 +18,10 @@ class VecEnvExecutor(object):
         self.ts += 1
         if max_path_length is not None:
             dones[self.ts >= max_path_length] = True
+        # for (i, done) in enumerate(dones):
+        #     if done:
+        #         obs[i] = self.envs[i].reset()
+        #         self.ts[i] = 0
         return obs, rewards, dones, tensor_utils.stack_tensor_dict_list(env_infos)
 
     def reset(self, dones, seeds=None, *args, **kwargs):

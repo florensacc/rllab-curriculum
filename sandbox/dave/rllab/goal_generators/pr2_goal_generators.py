@@ -42,7 +42,7 @@ class PR2FixedGoalGenerator(FixedGoalGenerator):
         # print "Using fixed goal generator"
         if goal is None:
             # goal = (0.5, 0.3, 0.5025)
-            goal = (0.6, 0., 0.5025)
+            goal = (0.55, 0., 0.5025)
             #goal = (0.8, 0.17, 1.0)
         goal = np.array(goal)
         super(PR2FixedGoalGenerator, self).__init__(goal)
@@ -205,7 +205,7 @@ class PR2BoxGoalGeneratorLarge(BoxGoalGenerator):
 
 class PR2TestGoalGenerator(GoalGenerator):
     """ Generate a list of goals that the we test if the policy can achieve """
-    def __init__(self, range=0.4, delta=0.01, obs=None, seed=0, small_range=False):
+    def __init__(self, range=0.3, delta=0.02, times=1, obs=None, seed=0, small_range=False):
         self.goals = []
         # Set the seed so that we produce consistent results
         np.random.seed(seed)
@@ -213,6 +213,7 @@ class PR2TestGoalGenerator(GoalGenerator):
         self.range = range
         self.delta = delta
         self.goal_index = -1
+        self.times = times
         self.generate_all_goals()
         # Reset the random seed to get randomness
         # np.random.seed(time.time())
@@ -224,6 +225,7 @@ class PR2TestGoalGenerator(GoalGenerator):
             for j in range(num_goals_x):
                 goal = np.array([j * self.delta - self.range/2, i * self.delta - self.range/2, 0])
                 self.goals.append(goal)
+        self.goals *= self.times
         from random import shuffle
         shuffle(self.goals)
 

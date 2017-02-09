@@ -13,9 +13,10 @@ import math
 class AntEnv(MujocoEnv, Serializable):
     """
     This AntEnv differs from the one in rllab.envs.mujoco.ant_env in the additional initialization options
-    that fix the rewards and observation space.
+    that fix the rewards and observation space. Sparse strips the forward reward and keeps ctrl, contact, survival
     The 'com' is added to the env_infos.
     Also the get_ori() method is added for the Maze and Gather tasks.
+    AND we kill with z<0.3!!!! (not 0.2 as in gym)
     """
     FILE = 'ant.xml'
     ORI_IND = 3
@@ -89,13 +90,13 @@ class AntEnv(MujocoEnv, Serializable):
             np.square(np.clip(self.model.data.cfrc_ext, -1, 1)))
         survive_reward = 0.05  # this is not in swimmer neither!! And in the GYM env it's 1!!!
 
-        if self.sparse:
+        if self.sparse:  # strip the forward reward, but keep the other costs/rewards!
             if np.linalg.norm(self.get_body_com("torso")[0:2]) > np.inf:  # potentially could specify some distance
-                reward = 1.0
+                forward_reward = 1.0
             else:
-                reward = 0.
-        else:
-            reward = forward_reward - ctrl_cost - contact_cost + survive_reward
+                forward_reward = 0.
+
+        reward = forward_reward - ctrl_cost - contact_cost + survive_reward
 
         state = self._state
         notdone = np.isfinite(state).all() \

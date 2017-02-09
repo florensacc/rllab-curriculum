@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 
 from rllab.core.serializable import Serializable
+from rllab.misc.ext import AttrDict
 from sandbox.rocky.chainer.misc import tensor_utils
 import numpy as np
 
@@ -71,6 +72,19 @@ class Parameterized(object):
                 self.get_param_dtypes(**tags),
                 param_values):
             param.copydata(np.asarray(value, dtype))
+
+    def set_param_values_from(self, other, **tags):
+        for param, other_param in zip(
+                self.get_params(**tags),
+                other.get_params(**tags)):
+            param.copydata(other_param)
+
+    def set_grad_values_from(self, other, **tags):
+        for param, other_param in zip(
+                self.get_params(**tags),
+                other.get_params(**tags)):
+            param.cleargrad()
+            param.addgrad(other_param)
 
     def flat_to_params(self, flattened_params, **tags):
         return tensor_utils.unflatten_tensors(flattened_params, self.get_param_shapes(**tags))

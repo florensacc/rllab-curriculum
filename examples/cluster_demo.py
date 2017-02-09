@@ -11,37 +11,37 @@ from rllab.envs.mujoco.swimmer_env import SwimmerEnv
 
 import sys
 
-stub(globals())
+
+def run_task(v):
+    env = normalize(CartpoleEnv())
+
+    policy = GaussianMLPPolicy(
+        env_spec=env.spec,
+        # The neural network policy should have two hidden layers, each with 32 hidden units.
+        hidden_sizes=(32, 32)
+    )
+
+    baseline = LinearFeatureBaseline(env_spec=env.spec)
+
+    algo = TRPO(
+        env=env,
+        policy=policy,
+        baseline=baseline,
+        batch_size=4000,
+        max_path_length=100,
+        n_itr=40,
+        discount=0.99,
+        step_size=v["step_size"],
+        # Uncomment both lines (this and the plot parameter below) to enable plotting
+        # plot=True,
+    )
+    algo.train()
+
 
 for step_size in [0.01, 0.05, 0.1]:
-
     for seed in [1, 11, 21, 31, 41]:
-
-        env = normalize(env=SwimmerEnv())
-
-        policy = GaussianMLPPolicy(
-            env_spec=env.spec,
-            # The neural network policy should have two hidden layers, each with 32 hidden units.
-            hidden_sizes=(32, 32)
-        )
-
-        baseline = LinearFeatureBaseline(env_spec=env.spec)
-
-        algo = TRPO(
-            env=env,
-            policy=policy,
-            baseline=baseline,
-            batch_size=4000,
-            max_path_length=100,
-            n_itr=40,
-            discount=0.99,
-            step_size=step_size,
-            # Uncomment both lines (this and the plot parameter below) to enable plotting
-            # plot=True,
-        )
-
         run_experiment_lite(
-            algo.train(),
+            run_task,
             exp_prefix="first_exp",
             # Number of parallel workers for sampling
             n_parallel=1,
@@ -52,6 +52,7 @@ for step_size in [0.01, 0.05, 0.1]:
             seed=seed,
             # mode="local",
             mode="ec2",
+            variant=dict(step_size=step_size, seed=seed)
             # plot=True,
             # terminate_machine=False,
         )

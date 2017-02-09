@@ -2,14 +2,17 @@ import tensorflow as tf
 import numpy as np
 
 
-def compile_function(inputs, outputs, log_name=None, profile=False):
+def compile_function(inputs, outputs, log_name=None, profile=False, extra_feed=None):
     def run(*input_vals):
         sess = tf.get_default_session()
+        feed_dict = dict(list(zip(inputs, input_vals)))
+        if extra_feed is not None:
+            feed_dict.update(extra_feed)
         if profile:
             run_metadata = tf.RunMetadata()
             out = sess.run(
                 outputs,
-                feed_dict=dict(list(zip(inputs, input_vals))),
+                feed_dict=feed_dict,
                 options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),
                 run_metadata=run_metadata,
             )
@@ -20,7 +23,7 @@ def compile_function(inputs, outputs, log_name=None, profile=False):
             import sys
             sys.exit()
             return out
-        return sess.run(outputs, feed_dict=dict(list(zip(inputs, input_vals))))
+        return sess.run(outputs, feed_dict=feed_dict)
 
     return run
 
@@ -263,4 +266,6 @@ def initialize_new_variables(sess):
         except tf.errors.FailedPreconditionError:
             uninitialized_vars.append(var)
     sess.run(tf.initialize_variables(uninitialized_vars))
+
+
 

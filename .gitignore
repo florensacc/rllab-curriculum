@@ -58,3 +58,7 @@ conopt_root
 .c9/
 sandbox/michael/tracking_data
 *.npy.z
+gpr_package
+gpr_root
+_pyxbld
+sandbox/rocky/motor

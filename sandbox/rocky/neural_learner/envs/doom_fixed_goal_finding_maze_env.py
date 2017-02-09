@@ -460,6 +460,7 @@ class DoomFixedGoalFindingMazeEnv(DoomEnv, Serializable):
             assert kwargs.get("frame_skip", 4) == 1
         Serializable.quick_init(self, locals())
         self.living_reward = living_reward
+        self.traj = []
         self.allow_backwards = allow_backwards
         self.doom_scenario_path = resource_manager.get_file(
             *mkwad(
@@ -569,6 +570,10 @@ class DoomFixedGoalFindingMazeEnv(DoomEnv, Serializable):
 
         log_stat('SuccessRate', episode_success)
 
+    def reset(self, restart_game=None, reset_map=None):
+        self.traj = []
+        return DoomEnv.reset(self, restart_game=restart_game, reset_map=reset_map)
+
     def render(self, close=False, wait_key=True, mode='human', full_size=False):
         level_name = self.executor.par_games.get_doom_map(0).decode()
         level = [x for x in self.wad.levels if x.name == level_name][0]
@@ -584,8 +589,11 @@ class DoomFixedGoalFindingMazeEnv(DoomEnv, Serializable):
         from sandbox.rocky.neural_learner.doom_utils.plotting import plot_textmap, parse_map
         parsed_map = parse_map(level_content)
 
-        width, height = 600, 600
-        map_img = plot_textmap(parsed_map, [[(agent_x, agent_y)]], out_width=width, out_height=height,
+        width, height = 400, 400
+
+        self.traj.append((agent_x, agent_y))
+
+        map_img = plot_textmap(parsed_map, [self.traj], out_width=width, out_height=height,
                                side_length=self.__getstate__()['__args'][2])[0][:, :, ::-1]
 
         obs_img = cv2.resize(obs_img, (width, height))

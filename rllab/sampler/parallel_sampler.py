@@ -1,11 +1,11 @@
 from rllab.sampler.utils import rollout
-# from sandbox.carlos_snn.sampler.utils_snn import rollout_snn
 from rllab.sampler.stateful_pool import singleton_pool, SharedGlobal
 from rllab.misc import ext
 from rllab.misc import logger
 from rllab.misc import tensor_utils
 import pickle
 import numpy as np
+import tensorflow as tf
 
 
 def _worker_init(G, id):
@@ -48,8 +48,18 @@ def _worker_terminate_task(G, scope=None):
         G.policy = None
 
 
+_cached_populate_env = dict()
+_cached_populate_policy = dict()
+
+
 def populate_task(env, policy, scope=None):
+    if scope in _cached_populate_env and scope in _cached_populate_policy:
+        if _cached_populate_env[scope] is env and _cached_populate_policy[scope] is policy:
+            # already populated; return
+            return
     logger.log("Populating workers...")
+    _cached_populate_env[scope] = env
+    _cached_populate_policy[scope] = policy
     if singleton_pool.n_parallel > 1:
         singleton_pool.run_each(
             _worker_populate_task,
@@ -68,6 +78,8 @@ def terminate_task(scope=None):
         _worker_terminate_task,
         [(scope,)] * singleton_pool.n_parallel
     )
+    del _cached_populate_env[scope]
+    del _cached_populate_policy[scope]
 
 
 def _worker_set_seed(_, seed):
@@ -86,14 +98,17 @@ def _worker_set_policy_params(G, params, scope=None):
     G = _get_scoped_G(G, scope)
     G.policy.set_param_values(params)
 
-def _worker_set_env_params(G,params,scope=None):
+
+def _worker_set_env_params(G, params, scope=None):
     G = _get_scoped_G(G, scope)
     G.env.set_param_values(params)
+
 
 def _worker_collect_one_path(G, max_path_length, scope=None):
     G = _get_scoped_G(G, scope)
     path = rollout(G.env, G.policy, max_path_length)
     return path, len(path["rewards"])
+
 
 # def _worker_collect_one_path_snn(G, max_path_length, switch_lat_every=0, scope=None):
 #     G = _get_scoped_G(G, scope)
