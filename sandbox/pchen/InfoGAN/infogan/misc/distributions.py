@@ -3391,7 +3391,7 @@ class FlowBasedDequant(DequantizationDistribution):
         self._dim = dim
 
         flat_dim = dim
-        from sandbox.pchen.InfoGAN.infogan.models.real_nvp import *
+        # from sandbox.pchen.InfoGAN.infogan.models.real_nvp import *
         noise = Gaussian(flat_dim)
         shape = [-1, 16, 16, 12]
         shaped_noise = ReshapeFlow(

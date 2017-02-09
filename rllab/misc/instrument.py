@@ -779,6 +779,11 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
     sio.write("""
         export AWS_DEFAULT_REGION={aws_region}
     """.format(aws_region=config.AWS_REGION_NAME))
+    sio.write("""
+        curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"
+        unzip awscli-bundle.zip
+        sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
+    """)
     if config.FAST_CODE_SYNC:
         # sio.write("""
         #     aws s3 cp {code_full_path} /tmp/rllab_code.tar.gz --region {aws_region}
