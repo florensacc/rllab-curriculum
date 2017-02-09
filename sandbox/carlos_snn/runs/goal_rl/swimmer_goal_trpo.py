@@ -102,30 +102,31 @@ if __name__ == '__main__':
                 plot=False,
             )
 
-            for s in range(0, 30, 10):
+            for s in range(30, 60, 10):
                 exp_prefix = 'goal-swimmer-trpo'
-                exp_name = exp_prefix + '_{}range_{}_{}_s'.format(goal_range, goal_reward, s)
+                exp_name = exp_prefix + '_{}range_{}_{}s'.format(goal_range, goal_reward, s)
                 if mode in ['ec2', 'local_docker']:
-                    # choose subnet
-                    subnet = random.choice(subnets)
-                    config.AWS_REGION_NAME = subnet[:-1]
-                    config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
-                        config.AWS_REGION_NAME]
-                    config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
-                        config.AWS_REGION_NAME]
-                    config.AWS_SECURITY_GROUP_IDS = \
-                        config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
-                            config.AWS_REGION_NAME]
-                    config.AWS_NETWORK_INTERFACES = [
-                        dict(
-                            SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
-                            Groups=config.AWS_SECURITY_GROUP_IDS,
-                            DeviceIndex=0,
-                            AssociatePublicIpAddress=True,
-                        )
-                    ]
+                    # # choose subnet
+                    # subnet = random.choice(subnets)
+                    # config.AWS_REGION_NAME = subnet[:-1]
+                    # config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
+                    #     config.AWS_REGION_NAME]
+                    # config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
+                    #     config.AWS_REGION_NAME]
+                    # config.AWS_SECURITY_GROUP_IDS = \
+                    #     config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
+                    #         config.AWS_REGION_NAME]
+                    # config.AWS_NETWORK_INTERFACES = [
+                    #     dict(
+                    #         SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
+                    #         Groups=config.AWS_SECURITY_GROUP_IDS,
+                    #         DeviceIndex=0,
+                    #         AssociatePublicIpAddress=True,
+                    #     )
+                    # ]
 
                     run_experiment_lite(
+                        use_cloudpickle=False,
                         stub_method_call=algo.train(),
                         mode=mode,
                         # Number of parallel workers for sampling
@@ -145,8 +146,8 @@ if __name__ == '__main__':
                             "pip install --upgrade theano"
                         ],
                     )
-                    if mode == 'local_docker':
-                        sys.exit()
+                    # if mode == 'local_docker':
+                    #     sys.exit()
                 else:
                     run_experiment_lite(
                         use_cloudpickle=False,

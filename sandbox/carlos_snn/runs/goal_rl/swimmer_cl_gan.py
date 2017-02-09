@@ -1,5 +1,6 @@
 import os
 import os.path as osp
+import sys
 import time
 import random
 import numpy as np
@@ -31,6 +32,7 @@ from sandbox.young_clgan.lib.logging import *
 
 from sandbox.young_clgan.lib.utils import initialize_parallel_sampler
 initialize_parallel_sampler()
+# initialize_parallel_sampler(n_processes=-1)
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -120,6 +122,7 @@ if __name__ == '__main__':
 
     all_goals = np.zeros((0, 2))
 
+    print("about to start outer loop")
     for outer_iter in range(hyperparams.outer_iters):
 
         # Train GAN
@@ -140,6 +143,7 @@ if __name__ == '__main__':
 
         with ExperimentLogger(log_config.log_dir, outer_iter):
             # set goal generator to uniformly sample from selected all_goals
+            print(goals)
             update_env_goal_generator(
                 env,
                 UniformListGoalGenerator(
