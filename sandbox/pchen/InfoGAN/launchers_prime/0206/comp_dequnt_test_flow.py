@@ -144,6 +144,7 @@ variants = VG().variants()
 
 print("#Experiments:", len(variants))
 
+
 config.AWS_INSTANCE_TYPE = "p2.xlarge"
 config.AWS_SPOT = True
 config.AWS_SPOT_PRICE = '1.23'
@@ -152,7 +153,7 @@ config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[config.AWS_REGION_NAME]
 config.AWS_IMAGE_ID = "ami-31b43151" #config.ALL_REGION_AWS_IMAGE_IDS[config.AWS_REGION_NAME]
 config.AWS_SECURITY_GROUP_IDS = config.ALL_REGION_AWS_SECURITY_GROUP_IDS[config.AWS_REGION_NAME]
 
-for v in variants[1:]:
+for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
