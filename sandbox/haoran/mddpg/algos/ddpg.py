@@ -44,6 +44,7 @@ class DDPG(OnlineAlgorithm, Serializable):
             debug_mode=False,
             critic_grad_clip=0,
             actor_grad_clip=0,
+            axis3d=False,
             **kwargs
     ):
         """
@@ -75,6 +76,7 @@ class DDPG(OnlineAlgorithm, Serializable):
         self.debug_mode = debug_mode
         self.critic_grad_clip = critic_grad_clip
         self.actor_grad_clip = actor_grad_clip
+        self.axis3d = axis3d
 
         super().__init__(env, policy, exploration_strategy, **kwargs)
 
@@ -341,7 +343,11 @@ class DDPG(OnlineAlgorithm, Serializable):
 
         # Create figure for plotting the environment.
         fig = plt.figure(figsize=(12, 7))
-        ax = fig.add_subplot(111)
+        if self.axis3d:
+            from mpl_toolkits.mplot3d import Axes3D
+            ax = fig.add_subplot(111, projection='3d')
+        else:
+            ax = fig.add_subplot(111)
 
         true_env = get_true_env(self.env)
         if hasattr(true_env, "log_stats"):

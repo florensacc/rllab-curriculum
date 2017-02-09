@@ -100,6 +100,10 @@ class EnvChooser(object):
             from sandbox.haoran.mddpg.envs.mujoco.billiards_env import \
                 BilliardsEnv
             env = BilliardsEnv(**kwargs)
+        elif env_name == "multilink_reacher":
+            from sandbox.haoran.mddpg.envs.mujoco.multilink_reacher_env import \
+                MultiLinkReacherEnv
+            env = MultiLinkReacherEnv(**kwargs)
         else:
             print("Unknown environment %s"%(env_name))
             raise NotImplementedError

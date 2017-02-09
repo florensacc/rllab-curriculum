@@ -77,6 +77,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             actor_train_frequency=1,
             update_target_frequency=1,
             debug_mode=False,
+            axis3d=False,
             **kwargs
     ):
         """
@@ -128,6 +129,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.update_target_counter = 0
         self.update_target = True
         self.debug_mode = debug_mode
+        self.axis3d = axis3d
 
         self.alpha_placeholder = tf.placeholder(tf.float32,
                                                 shape=(),
@@ -834,7 +836,11 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         # Create figure for plotting the environment.
         fig = plt.figure(figsize=(12, 7))
-        ax = fig.add_subplot(111)
+        if self.axis3d:
+            from mpl_toolkits.mplot3d import Axes3D
+            ax = fig.add_subplot(111, projection='3d')
+        else:
+            ax = fig.add_subplot(111)
 
         true_env = self.env
         while isinstance(true_env, ProxyEnv):
