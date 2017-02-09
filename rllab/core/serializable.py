@@ -19,7 +19,7 @@ class Serializable(object):
         else:
             varargs = tuple()
         if spec.kwonlyargs:
-            kwargs = locals_[spec.kwonlyargs]
+            kwargs = {kwonlyargs: locals_[kwonlyargs] for kwonlyargs in spec.kwonlyargs}
         else:
             kwargs = dict()
         if spec.varkw is not None and spec.varkw in locals_:
