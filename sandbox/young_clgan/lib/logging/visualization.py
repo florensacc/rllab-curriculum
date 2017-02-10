@@ -3,14 +3,12 @@ import tempfile
 import numpy as np
 import scipy.misc
 
-from sandbox.young_clgan.lib.goal.evaluator import evaluate_goals, convert_label
+from sandbox.young_clgan.lib.goal.evaluator import evaluate_goals
 from sandbox.young_clgan.lib.envs.base import FixedGoalGenerator
 
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
-
-
 
 
 def plot_policy_reward(policy, env, limit, horizon=200, max_reward=6000, fname=None, grid_size=60):
@@ -48,10 +46,9 @@ def plot_policy_reward(policy, env, limit, horizon=200, max_reward=6000, fname=N
         return img
 
 
-def plot_labeled_samples(samples, labels, limit,
+def plot_labeled_samples(samples, sample_classes, text_labels, limit,
         fname=None, size=1000, colors = ['red', 'green', 'blue', 'yellow']):
 
-    sample_classes, text_labels = convert_label(labels)
     size = min(size, samples.shape[0])
     indices = np.random.choice(samples.shape[0], size, replace=False)
     samples = samples[indices, :]

@@ -58,7 +58,7 @@ def parallel_map(func, iterable_object, num_processes=-1):
     return results
 
 
-def label_goals(goals, env, policy, horizon, min_reward=-np.inf, max_reward=np.inf,
+def label_goals(goals, env, policy, horizon, min_reward, max_reward,
                 old_rewards=None, improvement_threshold=None, n_traj=1):
     mean_rewards = evaluate_goals(goals, env, policy, horizon, n_traj)
     mean_rewards = mean_rewards.reshape(-1, 1)
@@ -76,33 +76,6 @@ def label_goals(goals, env, policy, horizon, min_reward=-np.inf, max_reward=np.i
         ).astype(np.float32)
     return labels
 
-
-def convert_label(labels):
-    """
-    :param labels: 3-dim evaluation of the goal
-    :return: convert to single integer label and gives associated texts (for plotting)
-    """
-    # label[0] --> LowRew, label[1] --> HighRew, label[2] --> Learnable ??
-    # Put good goals last so they will be plotted on top of other goals and be most visible.
-    classes = {
-        0: 'Other',
-        1: 'Low rewards',
-        2: 'High rewards',
-        3: 'Unlearnable',
-        4: 'Good goals',
-    }
-    new_labels = np.zeros(labels.shape[0], dtype=int)
-    new_labels[np.logical_and(labels[:, 0], labels[:, 1])] = 4
-    new_labels[labels[:, 0] == False] = 1
-    new_labels[labels[:, 1] == False] = 2
-    new_labels[
-        np.logical_and(
-            np.logical_and(labels[:, 0], labels[:, 1]),
-            labels[:, 2] == False
-        )
-    ] = 3
-
-    return new_labels, classes
 
 def evaluate_goals(goals, env, policy, horizon, n_traj=1, n_processes=-1):
     evaluate_goal_wrapper = FunctionWrapper(
