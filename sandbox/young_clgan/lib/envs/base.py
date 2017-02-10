@@ -1,5 +1,6 @@
 import random
 from rllab import spaces
+import sys
 
 import numpy as np
 
@@ -93,8 +94,16 @@ class GoalEnv(Serializable):
 
 
 class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
-    def __init__(self, env, goal_generator, goal_weight, distance_metric='L2',
-                 goal_reward='NegativeDistance', inner_weight=0):
+    def __init__(self, env, goal_generator, distance_metric='L2',
+                 goal_reward='NegativeDistance', goal_weight=1, inner_weight=0):
+        """
+        :param env: wrapped env
+        :param goal_generator: already instantiated: NEEDS GOOD DIM OF GOALS! --> TO DO: give the class a method to update dim?
+        :param distance_metric: L1 or L2 or a callable func
+        :param goal_reward: NegativeDistance or InverseDistance or callable func
+        :param goal_weight: coef of the goal-dist reward
+        :param inner_weight: coef of the inner reward
+        """
 
         Serializable.quick_init(self, locals())
         self.update_goal_generator(goal_generator)
@@ -114,9 +123,8 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
     def step(self, action):
         observation, reward, done, info = ProxyEnv.step(self, action)
         info['reward_inner'] = reward_inner = self.inner_weight * reward
-        body_com = observation[-3:-1]  # assumes the COM is last 3 coord, z being last
-        info['distance'] = np.linalg.norm(body_com - self.current_goal)
-        reward_dist = self._compute_dist_reward(body_com)
+        info['distance'] = np.linalg.norm(observation - self.current_goal)
+        reward_dist = self._compute_dist_reward(observation)
         info['reward_dist'] = reward_dist
         return (
             self._append_observation(observation),
@@ -185,6 +193,34 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         logger.record_tabular('MeanDistance', np.mean(distances))
         logger.record_tabular('MeanRewardDist', np.mean(reward_dist))
         logger.record_tabular('MeanRewardInner', np.mean(reward_inner))
+
+
+class GoalIdxExplorationEnv(GoalExplorationEnv, Serializable):
+    """
+    Instead of using the full state-space as goal, this class uses the observation[-3,-1] CoM in MuJoCo
+    """
+    def __init__(self, *args, idx=(1,1), **kwargs):
+        print("##### just entered init of GoalIdx", locals())
+        Serializable.quick_init(self, locals())
+        print("out of Serializable quick init for GoalIdxexplorationEnv")
+        self.idx = idx
+        super(GoalIdxExplorationEnv, self).__init__(*args, **kwargs)
+        print("done!")
+        # sys.exit()
+
+    def step(self, action):
+        observation, reward, done, info = ProxyEnv.step(self, action)
+        info['reward_inner'] = reward_inner = self.inner_weight * reward
+        body_com = observation[self.idx, ]  # assumes the COM is last 3 coord, z being last
+        info['distance'] = np.linalg.norm(body_com - self.current_goal)
+        reward_dist = self._compute_dist_reward(body_com)
+        info['reward_dist'] = reward_dist
+        return (
+            self._append_observation(observation),
+            reward_dist + reward_inner,
+            done,
+            info
+        )
 
 
 def update_env_goal_generator(env, goal_generator):

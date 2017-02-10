@@ -17,7 +17,7 @@ from rllab.sampler.stateful_pool import singleton_pool
 from rllab.envs.mujoco.swimmer_env import SwimmerEnv
 from rllab import config
 
-from sandbox.young_clgan.lib.envs.base import GoalExplorationEnv
+from sandbox.young_clgan.lib.envs.base import GoalIdxExplorationEnv
 from sandbox.young_clgan.lib.envs.base import UniformGoalGenerator, FixedGoalGenerator, update_env_goal_generator
 from sandbox.young_clgan.lib.goal import *
 from sandbox.young_clgan.lib.logging import *
@@ -78,8 +78,8 @@ if __name__ == '__main__':
         for goal_range in [2, 4]:
             inner_env = normalize(SwimmerEnv())
             goal_generator = UniformGoalGenerator(goal_dim=2, bound=goal_range)
-            env = GoalExplorationEnv(inner_env, goal_generator, goal_reward=goal_reward,
-                                     goal_weight=1)  # this goal_generator will be updated by a uniform after
+            env = GoalIdxExplorationEnv(inner_env, goal_generator, goal_reward=goal_reward,
+                                        goal_weight=1)  # this goal_generator will be updated by a uniform after
 
             policy = GaussianMLPPolicy(
                 env_spec=env.spec,
