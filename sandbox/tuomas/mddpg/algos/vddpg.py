@@ -77,7 +77,10 @@ class VDDPG(OnlineAlgorithm, Serializable):
             actor_train_frequency=1,
             update_target_frequency=1,
             debug_mode=False,
+            # evaluation
             axis3d=False,
+            q_plot_settings=None,
+            env_plot_settings=None,
             **kwargs
     ):
         """
@@ -130,6 +133,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.update_target = True
         self.debug_mode = debug_mode
         self.axis3d = axis3d
+        self.q_plot_settings = q_plot_settings
+        self.env_plot_settings = env_plot_settings
 
         self.alpha_placeholder = tf.placeholder(tf.float32,
                                                 shape=(),
@@ -168,6 +173,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.eval_sampler = ParallelSampler(self)
         self.n_eval_paths = n_eval_paths
         plt.switch_backend(plt_backend)
+
+        self._init_figures()
 
     @overrides
     def _init_tensorflow_ops(self):
@@ -729,6 +736,25 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         return t
 
+    def _init_figures(self):
+        # Init environment figure.
+        if self.env_plot_settings is not None:
+            self._fig_env = plt.figure(figsize=(7, 7))
+            self._ax_env = self._fig_env.add_subplot(111)
+            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+            self._ax_env.set_ylim(self.env_plot_settings['ylim'])
+
+        # Init critic + actor figure.
+        # TODO: Figure out to set the size automatically
+        if self.q_plot_settings is not None:
+            self._fig_q = plt.figure(figsize=(7, 7))
+
+            self._ax_q_lst = []
+            n_states = len(self.q_plot_settings['obs_lst'])
+            for i in range(n_states):
+                ax = self._fig_q.add_subplot(100 + n_states * 10 + i + 1)
+                self._ax_q_lst.append(ax)
+
     @overrides
     def evaluate(self, epoch, train_info):
         logger.log("Collecting samples for evaluation")
@@ -789,11 +815,6 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.last_statistics.update(OrderedDict([
             ('Epoch', epoch),
             # ('PolicySurrogateLoss', policy_loss),
-            #HT: why are the policy outputs info helpful?
-            # ('PolicyMeanOutput', np.mean(policy_outputs)),
-            # ('PolicyStdOutput', np.std(policy_outputs)),
-            # ('TargetPolicyMeanOutput', np.mean(target_policy_outputs)),
-            # ('TargetPolicyStdOutput', np.std(target_policy_outputs)),
             ('CriticLoss', qf_loss),
             ('AverageDiscountedReturn', average_discounted_return),
         ]))
@@ -834,31 +855,77 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 'TrainingPathLengths', es_path_lengths))
 
 
-        # Create figure for plotting the environment.
-        fig = plt.figure(figsize=(12, 7))
-        if self.axis3d:
-            from mpl_toolkits.mplot3d import Axes3D
-            ax = fig.add_subplot(111, projection='3d')
-        else:
-            ax = fig.add_subplot(111)
+        ## Create figure for plotting the environment.
+        #fig = plt.figure(figsize=(12, 7))
+        #if self.axis3d:
+        #    from mpl_toolkits.mplot3d import Axes3D
+        #    ax = fig.add_subplot(111, projection='3d')
+        #else:
+        #    ax = fig.add_subplot(111)
 
-        true_env = self.env
-        while isinstance(true_env, ProxyEnv):
-            true_env = true_env._wrapped_env
-        if hasattr(true_env, "log_stats"):
-            env_stats = true_env.log_stats(self, epoch, paths, ax)
+        #true_env = self.env
+        #while isinstance(true_env, ProxyEnv):
+        #    true_env = true_env._wrapped_env
+        #if hasattr(true_env, "log_stats"):
+        #    env_stats = true_env.log_stats(self, epoch, paths, ax)
+        #    self.last_statistics.update(env_stats)
+
+        ## Close and save figs.
+        #snapshot_dir = logger.get_snapshot_dir()
+        #img_file = os.path.join(snapshot_dir, 'itr_%d_test_paths.png' % epoch)
+
+        #plt.draw()
+        #plt.pause(0.001)
+
+        #plt.savefig(img_file, dpi=100)
+        #plt.cla()
+        #plt.close('all')
+
+        # Collect environment info.
+        snapshot_dir = logger.get_snapshot_dir()
+        env = self.env
+        while isinstance(env, ProxyEnv):
+            env = env._wrapped_env
+
+        if hasattr(env, "log_stats"):
+            env_stats = env.log_stats(self, epoch, paths)
             self.last_statistics.update(env_stats)
 
-        # Close and save figs.
-        snapshot_dir = logger.get_snapshot_dir()
-        img_file = os.path.join(snapshot_dir, 'itr_%d_test_paths.png' % epoch)
+        if hasattr(env, 'plot_paths'):
+            img_file = os.path.join(snapshot_dir,
+                                    'env_itr_%05d.png' % epoch)
 
-        plt.draw()
-        plt.pause(0.001)
+            self._ax_env.clear()
+            env.plot_paths(paths, self._ax_env)
+            self._ax_env.set_xlim(self.q_plot_settings['xlim'])
+            self._ax_env.set_ylim(self.q_plot_settings['ylim'])
 
-        plt.savefig(img_file, dpi=100)
-        plt.cla()
-        plt.close('all')
+            plt.pause(0.001)
+            plt.draw()
+
+            self._fig_env.savefig(img_file, dpi=100)
+
+        # Collect actor and critic info (save just plots)
+        if hasattr(self.qf, 'plot') and self.q_plot_settings is not None:
+            img_file = os.path.join(snapshot_dir,
+                                    'q_itr_%05d.png' % epoch)
+
+            [ax.clear() for ax in self._ax_q_lst]
+            self.qf.plot(
+                ax_lst=self._ax_q_lst,
+                obs_lst=self.q_plot_settings['obs_lst'],
+                action_dims=self.q_plot_settings['action_dims'],
+                axis_lims=self.q_plot_settings['axis_lims']
+            )
+
+            self.policy.plot_samples(self._ax_q_lst,
+                                     self.q_plot_settings['obs_lst'],
+                                     self.K)
+
+            plt.pause(0.001)
+            plt.draw()
+
+            self._fig_q.savefig(img_file, dpi=100)
 
         for key, value in self.last_statistics.items():
             logger.record_tabular(key, value)
