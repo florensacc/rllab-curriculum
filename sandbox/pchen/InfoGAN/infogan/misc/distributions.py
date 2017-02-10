@@ -13,7 +13,7 @@ from rllab.core.serializable import Serializable
 from rllab.misc.ext import AttrDict, extract
 from rllab.misc.overrides import overrides
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import CustomPhase, resconv_v1_customconv, plstmconv_v1, int_shape, \
-    universal_int_shape, get_linear_ar_mask
+    universal_int_shape, get_linear_ar_mask, tf_go
 import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
 import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
 import rllab.misc.logger as logger
@@ -3405,7 +3405,7 @@ class FlowBasedDequant(DequantizationDistribution):
     def __init__(
             self,
             shape,
-            flow_builder,
+            context_processor,
             width=1. / 256,
     ):
         global G_IDX
@@ -3416,31 +3416,41 @@ class FlowBasedDequant(DequantizationDistribution):
 
         self._shape = shape
         self._dim = dim
-        self._noise = Gaussian(dim)
-        def hacky_flow_builder_wrapper(builder):
-            # since flow builder needs to rebuild distributions;
-            # we need to take care of naming
-            def go(*args, **kwargs):
-                global G_IDX
-                old_counter = G_IDX
-                G_IDX = 999 # to avoid collision
-                ret = builder(*args, **kwargs)
-                G_IDX = old_counter
-                return ret
-            return go
-        flow_builder = hacky_flow_builder_wrapper(flow_builder)
+        self._context_processor = tf.make_template(self._name + "_cp", context_processor)
 
-        self._flow_builder = tf.make_template(self._name, flow_builder)
+        from sandbox.pchen.InfoGAN.infogan.models.real_nvp import checkerboard_condition_fn_gen
+        from sandbox.pchen.InfoGAN.infogan.models.real_nvp import resnet_blocks_gen
+        base = Gaussian(dim)
+        shaped_noise = ReshapeFlow(
+            base,
+            forward_fn=lambda x: tf.reshape(x, [-1] + list(shape)),
+            backward_fn=lambda x: tf_go(x).reshape([-1, base.dim]).value,
+        )
+        f = normalize
+        cur = shaped_noise
+        for i in range(3):
+            cf, ef, merge = checkerboard_condition_fn_gen(i, True)
+            cur = ShearingFlow(
+                f(cur),
+                nn_builder=resnet_blocks_gen(),
+                condition_fn=cf,
+                effect_fn=ef,
+                combine_fn=merge,
+            )
+        logitized = logitize(cur, coeff=256.)
+        self._delegate = logitized
 
         self.init_mode()
 
     @overrides
     def init_mode(self):
         self._custom_phase = CustomPhase.init
+        self._delegate.init_mode()
 
     @overrides
     def train_mode(self):
         self._custom_phase = CustomPhase.train
+        self._delegate.train_mode()
 
     def sample_logli(self, dist_info):
         condition = dist_info["condition"]
@@ -3452,14 +3462,13 @@ class FlowBasedDequant(DequantizationDistribution):
         with scopes.default_arg_scope(
                 counters={}, init=self._custom_phase == CustomPhase.init
         ):
-            out_dist = self._flow_builder(self._noise, condition)
-            if self._custom_phase == CustomPhase.init:
-                out_dist.init_mode()
-            else:
-                out_dist.train_mode()
-            # XXX: ugly mess, need to unite two nestation system
-            return out_dist.sample_logli(
-                out_dist.prior_dist_info(batch_size=bs)
+            processed = self._context_processor(condition)
+
+        with scopes.default_arg_scope(
+            context=processed,
+        ):
+            return self._delegate.sample_logli(
+                self._delegate.prior_dist_info(batch_size=bs)
             )
 
 # TODO: this has wrong impl for sampling
@@ -3488,7 +3497,6 @@ def normalize(dist):
             assert len(init_mode) == 0
             init_mode.append("forward")
         else:
-            import ipdb; ipdb.set_trace()
             assert len(init_mode) == 1
         mu, inv_std = normalize_per_dim(eps)
         sum_log_inv_std = tf.reduce_sum(tf.log(inv_std))

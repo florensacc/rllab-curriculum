@@ -20,36 +20,15 @@ import cloudpickle
 
 # kuma hopefully numerically stable
 
-def shallow_flow_builder(base, context):
-    from sandbox.pchen.InfoGAN.infogan.models.real_nvp import checkerboard_condition_fn_gen, resnet_blocks_gen, tf_go, channel_condition_fn_gen
-    from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp, flatten, assign_to_gpu, \
-        average_grads, temp_restore, np_logsumexp, get_available_gpus, restore
-
-    processed_context = nn.conv2d(context, 32)
+def shallow_processor(context):
+    this = checkerboard_condition_fn_gen()[0](context)
+    that = checkerboard_condition_fn_gen()[1](context)
+    processed_context = nn.conv2d(tf.concat(3, [this, that]), 32)
     for _ in range(3):
         processed_context = nn.gated_resnet(processed_context)
 
-    shape = [-1, 32, 32, 3]
-    shaped_noise = ReshapeFlow(
-        base,
-        forward_fn=lambda x: tf.reshape(x, shape),
-        backward_fn=lambda x: tf_go(x).reshape([-1, base.dim]).value,
-    )
 
-    f = normalize
-    cur = shaped_noise
-    with scopes.default_arg_scope(context=processed_context):
-        for i in range(3):
-            cf, ef, merge = checkerboard_condition_fn_gen(i, True)
-            cur = ShearingFlow(
-                f(cur),
-                nn_builder=resnet_blocks_gen(),
-                condition_fn=cf,
-                effect_fn=ef,
-                combine_fn=merge,
-            )
-        logitized = logitize(cur, coeff=256.)
-    return logitized
+    return processed_context
 
 class VG(VariantGenerator):
     @variant
@@ -138,7 +117,7 @@ def run_task(v):
         # noise_dist=UniformDequant(),
         noise_dist=FlowBasedDequant(
             shape=[32,32,3],
-            flow_builder=shallow_flow_builder,
+            context_processor=shallow_processor,
         )
     )
 
