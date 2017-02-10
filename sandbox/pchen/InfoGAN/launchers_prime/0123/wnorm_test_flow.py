@@ -36,7 +36,7 @@ class VG(VariantGenerator):
 def run_task(v):
     wnorm = v["wnorm"]
     if wnorm:
-        f = normalize
+        f = normalize_legacy
     else:
         f = lambda x: x
     hybrid = False

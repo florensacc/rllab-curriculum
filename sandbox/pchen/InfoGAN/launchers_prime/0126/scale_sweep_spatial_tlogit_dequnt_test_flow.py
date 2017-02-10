@@ -33,7 +33,7 @@ class VG(VariantGenerator):
 
 def run_task(v):
     logit = False
-    f = normalize
+    f = normalize_legacy
     hybrid = False
     scale = v["scale"]
 

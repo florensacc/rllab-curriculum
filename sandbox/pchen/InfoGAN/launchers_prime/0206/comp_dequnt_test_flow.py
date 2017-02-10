@@ -41,7 +41,7 @@ class VG(VariantGenerator):
 
 def run_task(v):
     logit = True
-    f = normalize
+    f = normalize_legacy
     hybrid = False
 
     dataset = Cifar10Dataset(dequantized=False) # dequantization left to flow

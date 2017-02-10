@@ -16,6 +16,7 @@ from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import CustomPhase, resconv_v
     universal_int_shape, get_linear_ar_mask
 import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
 import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+import rllab.misc.logger as logger
 
 TINY = 1e-8
 
@@ -273,8 +274,8 @@ class Gaussian(Distribution):
             )
             # forget it untill we code it numerically more stable param
             # prior_stddev = tf.get_variable("prior_stddev_%s" % self._name, initializer=prior_mean)
-        self._prior_mean = tf.reshape(tf.cast(prior_mean, floatX), [1, -1])
-        self._prior_stddev = tf.reshape(tf.cast(prior_stddev, floatX), [1, -1])
+        self._prior_mean = tf.reshape(tf.cast(prior_mean, floatX), [1, dim])
+        self._prior_stddev = tf.reshape(tf.cast(prior_stddev, floatX), [1, dim])
 
     @property
     def dim(self):
@@ -331,7 +332,7 @@ class Gaussian(Distribution):
     def sample_logli(self, dist_info):
         mean = dist_info["mean"]
         stddev = dist_info["stddev"]
-        epsilon = tf.random_normal(tf.shape(mean), seed=get_current_seed())
+        epsilon = tf.random_normal(universal_int_shape(mean), seed=get_current_seed())
         out = mean + epsilon * stddev
         return out, self.logli(out, dist_info)
 
@@ -2892,16 +2893,23 @@ class ReshapeFlow(Distribution):
             base_dist,
             forward_fn,
             backward_fn,
-            logli_diff_fn=lambda x: 0.,
             debug=False,
     ):
         global G_IDX
         G_IDX += 1
         self._name = "reshape_%s" % (G_IDX)
         self._base_dist = base_dist
-        self._forward = forward_fn
-        self._backward = backward_fn
-        self._logli_diff = logli_diff_fn
+        def _this_template(mode, *args, **kwargs):
+            if mode == "forward":
+                return forward_fn(*args, **kwargs)
+            elif mode == "backward":
+                return backward_fn(*args, **kwargs)
+
+            assert False
+        this_template = tf.make_template(self._name, _this_template)
+
+        self._forward = functools.partial(this_template, "forward")
+        self._backward = functools.partial(this_template, "backward")
         self._debug = debug
 
         self.train_mode()
@@ -2925,15 +2933,32 @@ class ReshapeFlow(Distribution):
         return self._base_dist.effective_dim
 
     def logli(self, x_var, dist_info):
-        eps = self._backward(x_var)
-        log_diff = self._logli_diff(x_var)
-        log_diff = tf.Print(log_diff, [x_var, log_diff]) if self._debug else log_diff
-        return self._base_dist.logli(eps, dist_info) + log_diff
+        with scopes.default_arg_scope(
+                counters={}, init=self._custom_phase == CustomPhase.init,
+                ema=None
+        ):
+            arr_maybe = self._backward(x_var)
+            if isinstance(arr_maybe, (tuple, list)):
+                eps, log_diff = arr_maybe
+            else:
+                eps = arr_maybe
+                log_diff = 0.
+            log_diff = tf.Print(log_diff, [x_var, log_diff]) if self._debug else log_diff
+            return self._base_dist.logli(eps, dist_info) + log_diff
 
     def sample_logli(self, dist_info):
-        eps, logpeps = self._base_dist.sample_logli(dist_info)
-        x = self._forward(eps)
-        return x, logpeps + self._logli_diff(x)
+        with scopes.default_arg_scope(
+                counters={}, init=self._custom_phase == CustomPhase.init,
+                ema=None
+        ):
+            eps, logpeps = self._base_dist.sample_logli(dist_info)
+            arr_maybe = self._forward(eps)
+            if isinstance(arr_maybe, (tuple, list)):
+                x, log_diff = arr_maybe
+            else:
+                x = arr_maybe
+                log_diff = 0.
+            return x, logpeps + log_diff
 
     def prior_dist_info(self, batch_size):
         return self._base_dist.prior_dist_info(batch_size)
@@ -3391,7 +3416,9 @@ class FlowBasedDequant(DequantizationDistribution):
         self._dim = dim
 
         flat_dim = dim
-        # from sandbox.pchen.InfoGAN.infogan.models.real_nvp import *
+        from sandbox.pchen.InfoGAN.infogan.models.real_nvp import checkerboard_condition_fn_gen, resnet_blocks_gen, tf_go, channel_condition_fn_gen
+        from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp, flatten, assign_to_gpu, \
+            average_grads, temp_restore, np_logsumexp, get_available_gpus, restore
         noise = Gaussian(flat_dim)
         shape = [-1, 16, 16, 12]
         shaped_noise = ReshapeFlow(
@@ -3400,6 +3427,7 @@ class FlowBasedDequant(DequantizationDistribution):
             backward_fn=lambda x: tf_go(x).reshape([-1, noise.dim]).value,
         )
 
+        f = normalize_legacy
         cur = shaped_noise
         for i in range(4):
             cf, ef, merge = checkerboard_condition_fn_gen(i, (i<2) )
@@ -3460,7 +3488,7 @@ class FlowBasedDequant(DequantizationDistribution):
         return (eps) * scaling, logli_eps - tf.log(scaling) * self._dim
 
 # TODO: this has wrong impl for sampling
-def normalize(dist):
+def normalize_legacy(dist):
     def normalize_per_dim(x):
         mu, inv_std = nn.init_normalization(x)
         return -mu, tf.log(inv_std)
@@ -3472,6 +3500,49 @@ def normalize(dist):
         combine_fn=lambda _, x: x,
     )
 
+def normalize(dist):
+    def normalize_per_dim(x):
+        mu, inv_std = nn.init_normalization(x)
+        return mu, inv_std
+
+    init_mode = []
+    @scopes.add_arg_scope_only("init")
+    def forward(eps, init, ):
+        if init:
+            logger.log("Init used in sampling pass")
+            assert len(init_mode) == 0
+            init_mode.append("forward")
+        else:
+            assert len(init_mode) == 1
+        mu, inv_std = normalize_per_dim(eps)
+        sum_log_inv_std = tf.reduce_sum(tf.log(inv_std))
+        if init_mode[0] == "forward":
+            return (eps - mu) * inv_std, -sum_log_inv_std
+        else:
+            return eps / inv_std + mu, sum_log_inv_std
+
+    @scopes.add_arg_scope_only("init")
+    def backward(x, init, ):
+        if init:
+            logger.log("Init used in inference pass")
+            assert len(init_mode) == 0
+            init_mode.append("backward")
+        else:
+            assert len(init_mode) == 1
+        mu, inv_std = normalize_per_dim(x)
+        sum_log_inv_std = tf.reduce_sum(tf.log(inv_std))
+        if init_mode[0] == "backward":
+            return (x - mu) * inv_std, sum_log_inv_std
+        else:
+            return x / inv_std + mu, -sum_log_inv_std
+
+    return ReshapeFlow(
+        dist,
+        forward_fn=forward,
+        backward_fn=backward,
+    )
+
+
 def shift(dist, offset=0.5 + (1/256/2)):
     return ReshapeFlow(
         dist,
@@ -3482,11 +3553,14 @@ def shift(dist, offset=0.5 + (1/256/2)):
 
 def logitize(dist, coeff=0.90):
     # apply logit(coeff*x)
+    logli_diff_fn = lambda x: tf.reduce_sum(-tf.log(x - coeff*(x**2)), reduction_indices=[1,2,3])
+    def forward(eps):
+        x = (1. / (1. + tf.exp(-eps))) / coeff
+        return x, logli_diff_fn(x)
     return ReshapeFlow(
         dist,
-        forward_fn=lambda eps: (1. / (1. + tf.exp(-eps))) / coeff,
-        backward_fn=lambda x: tf.log(coeff*x) - tf.log(1-coeff*x),
-        logli_diff_fn=lambda x: tf.reduce_sum(-tf.log(x - coeff*(x**2)), reduction_indices=[1,2,3]),
+        forward_fn=forward,
+        backward_fn=lambda x: (tf.log(coeff*x) - tf.log(1-coeff*x), logli_diff_fn(x)),
         debug=False,
     )
 

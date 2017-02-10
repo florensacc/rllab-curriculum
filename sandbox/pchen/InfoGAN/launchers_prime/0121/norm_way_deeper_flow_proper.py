@@ -26,7 +26,7 @@ cur = shaped_noise
 for i in range(8):
     cf, ef, merge = checkerboard_condition_fn_gen(i, True) # fixme: for now
     cur = ShearingFlow(
-        normalize(cur),
+        normalize_legacy(cur),
         nn_builder=resnet_blocks_gen(),
         condition_fn=cf,
         effect_fn=ef,
@@ -37,7 +37,7 @@ for i in range(8):
 for i in range(8):
     cf, ef, merge = channel_condition_fn_gen(i, )
     cur = ShearingFlow(
-        normalize(cur),
+        normalize_legacy(cur),
         nn_builder=resnet_blocks_gen(),
         condition_fn=cf,
         effect_fn=ef,
@@ -56,7 +56,7 @@ cur = upsampled
 for i in range(8):
     cf, ef, merge = checkerboard_condition_fn_gen(i, True) # fixme: for now
     cur = ShearingFlow(
-        normalize(cur),
+        normalize_legacy(cur),
         nn_builder=resnet_blocks_gen(),
         condition_fn=cf,
         effect_fn=ef,
