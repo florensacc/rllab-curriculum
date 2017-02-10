@@ -14,7 +14,7 @@ import rllab.misc.logger
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.sampler.stateful_pool import singleton_pool
-from rllab.envs.mujoco.swimmer_env import SwimmerEnv
+from rllab.envs.box2d.pendulum_env import PendulumEnv
 from rllab import config
 
 from sandbox.young_clgan.lib.envs.base import GoalIdxExplorationEnv
@@ -76,7 +76,7 @@ if __name__ == '__main__':
 
     for goal_reward in ['InverseDistance', 'NegativeDistance']:
         for goal_range in [2, 4]:
-            inner_env = normalize(SwimmerEnv())
+            inner_env = normalize(PendulumEnv())
             goal_generator = UniformGoalGenerator(goal_dim=2, bound=goal_range)
             env = GoalIdxExplorationEnv(inner_env, goal_generator, goal_reward=goal_reward,
                                         goal_weight=1)  # this goal_generator will be updated by a uniform after
