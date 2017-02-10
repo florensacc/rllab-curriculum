@@ -2894,10 +2894,11 @@ class ReshapeFlow(Distribution):
             forward_fn,
             backward_fn,
             debug=False,
+            name="reshape",
     ):
         global G_IDX
         G_IDX += 1
-        self._name = "reshape_%s" % (G_IDX)
+        self._name = "%s_%s" % (name, G_IDX)
         self._base_dist = base_dist
         def _this_template(mode, *args, **kwargs):
             if mode == "forward":
@@ -3524,6 +3525,7 @@ def normalize(dist):
         dist,
         forward_fn=forward,
         backward_fn=backward,
+        name="normalize",
     )
 
 
@@ -3533,18 +3535,27 @@ def shift(dist, offset=0.5 + (1/256/2)):
         forward_fn=lambda eps: eps - offset,
         backward_fn=lambda x: x + offset,
         debug=False,
+        name="shift",
     )
 
 def logitize(dist, coeff=0.90):
     # apply logit(coeff*x)
-    logli_diff_fn = lambda x: tf.reduce_sum(-tf.log(x - coeff*(x**2)), reduction_indices=[1,2,3])
+    # logli_diff_fn = lambda x: tf.reduce_sum(
+    #     -tf.log(x - coeff*(x**2)),
+    #     reduction_indices=[1,2,3]
+    # )
+    logli_diff_fn = lambda x: tf.reduce_sum(
+        tf.nn.softplus(x*coeff) + tf.nn.softplus(-x*coeff) - tf.nn.softplus(-coeff),
+        reduction_indices=[1,2,3]
+    )
     def forward(eps):
-        x = (1. / (1. + tf.exp(-eps))) / coeff
+        x = tf.nn.sigmoid(-eps) / coeff
         return x, logli_diff_fn(x)
     return ReshapeFlow(
         dist,
         forward_fn=forward,
         backward_fn=lambda x: (tf.log(coeff*x) - tf.log(1-coeff*x), logli_diff_fn(x)),
         debug=False,
+        name="logit",
     )
 
