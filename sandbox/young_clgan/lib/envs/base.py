@@ -199,14 +199,10 @@ class GoalIdxExplorationEnv(GoalExplorationEnv, Serializable):
     """
     Instead of using the full state-space as goal, this class uses the observation[-3,-1] CoM in MuJoCo
     """
-    def __init__(self, *args, idx=(1,1), **kwargs):
-        print("##### just entered init of GoalIdx", locals())
+    def __init__(self, idx=(1,1), **kwargs):
         Serializable.quick_init(self, locals())
-        print("out of Serializable quick init for GoalIdxexplorationEnv")
         self.idx = idx
-        super(GoalIdxExplorationEnv, self).__init__(*args, **kwargs)
-        print("done!")
-        # sys.exit()
+        super(GoalIdxExplorationEnv, self).__init__(**kwargs)
 
     def step(self, action):
         observation, reward, done, info = ProxyEnv.step(self, action)
