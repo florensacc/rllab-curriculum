@@ -223,7 +223,7 @@ class DistTrainer(object):
                     for output in op.outputs:
                         if output.dtype in [dtypes.float16, dtypes.float32, dtypes.float64]:
                             if "save" in op.name or "data_init" in op.name or "optim" in op.name or "ExponentialMovingAverage" in op.name or "eval" in op.name:
-                                print("ignoring " + op.name)
+                                # print("ignoring " + op.name)
                                 continue
                             message = op.name + ":" + str(output.value_index) + "; traceback: " + "|||".join(" ".join(str(item) for item in items) for items in op.traceback)
                             with ops.control_dependencies(check_op):

@@ -18,23 +18,13 @@ import tensorflow as tf
 import cloudpickle
 
 
-# kuma hopefully numerically stable
-
-def shallow_processor(context):
-    this = checkerboard_condition_fn_gen()[0](context)
-    that = checkerboard_condition_fn_gen()[1](context)
-    processed_context = nn.conv2d(tf.concat(3, [this, that]), 32)
-    for _ in range(3):
-        processed_context = nn.gated_resnet(processed_context)
-
-
-    return processed_context
+# test if logit transofmration is useful
 
 class VG(VariantGenerator):
     @variant
     def logit(self):
         return [
-            True,
+            True, False
         ]
 
     @variant
@@ -46,7 +36,7 @@ def run_task(v):
     f = normalize
     hybrid = False
 
-    dataset = Cifar10Dataset(dequantized=False) # dequantization left to flow
+    dataset = Cifar10Dataset(dequantized=False)
     flat_dim = dataset.image_dim
 
     noise = Gaussian(flat_dim)
@@ -95,43 +85,20 @@ def run_task(v):
             combine_fn=merge,
         )
 
-    if logit:
-        cur = shift(logitize(cur))
-
-    blocks = 4
-    filters = 32
-    nr_mix = 4
-    def go(x):
-        shp = int_shape(x)
-        chns = shp[3]
-        x = nn.conv2d(x, filters)
-        for _ in range(blocks):
-            x = nn.gated_resnet(x)
-        temp = nn.conv2d(x, chns * 2 * nr_mix)
-        return tf.reshape(
-            temp,
-            shp[:3] + [chns*2, nr_mix]
-        ) * 0.1
     dist = DequantizedFlow(
-        base_dist=cur,
-        # noise_dist=UniformDequant(),
-        noise_dist=FlowBasedDequant(
-            shape=[32,32,3],
-            context_processor=shallow_processor,
-        ),
+        f(cur),
+        UniformDequant()
     )
+    if logit:
+        dist = logitize(dist)
 
     algo = DistTrainer(
         dataset=dataset,
         dist=dist,
         init_batch_size=1024,
         train_batch_size=64, # also testing resuming from diff bs
-        optimizer=AdamaxOptimizer(
-            learning_rate=1e-3,
-        ),
+        optimizer=AdamaxOptimizer(learning_rate=1e-3),
         save_every=20,
-        # # for debug
-        debug=False,
         # resume_from="/home/peter/rllab-private/data/local/global_proper_deeper_flow/"
         # checkpoint_dir="data/local/test_debug",
     )
@@ -149,11 +116,11 @@ config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[config.AWS_REGION_NAME]
 config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[config.AWS_REGION_NAME]
 config.AWS_SECURITY_GROUP_IDS = config.ALL_REGION_AWS_SECURITY_GROUP_IDS[config.AWS_REGION_NAME]
 
-for v in variants[:]:
+for v in variants[:1]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="0209_flow_based_dequant",
+        exp_prefix="0209_redo_normal_nn_logitize_test",
         variant=v,
 
         mode="local",
@@ -164,7 +131,7 @@ for v in variants[:]:
         # ),
 
         # mode="ec2",
-        #
+
         use_gpu=True,
         snapshot_mode="last",
         docker_image="dementrock/rllab3-shared-gpu-cuda80",
