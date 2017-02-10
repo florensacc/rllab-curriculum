@@ -71,3 +71,7 @@ exp035c.py: Exact same run as exp035, after fixing problem with saving network.
 exp036.py: Run A3C on all 4 games (not running on Skiing anymore) with 84x84 inputs,
            scale to [0,1], slightly lower lr = 4e-4 (instead of 7e-4). Since this
            combination works on Pong (exp034).
+
+<Trying out training recurrent neural nets>
+exp037.py: First shot at training A3C LSTM policies for Chopper Command, Pong,
+           Seaquest, and Space Invaders.
