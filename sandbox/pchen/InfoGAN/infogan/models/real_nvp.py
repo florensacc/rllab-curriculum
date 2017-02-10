@@ -1,4 +1,3 @@
-from sandbox.pchen.InfoGAN.infogan.algos.dist_trainer import DistTrainer
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import tf_go, AdamaxOptimizer, average_grads
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import *
 
