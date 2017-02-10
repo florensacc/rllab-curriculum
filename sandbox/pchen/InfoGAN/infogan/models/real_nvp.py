@@ -9,7 +9,7 @@ import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
 import rllab.misc.logger as logger
 
 
-@scopes.add_arg_scope
+@scopes.add_arg_scope_only("blocks", "filters", "squash")
 def resnet_blocks_gen(blocks=4, filters=64, squash=tf.tanh):
     def go(x):
         chns = int_shape(x)[3]

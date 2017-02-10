@@ -3400,10 +3400,12 @@ class FactorizedEncodingSpatialTruncatedLogisticDequant(DequantizationDistributi
         scaling = self._width / 2.
         return (eps+1.) * scaling, logli_eps - tf.log(scaling) * self._dim
 
+
 class FlowBasedDequant(DequantizationDistribution):
     def __init__(
             self,
             shape,
+            flow_builder,
             width=1. / 256,
     ):
         global G_IDX
@@ -3414,78 +3416,51 @@ class FlowBasedDequant(DequantizationDistribution):
 
         self._shape = shape
         self._dim = dim
+        self._noise = Gaussian(dim)
+        def hacky_flow_builder_wrapper(builder):
+            # since flow builder needs to rebuild distributions;
+            # we need to take care of naming
+            def go(*args, **kwargs):
+                global G_IDX
+                old_counter = G_IDX
+                G_IDX = 999 # to avoid collision
+                ret = builder(*args, **kwargs)
+                G_IDX = old_counter
+                return ret
+            return go
+        flow_builder = hacky_flow_builder_wrapper(flow_builder)
 
-        flat_dim = dim
-        from sandbox.pchen.InfoGAN.infogan.models.real_nvp import checkerboard_condition_fn_gen, resnet_blocks_gen, tf_go, channel_condition_fn_gen
-        from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp, flatten, assign_to_gpu, \
-            average_grads, temp_restore, np_logsumexp, get_available_gpus, restore
-        noise = Gaussian(flat_dim)
-        shape = [-1, 16, 16, 12]
-        shaped_noise = ReshapeFlow(
-            noise,
-            forward_fn=lambda x: tf.reshape(x, shape),
-            backward_fn=lambda x: tf_go(x).reshape([-1, noise.dim]).value,
-        )
-
-        f = normalize_legacy
-        cur = shaped_noise
-        for i in range(4):
-            cf, ef, merge = checkerboard_condition_fn_gen(i, (i<2) )
-            cur = ShearingFlow(
-                f(cur),
-                nn_builder=resnet_blocks_gen(),
-                condition_fn=cf,
-                effect_fn=ef,
-                combine_fn=merge,
-            )
-
-        for i in range(4):
-            cf, ef, merge = channel_condition_fn_gen(i, )
-            cur = ShearingFlow(
-                f(cur),
-                nn_builder=resnet_blocks_gen(),
-                condition_fn=cf,
-                effect_fn=ef,
-            combine_fn=merge,
-        )
+        self._flow_builder = tf.make_template(self._name, flow_builder)
 
         self.init_mode()
 
     @overrides
     def init_mode(self):
         self._custom_phase = CustomPhase.init
-        self._delegate_dist.init_mode()
 
     @overrides
     def train_mode(self):
         self._custom_phase = CustomPhase.train
-        self._delegate_dist.train_mode()
 
     def sample_logli(self, dist_info):
         condition = dist_info["condition"]
-        with scopes.default_arg_scope(
-                counters={}, init=self._custom_phase == CustomPhase.init,
-                ema=None
-        ):
-            info_tensor = self._nn_template(condition)
-            if self._nr_mixtures != 1:
-                # ensure the mixture reshape is correct
-                shp = int_shape(info_tensor)
-                ndim = len(shp)
-                assert shp[-1] == self._nr_mixtures
-                info_tensor = tf.transpose(
-                    info_tensor,
-                    [0, ndim-1, ] + list(range(1, ndim-1))
-                )
-            delegate_info_flat = tf.reshape(
-                info_tensor,
-                [-1, self._delegate_dist.dist_flat_dim]
-            )
-        eps, logli_eps = self._delegate_dist.sample_logli(
-            self._delegate_dist.activate_dist(delegate_info_flat)
+        bs = universal_int_shape(condition)[0]
+        condition = tf.reshape(
+            condition, [bs, 32, 32, 3]
         )
-        scaling = self._width
-        return (eps) * scaling, logli_eps - tf.log(scaling) * self._dim
+
+        with scopes.default_arg_scope(
+                counters={}, init=self._custom_phase == CustomPhase.init
+        ):
+            out_dist = self._flow_builder(self._noise, condition)
+            if self._custom_phase == CustomPhase.init:
+                out_dist.init_mode()
+            else:
+                out_dist.train_mode()
+            # XXX: ugly mess, need to unite two nestation system
+            return out_dist.sample_logli(
+                out_dist.prior_dist_info(batch_size=bs)
+            )
 
 # TODO: this has wrong impl for sampling
 def normalize_legacy(dist):
@@ -3513,6 +3488,7 @@ def normalize(dist):
             assert len(init_mode) == 0
             init_mode.append("forward")
         else:
+            import ipdb; ipdb.set_trace()
             assert len(init_mode) == 1
         mu, inv_std = normalize_per_dim(eps)
         sum_log_inv_std = tf.reduce_sum(tf.log(inv_std))
