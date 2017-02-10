@@ -40,6 +40,9 @@ class NNPolicy(NeuralNetwork, Policy):
         """
         raise NotImplementedError
 
+    def reset(self):
+        pass
+
 
 class FeedForwardPolicy(NNPolicy):
     def __init__(

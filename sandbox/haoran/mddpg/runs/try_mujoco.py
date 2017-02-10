@@ -1,7 +1,7 @@
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.envs.normalized_env import normalize
 from rllab.misc import tensor_utils
-from sandbox.haoran.mddpg.envs.mujoco.billiards_env import BilliardsEnv
+from sandbox.haoran.myscripts.envs import EnvChooser
 import numpy as np
 import time
 
@@ -47,9 +47,10 @@ def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1,
 
 # ----------------------------------------------------------------------------
 def run():
-    true_env = BilliardsEnv(
-        random_init_state=False,
-    )
+    true_env = EnvChooser().choose_env("multilink_reacher")
+    # true_env = BilliardsEnv(
+    #     random_init_state=False,
+    # )
     env = normalize(
         true_env,
         normalize_obs=True,
@@ -69,7 +70,7 @@ def run():
     )
 
     while True:
-        rollout(env, policy, max_path_length=np.inf, animated=True, speedup=100)
+        rollout(env, policy, max_path_length=np.inf, animated=True, speedup=1)
 
 if __name__ == "__main__":
     run()

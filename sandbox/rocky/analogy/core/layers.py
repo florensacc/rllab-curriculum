@@ -25,7 +25,7 @@ def dynamic_rnn(
             # make sure the first dimension of input is time
             input = tf.transpose(input, [1, 0, 2])
 
-        with tf.op_scope([], "dynamic_rnn") as scope:
+        with tf.name_scope(name="dynamic_rnn", values=[]) as scope:
             base_name = scope
 
         def _new_ta(dtype, name):

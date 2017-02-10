@@ -3,7 +3,7 @@ import time
 from rllab.algos.base import RLAlgorithm
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
-from sandbox.rocky.neural_learner.sample_processors.default_sample_processor import DefaultSampleProcessor
+from sandbox.rocky.chainer.sample_processors.default_sample_processor import DefaultSampleProcessor
 from sandbox.rocky.chainer.misc import tensor_utils
 from sandbox.rocky.chainer.policies.base import Policy
 from sandbox.rocky.chainer.samplers.batch_sampler import BatchSampler

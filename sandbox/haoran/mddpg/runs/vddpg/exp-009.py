@@ -1,8 +1,9 @@
 """
 Variational DDPG (online, consevative)
 
-DDPG on HumanoidStandup. Note:
-* horizon = 1k
+Test DDPG on the cautions hopper.
+We hope to see how the hopper stabilizes in different random seeds and random
+    initial states.
 """
 # imports -----------------------------------------------------
 import tensorflow as tf

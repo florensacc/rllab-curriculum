@@ -85,3 +85,4 @@ class ProductDistribution(DistributionExt):
             for k in dist.dist_info_keys:
                 ret.append("id_%d_%s" % (idx, k))
         return ret
+

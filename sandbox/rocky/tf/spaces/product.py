@@ -36,7 +36,7 @@ class Product(Space):
 
     @property
     def flat_dim(self):
-        return np.sum([c.flat_dim for c in self._components])
+        return int(np.sum([c.flat_dim for c in self._components]))
 
     def flatten(self, x):
         return np.concatenate([c.flatten(xi) for c, xi in zip(self._components, x)])

@@ -16,6 +16,12 @@ all_subnet_info = {
             SubnetID="subnet-fe0ee1a6", Groups=["sg-dd0700b9"]),
         "us-west-1c": dict(
             SubnetID="subnet-6ee43f0a", Groups=["sg-dd0700b9"]),
+        "us-west-2a": dict(
+            SubnetID="subnet-a6a8fad0", Groups=["sg-8e57c5f7"]),
+        "us-west-2b": dict(
+            SubnetID="subnet-fce3d898", Groups=["sg-8e57c5f7"]),
+        "us-west-2c": dict(
+            SubnetID="subnet-e18512b9", Groups=["sg-8e57c5f7"]),
     },
     'rllab-hrtang':{
         "us-west-1a": dict(

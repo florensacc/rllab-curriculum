@@ -1,0 +1,147 @@
+<?xml version="1.0" ?>
+<mujoco model="clutter">
+    <compiler angle="radian" coordinate="local" meshdir="/Users/dementrock/research/openai/gpr/gpr/worldgen/data"
+              texturedir="/Users/dementrock/research/openai/gpr/gpr/worldgen/data"/>
+    <size nuser_actuator="1" nuser_geom="1" nuser_jnt="1"/>
+    <size nconmax="2000" njmax="2000"/>
+    <option gravity="0 0 -9.810000" integrator="Euler" iterations="200" solver="CG" timestep="0.002000"
+            viscosity="0.000000">
+        <flag warmstart="disable"/>
+    </option>
+    <visual>
+        <headlight active="1"/>
+    </visual>
+    <asset>
+        <texture builtin="none" file="textures/wood.png" name="noise_texture0" type="2d"/>
+        <material name="material0" texture="noise_texture0"/>
+        <texture builtin="none" file="textures/chars/A.png" gridlayout=".U..LFRB.D.." gridsize="3 4"
+                 name="noise_texture3" type="cube"/>
+        <material name="material3" texture="noise_texture3"/>
+        <texture builtin="none" file="textures/chars/B.png" gridlayout=".U..LFRB.D.." gridsize="3 4"
+                 name="noise_texture5" type="cube"/>
+        <material name="material5" texture="noise_texture5"/>
+    </asset>
+    <worldbody>
+        <!-- ================ MOCAP ================= /-->
+        <!--  ================= ARM ================= /-->
+        <body name="basearm_1" pos="0.205759326319 0.0251937476615 0.5">
+            <camera euler="0 0 0" fovy="40" name="rgb" pos="0 0 2"/>
+            <geom class="geom0_1" pos="0 0 0" size="0.025 0.025 0.025" type="box"/>
+            <joint axis="1 0 0" class="base_1" name="robot:x_1" pos="0 0 0" type="slide"/>
+            <joint axis="0 1 0" class="base_1" name="robot:y_1" pos="0 0 0" type="slide"/>
+            <joint axis="0 0 1" class="base_1" name="robot:z_1" pos="0 0 0" type="slide"/>
+            <joint axis="1 0 0" class="rot_1" name="robot:rot_x_1" pos="0 0 0" type="hinge"/>
+            <joint axis="0 1 0" class="rot_1" name="robot:rot_y_1" pos="0 0 0" type="hinge"/>
+            <joint axis="0 0 1" class="rot_1" name="robot:rot_z_1" pos="0 0 0" type="hinge"/>
+            <!--  ================= Palm ================= /-->
+            <body name="claw_1" pos="0.025 0 0" quat="0 1 0 0">
+                <geom class="geom1_1" fromto="0 .02 0 0 -.02 0" name="Geomclaw_1" size="0.01" type="capsule"/>
+                <body name="rightclaw_1" pos=".01 -.02 0">
+                    <geom class="geom1_1" fromto="0 0 0.015 .03 -.02 0.015" name="rightclaw_it_1" size="0.005"
+                          type="capsule"/>
+                    <geom class="geom1_1" fromto=".03 -.02 0.015 .07 0 0.015" name="rightclaw_ot_1" size="0.005"
+                          type="capsule"/>
+                    <geom class="geom1_1" fromto="0 0 -0.015 .03 -.02 -0.015" name="rightclaw_ib_1" size="0.005"
+                          type="capsule"/>
+                    <geom class="geom1_1" fromto=".03 -.02 -0.015 .07 0 -0.015" name="rightclaw_ob_1" size="0.005"
+                          type="capsule"/>
+                    <joint axis="0 0 -1" class="arm_1" name="robot:rc_close_1" pos="0 0 0" range="-1.05 1.05"
+                           type="hinge" user="008"/>
+                </body>
+                <body name="leftclaw_1" pos=".01 .02 0">
+                    <geom class="geom1_1" fromto="0 0 0.015 .03 .02 0.015" name="leftclaw_it_1" size="0.005"
+                          type="capsule"/>
+                    <geom class="geom1_1" fromto=".03 .02 0.015 .07 0 0.015" name="leftclaw_ot_1" size="0.005"
+                          type="capsule"/>
+                    <geom class="geom1_1" fromto="0 0 -0.015 .03 .02 -0.015" name="leftclaw_ib_1" size="0.005"
+                          type="capsule"/>
+                    <geom class="geom1_1" fromto=".03 .02 -0.015 .07 0 -0.015" name="leftclaw_ob_1" size="0.005"
+                          type="capsule"/>
+                    <joint axis="0 0 1" class="arm_1" name="robot:lc_close_1" pos="0 0 0" range="-1.05 1.05"
+                           type="hinge" user="009"/>
+                </body>
+                <site name="grip" pos="0.0475 0 0" rgba="1. 0. 0. 1." size="0.01 0.01 0.01"/>
+            </body>
+        </body>
+        <body name="annotation:outer_bound_1" pos="0.248259326319 0.0251937476615 0.2875">
+            <geom conaffinity="0" contype="0" mass="0.0" pos="0 0 0" rgba="0 0 0 0" size="0.0675 0.045 0.2375"
+                  type="box"/>
+        </body>
+        <body name="geom2" pos="-0.171879 -0.313206 0.075000">
+            <geom conaffinity="1" condim="3" contype="1" mass="1.0" material="material3"
+                  size="0.024950 0.024950 0.024950" type="box"/>
+            <joint armature="0.0001" axis="1 0 0" damping="0.01" limited="false" name="geom2:slide0" pos="0 0 0"
+                   type="slide"/>
+            <joint armature="0.0001" axis="0 1 0" damping="0.01" limited="false" name="geom2:slide1" pos="0 0 0"
+                   type="slide"/>
+            <joint armature="0.0001" axis="0 0 1" damping="0.01" limited="false" name="geom2:slide2" pos="0 0 0"
+                   type="slide"/>
+            <joint armature="0.0001" axis="1 0 0" damping="0.01" limited="false" name="geom2:hinge0" pos="0 0 0"
+                   type="hinge"/>
+            <joint armature="0.0001" axis="0 1 0" damping="0.01" limited="false" name="geom2:hinge1" pos="0 0 0"
+                   type="hinge"/>
+            <joint armature="0.0001" axis="0 0 1" damping="0.01" limited="false" name="geom2:hinge2" pos="0 0 0"
+                   type="hinge"/>
+            <site name="geom0" pos="0.000000 0.000000 0.000000" rgba="0 0 1 1" size="0.010000 0.010000 0.010000"/>
+        </body>
+        <body name="geom4" pos="-0.482283 0.037409 0.075000">
+            <geom conaffinity="1" condim="3" contype="1" mass="1.0" material="material5"
+                  size="0.024950 0.024950 0.024950" type="box"/>
+            <joint armature="0.0001" axis="1 0 0" damping="0.01" limited="false" name="geom4:slide0" pos="0 0 0"
+                   type="slide"/>
+            <joint armature="0.0001" axis="0 1 0" damping="0.01" limited="false" name="geom4:slide1" pos="0 0 0"
+                   type="slide"/>
+            <joint armature="0.0001" axis="0 0 1" damping="0.01" limited="false" name="geom4:slide2" pos="0 0 0"
+                   type="slide"/>
+            <joint armature="0.0001" axis="1 0 0" damping="0.01" limited="false" name="geom4:hinge0" pos="0 0 0"
+                   type="hinge"/>
+            <joint armature="0.0001" axis="0 1 0" damping="0.01" limited="false" name="geom4:hinge1" pos="0 0 0"
+                   type="hinge"/>
+            <joint armature="0.0001" axis="0 0 1" damping="0.01" limited="false" name="geom4:hinge2" pos="0 0 0"
+                   type="hinge"/>
+            <site name="geom1" pos="0.000000 0.000000 0.000000" rgba="0 0 1 1" size="0.010000 0.010000 0.010000"/>
+        </body>
+        <body name="floor" pos="0.000000 0.000000 0.025000">
+            <geom condim="3" material="material0" size="0.75 0.75 0.025" type="box"/>
+        </body>
+    </worldbody>
+    <actuator>
+        <!--  ================= Position actuators ================= /-->
+        <position class="position_1" ctrllimited="false" joint="robot:x_1" kp="200" name="robot:x_1"/>
+        <position class="position_1" ctrllimited="false" joint="robot:y_1" kp="200" name="robot:y_1"/>
+        <position class="position_1" ctrllimited="false" joint="robot:z_1" kp="200" name="robot:z_1"/>
+        <position class="position_1" ctrllimited="false" joint="robot:rot_x_1" kp="200" name="robot:rot_x_PD_1"/>
+        <position class="position_1" ctrllimited="false" joint="robot:rot_y_1" kp="200" name="robot:rot_y_PD_1"/>
+        <position class="position_1" ctrllimited="false" joint="robot:rot_z_1" kp="200" name="robot:rot_z_PD_1"/>
+        <position class="position_1" ctrlrange="-1.05 1.05" joint="robot:rc_close_1" kp="100"
+                  name="robot:Arc_close_1" user="1"/>
+        <position class="position_1" ctrlrange="-1.05 1.05" joint="robot:lc_close_1" kp="100"
+                  name="robot:Alc_close_1" user="1"/>
+    </actuator>
+    <default>
+        <default class="position_1">
+            <position ctrllimited="true" forcelimited="false"/>
+        </default>
+        <default class="geom0_1">
+            <geom conaffinity="1" contype="1" friction="1 0.005 0.001" margin="0.001" rgba=".75 .6 .5 1"
+                  solimp="0.95 0.95 0.01" solref="0.008 1" user="0"/>
+        </default>
+        <default class="geom1_1">
+            <geom conaffinity="1" contype="1" friction="1 0.005 0.001" margin="0.001" rgba=".7 .6 .55 1"
+                  solimp="0.95 0.95 0.01" solref="0.008 1" user="0"/>
+        </default>
+        <default class="arm_1">
+            <joint armature="0.1" damping="10" limited="true" stiffness="0" user="0"/>
+        </default>
+        <default class="base_1">
+            <joint armature="1" damping="30" limited="false" stiffness="0" user="0"/>
+        </default>
+        <default class="rot_1">
+            <joint armature="0.1" damping="10" limited="false" stiffness="0" user="0"/>
+        </default>
+    </default>
+    <equality>
+    </equality>
+    <contact>
+    </contact>
+</mujoco>

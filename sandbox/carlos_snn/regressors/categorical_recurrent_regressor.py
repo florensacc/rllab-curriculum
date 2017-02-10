@@ -5,16 +5,13 @@ import theano
 import theano.tensor as TT
 
 from rllab.core.lasagne_powered import LasagnePowered
-from rllab.core.network import MLP
 from rllab.core.serializable import Serializable
-from rllab.misc import ext
-from rllab.misc import logger
-from rllab.misc import special
+from rllab.misc import ext, logger, special
 from rllab.optimizers.lbfgs_optimizer import LbfgsOptimizer
 from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
-
-from sandbox.carlos_snn.distributions.categorical import Categorical
-from sandbox.carlos_snn.core.network import GRUNetwork
+from rllab.core.network import GRUNetwork
+from rllab.distributions.categorical import Categorical
+# from sandbox.carlos_snn.distributions.categorical import Categorical_oneAxis as Categorical
 
 NONE = list()
 

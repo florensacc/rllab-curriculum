@@ -10,18 +10,17 @@ from rllab.misc.overrides import overrides
 from rllab.misc import logger
 from scipy.misc import imresize
 import time
-# import cv2
-import pdb
+import copy
 np.set_printoptions(threshold=np.nan, linewidth=np.nan)
 class Pr2EnvLego(MujocoEnv, Serializable):
 
-    FILE = 'pr2_legofree_position.xml'
+    FILE = 'pr2_legofree_different_objects.xml'
 
-    def __init__(
+    def     __init__(
             self,
             goal_generator=None,
             lego_generator=None,
-            action_penalty_weight= 0.001, #originally was 0.001 #there is one with 0.0005
+            action_penalty_weight= 0.01, #originally was 0.001 #there is one with 0.0005
             distance_thresh=0.01,  # 1 cm
             model='pr2_legofree_different_objects.xml', #'pr2_1arm.xml',
             max_action=float("inf"),
@@ -39,7 +38,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             use_depth=False,
             number_actions=1,
             dilate_time=1,
-            crop=False,
+            crop=True,
             *args, **kwargs):
 
         self.action_penalty_weight = action_penalty_weight
@@ -66,8 +65,8 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.failure_rate_gamma = failure_rate_gamma
         self.use_running_average_failure_rate = use_running_average_failure_rate
         self.offset = offset
-        self.distance_tip_lego_penalty_weight = .6 #0.5 #0.4 #1  #0.1  #0.3
-        self.angle_penalty_weight = .2
+        self.distance_tip_lego_penalty_weight = 0.6 #0.5 #0.4 #1  #0.1  #0.3
+        self.angle_penalty_weight = 0.2
         #0.2 #0.4 #0.5 #1 #0.05
         self.occlusion_weight = 0.0005 #0.0005
         self.use_vision = use_vision
@@ -86,10 +85,12 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.crop = crop
         self.discount_weights = 0.99
         self.idx = 0
-        self.object = np.zeros(3)
 
         super(Pr2EnvLego, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
+        init_qpos = copy.copy(self.model.data.qpos)
+        init_qpos[:7, 0] = np.array([1.2, -0.5, 2, -1.5, 0, 0, -0.25])
+        self.init_qpos = init_qpos
 
     def set_model(self, model):
         self.__class__.FILE = model
@@ -107,7 +108,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             # img = img.astype(np.uint8)
             # imsave('data/local/imgs/lego' + str(time.clock()) + '.png', img)
             # depth = self.depth.transpose([2,0,1])
-            idxpos = list(range(7)) + list(range(14  - 3, dim))  # TODO: Hacky
+            idxpos = list(range(7)) + list(range(dim - 3, dim))  # TODO: Hacky
             idxvel = list(range(7))
             return  np.concatenate([
                 self.model.data.qpos.flat[idxpos],
@@ -119,16 +120,16 @@ class Pr2EnvLego(MujocoEnv, Serializable):
                 np.reshape(self.depth, -1),
             ]).reshape(-1)
         else:
-            idxpos = list(range(7)) + list(range(14 + self.idx * 7, 14 + (self.idx +1)* 7)) + list(range(dim-3, dim))  # TODO: Hacky
-            idxvel = list(range(7)) + list(range(14 + self.idx * 6, 14 + (self.idx +1)*6))
+            idxpos = list(range(7)) + list(range(14 + self.idx * 7, 14 + (self.idx + 1) * 7)) + list(
+                range(dim - 3, dim))  # TODO: Hacky
+            idxvel = list(range(7)) + list(range(14 + self.idx * 6, 14 + (self.idx + 1) * 6))
             obs = np.concatenate([
                 self.model.data.qpos.flat[idxpos],  # We do not need to explicitly include the goal
                 #                                  # since we already have the vec to the goal.
                 self.model.data.qvel.flat[idxvel],  # Do not include the velocity of the target (should be 0).
-                self.get_tip_position(),
+                # self.get_tip_position(),
                 self.get_vec_tip_to_lego(),
                 vec_to_goal,
-                self.object,
             ]).reshape(-1)
             # dim = obs.shape[0]
             # obs += np.random.multivariate_normal(np.zeros((dim,)), 0.01 * np.eye(dim))
@@ -157,31 +158,42 @@ class Pr2EnvLego(MujocoEnv, Serializable):
     def get_cos_vecs(self):
         vec_tip_to_lego = self.get_vec_tip_to_lego()
         vec_to_goal = self.get_vec_to_goal()
-        return np.dot(vec_to_goal[:2], vec_tip_to_lego[:2]) / (
+        return np.dot(vec_to_goal, vec_tip_to_lego) / (
             np.linalg.norm(vec_to_goal[:2]) * np.linalg.norm(vec_tip_to_lego[:2]))
 
     def step(self, action):
         #action /= 10
         # Limit actions to the specified range.
+        reward_ctrl = -self.action_penalty_weight * np.sum(np.square(action))
+        apply_action = copy.copy(action)
         if self.use_depth and self.use_vision:
             self.depth = self.viewer.get_depth_map().astype(np.float32)
         if self.position_controller:
             for idx in self.roll_joints:
-                theta_pos = self.model.data.qpos[idx]
-                theta_action = action[idx] + np.pi
+                # theta_pos = self.model.data.qpos[idx]
+                theta_pos = 0
+                theta_action = apply_action[idx] + np.pi
                 diff = (theta_action - theta_pos) // (2 * np.pi)
                 theta_action -= (np.pi + diff * 2 * np.pi)
-                action[idx] = theta_action
+                apply_action[idx] = theta_action
+
+        theta_pos = copy.copy(self.model.data.qpos)[:7, 0]
+
+        if self.crop:
+            # diff = np.maximum(-self.beta, diff)
+            # diff = np.minimum(self.beta, diff)
+            # action = diff + theta_pos
+            apply_action = np.maximum(-self.beta, apply_action)
+            apply_action = np.minimum(self.beta, apply_action)
+        apply_action = apply_action + theta_pos
+
         for idx, jnt_range in enumerate(self.model.jnt_range):
-            if self.model.jnt_limited[idx] == 1 and idx <   7:
-                action[idx] = max(jnt_range[0], action[idx])
-                action[idx] = min(jnt_range[1], action[idx])
+            if self.model.jnt_limited[idx] == 1 and idx < 7:
+                apply_action[idx] = max(jnt_range[0], apply_action[idx])
+                apply_action[idx] = min(jnt_range[1], apply_action[idx])
 
         theta_pos = self.model.data.qpos[:7, 0]
-        if self.crop:
-            action = np.maximum(-self.beta, action)
-            action = np.minimum(self.beta, action)
-            action = action + theta_pos
+        # diff = action - theta_pos
 
         vec_tip_to_lego = self.get_vec_tip_to_lego()
         distance_tip_to_lego_previous = np.linalg.norm(vec_tip_to_lego)
@@ -190,16 +202,17 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         # self.dilate_time = 10
 
         # Simulat2e this action and get the resulting state.
-        theta_pos = self.model.data.qpos[:7, 0]
-        diff = action[:7] - theta_pos
+        # theta_pos = self.model.data.qpos[:7, 0]
+        # diff = action[:7] - theta_pos
         # print(action - theta_pos)
         # action  = np.zeros((7,)) - 0.1 * np.ones((7,))
-        self.forward_dynamics(action, qvel=self.init_qvel, position_ctrl=True)
+        # action = np.array([-0.1]*7)
+        self.forward_dynamics(apply_action, qvel=self.init_qvel, position_ctrl=True)
         theta_pos = self.model.data.qpos[:7, 0]
         # print(action)
         # print((theta_pos - action) / 0.1)
-        # self.error = np.maximum(self.error, abs(theta_pos - action) / 0.1)
-        self.error += abs(theta_pos - action) / 0.1
+        # self.error += abs(theta_pos - action) / 0.1
+        # self.error += abs(theta_pos - action) / 0.1
 
         vec_to_goal = self.get_vec_to_goal()
         distance_to_goal = np.linalg.norm(vec_to_goal)
@@ -209,13 +222,13 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         reward_dist = - distance_to_goal
         reward_tip = - self.distance_tip_lego_penalty_weight * distance_tip_to_lego
 
-        cos_angle = -self.get_cos_vecs()
+        cos_angle = self.get_cos_vecs()
         reward_angle = - self.angle_penalty_weight * cos_angle
 
         # Penalize the robot for large actions.f
         # reward_occlusion = self.occlusion_weight * self.get_reward_occlusion()
         # reward_ctrl = - self.action_penalty_weight * np.square(action).sum()
-        reward = reward_dist + reward_tip + reward_angle #reward_ctrl#+ reward_occlusion
+        reward = reward_dist  + reward_tip + reward_angle #reward_ctrl#+ reward_occlusion
         state = self._state
         notdone = np.isfinite(state).all()
         done = not notdone
@@ -237,25 +250,25 @@ class Pr2EnvLego(MujocoEnv, Serializable):
                     reward_angle=reward_angle,
                     weight_angle=self.angle_penalty_weight,
                     weight_tip=self.distance_tip_lego_penalty_weight,
-                    # reward_occlusion=reward_occlusion,
-                    # error_position_x=error_position[0],
-                    # error_position_y=error_position[1],
-                    # error_position_z=error_position[2],
+                    x_goal=self.goal[0],
+                    y_goal=self.goal[1],
+                    x_lego=self.get_lego_position()[0],
+                    y_lego=self.get_lego_position()[1],
                     )
 
-    def viewer_setup(self, is_bot=False):
-        #self.viewer.cam.lookat[0] = self.model.stat.center[0]
-        #self.viewer.cam.lookat[1] = self.model.stat.center[1]
-        #self.viewer.cam.lookat[2] = self.model.stat.center[2]
-        if self.use_vision:
-            self.viewer.cam.camid = -1
-            # self.viewer.cam.distance = self.model.stat.extent * 1.5
-        else:
-            self.viewer.cam.camid = -1
-        #self.viewer.cam.trackbodyid = -1   # 39
-        #self.viewer.cam.elevation = 0
-        #self.viewer.cam.azimuth = 0
-        #self.viewer.cam.VR = 1
+    # def viewer_setup(self, is_bot=False):
+    #     #self.viewer.cam.lookat[0] = self.model.stat.center[0]
+    #     #self.viewer.cam.lookat[1] = self.model.stat.center[1]
+    #     #self.viewer.cam.lookat[2] = self.model.stat.center[2]
+    #     if self.use_vision:
+    #         self.viewer.cam.camid = -1
+    #         # self.viewer.cam.distance = self.model.stat.extent * 1.5
+    #     else:
+    #         self.viewer.cam.camid = -1
+    #     #self.viewer.cam.trackbodyid = -1   # 39
+    #     #self.viewer.cam.elevation = 0
+    #     #self.viewer.cam.azimuth = 0
+    #     #self.viewer.cam.VR = 1
 
 
     @overrides
@@ -263,7 +276,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         goal_dims = 3 # self.goal_dims
         lego_dims = 6
         # print(self.error/100)
-        self.error = np.zeros((7,))
+        # self.error = np.zeros((7,))
         if self.allow_random_restarts or self.first_time:
             if self.pos_normal_sample:
                 # Sample a new random initial robot position from a normal distribution.
@@ -284,30 +297,43 @@ class Pr2EnvLego(MujocoEnv, Serializable):
                         qpos[idx] = max(jnt_range[0], qpos[idx])
                         qpos[idx] = min((jnt_range[1]+jnt_range[0])/2, qpos[idx])
 
-        elif qpos is None:
+
+            if self._lego_generator is not None:
+                lego_position = self.get_lego_position()
+                self.lego = self._lego_generator.generate_goal(lego_position)[:3]
+                qpos[14 + self.idx * 7:14 + (self.idx + 1) * 7, 0] = np.concatenate(
+                        [self.lego, np.array([1, 0, 0, 0])])
+
+            else:
+                # print("No lego generator!")
+                qpos[14 + self.idx * 7:14 + (self.idx + 1) * 7, 0] = np.array((0.6, 0.2, 0.5025, 1, 0, 0, 0))
+
+        else:
             # Use current position as new position.
-            qpos_curr = self.model.data.qpos #[:-goal_dims]
-            qpos = list(qpos_curr)
-        # Generate a new goal.
-        qpos[14:] = 0
+            qpos_curr = copy.copy(self.model.data.qpos) #[:-goal_dims]
+            qpos = qpos_curr
+            # if self.get_lego_position()[-1] < 0.4:
         lego_position = self.get_lego_position()
         self.object = np.random.multinomial(1, 3 * [0.25])
         self.idx = self.object.argmax()
-
+        qpos[14:,0] = 10
         if self._lego_generator is not None:
+            lego_position = self.get_lego_position()
             self.lego = self._lego_generator.generate_goal(lego_position)[:3]
-            if self.idx == 2:
-                qpos[14 + self.idx * 7:14 + (self.idx + 1)*7, 0] = np.concatenate([self.lego, np.array([0,0,1,0])])
-            else:
-                qpos[14 + self.idx * 7:14 + (self.idx + 1)*7, 0] = np.concatenate([self.lego, np.array([1,0,0,0])])
+            theta = np.random.uniform(0, 2 * np.pi)
+            quat = np.array([np.cos(theta / 2), 0, 0, np.sin(theta / 2)])
+            qpos[14 + self.idx * 7:14 + (self.idx + 1) * 7, 0] = np.concatenate(
+                [self.lego, quat])
 
         else:
-            #print("No lego generator!")
+            # print("No lego generator!")
             qpos[14 + self.idx * 7:14 + (self.idx + 1) * 7, 0] = np.array((0.6, 0.2, 0.5025, 1, 0, 0, 0))
+        # Generate a new goal.
+
+        lego_position = self.get_lego_position()
 
         if self._goal_generator is not None:
             self.goal = self._goal_generator.generate_goal(self.lego[:3])
-            qpos[-goal_dims:] = self.goal[:goal_dims, None]
             qpos[-goal_dims:] = self.goal[:goal_dims, None]
         else:
             print("No goal generator!")
@@ -319,7 +345,6 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             #qvel = self.init_qvel + np.random.normal(size=self.init_qvel.shape) * 10
         elif qvel is None:
             qvel = np.array(self.model.data.qvel)
-
 
         # Set the velocity of the goal (the goal itself -
         # this is NOT the arm velocity at the goal position!) to 0.
@@ -337,6 +362,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.first_time = False
         #Apply a force in the Lego block
         xfrc = np.zeros(self.model.data.xfrc_applied.shape)
+        # xfrc[-2, 2] = -0.981
         xfrc[-(4-self.idx), 2] = -0.981
         # xfrc[13, 2] = - 9.81 * 0.0917
         self.model.data.xfrc_applied = xfrc
@@ -377,6 +403,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         logger.record_tabular('MaxAbsActions', np.max(np.abs(actions)))
         logger.record_tabular('StdAbsActions', np.std(np.abs(actions)))
         logger.record_tabular('StdActions', np.std(actions))
+        logger.record_tabular('MeanActions', np.mean(actions))
 
         #distances_to_goal_x = [path["env_infos"]["distance_to_goal_x"] for path in paths]
         #distances_to_goal_y = [path["env_infos"]["distance_to_goal_y"] for path in paths]
@@ -430,7 +457,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         paths_within_thresh = np.mean([(d < self.distance_thresh).any() for d in distances_to_goal])
         logger.record_tabular('PathsWithinThresh', paths_within_thresh)
 
-    #
+
     # def __getstate__(self):
     #     d = super(Pr2EnvLego, self).__getstate__()
     #     d['_weight_angle'], d['_weight_tip'] = self.angle_penalty_weight, self.distance_tip_lego_penalty_weight
@@ -441,6 +468,8 @@ class Pr2EnvLego(MujocoEnv, Serializable):
     #     self.update_weights(d['_weight_angle'], d['_weight_tip'])
     #
     # def update_weights(self, angle_weight, tip_weight):
-    #     self.angle_penalty_weight = angle_weight * 0.995
-    #     self.distance_tip_lego_penalty_weight = tip_weight * 0.995
+    #     self.angle_penalty_weight = angle_weight * 0.997
+    #     self.distance_tip_lego_penalty_weight = tip_weight * 0.997
     #     # return self.angle_penalty_weight, self.distance_tip_lego_penalty_weight
+
+    # #

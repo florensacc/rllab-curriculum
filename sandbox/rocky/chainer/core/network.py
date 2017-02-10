@@ -46,9 +46,9 @@ class MLP(chainer.Chain):
         )
         self.l_out = link
         if hidden_nonlinearity is None:
-            hidden_nonlinearity = F.Identity()
+            hidden_nonlinearity = F.identity
         if output_nonlinearity is None:
-            output_nonlinearity = F.Identity()
+            output_nonlinearity = F.identity
         self.hidden_nonlinearity = hidden_nonlinearity
         self.output_nonlinearity = output_nonlinearity
 

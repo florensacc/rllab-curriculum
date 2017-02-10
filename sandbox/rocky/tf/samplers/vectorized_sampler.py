@@ -1,3 +1,5 @@
+import copy
+import inspect
 import pickle
 
 from rllab.sampler.base import Sampler
@@ -36,38 +38,45 @@ class VectorizedSampler(Sampler):
                     envs=envs,
                 )
 
-    def shn_envswn_worker(self):
+    def shutdown_worker(self):
         self.vec_env.terminate()
 
-    def obtain_samples(self, itr, max_path_length, batch_size, max_n_trajs=None):
-        # if self.vec_env is None:
-        #     raise
-        logger.log("Obtaining samples for iteration %d..." % itr)
+    def obtain_samples(self, max_path_length, batch_size, max_n_trajs=None, seeds=None, show_progress=True):
         paths = []
         n_samples = 0
         dones = np.asarray([True] * self.vec_env.n_envs)
-        obses = self.vec_env.reset(dones)
+        obses = self.vec_env.reset(dones, seeds=seeds)
+
         running_paths = [None] * self.vec_env.n_envs
 
-        pbar = ProgBarCounter(batch_size)
+        if show_progress:
+            pbar = ProgBarCounter(batch_size)
         policy_time = 0
         env_time = 0
         process_time = 0
 
         policy = self.policy
+        if hasattr(policy, 'inform_vec_env'):
+            policy.inform_vec_env(self.vec_env)
+
         import time
         while n_samples < batch_size:
             t = time.time()
-            try:
-                #HT: feeding "dones" only helps with recurrent policies?
-                policy.reset(dones)
-            except:
-                policy.reset()
+            policy.reset(dones)
             actions, agent_infos = policy.get_actions(obses)
 
             policy_time += time.time() - t
             t = time.time()
             next_obses, rewards, dones, env_infos = self.vec_env.step(actions, max_path_length=max_path_length)
+
+            if np.any(dones):
+                new_obses = self.vec_env.reset(dones)
+                reset_idx = 0
+                for idx, done in enumerate(dones):
+                    if done:
+                        next_obses[idx] = new_obses[reset_idx]
+                        reset_idx += 1
+
             env_time += time.time() - t
 
             t = time.time()
@@ -109,10 +118,12 @@ class VectorizedSampler(Sampler):
                 break
 
             process_time += time.time() - t
-            pbar.inc(len(obses))
+            if show_progress:
+                pbar.inc(len(obses))
             obses = next_obses
 
-        pbar.stop()
+        if show_progress:
+            pbar.stop()
 
         logger.record_tabular("PolicyExecTime", policy_time)
         logger.record_tabular("EnvExecTime", env_time)

@@ -12,7 +12,6 @@ import gc
 import json
 import numpy as np
 import matplotlib.pyplot as plt
-plt.switch_backend('agg')
 
 class MultiGoalEnv(Env, Serializable):
     """
@@ -143,8 +142,12 @@ class MultiGoalEnv(Env, Serializable):
         point = self.ax.plot(x,y,'b*')
         self.dynamic_plots = point
 
+        plt.draw()
+        plt.pause(0.001)
         if close:
             self.fixed_plots = None
+            self.fig = None
+
 
     def plot_position_cost(self,ax):
         delta = 0.01
@@ -178,7 +181,7 @@ class MultiGoalEnv(Env, Serializable):
     def set_param_values(self, params):
         pass
 
-    def log_stats(self, algo, epoch, paths):
+    def log_stats(self, algo, epoch, paths, ax):
         # compute number of goals reached
         n_goal = len(self.goal_positions)
         goal_reached = [False] * n_goal
@@ -194,22 +197,23 @@ class MultiGoalEnv(Env, Serializable):
         }
 
         # plot q-values at selected states
-        snapshot_gap = logger.get_snapshot_gap()
-        if snapshot_gap <= 0 or \
-            np.mod(epoch + 1, snapshot_gap) == 0 or \
-            epoch == 0:
-            snapshot_dir = logger.get_snapshot_dir()
-            variant_file = os.path.join(
-                snapshot_dir,
-                "variant.json",
-            )
-            with open(variant_file) as vf:
-                variant = json.load(vf)
-            img_file = os.path.join(
-                snapshot_dir,
-                "itr_%d_qf.png"%(epoch),
-            )
-            self.plot_qf(algo, variant, img_file)
+        # snapshot_gap = logger.get_snapshot_gap()
+        # if snapshot_gap <= 0 or \
+        #     np.mod(epoch + 1, snapshot_gap) == 0 or \
+        #     epoch == 0:
+
+        snapshot_dir = logger.get_snapshot_dir()
+        variant_file = os.path.join(
+            snapshot_dir,
+            "variant.json",
+        )
+        with open(variant_file) as vf:
+            variant = json.load(vf)
+        img_file = os.path.join(
+            snapshot_dir,
+            "itr_%d_qf.png"%(epoch),
+        )
+        self.plot_qf(algo, variant, img_file)
         return stats
 
     def eval_qf(self, sess, qf, o, lim):

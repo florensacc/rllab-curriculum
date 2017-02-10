@@ -1,6 +1,7 @@
 """
 :author: Vitchyr Pong
 """
+import os
 import abc
 import time
 import gtimer as gt
@@ -8,6 +9,7 @@ import gtimer as gt
 import numpy as np
 import tensorflow as tf
 from collections import OrderedDict
+from tensorflow.python.client import timeline
 
 from sandbox.haoran.mddpg.misc.simple_replay_pool import SimpleReplayPool
 
@@ -45,6 +47,8 @@ class OnlineAlgorithm(RLAlgorithm):
             scale_reward_annealer=None,
             render=False,
             epoch_full_paths=False,  # TH: I'm good without this. Remove?
+            profiling=False,
+            train_repeat=1,
     ):
         """
         :param env: Environment
@@ -82,6 +86,8 @@ class OnlineAlgorithm(RLAlgorithm):
         self.scale_reward_annealer = scale_reward_annealer
         self.render = render
         self.epoch_full_paths = epoch_full_paths
+        self.profiling = profiling
+        self.train_repeat = train_repeat
 
         self.observation_dim = self.env.observation_space.flat_dim
         self.action_dim = self.env.action_space.flat_dim
@@ -129,6 +135,7 @@ class OnlineAlgorithm(RLAlgorithm):
             self._start_worker()
 
             observation = self.env.reset()
+            self.policy.reset()
             self.exploration_strategy.reset()
             itr = 0
             path_length = 0
@@ -158,6 +165,7 @@ class OnlineAlgorithm(RLAlgorithm):
                     action = self.exploration_strategy.get_action(itr,
                                                                   observation,
                                                                   self.policy)
+                    gt.stamp('train: get actions')
                     action.squeeze()
                     if self.render:
                         self.env.render()
@@ -165,12 +173,7 @@ class OnlineAlgorithm(RLAlgorithm):
                     reward = raw_reward * self.scale_reward
                     path_length += 1
                     path_return += reward
-                    gt.stamp('train: sampling')
-
-                    #self.plot_path(rewards=raw_reward,
-                    #               obs=observation,
-                    #               actions=action,
-                    #               info=info)
+                    gt.stamp('train: simulation')
 
                     # add experience to replay pool
                     self.pool.add_sample(observation,
@@ -187,13 +190,8 @@ class OnlineAlgorithm(RLAlgorithm):
                                              np.zeros_like(terminal),
                                              True)
 
-                        #self.plot_path(rewards=raw_reward,
-                        #               obs=observation,
-                        #               actions=action,
-                        #               info=info,
-                        #               flush=True)
-
                         observation = self.env.reset()
+                        self.policy.reset()
                         self.exploration_strategy.reset()
                         self.es_path_returns.append(path_return)
                         self.es_path_lengths.append(path_length)
@@ -201,13 +199,15 @@ class OnlineAlgorithm(RLAlgorithm):
                         path_return = 0
                     else:
                         observation = next_ob
+                    gt.stamp('train: fill replay pool')
 
                     self.process_env_info(info=info, flush=should_reset)
-                    gt.stamp('train: fill replay pool')
+                    gt.stamp('train: process env info')
 
                     # train
                     if self.pool.size >= self.min_pool_size:
-                        self._do_training()
+                        for _ in range(self.train_repeat):
+                            self._do_training()
                     itr += 1
                     gt.stamp('train: updates')
 
@@ -228,8 +228,13 @@ class OnlineAlgorithm(RLAlgorithm):
                 times_itrs = gt.get_times().stamps.itrs
                 train_time = np.sum([
                     times_itrs[stamp][-1]
-                    for stamp in ["train: sampling",
-                    "train: fill replay pool","train: updates"]
+                    for stamp in [
+                        "train: get actions",
+                        "train: simulation",
+                        "train: fill replay pool",
+                        "train: process env info",
+                        "train: updates",
+                    ]
                 ])
                 eval_time = times_itrs["test"][-1]
                 total_time = gt.get_times().total
@@ -253,6 +258,27 @@ class OnlineAlgorithm(RLAlgorithm):
             self.env.terminate()
             return self.last_statistics
 
+
+    @staticmethod
+    def profile(sess, ops, feed_dict, file_name):
+        run_metadata = tf.RunMetadata()
+        run_kwargs = dict(
+            options=tf.RunOptions(
+                trace_level=tf.RunOptions.FULL_TRACE),
+            run_metadata=run_metadata,
+        )
+        sess.run(ops, feed_dict=feed_dict, **run_kwargs)
+        tl = timeline.Timeline(run_metadata.step_stats)
+        ctf = tl.generate_chrome_trace_format()
+        timeline_file = os.path.join(
+            logger.get_snapshot_dir(),
+            file_name,
+        )
+        with open(timeline_file, 'w') as f:
+            f.write(ctf)
+
+
+    @gt.wrap
     def _do_training(self):
         minibatch = self.pool.random_batch(self.batch_size)
         sampled_obs = minibatch['observations']
@@ -260,17 +286,36 @@ class OnlineAlgorithm(RLAlgorithm):
         sampled_actions = minibatch['actions']
         sampled_rewards = minibatch['rewards']
         sampled_next_obs = minibatch['next_observations']
+        gt.stamp("sample minibatch")
 
         feed_dict = self._update_feed_dict(sampled_rewards,
                                            sampled_terminals,
                                            sampled_obs,
                                            sampled_actions,
                                            sampled_next_obs)
-
+        gt.stamp("update feed dict")
 
         # TH: First train, then finalize. This can be suboptimal.
-        self.sess.run(self._get_training_ops(), feed_dict=feed_dict)
-        self.sess.run(self._get_finalize_ops(), feed_dict=feed_dict)
+        if self.profiling:
+            OnlineAlgorithm.profile(
+                self.sess,
+                self._get_training_ops(),
+                feed_dict,
+                "_get_training_ops.json",
+            )
+            gt.stamp("_get_training_ops")
+            OnlineAlgorithm.profile(
+                self.sess,
+                self._get_finalize_ops(),
+                feed_dict,
+                "_get_finalize_ops.json",
+            )
+            gt.stamp("_get_finalize_ops")
+        else:
+            self.sess.run(self._get_training_ops(), feed_dict=feed_dict)
+            gt.stamp("_get_training_ops")
+            self.sess.run(self._get_finalize_ops(), feed_dict=feed_dict)
+            gt.stamp("_get_finalize_ops")
 
     def get_epoch_snapshot(self, epoch):
         return dict(

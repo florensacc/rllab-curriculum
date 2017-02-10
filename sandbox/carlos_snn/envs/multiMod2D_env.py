@@ -4,7 +4,11 @@ from rllab.spaces import Box
 import numpy as np
 
 
-class MultiModEnv(Env):
+class MultiMod2DEnv(Env):
+    """
+    This is a single time-step MDP where the action taken corresponds to the next state (in a 2D plane).
+    The reward has a multi-modal gaussian shape, with the mode means set in a circle around the origin.
+    """
     def __init__(self, mu=(1, 0), sigma=0.01, n=2, rand_init=False):
         self.mu = np.array(mu)
         self.sigma = sigma  #we suppose symetric Gaussians
@@ -38,10 +42,9 @@ class MultiModEnv(Env):
             reward += 1. / (2 * np.sqrt(np.power(2. * np.pi, 2.) * self.sigma)) * (
                 np.exp(-0.5 / self.sigma * np.linalg.norm(x - mu) ** 2))
         return reward
-        # return float(- 0.5 + 1./(2.*np.sqrt(np.power(2.*np.pi,2.)*self.sigma))*(np.exp(-0.5/self.sigma*(np.linalg.norm(x)-self.mu)**2)) )#\
 
     def step(self, action):
-        self._state = self._state + action
+        self._state += action
         done = True
         next_observation = np.copy(self._state)
         reward = self.reward_state(self._state)
