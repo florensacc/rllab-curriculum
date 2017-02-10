@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 
 from sandbox.haoran.mddpg.core.neuralnet import NeuralNetwork
 from sandbox.haoran.mddpg.core.tf_util import he_uniform_initializer, mlp, linear, weight_variable
@@ -39,6 +40,16 @@ class NNPolicy(NeuralNetwork, Policy):
         :return: TensorFlow tensor.
         """
         raise NotImplementedError
+
+    def plot_samples(self, ax_lst, obs_lst, K):
+        for ax, obs in zip(ax_lst, obs_lst):
+            obs = obs.reshape((-1, self.observation_dim))
+            obs = np.tile(obs, (K, 1))
+
+            actions, _ = self.get_actions(obs)
+
+            x, y = actions[:, 0], actions[:, 1]
+            ax.plot(x, y, '*')
 
 
 class FeedForwardPolicy(NNPolicy):

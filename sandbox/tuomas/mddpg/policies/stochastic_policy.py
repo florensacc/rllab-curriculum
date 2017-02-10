@@ -10,17 +10,15 @@ from rllab.core.serializable import Serializable
 from rllab.policies.base import Policy
 from rllab.exploration_strategies.base import ExplorationStrategy
 from sandbox.rocky.tf.core.parameterized import Parameterized
+from sandbox.tuomas.mddpg.policies.nn_policy import NNPolicy
 
 
-class StochasticNNPolicy(NeuralNetwork, Policy):
+class StochasticNNPolicy(NNPolicy):
     def __init__(self,
                  scope_name,
-                 observation_dim,
-                 action_dim,
                  hidden_dims,
                  temperature_dim=0,
                  temperatures=None,
-                 W_initializer=None,
                  output_nonlinearity=tf.identity,
                  sample_dim=1,
                  freeze_samples=False,
@@ -29,9 +27,11 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
                  **kwargs):
         Serializable.quick_init(self, locals())
 
-        self._obs_dim = observation_dim
-        self._action_dim = action_dim
         self._sample_dim = sample_dim
+        self._hidden_dims = hidden_dims
+        self._output_scale = output_scale
+        self._output_nonlinearity = output_nonlinearity
+
         self._freeze = freeze_samples
         if temperatures is not None:
             # TODO: temperature shouldn't be a property of a policy. Instead
@@ -44,54 +44,52 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
         self._temps = temperatures
         self._current_temp = 0
 
-        with tf.variable_scope(scope_name) as variable_scope:
-            super(StochasticNNPolicy, self).__init__(
-                variable_scope.original_name_scope, **kwargs
-            )
-            self._create_pls()
-            input_list = [self._obs_pl, self._sample_pl]
-            if self._temp_dim > 0:
-                input_list.append(self._temp_pl)
-
-            all_inputs = tf.concat(concat_dim=1, values=input_list)
-
-            self._pre_output = mlp(
-                all_inputs,
-                observation_dim + self._sample_dim + self._temp_dim,
-                hidden_dims,
-                output_layer_size=action_dim,
-                nonlinearity=tf.nn.relu,
-                output_nonlinearity=tf.identity,
-                W_initializer=W_initializer
-            )
-            self._output = output_scale * output_nonlinearity(self._pre_output)
-            self.variable_scope = variable_scope
-
-            # N: batch size, Da: action dim, Ds: sample dim
-            self._Doutput_Dsample = tf.pack(
-                [
-                    tf.gradients(self.output[:,i], self._sample_pl)[0]
-                    for i in range(self._action_dim)
-                ],
-                axis=1
-            )  # N x Da x Ds
-
         # Freeze stuff
         self._K = K
         self._samples = np.random.randn(K, self._sample_dim)
         self.output_nonlinearity = output_nonlinearity
         self.output_scale = output_scale
 
+        super(StochasticNNPolicy, self).__init__(scope_name, **kwargs)
+
+    def create_network(self):
+        self._create_pls()
+        input_list = [self.observations_placeholder, self._sample_pl]
+        if self._temp_dim > 0:
+            input_list.append(self._temp_pl)
+
+        all_inputs = tf.concat(concat_dim=1, values=input_list)
+
+        self._pre_output = mlp(
+            all_inputs,
+            self.observation_dim + self._sample_dim + self._temp_dim,
+            self._hidden_dims,
+            output_layer_size=self.action_dim,
+            nonlinearity=tf.nn.relu,
+            output_nonlinearity=tf.identity,
+            W_initializer=None,
+        )
+        output = (
+            self._output_scale * self.output_nonlinearity(self._pre_output)
+        )
+
+        # N: batch size, Da: action dim, Ds: sample dim
+        self._Doutput_Dsample = tf.pack(
+            [
+                tf.gradients(output[:,i], self._sample_pl)[0]
+                for i in range(self.action_dim)
+            ],
+            axis=1
+        )  # N x Da x Ds
+
+        return output
+
+
     @property
     def pre_output(self):
         return self._pre_output
 
     def _create_pls(self):
-            self._obs_pl = tf.placeholder(
-                tf.float32,
-                shape=[None, self._obs_dim],
-                name='actor_obs'
-            )
             self._sample_pl = tf.placeholder(
                 tf.float32,
                 shape=[None, self._sample_dim],
@@ -104,16 +102,10 @@ class StochasticNNPolicy(NeuralNetwork, Policy):
                     name='actor_temperature'
                 )
 
-            # Give another name for backward compatibility
-            # TODO: should not access these directly.
-            self.observations_placeholder = self._obs_pl
-
-            self._input = self._obs_pl
-
     def get_feed_dict(self, observations, temperatures=None):
         N = observations.shape[0]
         feed = {self._sample_pl: self._get_input_samples(N),
-                self._obs_pl: observations}
+                self.observations_placeholder: observations}
         if self._temp_dim > 0:
             if temperatures is None:
                 temperatures = self._temps[self._current_temp][None]

@@ -161,6 +161,38 @@ class FeedForwardCritic(NNCritic):
                           b_initializer=self.output_b_init,
                           reuse_variables=True)
 
+    def plot(self, ax_lst, obs_lst, action_dims, axis_lims):
+        """
+        Plots level curves of critic output.
+
+        :param ax_lst: List of plt Axes instances.
+        :param obs_lst: List of input observations at which the critic is
+            evaluated.
+        :return:
+        """
+        assert len(action_dims) == 2
+        assert len(axis_lims) == 2
+
+        xx = np.arange(axis_lims[0][0], axis_lims[0][1], 0.05)
+        yy = np.arange(axis_lims[1][0], axis_lims[1][1], 0.05)
+        X, Y = np.meshgrid(xx, yy)
+
+        actions = np.zeros((X.size, self.action_dim))
+        actions[:, action_dims[0]] = X.ravel()
+        actions[:, action_dims[1]] = Y.ravel()
+
+        feed = {self.actions_placeholder: actions}
+
+        for ax, obs in zip(ax_lst, obs_lst):
+            obs = obs.reshape((-1, self.observation_dim))
+            obs = np.tile(obs, (actions.shape[0], 1))
+
+            feed[self.observations_placeholder] = obs
+            Q = self.sess.run(self.output, feed).reshape(X.shape)
+
+            cs = ax.contour(X, Y, Q, 20)
+            ax.clabel(cs, inline=1, fontsize=10, fmt='%.2f')
+
 
 class MultiCritic(NNCritic):
     """
