@@ -269,7 +269,7 @@ def get_plot_instruction(
         legend_post_processor=None,
         normalize_error=False,
         custom_series_splitter=None,
-        squeeze_nan=True,
+        squeeze_nan=False,
         xlim=None, ylim=None,
         show_exp_count=False,
 ):
@@ -742,5 +742,5 @@ if __name__ == "__main__":
         # automatically open a new tab and show the plots
         import webbrowser
         webbrowser.open(url,new=2)
-        
+
     app.run(host='0.0.0.0', port=args.port, debug=args.debug)

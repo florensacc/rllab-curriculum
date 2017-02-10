@@ -72,6 +72,12 @@ class VDDPG(OnlineAlgorithm, Serializable):
             n_eval_paths=2,
             svgd_target="action",
             plt_backend="TkAgg",
+            target_action_dist="uniform",
+            critic_train_frequency=1,
+            actor_train_frequency=1,
+            update_target_frequency=1,
+            debug_mode=False,
+            axis3d=False,
             **kwargs
     ):
         """
@@ -112,6 +118,18 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.actor_sparse_update = actor_sparse_update
         self.resume = resume
         self.temperatures = temperatures
+        self.target_action_dist = target_action_dist
+        self.critic_train_frequency = critic_train_frequency
+        self.critic_train_counter = 0
+        self.train_critic = True # shall be modified later
+        self.actor_train_frequency = actor_train_frequency
+        self.actor_train_counter = 0
+        self.train_actor = True # shall be modified later
+        self.update_target_frequency = update_target_frequency
+        self.update_target_counter = 0
+        self.update_target = True
+        self.debug_mode = debug_mode
+        self.axis3d = axis3d
 
         self.alpha_placeholder = tf.placeholder(tf.float32,
                                                 shape=(),
@@ -500,15 +518,49 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
     @overrides
     def _get_training_ops(self):
-        train_ops = list()
+        """ notice that the order of these ops are different from before """
+        ops = []
         if self.train_actor:
-            train_ops += self.train_actor_op
+            ops.append(self.train_actor_op)
+            if self.debug_mode:
+                ops.append(
+                    tf.Print(
+                        self.actor_surrogate_loss,
+                        [self.actor_surrogate_loss],
+                        message="Actor minibatch loss: ",
+                    )
+                )
+            if self.update_target:
+                ops.append(self.update_target_actor_op)
+                if self.debug_mode:
+                    ops.append(
+                        tf.Print(
+                            self.tau,
+                            [self.tau],
+                            message="Update target actor with tau: "
+                        )
+                    )
         if self.train_critic:
-            train_ops += [self.train_critic_op,
-                          self.update_target_actor_op,
-                          self.update_target_critic_op]
-
-        return train_ops
+            ops.append(self.train_critic_op)
+            if self.debug_mode:
+                ops.append(
+                    tf.Print(
+                        self.critic_total_loss,
+                        [self.critic_total_loss],
+                        message="Critic minibatch loss: ",
+                    )
+                )
+            if self.update_target:
+                ops.append(self.update_target_critic_op)
+                if self.debug_mode:
+                    ops.append(
+                        tf.Print(
+                            self.tau,
+                            [self.tau],
+                            message="Update target critic with tau: "
+                        )
+                    )
+        return ops
 
     def _get_finalize_ops(self):
         return [self.finalize_actor_op]
@@ -605,21 +657,33 @@ class VDDPG(OnlineAlgorithm, Serializable):
         if self.q_target_type == 'soft':
             # We'll use the same actions for each sample (first dimension).
 
-            ## new uniform sampling
-            scale = self.policy.output_scale
-            actions = np.random.uniform(
-                low=-scale, high=scale, size=(N, self.K_critic, Da))
-            weights = np.power(2. * scale, Da) * np.ones((N, self.K_critic))
-                # 1/p = volume of the action space
+            if self.target_action_dist == "uniform":
+                scale = self.policy.output_scale
+                actions = np.random.uniform(
+                    low=-scale, high=scale, size=(N, self.K_critic, Da))
+                weights = np.power(2. * scale, Da) * np.ones((N, self.K_critic))
+                    # 1/p = volume of the action space
+            elif self.target_action_dist == "gaussian":
+                ## old Gaussian sampling: may accidentally get low prob samples
+                actions = (np.random.randn(N, self.K_critic, Da)
+                           * self.critic_proposal_sigma + self.critic_proposal_mu)
+                weights = scipy.stats.multivariate_normal(
+                    mean=self.critic_proposal_mu,
+                    cov=self.critic_proposal_sigma**2,
+                ).pdf(actions) #N*K_critic x Da
+            # Be careful in using the "policy" option, as in the early stage of
+            # training, the weights tend to be huge, because the actions are
+            # concentrated on a "low-dimensional" manifold in the high-dim
+            # aciton space
+            elif self.target_action_dist == "policy":
+                actions, info = self.policy.get_actions(
+                    next_obs,
+                    with_prob=True,
+                )
+                weights = info["prob"].reshape(N, self.K_critic)
+            else:
+                raise NotImplementedError
 
-            ## old Gaussian sampling: may accidentally get low prob samples
-            # actions = (np.random.randn(N, self.K_critic, Da)
-            #            * self.critic_proposal_sigma + self.critic_proposal_mu)
-            # weights = scipy.stats.multivariate_normal(
-            #     mean=self.critic_proposal_mu,
-            #     cov=self.critic_proposal_sigma**2,
-            # ).pdf(actions)
-            # N*K_critic x Da
             actions = np.reshape(actions, (N*self.K_critic, Da))
 
             feed[self.importance_weights_pl] = weights[:, :, None]
@@ -674,6 +738,11 @@ class VDDPG(OnlineAlgorithm, Serializable):
             policy=self.eval_policy
         )
         rewards, terminals, obs, actions, next_obs = split_paths(paths)
+
+        # temperarily turn on these so that _update_feed_dict can work
+        # this will not impact the training process
+        self.train_actor = True
+        self.train_critic = True
         feed_dict = self._update_feed_dict(rewards, terminals, obs, actions,
                                            next_obs)
 
@@ -767,7 +836,11 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         # Create figure for plotting the environment.
         fig = plt.figure(figsize=(12, 7))
-        ax = fig.add_subplot(111)
+        if self.axis3d:
+            from mpl_toolkits.mplot3d import Axes3D
+            ax = fig.add_subplot(111, projection='3d')
+        else:
+            ax = fig.add_subplot(111)
 
         true_env = self.env
         while isinstance(true_env, ProxyEnv):
@@ -815,6 +888,35 @@ class VDDPG(OnlineAlgorithm, Serializable):
         Serializable.__setstate__(self, d)
         self.qf.set_param_values(d["qf_params"])
         self.policy.set_param_values(d["policy_params"])
+
+    def _do_training(self):
+        self.train_critic = (np.mod(
+            self.critic_train_counter,
+            self.critic_train_frequency,
+        ) == 0)
+        self.train_actor = (np.mod(
+            self.actor_train_counter,
+            self.actor_train_frequency,
+        ) == 0)
+        self.update_target = (np.mod(
+            self.update_target_counter,
+            self.update_target_frequency,
+        ) == 0)
+
+        super()._do_training()
+
+        self.critic_train_counter = np.mod(
+            self.critic_train_counter + 1,
+            self.critic_train_frequency
+        )
+        self.actor_train_counter = np.mod(
+            self.actor_train_counter + 1,
+            self.actor_train_frequency,
+        )
+        self.update_target_counter = np.mod(
+            self.update_target_counter + 1,
+            self.update_target_frequency,
+        )
 
 ## Use the following code to test whether the exp(Q-Qmax) code works
 # import tensorflow as tf
