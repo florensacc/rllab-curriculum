@@ -11,7 +11,7 @@ matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 
 
-def plot_policy_reward(policy, env, limit, horizon=200, max_reward=6000, fname=None, grid_size=60):
+def plot_policy_reward(policy, env, limit, horizon=200, max_reward=6000, fname=None, grid_size=60, return_rewards=False):
     """
     Complete evaluation of the policy to reach all points in a 2D grid
     :param limit: in a 2D square of this side-length
@@ -36,14 +36,20 @@ def plot_policy_reward(policy, env, limit, horizon=200, max_reward=6000, fname=N
     plt.colorbar()
     if fname is not None:
         plt.savefig(fname, format='png')
-        return scipy.misc.imread(fname)
+        if return_rewards:
+            return scipy.misc.imread(fname), z
+        else:
+            return scipy.misc.imread(fname)
     else:
         fp = tempfile.TemporaryFile()
         plt.savefig(fp, format='png')
         fp.seek(0)
         img = scipy.misc.imread(fp)
         fp.close()
-        return img
+        if return_rewards:
+            return img, z
+        else:
+            return img
 
 
 def plot_labeled_samples(samples, sample_classes, text_labels, limit,

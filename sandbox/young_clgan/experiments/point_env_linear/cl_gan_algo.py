@@ -175,12 +175,19 @@ class CLGANPointEnvLinear(RLAlgorithm):
 
                 algo.train()
 
-                img = plot_policy_reward(
+                img, rewards = plot_policy_reward(
                     policy, env, hyperparams.goal_range,
                     horizon=hyperparams.horizon,
                     fname='{}/policy_reward_{}.png'.format(log_config.plot_dir, outer_iter),
+                    return_rewards=True
                 )
-                report.add_image(img, 'policy performance\n itr: {}'.format(outer_iter))
+                report.add_image(
+                    img,
+                    'policy performance\n itr: {} \nmean_rewards: {} \ncoverage: {}'.format(
+                        outer_iter, np.mean(rewards),
+                        np.mean(rewards >= hyperparams.max_reward)
+                    )
+                )
                 report.save()
 
                 labels = label_goals(
