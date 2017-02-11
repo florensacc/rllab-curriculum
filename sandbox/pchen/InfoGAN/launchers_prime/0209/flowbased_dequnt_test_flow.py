@@ -127,7 +127,7 @@ def run_task(v):
         init_batch_size=1024,
         train_batch_size=64, # also testing resuming from diff bs
         optimizer=AdamaxOptimizer(
-            learning_rate=1e-3,
+            learning_rate=1e-4,
         ),
         save_every=20,
         # # for debug
