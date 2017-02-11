@@ -81,6 +81,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
             axis3d=False,
             q_plot_settings=None,
             env_plot_settings=None,
+            eval_entropy_n_sample=10,
+            eval_kl_n_sample=10,
+            eval_kl_n_sample_part=10,
             **kwargs
     ):
         """
@@ -94,6 +97,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
         :param qf_learning_rate: Learning rate of the critic
         :param policy_learning_rate: Learning rate of the actor
         :param Q_weight_decay: How much to decay the weights for Q
+        :param eval_entropy_n_sample: (large values slow dow computation)
+        :param eval_kl_n_sample: (large values slow dow computation)
+        :param eval_kl_n_sample_part: (large values slow dow computation)
         :return:
         """
         assert ((Ks is None and temperatures is None) or
@@ -173,6 +179,10 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.eval_sampler = ParallelSampler(self)
         self.n_eval_paths = n_eval_paths
         plt.switch_backend(plt_backend)
+
+        self.eval_entropy_n_sample = eval_entropy_n_sample
+        self.eval_kl_n_sample = eval_kl_n_sample
+        self.eval_kl_n_sample_part = eval_kl_n_sample_part
 
         self._init_figures()
 
@@ -668,7 +678,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 scale = self.policy.output_scale
                 actions = np.random.uniform(
                     low=-scale, high=scale, size=(N, self.K_critic, Da))
-                weights = np.power(2. * scale, Da) * np.ones((N, self.K_critic))
+                weights = np.power(2. * scale, -Da) * np.ones((N, self.K_critic))
                     # 1/p = volume of the action space
             elif self.target_action_dist == "gaussian":
                 ## old Gaussian sampling: may accidentally get low prob samples
@@ -754,6 +764,46 @@ class VDDPG(OnlineAlgorithm, Serializable):
             for i in range(n_states):
                 ax = self._fig_q.add_subplot(100 + n_states * 10 + i + 1)
                 self._ax_q_lst.append(ax)
+
+
+    def compute_kl(self, observations, K, K_part):
+        """
+        K: number of particles to estimate log(q) / log(bar{p})
+        K_part: number of particles to estimate the partition function
+        """
+        N = observations.shape[0]
+        Da = self.policy.action_dim
+        Do = self.policy.observation_dim
+
+        # compute the partition function
+        scale = self.policy.output_scale
+        actions_part = np.random.uniform(
+            low=-scale, high=scale, size=(N * K_part, Da))
+        weights = np.power(2. * scale, -Da) * np.ones((N, K_part))
+        Qs_part = self.sess.run(
+            self.qf.output,
+            self.qf.get_feed_dict(
+                obs=np.tile(observations, (1, K_part)).reshape(-1, Do),
+                action=actions_part,
+            ) # N x K_part
+        ).reshape(N, K_part)
+        Qs_part_max = np.amax(Qs_part, axis=1, keepdims=True)
+        logZs = Qs_part_max[:,0] + np.log(np.mean(
+            np.exp(Qs_part - Qs_part_max) / weights,
+            axis=1
+        )) # (N,)
+
+        # compute kl(p | bar{p})
+        obs = np.tile(observations, (1, K)).reshape(-1, Do)
+        actions, info = self.policy.get_actions(obs, with_prob=True)
+        Qs = self.sess.run(
+            self.qf.output,
+            self.qf.get_feed_dict(obs, actions),
+        ).reshape(N, K)
+
+        qs = info["prob"].reshape(N, K)
+        kl = np.mean(np.log(qs) - Qs, axis=1) + logZs
+        return kl
 
     @overrides
     def evaluate(self, epoch, train_info):
@@ -854,6 +904,39 @@ class VDDPG(OnlineAlgorithm, Serializable):
             self.last_statistics.update(create_stats_ordered_dict(
                 'TrainingPathLengths', es_path_lengths))
 
+        # log the entropy regularized objective
+        discounted_regularized_returns = []
+        entropy_reward_ratios = []
+        for path in paths:
+            entropies = self.policy.compute_entropy(
+                path["observations"], n_sample=self.eval_entropy_n_sample)
+            entropy_bonuses = np.concatenate([entropies[1:], [0]])
+            discounted_rewards = special.discount_return(
+                path["rewards"], self.discount
+            )
+            discounted_entropies = special.discount_return(
+                entropy_bonuses,  self.discount
+            )
+            discounted_regularized_returns.append(
+                discounted_rewards + discounted_entropies
+            )
+            entropy_reward_ratios.append(
+                discounted_entropies / discounted_rewards
+            )
+        self.last_statistics.update(create_stats_ordered_dict(
+            'DiscRegReturn', discounted_regularized_returns))
+        self.last_statistics.update(create_stats_ordered_dict(
+            'EntropyRewardRatio', entropy_reward_ratios))
+
+        kls = self.compute_kl(obs,
+            K=self.eval_kl_n_sample,
+            K_part=self.eval_kl_n_sample_part,
+        )
+        self.last_statistics.update(create_stats_ordered_dict(
+            'KL', kls))
+
+
+        # log kl(pi | exp(Q))
 
         ## Create figure for plotting the environment.
         #fig = plt.figure(figsize=(12, 7))

@@ -14,6 +14,9 @@ from sandbox.tuomas.mddpg.policies.nn_policy import NNPolicy
 
 
 class StochasticNNPolicy(NNPolicy):
+    """
+    Note: we fix the input distribution to be standard normal
+    """
     def __init__(self,
                  scope_name,
                  hidden_dims,
@@ -52,6 +55,10 @@ class StochasticNNPolicy(NNPolicy):
 
         super(StochasticNNPolicy, self).__init__(scope_name, **kwargs)
 
+        assert sample_dim == self.action_dim, """
+            Unable to compute prob(action) if sample_dim != action_dim
+        """
+
     def create_network(self):
         self._create_pls()
         input_list = [self.observations_placeholder, self._sample_pl]
@@ -81,6 +88,12 @@ class StochasticNNPolicy(NNPolicy):
             ],
             axis=1
         )  # N x Da x Ds
+        Da = self._sample_dim
+        self._sample_prob = np.power(2. * np.pi, -Da / 2.) * \
+            tf.exp(-0.5 * tf.reduce_sum(
+                tf.square(self._sample_pl),reduction_indices=1))
+        self._action_prob = self._sample_prob / \
+            tf.abs(tf.matrix_determinant(self._Doutput_Dsample))
 
         return output
 
@@ -128,20 +141,12 @@ class StochasticNNPolicy(NNPolicy):
             actions = self.sess.run(self.output, feed)
             info = {}
         else:
-            actions, jacobians = self.sess.run(
-                [self.output, self._Doutput_Dsample],
+            actions, action_probs = self.sess.run(
+                [self.output, self._action_prob],
                 feed,
             )
-            samples = feed[self._sample_pl]
-            Ds = self._sample_dim
-            gauss_pdf = scipy.stats.multivariate_normal(
-                mean=np.zeros(Ds),
-                cov=np.ones(Ds),
-            ).pdf(samples)
-            coeffs = np.array([np.abs(np.linalg.det(J)) for J in jacobians])
-            action_pdf = gauss_pdf / coeffs
             info = {
-                "prob": action_pdf,
+                "prob": action_probs,
             }
 
         return actions, info
@@ -164,6 +169,15 @@ class StochasticNNPolicy(NNPolicy):
         if self._temp_dim > 0:
             self._current_temp = (self._current_temp + 1) % self._n_temps
 
+    def compute_entropy(self, observations, n_sample):
+        N = observations.shape[0]
+        Do = self.observation_dim
+        obs_copied = np.reshape(np.tile(observations, (1, n_sample)), (-1, Do))
+        actions, info = self.get_actions(obs_copied, with_prob=True)
+        action_probs = info["prob"].reshape(N, n_sample)
+        TINY = 1e-8
+        entropies = np.mean(-np.log(action_probs + TINY), axis=1)
+        return entropies
 
 class StochasticPolicyMaximizer(Parameterized, Serializable):
     """
