@@ -28,6 +28,18 @@ class VG(VariantGenerator):
         ]
 
     @variant
+    def leaky(self):
+        return [
+            True, False
+        ]
+
+    @variant
+    def deep_flow(self):
+        return [
+            True, False
+        ]
+
+    @variant
     def seed(self):
         return [42,]
 
@@ -39,8 +51,20 @@ def run_task(v):
     dataset = Cifar10Dataset(dequantized=False)
     flat_dim = dataset.image_dim
 
-    # noise = Gaussian(flat_dim)
-    noise = Logistic([flat_dim], init_scale=0.5)
+    if v["leaky"]:
+        this_flow = LeakyLinearShearingFlow
+    else:
+        this_flow = LinearShearingFlow
+
+    if v["deep_flow"]:
+        flow_nr = 2
+        blocks = 2
+    else:
+        flow_nr = 1
+        blocks = 4
+
+    noise = Gaussian(flat_dim)
+    # noise = Logistic([flat_dim], init_scale=0.5)
     shape = [-1, 16, 16, 12]
     shaped_noise = ReshapeFlow(
         noise,
@@ -49,21 +73,21 @@ def run_task(v):
     )
 
     cur = shaped_noise
-    for i in range(4):
+    for i in range(4 * flow_nr):
         cf, ef, merge = checkerboard_condition_fn_gen(i, (i<2) )
-        cur = ShearingFlow(
+        cur = this_flow(
             f(cur),
-            nn_builder=resnet_blocks_gen(),
+            nn_builder=resnet_blocks_gen_raw(blocks),
             condition_fn=cf,
             effect_fn=ef,
             combine_fn=merge,
         )
 
-    for i in range(4):
+    for i in range(4 * flow_nr):
         cf, ef, merge = channel_condition_fn_gen(i, )
-        cur = ShearingFlow(
+        cur = this_flow(
             f(cur),
-            nn_builder=resnet_blocks_gen(),
+            nn_builder=resnet_blocks_gen_raw(blocks),
             condition_fn=cf,
             effect_fn=ef,
             combine_fn=merge,
@@ -76,11 +100,11 @@ def run_task(v):
         backward_fn=lambda x: tf_go(x, debug=False).space_to_depth(2).value,
     )
     cur = upsampled
-    for i in range(3):
+    for i in range(3 * flow_nr):
         cf, ef, merge = checkerboard_condition_fn_gen(i, (i<2) if hybrid else True)
-        cur = ShearingFlow(
+        cur = this_flow(
             f(cur),
-            nn_builder=resnet_blocks_gen(),
+            nn_builder=resnet_blocks_gen_raw(blocks),
             condition_fn=cf,
             effect_fn=ef,
             combine_fn=merge,
@@ -125,17 +149,20 @@ for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="0209_redo_normal_nn_logitize_test",
+        exp_prefix="0210_comp_depth_style_gen_linear_flow",
         variant=v,
 
-        mode="local",
+        # mode="local",
 
         # mode="local_docker",
         # env=dict(
         #     CUDA_VISIBLE_DEVICES="5"
         # ),
 
-        # mode="ec2",
+        mode="ec2",
+        aws_config=dict(
+            placement=dict(AvailabilityZone="us-west-2b"),
+        ),
 
         use_gpu=True,
         snapshot_mode="last",

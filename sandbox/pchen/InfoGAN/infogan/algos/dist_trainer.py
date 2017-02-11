@@ -101,7 +101,8 @@ class DistTrainer(object):
                 #     for grad, var in tower_grads
                 # ]
                 # # gradient numerics check
-                tower_grads = [
+                if self._debug:
+                    tower_grads = [
                     (tf.check_numerics(grad, var.name), var)
                     for grad, var in tower_grads
                 ]

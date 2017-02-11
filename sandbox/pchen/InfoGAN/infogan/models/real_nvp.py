@@ -24,6 +24,23 @@ def resnet_blocks_gen(blocks=4, filters=64, squash=tf.tanh):
 
     return go
 
+@scopes.add_arg_scope_only("blocks", "filters", "squash")
+def resnet_blocks_gen_raw(blocks=4, filters=64, squash=tf.tanh):
+    def go(x):
+        chns = int_shape(x)[3]
+        x = nn.conv2d(x, filters)
+        for _ in range(blocks):
+            x = nn.gated_resnet(x)
+        temp = nn.conv2d(x, chns * 2)
+        return temp
+        # mu = temp[:, :, :, chns:]
+        # logstd = (temp[:, :, :, :chns])  # might want learn scaling
+        # if squash:
+        #     logstd = squash(logstd)
+        # return mu, logstd
+
+    return go
+
 
 def checkerboard_condition_fn_gen(bin=0, h_collapse=True):
     id = bin % 2
