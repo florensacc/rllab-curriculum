@@ -2864,6 +2864,136 @@ class CondPixelCNN(Distribution):
     def activate_dist(self, flat):
         return dict(context=flat)
 
+class GeneralizedShearingFlow(Distribution):
+    def __init__(
+            self,
+            base_dist,
+            nn_builder,
+            condition_fn,
+            effect_fn,
+            combine_fn,
+            backwad_join_fn,
+            forward_join_fn,
+    ):
+        # fix me later about how to serailzie fn?
+        # Serializable.quick_init(self, locals())
+
+        global G_IDX
+        G_IDX += 1
+        self._name = "Shearing_%s" % (G_IDX)
+        assert base_dist
+        assert nn_builder
+        assert condition_fn
+        assert effect_fn
+        assert combine_fn
+        self._base_dist = base_dist
+        self._nn_template = tf.make_template(self._name, nn_builder)
+        self._condition_set = condition_fn
+        self._effect_set = effect_fn
+        self._combine = combine_fn
+        self._backward_join = backwad_join_fn
+        self._forward_join = forward_join_fn
+
+        self.train_mode()
+
+    @overrides
+    def init_mode(self):
+        self._custom_phase = CustomPhase.init
+        self._base_dist.init_mode()
+
+    @overrides
+    def train_mode(self):
+        self._custom_phase = CustomPhase.train
+        self._base_dist.train_mode()
+
+    @property
+    def dim(self):
+        return self._base_dist.dim
+
+    @property
+    def effective_dim(self):
+        return self._base_dist.effective_dim
+
+    def infer(self, x_var, dist_info):
+        condition = self._condition_set(x_var)
+        effect = self._effect_set(x_var)
+
+        counters = {}
+        with scopes.default_arg_scope(
+                counters=counters, init=self._custom_phase == CustomPhase.init,
+                ema=None
+        ):
+            join_params = self._nn_template(condition)
+
+        return condition, effect, join_params
+
+    def logli(self, x_var, dist_info):
+        condition, effect, join_params = self.infer(x_var, dist_info)
+        effect_shp = nn.int_shape(effect)
+        joined, logdiff = self._backward_join(effect, join_params)
+        eps = self._combine(condition, joined)
+
+        return self._base_dist.logli(eps, dist_info) + logdiff
+
+    def logli_init_prior(self, x_var):
+        return self._base_dist.logli_init_prior(x_var)
+
+    def prior_dist_info(self, batch_size):
+        return self._base_dist.prior_dist_info(batch_size)
+
+    def sample_logli(self, dist_info):
+        eps, logpeps = self._base_dist.sample_logli(dist_info)
+        condition, effect, join_params = self.infer(eps, dist_info)
+        effect_shp = nn.int_shape(effect)
+        joined, logdiff = self._forward_join(effect, join_params)
+        x = self._combine(condition, joined)
+
+        return x, logpeps + logdiff
+
+    @property
+    def dist_info_keys(self):
+        return self._base_dist.dist_info_keys
+
+    @property
+    def dist_flat_dim(self):
+        return self._base_dist.dist_flat_dim
+
+    def activate_dist(self, flat):
+        return self._base_dist.activate_dist(flat)
+
+    def nonreparam_logli(self, x_var, dist_info):
+        raise "not defined"
+
+def LinearShearingFlow(
+        base_dist,
+        nn_builder,
+        condition_fn,
+        effect_fn,
+        combine_fn,
+):
+    def backwad_join_fn(effect, join_params):
+        chns = int_shape(join_params)[-1] // 2
+        mu = join_params[:, :, :, chns:]
+        logstd = tf.tanh(join_params[:, :, :, :chns])
+        joined = effect * tf.exp(logstd) + mu
+        return joined, tf.reduce_sum(logstd, [1,2,3])
+
+    def forward_join_fn(effect, join_params):
+        chns = int_shape(join_params)[-1] // 2
+        mu = join_params[:, :, :, chns:]
+        logstd = tf.tanh(join_params[:, :, :, :chns])
+        joined = (effect - mu) / tf.exp(logstd)
+        return joined, tf.reduce_sum(logstd, [1,2,3])
+
+    return GeneralizedShearingFlow(
+        base_dist,
+        nn_builder,
+        condition_fn,
+        effect_fn,
+        combine_fn,
+        backwad_join_fn=backwad_join_fn,
+        forward_join_fn=forward_join_fn,
+    )
 
 class ShearingFlow(Distribution):
     def __init__(
