@@ -2995,6 +2995,48 @@ def LinearShearingFlow(
         forward_join_fn=forward_join_fn,
     )
 
+def LeakyLinearShearingFlow(
+        base_dist,
+        nn_builder,
+        condition_fn,
+        effect_fn,
+        combine_fn,
+        leakiness=1.,
+):
+    def backwad_join_fn(effect, join_params):
+        chns = int_shape(join_params)[-1] // 2
+        mu = join_params[:, :, :, chns:]
+        logstd = tf.tanh(join_params[:, :, :, :chns])
+        logstd = tf.select(
+            effect >= 0,
+            logstd,
+            tf.ones_like(logstd) * tf.log(leakiness)
+        )
+        joined = effect * tf.exp(logstd) + mu
+        return joined, tf.reduce_sum(logstd, [1,2,3])
+
+    def forward_join_fn(effect, join_params):
+        chns = int_shape(join_params)[-1] // 2
+        mu = join_params[:, :, :, chns:]
+        logstd = tf.tanh(join_params[:, :, :, :chns])
+        logstd = tf.select(
+            (effect - mu) >= 0,
+            logstd,
+            tf.ones_like(logstd) * tf.log(leakiness)
+        )
+        joined = (effect - mu) / tf.exp(logstd)
+        return joined, tf.reduce_sum(logstd, [1,2,3])
+
+    return GeneralizedShearingFlow(
+        base_dist,
+        nn_builder,
+        condition_fn,
+        effect_fn,
+        combine_fn,
+        backwad_join_fn=backwad_join_fn,
+        forward_join_fn=forward_join_fn,
+    )
+
 class ShearingFlow(Distribution):
     def __init__(
             self,
