@@ -103,7 +103,7 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
 
         return reward
 
-    def log_stats(self, algo, epoch, paths, ax):
+    def log_stats(self, algo, epoch, paths):
         # forward distance
         progs = []
         for path in paths:
@@ -129,18 +129,7 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
             'env: DistanceRewardMin': np.min(distance_rewards),
             'env: DistanceRewardStd': np.std(distance_rewards),
         }
-        snapshot_dir = logger.get_snapshot_dir()
-        variant_file = os.path.join(
-            snapshot_dir,
-            "variant.json",
-        )
-        with open(variant_file) as vf:
-            variant = json.load(vf)
-        img_file = os.path.join(
-            snapshot_dir,
-            "itr_%d_plots.png"%(epoch),
-        )
-        SwimmerUndirectedEnv.plot_paths(algo, paths, variant, img_file)
+        SwimmerUndirectedEnv.plot_paths_qf(algo, paths, epoch)
 
         return stats
 
@@ -170,7 +159,18 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
         return X, Y, Q
 
     @staticmethod
-    def plot_paths(algo, paths, variant, img_file):
+    def plot_paths_qf(algo, paths, epoch):
+        snapshot_dir = logger.get_snapshot_dir()
+        variant_file = os.path.join(
+            snapshot_dir,
+            "variant.json",
+        )
+        with open(variant_file) as vf:
+            variant = json.load(vf)
+        img_file = os.path.join(
+            snapshot_dir,
+            "itr_%d_plots.png"%(epoch),
+        )
         # plot the test paths
         fig = plt.figure(figsize=(14, 14))
             # don't ask me how I figured out this ratio
@@ -187,7 +187,7 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
         # plot the q-value at the initial state
         ax_qf = fig.add_subplot(212)
         ax_qf.grid(True)
-        lim = 1.
+        lim = algo.policy.output_scale
         ax_qf.set_xlim((-lim, lim))
         ax_qf.set_ylim((-lim, lim))
         obs = paths[0]["observations"][0]
