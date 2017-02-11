@@ -89,7 +89,7 @@ def run_task(v):
         cur = shift(logitize(cur))
 
     dist = DequantizedFlow(
-        f(cur),
+        cur,
         UniformDequant()
     )
 
@@ -123,7 +123,7 @@ for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="0209_redo_normal_nn_logitize_test",
+        exp_prefix="0210_fixed2_redo_normal_nn_logitize_test",
         variant=v,
 
         # mode="local",
@@ -134,7 +134,9 @@ for v in variants[:]:
         # ),
 
         mode="ec2",
-
+        aws_config=dict(
+            placement=dict(AvailabilityZone="us-west-2b"),
+        ),
         use_gpu=True,
         snapshot_mode="last",
         docker_image="dementrock/rllab3-shared-gpu-cuda80",

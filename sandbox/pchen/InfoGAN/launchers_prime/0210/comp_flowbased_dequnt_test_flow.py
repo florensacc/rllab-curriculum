@@ -18,13 +18,19 @@ import tensorflow as tf
 import cloudpickle
 
 
-# test if logit transofmration is useful
+# kuma hopefully numerically stable
 
 class VG(VariantGenerator):
     @variant
+    def depth(self):
+        return [
+            0, 1, 3
+        ]
+
+    @variant
     def logit(self):
         return [
-            True, False
+            True,
         ]
 
     @variant
@@ -36,7 +42,7 @@ def run_task(v):
     f = normalize
     hybrid = False
 
-    dataset = Cifar10Dataset(dequantized=False)
+    dataset = Cifar10Dataset(dequantized=False) # dequantization left to flow
     flat_dim = dataset.image_dim
 
     noise = Gaussian(flat_dim)
@@ -88,9 +94,49 @@ def run_task(v):
     if logit:
         cur = shift(logitize(cur))
 
+    depth = v["depth"]
+    if depth == 0:
+        dequant_noise = UniformDequant()
+    else:
+        def shallow_processor(context):
+            this = checkerboard_condition_fn_gen()[0](context)
+            that = checkerboard_condition_fn_gen()[1](context)
+            processed_context = nn.conv2d(tf.concat(3, [this, that]), 32)
+            for _ in range(depth):
+                processed_context = nn.gated_resnet(processed_context)
+            return processed_context
+        def flow_builder():
+            from sandbox.pchen.InfoGAN.infogan.models.real_nvp import checkerboard_condition_fn_gen
+            from sandbox.pchen.InfoGAN.infogan.models.real_nvp import resnet_blocks_gen
+            base = Gaussian(flat_dim)
+            shape = [32, 32, 3]
+            shaped_noise = ReshapeFlow(
+                base,
+                forward_fn=lambda x: tf.reshape(x, [-1] + list(shape)),
+                backward_fn=lambda x: tf_go(x).reshape([-1, base.dim]).value,
+            )
+            f = normalize
+            cur = shaped_noise
+            for i in range(depth):
+                cf, ef, merge = checkerboard_condition_fn_gen(i, True)
+                cur = ShearingFlow(
+                    f(cur),
+                    nn_builder=resnet_blocks_gen(),
+                    condition_fn=cf,
+                    effect_fn=ef,
+                    combine_fn=merge,
+                )
+            return logitize(cur, coeff=256.)
+        dequant_noise = FlowBasedDequant(
+            shape=[32,32,3],
+            context_processor=shallow_processor,
+            flow_builder=flow_builder,
+        )
+
     dist = DequantizedFlow(
-        f(cur),
-        UniformDequant()
+        base_dist=cur,
+        # noise_dist=UniformDequant(),
+        noise_dist=dequant_noise,
     )
 
     algo = DistTrainer(
@@ -102,6 +148,8 @@ def run_task(v):
             learning_rate=1e-3,
         ),
         save_every=20,
+        # # for debug
+        debug=False,
         # resume_from="/home/peter/rllab-private/data/local/global_proper_deeper_flow/"
         # checkpoint_dir="data/local/test_debug",
     )
@@ -123,7 +171,7 @@ for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="0209_redo_normal_nn_logitize_test",
+        exp_prefix="0210_comp_flow_based_dequant",
         variant=v,
 
         # mode="local",
@@ -134,7 +182,7 @@ for v in variants[:]:
         # ),
 
         mode="ec2",
-
+        #
         use_gpu=True,
         snapshot_mode="last",
         docker_image="dementrock/rllab3-shared-gpu-cuda80",

@@ -13,7 +13,7 @@ from rllab.core.serializable import Serializable
 from rllab.misc.ext import AttrDict, extract
 from rllab.misc.overrides import overrides
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import CustomPhase, resconv_v1_customconv, plstmconv_v1, int_shape, \
-    universal_int_shape, get_linear_ar_mask, tf_go
+    universal_int_shape, get_linear_ar_mask, tf_go, safe_log
 import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
 import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
 import rllab.misc.logger as logger
@@ -657,6 +657,87 @@ class Kumaraswamy(Distribution):
         )
 
 THRESHOLD = 1e-3
+
+class Logistic(Distribution):
+    def __init__(
+            self, shape,
+            init_scale=1., init_mean=1.,
+    ):
+        Serializable.quick_init(self, locals())
+
+        self._shape = shape
+        self._dim = np.prod(shape)
+        self._init_mean = init_mean
+        self._init_scale = init_scale
+
+    @property
+    def dim(self):
+        return self._dim
+
+    @property
+    def dist_flat_dim(self):
+        return self._dim * 2
+
+    @property
+    def effective_dim(self):
+        return self._dim
+
+    @property
+    def dist_info_keys(self):
+        return ["mu", "scale"]
+
+    def cdf(self, x_var, dist_info):
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        return tf.nn.sigmoid((x_var - mu) / (scale + 1e-7))
+
+    def inverse_cdf(self, p, dist_info):
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        p = tf.clip_by_value(p, 1e-6, 1-1e-6)
+        return mu + scale * (tf.log(p) - tf.log(1 - p))
+
+    def logli(self, x_var, dist_info):
+        x_var = tf.reshape(x_var, [-1, self.dim])
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        bs = int_shape(mu)[0]
+        # untruncated logprob calculation
+        neg_standardized = -(x_var - mu)/(scale + 1e-7)
+        neg_standardized = neg_standardized
+        raw_logli = neg_standardized - tf.log(scale + 1e-20) \
+                    - 2. * tf.nn.softplus(neg_standardized)
+
+        return tf.reduce_sum(raw_logli, reduction_indices=[1])
+
+    def entropy(self, dist_info):
+        raise NotImplemented
+
+    def activate_dist(self, flat_dist):
+        return dict(
+            mu=self._init_mean * (flat_dist[:, :self.dim]),
+            scale=self._init_scale * tf.exp(flat_dist[:, self.dim:]),
+        )
+
+    def sample_logli(self, dist_info):
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        bs = int_shape(mu)[0]
+        p = tf.random_uniform(
+            shape=universal_int_shape(mu),
+            minval=1e-20,
+            maxval=1. - 1e-20,
+        )
+        samples = self.inverse_cdf(p, dist_info)
+
+        return tf.reshape(samples, [-1]+list(self._shape)), self.logli(samples, dist_info)
+
+    def prior_dist_info(self, batch_size):
+        return dict(
+            mu=tf.zeros([batch_size, self._dim]),
+            scale=tf.zeros([batch_size, self._dim]),
+        )
+
 class TruncatedLogistic(Distribution):
     def __init__(
             self, shape, lo, hi,
@@ -3407,7 +3488,9 @@ class FlowBasedDequant(DequantizationDistribution):
             self,
             shape,
             context_processor,
+            flow_builder,
             width=1. / 256,
+
     ):
         global G_IDX
         G_IDX += 1
@@ -3419,27 +3502,7 @@ class FlowBasedDequant(DequantizationDistribution):
         self._dim = dim
         self._context_processor = tf.make_template(self._name + "_cp", context_processor)
 
-        from sandbox.pchen.InfoGAN.infogan.models.real_nvp import checkerboard_condition_fn_gen
-        from sandbox.pchen.InfoGAN.infogan.models.real_nvp import resnet_blocks_gen
-        base = Gaussian(dim)
-        shaped_noise = ReshapeFlow(
-            base,
-            forward_fn=lambda x: tf.reshape(x, [-1] + list(shape)),
-            backward_fn=lambda x: tf_go(x).reshape([-1, base.dim]).value,
-        )
-        f = normalize
-        cur = shaped_noise
-        for i in range(3):
-            cf, ef, merge = checkerboard_condition_fn_gen(i, True)
-            cur = ShearingFlow(
-                f(cur),
-                nn_builder=resnet_blocks_gen(),
-                condition_fn=cf,
-                effect_fn=ef,
-                combine_fn=merge,
-            )
-        logitized = logitize(cur, coeff=256.)
-        self._delegate = logitized
+        self._delegate = flow_builder()
 
         self.init_mode()
 
@@ -3545,7 +3608,8 @@ def logitize(dist, coeff=0.90):
     #     reduction_indices=[1,2,3]
     # )
     logli_diff_fn = lambda x: tf.reduce_sum(
-        tf.nn.softplus(x*coeff) + tf.nn.softplus(-x*coeff) - tf.nn.softplus(-coeff),
+        -safe_log(x*coeff) - safe_log(1-x*coeff) \
+          + tf.log(coeff),
         reduction_indices=[1,2,3]
     )
     def forward(eps):

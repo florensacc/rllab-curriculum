@@ -24,7 +24,7 @@ class VG(VariantGenerator):
     @variant
     def logit(self):
         return [
-            True, False
+            True,
         ]
 
     @variant
@@ -39,7 +39,8 @@ def run_task(v):
     dataset = Cifar10Dataset(dequantized=False)
     flat_dim = dataset.image_dim
 
-    noise = Gaussian(flat_dim)
+    # noise = Gaussian(flat_dim)
+    noise = Logistic([flat_dim], init_scale=0.5)
     shape = [-1, 16, 16, 12]
     shaped_noise = ReshapeFlow(
         noise,
@@ -89,7 +90,7 @@ def run_task(v):
         cur = shift(logitize(cur))
 
     dist = DequantizedFlow(
-        f(cur),
+        cur,
         UniformDequant()
     )
 
@@ -102,6 +103,7 @@ def run_task(v):
             learning_rate=1e-3,
         ),
         save_every=20,
+        # debug=True,
         # resume_from="/home/peter/rllab-private/data/local/global_proper_deeper_flow/"
         # checkpoint_dir="data/local/test_debug",
     )
@@ -126,14 +128,14 @@ for v in variants[:]:
         exp_prefix="0209_redo_normal_nn_logitize_test",
         variant=v,
 
-        # mode="local",
+        mode="local",
 
         # mode="local_docker",
         # env=dict(
         #     CUDA_VISIBLE_DEVICES="5"
         # ),
 
-        mode="ec2",
+        # mode="ec2",
 
         use_gpu=True,
         snapshot_mode="last",
