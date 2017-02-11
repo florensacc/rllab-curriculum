@@ -40,7 +40,7 @@ def run_task(v):
     flat_dim = dataset.image_dim
 
     # noise = Gaussian(flat_dim)
-    noise = Logistic([flat_dim], init_scale=2.)
+    noise = Logistic([flat_dim], init_scale=0.5)
     shape = [-1, 16, 16, 12]
     shaped_noise = ReshapeFlow(
         noise,
