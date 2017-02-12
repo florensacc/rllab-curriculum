@@ -184,7 +184,6 @@ for v in variants:
             epoch_length=10000,
             n_epochs=500,
             n_eval_paths=10,
-            eval_entropy_n_sample=1000,
             eval_kl_n_sample=1000,
             eval_kl_n_sample_part=1000,
         )
