@@ -3002,27 +3002,31 @@ def LeakyLinearShearingFlow(
         effect_fn,
         combine_fn,
         leakiness=1.,
+        double=False,
 ):
+    multiple = 3 if double else 2
     def backwad_join_fn(effect, join_params):
-        chns = int_shape(join_params)[-1] // 2
-        mu = join_params[:, :, :, chns:]
+        chns = int_shape(join_params)[-1] // multiple
+        mu = join_params[:, :, :, chns:2*chns]
         logstd = tf.tanh(join_params[:, :, :, :chns])
         logstd = tf.select(
             effect >= 0,
             logstd,
-            tf.ones_like(logstd) * tf.log(leakiness)
+            tf.tanh(join_params[:,:,:,chns*2:]) if double else
+                tf.ones_like(logstd) * tf.log(leakiness)
         )
         joined = effect * tf.exp(logstd) + mu
         return joined, tf.reduce_sum(logstd, [1,2,3])
 
     def forward_join_fn(effect, join_params):
-        chns = int_shape(join_params)[-1] // 2
-        mu = join_params[:, :, :, chns:]
+        chns = int_shape(join_params)[-1] // multiple
+        mu = join_params[:, :, :, chns:2*chns]
         logstd = tf.tanh(join_params[:, :, :, :chns])
         logstd = tf.select(
             (effect - mu) >= 0,
             logstd,
-            tf.ones_like(logstd) * tf.log(leakiness)
+            tf.tanh(join_params[:,:,:,chns*2:]) if double else
+                tf.ones_like(logstd) * tf.log(leakiness)
         )
         joined = (effect - mu) / tf.exp(logstd)
         return joined, tf.reduce_sum(logstd, [1,2,3])
@@ -3785,7 +3789,7 @@ def logitize(dist, coeff=0.90):
         reduction_indices=[1,2,3]
     )
     def forward(eps):
-        x = tf.nn.sigmoid(-eps) / coeff
+        x = tf.nn.sigmoid(eps) / coeff
         return x, logli_diff_fn(x)
     return ReshapeFlow(
         dist,
