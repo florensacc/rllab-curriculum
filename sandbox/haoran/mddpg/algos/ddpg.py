@@ -351,7 +351,7 @@ class DDPG(OnlineAlgorithm, Serializable):
 
         true_env = get_true_env(self.env)
         if hasattr(true_env, "log_stats"):
-            env_stats = true_env.log_stats(self, epoch, paths, ax)
+            env_stats = true_env.log_stats(self, epoch, paths)
             self.last_statistics.update(env_stats)
 
         # Close and save figs.
