@@ -263,6 +263,8 @@ class DistTrainer(object):
                             vali_log_vals.append(log_vals)
 
                         samples = sess.run(sample_imgs)
+                        # convert to a form that plt likes
+                        samples = np.clip(samples+0.5, 0., 1.)
                         img_tile = plotting.img_tile(samples, aspect_ratio=1., border_color=1., stretch=True)
                         _ = plotting.plot_img(img_tile, title=None, )
                         plotting.plt.savefig("%s/samples_itr_%s.png" % (self._checkpoint_dir, itr))
