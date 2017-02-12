@@ -16,6 +16,7 @@ import os
 import mako.template
 import mako.lookup
 from six.moves import range
+import copy
 
 MODEL_DIR = osp.abspath(
     osp.join(
@@ -165,8 +166,9 @@ class MujocoEnv(Env):
         noise = 0.5 * (ub - lb) * noise
         return action + noise
 
-    def forward_dynamics(self, action, qvel=None, qpos=None, position_ctrl=False):
+    def forward_dynamics(self, action, qvel=None, qpos=None, position_ctrl=False, range_pos=0.1):
         self.model.data.ctrl = self.inject_action_noise(action)
+        action_dim = len(action)
         i = 0
         if not position_ctrl:
             for _ in range(self.frame_skip):
@@ -174,15 +176,16 @@ class MujocoEnv(Env):
         else:
             while True:
                 self.model.step()
-                if qvel is not None:
-                    self.model.data.qvel = qvel
-                error = abs(action - self.model.data.qpos[:7, 0])/0.1
-                if (error < 0.1).all() or i > 24:
-                # if i > 24:
-                    # print(i)
-                    # print(error)
+                # self.render()
+                error = abs(action - self.model.data.qpos[:action_dim, 0])/range_pos
+                if (error < 0.1).all() or i > 29:
                     break
                 i += 1
+            if qvel is not None:
+                qvel = copy.copy(self.model.data.qvel)
+                qvel[:action_dim, 0] = 0
+                self.model.data.qvel = qvel
+            # print(i)
         self.model.forward()
         new_com = self.model.data.com_subtree[0]
         self.dcom = new_com - self.current_com

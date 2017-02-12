@@ -1,6 +1,3 @@
-
-
-
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
 import numpy as np
@@ -8,16 +5,13 @@ import theano
 import theano.tensor as TT
 
 from rllab.core.lasagne_powered import LasagnePowered
-from rllab.core.network import MLP
 from rllab.core.serializable import Serializable
-from sandbox.rocky.snn.distributions.bernoulli import Bernoulli
+from rllab.distributions.bernoulli import Bernoulli
 from rllab.misc import ext
 from rllab.misc import logger
-from rllab.misc import special
 from rllab.optimizers.lbfgs_optimizer import LbfgsOptimizer
 from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
-
-from sandbox.carlos_snn.core.network import GRUNetwork
+from rllab.core.network import GRUNetwork
 
 
 class BernoulliRecurrentRegressor(LasagnePowered, Serializable):
@@ -63,12 +57,12 @@ class BernoulliRecurrentRegressor(LasagnePowered, Serializable):
         p_network = GRUNetwork(
             input_shape=input_shape,
             output_dim=output_dim,
-            hidden_dim=hidden_sizes[0],  ## not sure if 32 is a good number, ie equivalent to (32,32)MLP
+            hidden_dim=hidden_sizes[0],
             hidden_nonlinearity=hidden_nonlinearity,
             output_nonlinearity=NL.sigmoid,
         )
 
-        l_p = p_network.output_layer # this is every intermediate latent state! but I only care about last
+        l_p = p_network.output_layer  # this is every intermediate latent state! but I only care about last
 
         LasagnePowered.__init__(self, [l_p])
 

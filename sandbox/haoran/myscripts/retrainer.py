@@ -1,16 +1,16 @@
 import os
 import os.path as osp
 import joblib
+import tensorflow as tf
 from rllab import config
 from rllab.misc import logger
+from sandbox.haoran.myscripts import tf_utils
 
 class Retrainer(object):
     def __init__(self,
         exp_prefix,
         exp_name,
         snapshot_file,
-        target_itr,
-        n_parallel,
         configure_script,
     ):
         """
@@ -20,52 +20,60 @@ class Retrainer(object):
         self.exp_prefix = exp_prefix
         self.exp_name = exp_name
         self.snapshot_file = snapshot_file
-        self.target_itr = target_itr
-        self.n_parallel = n_parallel
         self.configure_script = configure_script
 
-    def reload_snapshot(self):
-        local_log_dir = osp.join(
+
+        self.local_log_dir = osp.join(
             config.LOG_DIR,
             "local",
             self.exp_prefix.replace("_", "-"),
             self.exp_name,
         )
-        if not osp.isdir(local_log_dir):
-            os.system("mkdir -p %s"%(local_log_dir))
-        local_snapshot_file = osp.join(local_log_dir, self.snapshot_file)
-        if osp.isfile(local_snapshot_file):
-            logger.log("Found snapshot file %s"%(local_snapshot_file))
+        if not osp.isdir(self.local_log_dir):
+            os.system("mkdir -p %s"%(self.local_log_dir))
+        self.remote_log_dir = osp.join(
+            config.AWS_S3_PATH,
+            self.exp_prefix.replace("_","-"),
+            self.exp_name,
+        )
+
+    def grab_file(self, file_name):
+        local_file = osp.join(self.local_log_dir, file_name)
+        if osp.isfile(local_file):
+            logger.log("Found file %s"%(local_file))
         else:
             logger.log("Downloading snapshot file...")
-            remote_log_dir = osp.join(
-                config.AWS_S3_PATH,
-                self.exp_prefix.replace("_","-"),
-                self.exp_name,
-            )
-            remote_snapshot_file = osp.join(remote_log_dir, self.snapshot_file)
+            remote_file = osp.join(self.remote_log_dir, file_name)
             try:
                 os.system("""
                     aws s3 cp {remote} {local}
                 """.format(
-                    remote=remote_snapshot_file,
-                    local=local_snapshot_file,
+                    remote=remote_file,
+                    local=local_file,
                 ))
             except:
-                print("Unable to download snapshot file %s"%(remote_snapshot_file))
+                print("Unable to download file %s"%(remote_file))
             logger.log("Download complete")
 
+    def reload_snapshot(self):
+        self.grab_file(self.snapshot_file)
+        local_snapshot_file = osp.join(self.local_log_dir, self.snapshot_file)
+        self.sess = tf.get_default_session() or tf_utils.create_session()
         self.snapshot = joblib.load(local_snapshot_file)
-        self.algo = self.snapshot["algo"]
-        print("Algo last itr: %d, target itr: %d"%(
-            self.algo.current_itr,
-            self.target_itr,
-        ))
-        self.algo.current_itr += 1
-        self.algo.n_itr = self.target_itr
-        self.algo.n_parallel = self.n_parallel
+        try:
+            self.algo = self.snapshot["algo"]
+        except:
+            print('Unable to load algo')
 
+        print(self.configure_script)
         exec(self.configure_script)
+
+    def reload_variant(self):
+        self.grab_file("variant.json")
+        local_variant_file = osp.join(self.local_log_dir, "variant.json")
+        with open(local_variant_file) as vf:
+            variant = json.load(vf)
+        return variant
 
     def retrain(self):
         self.reload_snapshot()

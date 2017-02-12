@@ -13,16 +13,17 @@ from sandbox.haoran.mddpg.algos.online_algorithm import OnlineAlgorithm
 from sandbox.haoran.mddpg.misc.data_processing import create_stats_ordered_dict
 from sandbox.haoran.mddpg.misc.rllab_util import split_paths
 from sandbox.haoran.myscripts.myutilities import get_true_env
-
+from sandbox.haoran.myscripts.tf_utils import adam_clipped_op
 from sandbox.haoran.mddpg.misc.simple_replay_pool import SimpleReplayPool
 from rllab.misc import logger
 from rllab.misc import special
 from rllab.misc.overrides import overrides
+from rllab.core.serializable import Serializable
 
 TARGET_PREFIX = "target_"
 
 
-class DDPG(OnlineAlgorithm):
+class DDPG(OnlineAlgorithm, Serializable):
     """
     Deep Deterministic Policy Gradient.
     """
@@ -39,6 +40,11 @@ class DDPG(OnlineAlgorithm):
             plt_backend="MacOSX",
             critic_train_frequency=1,
             actor_train_frequency=1,
+            update_target_frequency=1,
+            debug_mode=False,
+            critic_grad_clip=0,
+            actor_grad_clip=0,
+            axis3d=False,
             **kwargs
     ):
         """
@@ -51,6 +57,7 @@ class DDPG(OnlineAlgorithm):
         :param Q_weight_decay: How much to decay the weights for Q
         :return:
         """
+        Serializable.quick_init(self, locals())
         self.qf = qf
         self.critic_learning_rate = qf_learning_rate
         self.actor_learning_rate = policy_learning_rate
@@ -59,8 +66,17 @@ class DDPG(OnlineAlgorithm):
         plt.switch_backend(plt_backend)
         self.critic_train_frequency = critic_train_frequency
         self.critic_train_counter = 0
+        self.train_critic = True # shall be modified later
         self.actor_train_frequency = actor_train_frequency
         self.actor_train_counter = 0
+        self.train_actor = True # shall be modified later
+        self.update_target_frequency = update_target_frequency
+        self.update_target_counter = 0
+        self.update_target = True
+        self.debug_mode = debug_mode
+        self.critic_grad_clip = critic_grad_clip
+        self.actor_grad_clip = actor_grad_clip
+        self.axis3d = axis3d
 
         super().__init__(env, policy, exploration_strategy, **kwargs)
 
@@ -102,10 +118,20 @@ class DDPG(OnlineAlgorithm):
         )
         self.critic_total_loss = (
             self.critic_loss + self.Q_weight_decay * self.Q_weights_norm)
-        self.train_critic_op = tf.train.AdamOptimizer(
-            self.critic_learning_rate).minimize(
-            self.critic_total_loss,
-            var_list=self.qf.get_params_internal())
+        if self.critic_grad_clip > 0:
+            # copied from http://stackoverflow.com/questions/36498127/how-to-effectively-apply-gradient-clipping-in-tensor-flow
+            self.critic_optimizer, self.train_critic_op = adam_clipped_op(
+                loss=self.critic_total_loss,
+                var_list=self.qf.get_params_internal(),
+                lr=self.critic_learning_rate,
+                clip=self.critic_grad_clip,
+            )
+        else:
+            self.train_critic_op = tf.train.AdamOptimizer(
+                self.critic_learning_rate).minimize(
+                self.critic_total_loss,
+                var_list=self.qf.get_params_internal())
+
 
     def _init_actor_ops(self):
         # To compute the surrogate loss function for the critic, it must take
@@ -118,6 +144,14 @@ class DDPG(OnlineAlgorithm):
             # remember that the critic takes no action input at the beginning
         self.actor_surrogate_loss = - tf.reduce_mean(
             self.critic_with_action_input.output)
+
+        if self.actor_grad_clip > 0:
+            self.actor_optimizer, self.train_actor_op = adam_clipped_op(
+                loss=self.actor_surrogate_loss,
+                var_list=self.policy.get_params_internal(),
+                lr=self.actor_learning_rate,
+                clip=self.actor_grad_clip,
+            )
         self.train_actor_op = tf.train.AdamOptimizer(
             self.actor_learning_rate).minimize(
             self.actor_surrogate_loss,
@@ -151,25 +185,55 @@ class DDPG(OnlineAlgorithm):
 
     @overrides
     def _get_training_ops(self):
-        return [
-            self.train_actor_op,
-            self.train_critic_op,
-            self.update_target_critic_op,
-            self.update_target_actor_op,
-        ]
+        # return [
+        #     self.train_actor_op,
+        #     self.train_critic_op,
+        #     self.update_target_critic_op,
+        #     self.update_target_actor_op,
+        # ]
 
         # notice that the order of these ops are different from above
         ops = []
         if self.train_actor:
-            ops += [
-                self.train_actor_op,
-                self.update_target_actor_op,
-            ]
+            ops.append(self.train_actor_op)
+            if self.debug_mode:
+                ops.append(
+                    tf.Print(
+                        self.actor_surrogate_loss,
+                        [self.actor_surrogate_loss],
+                        message="Actor minibatch loss: ",
+                    )
+                )
+            if self.update_target:
+                ops.append(self.update_target_actor_op)
+                if self.debug_mode:
+                    ops.append(
+                        tf.Print(
+                            self.tau,
+                            [self.tau],
+                            message="Update target actor with tau: "
+                        )
+                    )
         if self.train_critic:
-            ops += [
-                self.train_critic_op,
-                self.update_target_critic_op,
-            ]
+            ops.append(self.train_critic_op)
+            if self.debug_mode:
+                ops.append(
+                    tf.Print(
+                        self.critic_total_loss,
+                        [self.critic_total_loss],
+                        message="Critic minibatch loss: ",
+                    )
+                )
+            if self.update_target:
+                ops.append(self.update_target_critic_op)
+                if self.debug_mode:
+                    ops.append(
+                        tf.Print(
+                            self.tau,
+                            [self.tau],
+                            message="Update target critic with tau: "
+                        )
+                    )
         return ops
 
     @overrides
@@ -279,7 +343,11 @@ class DDPG(OnlineAlgorithm):
 
         # Create figure for plotting the environment.
         fig = plt.figure(figsize=(12, 7))
-        ax = fig.add_subplot(111)
+        if self.axis3d:
+            from mpl_toolkits.mplot3d import Axes3D
+            ax = fig.add_subplot(111, projection='3d')
+        else:
+            ax = fig.add_subplot(111)
 
         true_env = get_true_env(self.env)
         if hasattr(true_env, "log_stats"):
@@ -288,6 +356,9 @@ class DDPG(OnlineAlgorithm):
 
         # Close and save figs.
         snapshot_dir = logger.get_snapshot_dir()
+        if snapshot_dir is None:
+            snapshot_dir = '/tmp/ddpg/'
+            os.system('mkdir -p %s'%(snapshot_dir))
         img_file = os.path.join(snapshot_dir, 'itr_%d_test_paths.png' % epoch)
 
         plt.draw()
@@ -305,10 +376,11 @@ class DDPG(OnlineAlgorithm):
     def get_epoch_snapshot(self, epoch):
         return dict(
             epoch=epoch,
-            env=self.env,
-            policy=self.policy,
-            es=self.exploration_strategy,
-            qf=self.qf,
+            # env=self.env,
+            # policy=self.policy,
+            # es=self.exploration_strategy,
+            # qf=self.qf,
+            algo=self,
         )
 
     def _do_training(self):
@@ -319,6 +391,10 @@ class DDPG(OnlineAlgorithm):
         self.train_actor = (np.mod(
             self.actor_train_counter,
             self.actor_train_frequency,
+        ) == 0)
+        self.update_target = (np.mod(
+            self.update_target_counter,
+            self.update_target_frequency,
         ) == 0)
 
         minibatch = self.pool.random_batch(self.batch_size)
@@ -347,3 +423,20 @@ class DDPG(OnlineAlgorithm):
             self.actor_train_counter + 1,
             self.actor_train_frequency,
         )
+        self.update_target_counter = np.mod(
+            self.update_target_counter + 1,
+            self.update_target_frequency,
+        )
+
+    def __getstate__(self):
+        d = Serializable.__getstate__(self)
+        d.update({
+            "policy_params": self.policy.get_param_values(),
+            "qf_params": self.qf.get_param_values(),
+        })
+        return d
+
+    def __setstate__(self, d):
+        Serializable.__setstate__(self, d)
+        self.qf.set_param_values(d["qf_params"])
+        self.policy.set_param_values(d["policy_params"])

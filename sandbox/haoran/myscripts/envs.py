@@ -80,10 +80,18 @@ class EnvChooser(object):
             from sandbox.tuomas.mddpg.envs.hopper_env import \
                 HopperEnv
             env = HopperEnv(**kwargs)
+        elif env_name == "tuomas_ant":
+            from sandbox.tuomas.mddpg.envs.mujoco.ant_env import \
+                AntEnv
+            env = AntEnv(**kwargs)
         elif env_name == "gym_walker":
             from sandbox.haoran.mddpg.envs.mujoco.gym_walker2d_env import \
                 Walker2DEnv
             env = Walker2DEnv(**kwargs)
+        elif env_name == "gym_undirected_swimmer":
+            from sandbox.haoran.mddpg.envs.mujoco.gym_undirected_swimmer import \
+                UndirectedSwimmerEnv
+            env = UndirectedSwimmerEnv(**kwargs)
         elif env_name == "gym_humanoid":
             from sandbox.haoran.mddpg.envs.mujoco.gym_humanoid_env import \
                 HumanoidEnv
@@ -92,6 +100,14 @@ class EnvChooser(object):
             from sandbox.haoran.mddpg.envs.mujoco.gym_humanoid_standup_env import \
                 HumanoidStandupEnv
             env = HumanoidStandupEnv(**kwargs)
+        elif env_name == "billiards":
+            from sandbox.haoran.mddpg.envs.mujoco.billiards_env import \
+                BilliardsEnv
+            env = BilliardsEnv(**kwargs)
+        elif env_name == "multilink_reacher":
+            from sandbox.haoran.mddpg.envs.mujoco.multilink_reacher_env import \
+                MultiLinkReacherEnv
+            env = MultiLinkReacherEnv(**kwargs)
         else:
             print("Unknown environment %s"%(env_name))
             raise NotImplementedError

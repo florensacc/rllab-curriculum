@@ -21,7 +21,7 @@ from rllab.misc import ext
 from rllab.misc import autoargs
 from rllab.distributions.diagonal_gaussian import DiagonalGaussian
 
-from sandbox.carlos_snn.distributions.categorical import Categorical
+from sandbox.carlos_snn.distributions.categorical import Categorical_oneAxis as Categorical
 from sandbox.rocky.snn.distributions.bernoulli import Bernoulli
 
 
@@ -85,7 +85,6 @@ class GaussianMLPPolicy_snn(StochasticPolicy, LasagnePowered, Serializable):  # 
                 self.latent_dist_info = dict(prob=1./self.latent_dim * np.ones(self.latent_dim))
             else:
                 self.latent_dist_info = dict(prob=np.ones(self.latent_dim))
-            print(self.latent_dist_info)
         else:
             raise NotImplementedError
 

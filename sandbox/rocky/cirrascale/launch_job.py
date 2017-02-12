@@ -21,7 +21,8 @@ def get_directory():
 
 CACHED_GPUS = None
 
-FORBIDDEN = [5, 6, 7, 8, 9, 30, 49, 54, 56]
+FORBIDDEN = [4, 5, 6, 7, 8, 9, 30, 46, 49, 52, 54, 56] + [32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46
+                                                      ]  # cirrakube
 
 
 def get_first_available_gpu(type_filter=None):
@@ -59,6 +60,7 @@ def launch_cirrascale(type_filter="pascal"):
         job_id = params["exp_name"]
 
         local_code_path = "/local_home/rocky/rllab-workdir/%s" % job_id
+        local_mujoco_path = local_code_path + "/.mujoco"
         env = params.pop("env", None)
         if env is None:
             env = dict()
@@ -83,6 +85,20 @@ def launch_cirrascale(type_filter="pascal"):
             AWS_ACCESS_KEY_ID={aws_access_key}
             AWS_SECRET_ACCESS_KEY={aws_access_secret}
         """.format(job_id=job_id, aws_access_key=config.AWS_ACCESS_KEY, aws_access_secret=config.AWS_ACCESS_SECRET))
+        # sio.write("""
+        #     MUJOCO_PY_MJKEY_PATH
+        #     MUJOCO_PY_MJPRO_PATH
+        #     AWS_ACCESS_KEY_ID={aws_access_key}
+        #     AWS_SECRET_ACCESS_KEY={aws_access_secret}
+        # """.format(job_id=job_id, aws_access_key=config.AWS_ACCESS_KEY, aws_access_secret=config.AWS_ACCESS_SECRET))
+
+        s3_mujoco_key_path = config.AWS_CODE_SYNC_S3_PATH + '/.mujoco/'
+        sio.write("""
+            aws s3 cp --recursive {} {} --region {}
+        """.format(s3_mujoco_key_path, local_mujoco_path, config.AWS_REGION_NAME))
+        sio.write("""
+            cd {local_code_path}
+        """.format(local_code_path=local_code_path))  # config.DOCKER_CODE_DIR))
         sio.write("""
             aws s3 cp {code_full_path} /tmp/{code_file_name} --region {aws_region}
         """.format(job_id=job_id, code_full_path=code_full_path, local_code_path=local_code_path,
@@ -135,6 +151,7 @@ def launch_cirrascale(type_filter="pascal"):
                 python_command=python_command,
                 script=script,
                 post_commands=[],
+                mujoco_path=local_mujoco_path,
             ),
             job_id=job_id,
         ))
@@ -192,6 +209,7 @@ def launch_cirrascale(type_filter="pascal"):
         subprocess.check_call(ssh_command)
 
     return _launch
+
 
 def local_launch_cirrascale(type_filter="pascal"):
     def _launch(params, exp_prefix, docker_image=None, use_gpu=False, \
@@ -265,7 +283,7 @@ def local_launch_cirrascale(type_filter="pascal"):
                     "echo executed",
                 ]
             ) + " \'",
-            ]
+        ]
         print(gpu)
         print(ssh_command)
         print("Job id: %s" % job_id)
@@ -283,4 +301,3 @@ def local_launch_cirrascale(type_filter="pascal"):
         subprocess.check_call(ssh_command)
 
     return _launch
-

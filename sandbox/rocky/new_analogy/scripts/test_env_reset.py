@@ -4,7 +4,7 @@ from sandbox.rocky.cirrascale.launch_job import launch_cirrascale
 
 
 def run_task(*_):
-    from sandbox.rocky.new_analogy.envs.conopt_env import ConoptEnv
+    from sandbox.rocky.new_analogy.envs.gpr_env import GprEnv
     from sandbox.rocky.tf.envs.base import TfEnv
 
     data = np.load("/shared-data/claw-{n_trajs}-data.npz".format(n_trajs=500))
@@ -12,7 +12,7 @@ def run_task(*_):
     xinits = exp_x[:, 0, :]
     xinit = xinits[0]
     FixedResetClawEnv
-    env = TfEnv(ConoptEnv("TF2"))
+    env = TfEnv(GprEnv("TF2"))
     conopt_env = env.wrapped_env.conopt_env
     conopt_env.reset_to(xinit[:conopt_env.world.dimx])
     import ipdb; ipdb.set_trace()

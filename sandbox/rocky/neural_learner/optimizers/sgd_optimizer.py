@@ -21,6 +21,7 @@ class SGDOptimizer(Serializable):
             n_epochs=2,
             batch_size=32,
             gradient_clipping=40,
+            learning_rate=1e-3,
             callback=None,
             verbose=False,
             **kwargs):
@@ -40,8 +41,10 @@ class SGDOptimizer(Serializable):
         if tf_optimizer_cls is None:
             tf_optimizer_cls = tf.train.AdamOptimizer
         if tf_optimizer_args is None:
-            tf_optimizer_args = dict(learning_rate=1e-3)
-        self.tf_optimizer = tf_optimizer_cls(**tf_optimizer_args)
+            tf_optimizer_args = dict()
+        self.learning_rate = learning_rate
+        self.tf_optimizer_cls = tf_optimizer_cls
+        self.tf_optimizer_args = tf_optimizer_args
         self.n_epochs = n_epochs
         self.batch_size = batch_size
         self.gradient_clipping = gradient_clipping
@@ -64,17 +67,22 @@ class SGDOptimizer(Serializable):
         if diagnostic_vars is None:
             diagnostic_vars = OrderedDict()
 
+        lr_var = tf.placeholder(dtype=tf.float32, shape=(), name="lr")
+
         params = target.get_params(trainable=True)
-        gvs = self.tf_optimizer.compute_gradients(loss, var_list=params)
+
+        tf_optimizer = self.tf_optimizer_cls(**dict(self.tf_optimizer_args, learning_rate=lr_var))
+
+        gvs = tf_optimizer.compute_gradients(loss, var_list=params)
         if self.gradient_clipping is not None:
             capped_gvs = [
                 (tf.clip_by_value(grad, -self.gradient_clipping, self.gradient_clipping), var)
                 if grad is not None else (grad, var)
                 for grad, var in gvs
-            ]
+                ]
         else:
             capped_gvs = gvs
-        train_op = self.tf_optimizer.apply_gradients(capped_gvs)
+        train_op = tf_optimizer.apply_gradients(capped_gvs)
 
         if extra_inputs is None:
             extra_inputs = list()
@@ -82,7 +90,7 @@ class SGDOptimizer(Serializable):
         self.input_vars = inputs + extra_inputs
 
         self.f_train = tensor_utils.compile_function(
-            inputs=self.input_vars,
+            inputs=self.input_vars + [lr_var],
             outputs=[train_op, loss] + list(diagnostic_vars.values()),
         )
         self.f_loss_diagnostics = tensor_utils.compile_function(
@@ -128,11 +136,14 @@ class SGDOptimizer(Serializable):
             progbar = pyprind.ProgBar(N)
             losses = []
             diags = OrderedDict([(k, []) for k in self.diagnostic_vars.keys()])
+            input_ids = np.arange(len(inputs[0]))
+            np.random.shuffle(input_ids)
             for batch_idx in range(0, N, batch_size):
                 # must permute inputs first; otherwise minibatches are correlated
-                raise NotImplementedError
-                batch_sliced_inputs = [x[batch_idx:batch_idx + self.batch_size] for x in inputs]
-                _, loss, *diagnostics = self.f_train(*(batch_sliced_inputs + extra_inputs))
+                # raise NotImplementedError
+                batch_ids = input_ids[batch_idx:batch_idx + self.batch_size]
+                batch_sliced_inputs = [x[batch_ids] for x in inputs]
+                _, loss, *diagnostics = self.f_train(*(batch_sliced_inputs + extra_inputs + [self.learning_rate]))
                 losses.append(loss)
                 for k, diag_val in zip(self.diagnostic_vars.keys(), diagnostics):
                     diags[k].append(diag_val)

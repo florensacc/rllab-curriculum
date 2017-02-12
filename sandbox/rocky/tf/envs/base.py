@@ -75,7 +75,7 @@ class VecTfEnv(VecEnv):
     def n_envs(self):
         return self.vec_env.n_envs
 
-    def step(self, action_n, max_path_length):
+    def step(self, action_n, max_path_length=None):
         return self.vec_env.step(action_n, max_path_length)
 
     def terminate(self):

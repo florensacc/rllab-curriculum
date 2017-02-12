@@ -6,8 +6,9 @@ from distutils.version import LooseVersion
 
 
 def worker_init_tf(G):
-    G.sess = tf.Session()
-    G.sess.__enter__()
+    if not hasattr(G, 'sess') or G.sess is None:
+        G.sess = tf.Session()
+        G.sess.__enter__()
 
 
 def worker_init_tf_vars(G):

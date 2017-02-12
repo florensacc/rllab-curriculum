@@ -360,13 +360,13 @@
 
                                                             </body>
                                                             <body name="l_gripper_r_finger_link" pos="0.07691 -0.01 0">
-                                                                <site name="tip" pos="0 0 0" size="0.01"/>
                                                                 <inertial pos="0.03576 -0.01736 -0.00095" quat="0.474684 0.510909 0.446353 0.560727" mass="0.17389" diaginertia="0.000199 0.000181 0.000077" />
                                                                 <!--<joint name="l_gripper_r_finger_joint" type="hinge" pos="0 0 0" axis="0 0 -1" limited="true" range="0 0.548"/>-->
                                                                 <geom name="geom63" euler="3.14 0 0" rgba="0.7 0.7 0.7 1" mesh="l_finger" />
 
 
                                                                 <body name="l_gripper_r_finger_tip_link" pos="0.09137 -0.00495 0">
+                                                                    <site name="tip" pos="0 0 0" size="0.01"/>
                                                                     <inertial pos="0.00423 -0.00284 0" quat="-0.249588 0.661594 0.249588 0.661594" mass="0.04419" diaginertia="0.000015 0.000015 0.000003" />
                                                                     <!--<joint name="l_gripper_r_finger_tip_joint" type="hinge" pos="0 0 0" axis="0 0 -1" limited="true" range="-.548 0"/>-->
                                                                     <geom name="l_gripper_r_finger_tip" euler="3.14 0 0" rgba="0.7 0.7 0.7 1" mesh="l_finger_tip" />
@@ -544,7 +544,7 @@
         </body>
         <body name="table" pos="0 0 0">
             <inertial pos="0 0 0" mass="100.0" diaginertia="1.0 1.0 1.0"/>
-            <geom name="table_geom" type="box" pos="0.6 0 0.42" size="0.25 1.0 0.05" rgba="0 0.3 0 1" contype="1" conaffinity="1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+            <geom name="table_geom" type="box" pos="0.6 0 0.42" size="0.5 1.0 0.05" rgba="0 0.3 0 1" contype="1" conaffinity="1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
         </body>
         <!--<body name="OBJ_brick1" pos ="0.6 0.2 0.5249">
             <joint type="free" />
@@ -569,6 +569,15 @@
             <geom name="brick" pos="0 0 0" type="box" size="0.0975 0.0475 0.0325" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
 
         </body>
+
+        <!--<body name="OBJ_brick1" pos ="0.6 0.2 0.5025">-->
+            <!--<joint type="free" />-->
+            <!--<site name="lego_target" pos="0 0 0" size="0.005"/>-->
+
+            <!--<inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>  #mass was 0.00001-->
+            <!--<geom name="brick" pos="0 0 0" type="cylinder" size="0.07 0.0325" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>-->
+
+        <!--</body>-->
 
 
         <body name="target" pos="0 0 0">
@@ -608,8 +617,8 @@
 
     </worldbody>
 <actuator>
-    <position ctrllimited="true" ctrlrange="-0.714602 2.285398" forcelimited="true" forcerange="-10 10" joint="l_shoulder_pan_joint" kp="75"/>
-    <position ctrllimited="true" ctrlrange="-0.5236 1.3963" forcelimited="true" forcerange="-10 10" joint="l_shoulder_lift_joint" kp="1000"/>
+    <position ctrllimited="true" ctrlrange="-0.714602 2.285398" forcelimited="true" forcerange="-10 10" joint="l_shoulder_pan_joint" kp="125"/>
+    <position ctrllimited="true" ctrlrange="-0.5236 1.3963" forcelimited="true" forcerange="-10 10" joint="l_shoulder_lift_joint" kp="100"/>
     <position ctrllimited="true" ctrlrange="-0.8 3.9" forcelimited="true" forcerange="-10 10" joint="l_upper_arm_roll_joint" kp="10"/>
     <position ctrllimited="true" ctrlrange="-2.3213 0" forcelimited="true" forcerange="-10 10" joint="l_elbow_flex_joint" kp="50"/>
     <position joint="l_forearm_roll_joint" forcelimited="true" forcerange="-10 10" kp="10"/>

@@ -91,6 +91,9 @@ def make_plot(plot_list, use_median=False, use_five_numbers=False, plot_width=No
             y_lower = list(plt.means - plt.stds)
             y_extras = []
 
+        if hasattr(plt, "custom_x"):
+            x = list(plt.custom_x)
+
         data.append(go.Scatter(
             x=x + x[::-1],
             y=y_upper + y_lower[::-1],
@@ -266,6 +269,7 @@ def get_plot_instruction(
         legend_post_processor=None,
         normalize_error=False,
         custom_series_splitter=None,
+        squeeze_nan=False,
         xlim=None, ylim=None,
         show_exp_count=False,
 ):
@@ -566,6 +570,11 @@ def get_plot_instruction(
         if len(to_plot) > 0 and not gen_eps:
             fig_title = "%s: %s" % (split_key, split_legend)
             # plots.append("<h3>%s</h3>" % fig_title)
+            if squeeze_nan:
+                for to_plot_i in to_plot:
+                    to_plot_i.custom_x = custom_x = np.where(np.logical_not(np.isnan(to_plot_i.means)))[0]
+                    to_plot_i.means = to_plot_i.means[custom_x]
+                    to_plot_i.stds = to_plot_i.stds[custom_x]
             plots.append(make_plot(
                 to_plot,
                 use_median=use_median, use_five_numbers=use_five_numbers,
@@ -733,5 +742,5 @@ if __name__ == "__main__":
         # automatically open a new tab and show the plots
         import webbrowser
         webbrowser.open(url,new=2)
-        
+
     app.run(host='0.0.0.0', port=args.port, debug=args.debug)

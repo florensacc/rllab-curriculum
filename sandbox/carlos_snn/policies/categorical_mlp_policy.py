@@ -7,8 +7,9 @@ from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.network import MLP
 from rllab.core.serializable import Serializable
 
-# from sandbox.carlos_snn.distributions.categorical import Categorical, from_index
-from rllab.distributions.categorical import Categorical
+from sandbox.carlos_snn.distributions.categorical import Categorical_oneAxis as Categorical
+# from sandbox.carlos_snn.distributions.categorical import from_index
+# from rllab.distributions.categorical import Categorical
 
 from rllab.misc import ext
 from rllab.misc.overrides import overrides
@@ -17,6 +18,9 @@ from rllab.spaces import Discrete, Box
 
 
 class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
+    """
+    This class is made to run TRPO_snn for regular CategoricalMLPs (in order to get the bonus evaluators)
+    """
     def __init__(
             self,
             env_spec,
@@ -66,7 +70,6 @@ class CategoricalMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
         super(CategoricalMLPPolicy, self).__init__(env_spec)
         LasagnePowered.__init__(self, [prob_network.output_layer])
 
-    ##CF
     @property
     def latent_space(self):
         return Box(low=-np.inf, high=np.inf, shape=(1,))

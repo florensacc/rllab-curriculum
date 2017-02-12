@@ -1,10 +1,10 @@
-from rllab.envs.base import Env, Step
-from rllab.core.serializable import Serializable
-from rllab.misc.ext import using_seed
-from rllab.spaces.discrete import Discrete
 import numpy as np
 
-from sandbox.rocky.neural_learner.envs.vec_env import VecEnv
+from rllab.core.serializable import Serializable
+from rllab.envs.base import Env, Step
+from rllab.misc.ext import using_seed
+from rllab.spaces.discrete import Discrete
+from sandbox.rocky.tf.envs.vec_env import VecEnv
 
 
 class MABEnv(Env, Serializable):
@@ -55,7 +55,7 @@ class VecMAB(VecEnv):
         self.ts = np.zeros((self.n_envs,))
         self.reset_trial(np.asarray([True] * self.n_envs))
 
-    def reset_trial(self, dones, seeds=None):
+    def reset_trial(self, dones, seeds=None, *args, **kwargs):
         """
         :param dones: array of length == self.n_envs
         :param seeds: array of length == sum(dones)
@@ -74,8 +74,9 @@ class VecMAB(VecEnv):
             raise NotImplementedError
         return self.reset(dones)
 
-    def reset(self, dones):
+    def reset(self, dones, seeds=None, *args, **kwargs):
         dones = np.cast['bool'](dones)
+        self.ts[dones] = 0
         return self.get_current_obs()[dones]
 
     def get_current_obs(self):
@@ -88,9 +89,9 @@ class VecMAB(VecEnv):
         if max_path_length is not None:
             dones = self.ts >= max_path_length
         else:
-            dones = np.asarray([False] * self.n_envs)
-        if np.any(dones):
-            self.reset(dones)
+            dones = np.asarray([True] * self.n_envs)
+        # if np.any(dones):
+        #     self.reset(dones)
         if np.shape(rewards) == ():
             rewards = np.asarray([rewards])
         return self.get_current_obs(), rewards, dones, dict()

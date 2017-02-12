@@ -113,7 +113,6 @@ class BatchPolopt(RLAlgorithm):
 
     def obtain_samples(self, itr):
         return self.sampler.obtain_samples(
-            itr,
             max_path_length=self.max_path_length,
             batch_size=self.batch_size
         )

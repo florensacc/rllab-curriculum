@@ -1,6 +1,3 @@
-
-
-
 import lasagne.layers as L
 import lasagne.nonlinearities as NL
 import numpy as np
@@ -10,10 +7,8 @@ import theano.tensor as TT
 from rllab.core.lasagne_powered import LasagnePowered
 from rllab.core.network import MLP
 from rllab.core.serializable import Serializable
-from sandbox.rocky.snn.distributions.bernoulli import Bernoulli
-from rllab.misc import ext
-from rllab.misc import logger
-from rllab.misc import special
+from rllab.distributions.bernoulli import Bernoulli
+from rllab.misc import ext, logger
 from rllab.optimizers.lbfgs_optimizer import LbfgsOptimizer
 from rllab.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 

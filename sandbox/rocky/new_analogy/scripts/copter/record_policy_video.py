@@ -33,7 +33,7 @@ resource_name = "irl/I1-3k-bc-pretrained.pkl"
 #     import ipdb; ipdb.set_trace()
 
 def run_task(*_):
-    from sandbox.rocky.new_analogy.envs.conopt_env import ConoptEnv
+    from sandbox.rocky.new_analogy.envs.gpr_env import GprEnv
     output_path = os.path.join(config.PROJECT_PATH, "data/video/copter-bc")
     mkdir_p(output_path)
     with tf.Session() as sess:
@@ -83,7 +83,7 @@ def run_task(*_):
 
 
             with using_seed(idx):
-                env = TfEnv(ConoptEnv("I1_copter_3_targets"))
+                env = TfEnv(GprEnv("I1_copter_3_targets"))
                 obs = env.reset()
 
                 task_id = env.wrapped_env.conopt_env.task_id

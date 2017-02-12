@@ -16,6 +16,7 @@ from rllab.core.serializable import Serializable
 
 from collections import OrderedDict
 import numpy as np
+import scipy.stats
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import os
@@ -52,6 +53,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
             kernel,
             qf,
             K,
+            # Number of static particles (used only if actor_sparse_update=True)
+            K_fixed=1,
+            K_critic=99,
             Ks=None,  # Use different number of particles for different temps.
             q_prior=None,
             q_target_type="max",
@@ -63,10 +67,23 @@ class VDDPG(OnlineAlgorithm, Serializable):
             temperatures=None,
             train_critic=True,
             train_actor=True,
+            actor_sparse_update=False,
             resume=False,
             n_eval_paths=2,
             svgd_target="action",
             plt_backend="TkAgg",
+            target_action_dist="uniform",
+            critic_train_frequency=1,
+            actor_train_frequency=1,
+            update_target_frequency=1,
+            debug_mode=False,
+            # evaluation
+            axis3d=False,
+            q_plot_settings=None,
+            env_plot_settings=None,
+            eval_entropy_n_sample=10,
+            eval_kl_n_sample=10,
+            eval_kl_n_sample_part=10,
             **kwargs
     ):
         """
@@ -80,6 +97,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
         :param qf_learning_rate: Learning rate of the critic
         :param policy_learning_rate: Learning rate of the actor
         :param Q_weight_decay: How much to decay the weights for Q
+        :param eval_entropy_n_sample: (large values slow dow computation)
+        :param eval_kl_n_sample: (large values slow dow computation)
+        :param eval_kl_n_sample_part: (large values slow dow computation)
         :return:
         """
         assert ((Ks is None and temperatures is None) or
@@ -90,7 +110,12 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.q_prior = q_prior
         self.prior_coeff = 0.#1.
         self.K = K
+        self.K_static = K_fixed
         self.Ks = Ks
+        self.K_critic = K_critic  # Number of actions used to estimate the target.
+        Da = env.action_space.flat_dim
+        self.critic_proposal_sigma = np.ones((Da,))
+        self.critic_proposal_mu = np.zeros((Da,))
         self.q_target_type = q_target_type
         self.critic_lr = qf_learning_rate
         self.critic_weight_decay = Q_weight_decay
@@ -99,8 +124,23 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.qf_extra_training = qf_extra_training
         self.train_critic = train_critic
         self.train_actor = train_actor
+        self.actor_sparse_update = actor_sparse_update
         self.resume = resume
         self.temperatures = temperatures
+        self.target_action_dist = target_action_dist
+        self.critic_train_frequency = critic_train_frequency
+        self.critic_train_counter = 0
+        self.train_critic = True # shall be modified later
+        self.actor_train_frequency = actor_train_frequency
+        self.actor_train_counter = 0
+        self.train_actor = True # shall be modified later
+        self.update_target_frequency = update_target_frequency
+        self.update_target_counter = 0
+        self.update_target = True
+        self.debug_mode = debug_mode
+        self.axis3d = axis3d
+        self.q_plot_settings = q_plot_settings
+        self.env_plot_settings = env_plot_settings
 
         self.alpha_placeholder = tf.placeholder(tf.float32,
                                                 shape=(),
@@ -110,6 +150,15 @@ class VDDPG(OnlineAlgorithm, Serializable):
                                                       shape=(),
                                                       name='prior_coeff')
         self.K_pl = tf.placeholder(tf.int32, shape=(), name='K')
+        # # Number of particles for computing critic target.
+        # self.K_critic_pl = tf.placeholder(tf.int32, shape=(), name='K')
+
+        if q_target_type == 'soft':
+            self.importance_weights_pl = tf.placeholder(
+                tf.float32, shape=(None, self.K_critic, None),
+                name='importance_weights'
+            )
+
         self.svgd_target = svgd_target
         if svgd_target == "pre-action":
             assert policy.output_nonlinearity == tf.nn.tanh
@@ -131,6 +180,12 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.n_eval_paths = n_eval_paths
         plt.switch_backend(plt_backend)
 
+        self.eval_entropy_n_sample = eval_entropy_n_sample
+        self.eval_kl_n_sample = eval_kl_n_sample
+        self.eval_kl_n_sample_part = eval_kl_n_sample_part
+
+        self._init_figures()
+
     @overrides
     def _init_tensorflow_ops(self):
 
@@ -147,10 +202,16 @@ class VDDPG(OnlineAlgorithm, Serializable):
             scope_name="dummy_" + self.policy.scope_name,
         )
 
-        self.target_qf = self.qf.get_copy(
-            scope_name=TARGET_PREFIX + self.qf.scope_name,
-            action_input=self.target_policy.output
-        )
+        if self.q_target_type == 'soft':
+            # For soft target, we don't feed in the actions from the policy.
+            self.target_qf = self.qf.get_copy(
+                scope_name=TARGET_PREFIX + self.qf.scope_name,
+            )
+        else:
+            self.target_qf = self.qf.get_copy(
+                scope_name=TARGET_PREFIX + self.qf.scope_name,
+                action_input=self.target_policy.output
+            )
 
         # TH: It's a bit weird to set class attributes (kernel.kappa and
         # kernel.kappa_grads) outside the class. Could we do this somehow
@@ -158,11 +219,24 @@ class VDDPG(OnlineAlgorithm, Serializable):
         # Note: need to reshape policy output from N*K x Da to N x K x Da
         shape = tf_shape((-1, self.K_pl, Da))
         if self.svgd_target == "action":
-            actions_reshaped = tf.reshape(self.policy.output, shape)
-            self.kernel.kappa = self.kernel.get_kappa(actions_reshaped)
-            self.kernel.kappa_grads = self.kernel.get_kappa_grads(
-                actions_reshaped)
+            if self.actor_sparse_update:
+                updated_actions = tf.reshape(self.policy.output, shape)
+                self.kernel.kappa = self.kernel.get_asymmetric_kappa(
+                    updated_actions
+                )
+                self.kernel.kappa_grads = (
+                    self.kernel.get_asymmetric_kappa_grads(updated_actions)
+                )
+
+            else:
+                actions_reshaped = tf.reshape(self.policy.output, shape)
+                self.kernel.kappa = self.kernel.get_kappa(actions_reshaped)
+                self.kernel.kappa_grads = self.kernel.get_kappa_grads(
+                    actions_reshaped)
         elif self.svgd_target == "pre-action":
+            if self.actor_sparse_update:
+                raise NotImplementedError
+
             pre_actions_reshaped = tf.reshape(self.policy.pre_output, shape)
             self.kernel.kappa = self.kernel.get_kappa(pre_actions_reshaped)
             self.kernel.kappa_grads = self.kernel.get_kappa_grads(
@@ -209,11 +283,20 @@ class VDDPG(OnlineAlgorithm, Serializable):
         all_dummy_params = self.dummy_policy.get_params_internal()
         Da = self.env.action_space.flat_dim
 
+        # TODO: not sure if this is needed
         self.critic_with_policy_input = self.qf.get_weight_tied_copy(
             action_input=self.policy.output,
             observation_input=self.policy.observations_placeholder,
         )
+        if self.actor_sparse_update:
+            self.critic_with_static_actions = self.qf.get_weight_tied_copy(
+            action_input=self.kernel.fixed_actions_pl,
+            observation_input=self.policy.observations_placeholder,
+        )
+
         if self.svgd_target == "action":
+            if self.q_prior is not None and self.actor_sparse_update:
+                raise NotImplementedError
             if self.q_prior is not None:
                 self.prior_with_policy_input = self.q_prior.get_weight_tied_copy(
                     action_input=self.policy.output,
@@ -222,12 +305,23 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 p = self.prior_coeff_placeholder
                 log_p = ((1.0 - p) * self.critic_with_policy_input.output
                          + p * self.prior_with_policy_input.output)
+            elif self.actor_sparse_update:
+                log_p = self.critic_with_static_actions.output
             else:
                 log_p = self.critic_with_policy_input.output
             log_p = tf.squeeze(log_p)
-            grad_log_p = tf.gradients(log_p, self.policy.output)
-            grad_log_p = tf.reshape(grad_log_p,
-                                    tf_shape((-1, self.K_pl, 1, Da)))
+
+            if self.actor_sparse_update:
+                grad_log_p = tf.gradients(log_p,
+                                          self.critic_with_static_actions.action_input)
+
+                grad_log_p = tf.reshape(grad_log_p,
+                                        tf_shape((-1, self.K_static, 1, Da)))
+            else:
+                grad_log_p = tf.gradients(log_p, self.policy.output)
+
+                grad_log_p = tf.reshape(grad_log_p,
+                                        tf_shape((-1, self.K_pl, 1, Da)))
             # N x K x 1 x Da
 
             kappa = tf.expand_dims(
@@ -340,8 +434,18 @@ class VDDPG(OnlineAlgorithm, Serializable):
             q_next = self.target_qf.output
             q_curr = self.qf.output
 
-        q_next = tf.reshape(q_next, tf_shape((-1, self.K_pl, M)))  # N x K x M
+        # N x K x M
+        q_next = tf.reshape(q_next, tf_shape((-1, self.K_critic, M)))
         q_curr = tf.reshape(q_curr, (-1, M))  # N x M
+
+        # average across reward dims of max Q - min Q, where max and min are
+        # over sampled actions
+        # logging this allows us to know roughly how close are softmax and max
+        self.q_next_avg_diff = tf.reduce_mean(
+            tf.reduce_max(q_next, reduction_indices=1)\
+            - tf.reduce_min(q_next, reduction_indices=1),
+            reduction_indices=1,
+        ) # N
 
         if self.q_target_type == 'mean':
             q_next = tf.reduce_mean(q_next, reduction_indices=1, name='q_next',
@@ -352,10 +456,25 @@ class VDDPG(OnlineAlgorithm, Serializable):
             # pick a single action and stick with that for all critics.
             q_next = tf.reduce_max(q_next, reduction_indices=1, name='q_next',
                                    keep_dims=False)  # N x M
+        elif self.q_target_type == 'soft':
+            # Note: q_next is actually soft V!
+            q_next_max = tf.reduce_max(
+                q_next,
+                axis=1,
+                keep_dims=True,
+                name="q_next_max",
+            ) # N x 1 x M
+            exp_q_next_minus_max = tf.exp(q_next - q_next_max)  # N x K x M
+            q_next = q_next_max[:,0,:] + tf.log(tf.reduce_mean(
+                exp_q_next_minus_max / self.importance_weights_pl,
+                axis=1,
+                keep_dims=False,
+                name="q_next",
+            ))
+
         else:
             raise NotImplementedError
         # q_next: N x M
-        # q_next = tf.Print(q_next, [tf.shape(q_next)], 'Shape of q_next: ')
 
         assert_op = tf.assert_equal(
             tf.shape(self.rewards_placeholder), tf.shape(q_next)
@@ -367,8 +486,6 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 self.rewards_placeholder + (1 - self.terminals_placeholder) *
                 self.discount * q_next
             )  # N x M
-
-        # self.ys = tf.Print(self.ys, [tf.shape(self.ys)], 'Shape of ys: ')
 
         self.critic_loss = tf.reduce_mean(tf.reduce_mean(
             tf.square(self.ys - q_curr)
@@ -418,15 +535,49 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
     @overrides
     def _get_training_ops(self):
-        train_ops = list()
+        """ notice that the order of these ops are different from before """
+        ops = []
         if self.train_actor:
-            train_ops += self.train_actor_op
+            ops.append(self.train_actor_op)
+            if self.debug_mode:
+                ops.append(
+                    tf.Print(
+                        self.actor_surrogate_loss,
+                        [self.actor_surrogate_loss],
+                        message="Actor minibatch loss: ",
+                    )
+                )
+            if self.update_target:
+                ops.append(self.update_target_actor_op)
+                if self.debug_mode:
+                    ops.append(
+                        tf.Print(
+                            self.tau,
+                            [self.tau],
+                            message="Update target actor with tau: "
+                        )
+                    )
         if self.train_critic:
-            train_ops += [self.train_critic_op,
-                          self.update_target_actor_op,
-                          self.update_target_critic_op]
-
-        return train_ops
+            ops.append(self.train_critic_op)
+            if self.debug_mode:
+                ops.append(
+                    tf.Print(
+                        self.critic_total_loss,
+                        [self.critic_total_loss],
+                        message="Critic minibatch loss: ",
+                    )
+                )
+            if self.update_target:
+                ops.append(self.update_target_critic_op)
+                if self.debug_mode:
+                    ops.append(
+                        tf.Print(
+                            self.tau,
+                            [self.tau],
+                            message="Update target critic with tau: "
+                        )
+                    )
+        return ops
 
     def _get_finalize_ops(self):
         return [self.finalize_actor_op]
@@ -454,20 +605,38 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         feeds = dict()
         if self.train_actor:
-            feeds.update(self._actor_feed_dict(obs, temp, K))
-            feeds.update(
-                self.kernel.update(self, feeds, multiheaded=False, K=K)
-            )
+            if self.actor_sparse_update:
+                # Update feed dict first with larger number of fixed particles
+                feeds.update(self._actor_feed_dict_for(
+                    self.critic_with_static_actions, obs, temp, self.K_static))
+                feeds.update(
+                    self.kernel.update(self,
+                                       feeds,
+                                       multiheaded=False,
+                                       K=self.K_static)
+                )
+
+                # Then update the feeds again with smaller number of particles.
+                feeds.update(self._actor_feed_dict_for(None, obs, temp, self.K))
+            else:
+                feeds.update(self._actor_feed_dict_for(
+                    self.critic_with_policy_input, obs, temp, K)
+                )
+                feeds.update(
+                    self.kernel.update(self, feeds, multiheaded=False,
+                                       K=self.K)
+                )
+
         if self.train_critic:
             feeds.update(self._critic_feed_dict(
-                rewards, terminals, obs, actions, next_obs, temp, K
+                rewards, terminals, obs, actions, next_obs, temp, self.K_critic
             ))
 
         feeds[self.K_pl] = K
 
         return feeds
 
-    def _actor_feed_dict(self, obs, temp, K):
+    def _actor_feed_dict_for(self, critic, obs, temp, K):
         # Note that we want K samples for each observation. Therefore we
         # first need to replicate the observations.
         obs = self._replicate_rows(obs, K)
@@ -479,13 +648,19 @@ class VDDPG(OnlineAlgorithm, Serializable):
         critic_inputs = (obs,) if temp is None else (obs, None, temp)
 
         feed = self.policy.get_feed_dict(*actor_inputs)
-        feed.update(self.critic_with_policy_input.get_feed_dict(*critic_inputs))
+        #feed.update(self.critic_with_policy_input.get_feed_dict(*critic_inputs))
+        if critic is not None:
+            feed.update(critic.get_feed_dict(*critic_inputs))
+        #feed.update(self.critic_with_static_actions.get_feed_dict(*critic_inputs))
         feed[self.alpha_placeholder] = self.alpha
         feed[self.prior_coeff_placeholder] = self.prior_coeff
         return feed
 
     def _critic_feed_dict(self, rewards, terminals, obs, actions, next_obs,
                           temp, K):
+        N = obs.shape[0]
+        Da = self.env.action_space.flat_dim
+        feed = {}
         # Again, we'll need to replicate next_obs.
         next_obs = self._replicate_rows(next_obs, K)
 
@@ -495,7 +670,43 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         target_policy_input = [next_obs]
         critic_input = [obs, actions]
-        target_critic_input = [next_obs, None]
+
+        if self.q_target_type == 'soft':
+            # We'll use the same actions for each sample (first dimension).
+
+            if self.target_action_dist == "uniform":
+                scale = self.policy.output_scale
+                actions = np.random.uniform(
+                    low=-scale, high=scale, size=(N, self.K_critic, Da))
+                weights = np.power(2. * scale, -Da) * np.ones((N, self.K_critic))
+                    # 1/p = volume of the action space
+            elif self.target_action_dist == "gaussian":
+                ## old Gaussian sampling: may accidentally get low prob samples
+                actions = (np.random.randn(N, self.K_critic, Da)
+                           * self.critic_proposal_sigma + self.critic_proposal_mu)
+                weights = scipy.stats.multivariate_normal(
+                    mean=self.critic_proposal_mu,
+                    cov=self.critic_proposal_sigma**2,
+                ).pdf(actions) #N*K_critic x Da
+            # Be careful in using the "policy" option, as in the early stage of
+            # training, the weights tend to be huge, because the actions are
+            # concentrated on a "low-dimensional" manifold in the high-dim
+            # aciton space
+            elif self.target_action_dist == "policy":
+                actions, info = self.policy.get_actions(
+                    next_obs,
+                    with_prob=True,
+                )
+                weights = info["prob"].reshape(N, self.K_critic)
+            else:
+                raise NotImplementedError
+
+            actions = np.reshape(actions, (N*self.K_critic, Da))
+
+            feed[self.importance_weights_pl] = weights[:, :, None]
+            target_critic_input = [next_obs, actions]
+        else:
+            target_critic_input = [next_obs, None]
 
         if temp is not None:
             target_policy_input.append(temp)
@@ -505,9 +716,10 @@ class VDDPG(OnlineAlgorithm, Serializable):
         #curr_inputs = (obs, actions) if temp is None else (obs, actions, temp)
         #next_inputs = (next_obs,) if temp is None else (next_obs, temp)
 
-        feed = self.target_policy.get_feed_dict(*target_policy_input)
+        feed.update(self.target_policy.get_feed_dict(*target_policy_input))
         feed.update(self.qf.get_feed_dict(*critic_input))
         feed.update(self.target_qf.get_feed_dict(*target_critic_input))
+
 
         # Adjust rewards dims for backward compatibility.
         if rewards.ndim == 1:
@@ -534,6 +746,70 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         return t
 
+    def _init_figures(self):
+        # Init environment figure.
+        if self.env_plot_settings is not None:
+            self._fig_env = plt.figure(figsize=(7, 7))
+            self._ax_env = self._fig_env.add_subplot(111)
+            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+            self._ax_env.set_ylim(self.env_plot_settings['ylim'])
+
+        # Init critic + actor figure.
+        # TODO: Figure out to set the size automatically
+        if self.q_plot_settings is not None:
+            # Make sure the observations are given as np array.
+            self.q_plot_settings['obs_lst'] = (
+                np.array(self.q_plot_settings['obs_lst'])
+            )
+
+            self._fig_q = plt.figure(figsize=(7, 7))
+
+            self._ax_q_lst = []
+            n_states = len(self.q_plot_settings['obs_lst'])
+            for i in range(n_states):
+                ax = self._fig_q.add_subplot(100 + n_states * 10 + i + 1)
+                self._ax_q_lst.append(ax)
+
+
+    def compute_kl(self, observations, K, K_part):
+        """
+        K: number of particles to estimate log(q) / log(bar{p})
+        K_part: number of particles to estimate the partition function
+        """
+        N = observations.shape[0]
+        Da = self.policy.action_dim
+        Do = self.policy.observation_dim
+
+        # compute the partition function
+        scale = self.policy.output_scale
+        actions_part = np.random.uniform(
+            low=-scale, high=scale, size=(N * K_part, Da))
+        weights = np.power(2. * scale, -Da) * np.ones((N, K_part))
+        Qs_part = self.sess.run(
+            self.qf.output,
+            self.qf.get_feed_dict(
+                obs=np.tile(observations, (1, K_part)).reshape(-1, Do),
+                action=actions_part,
+            ) # N x K_part
+        ).reshape(N, K_part)
+        Qs_part_max = np.amax(Qs_part, axis=1, keepdims=True)
+        logZs = Qs_part_max[:,0] + np.log(np.mean(
+            np.exp(Qs_part - Qs_part_max) / weights,
+            axis=1
+        )) # (N,)
+
+        # compute kl(p | bar{p})
+        obs = np.tile(observations, (1, K)).reshape(-1, Do)
+        actions, info = self.policy.get_actions(obs, with_prob=True)
+        Qs = self.sess.run(
+            self.qf.output,
+            self.qf.get_feed_dict(obs, actions),
+        ).reshape(N, K)
+
+        qs = info["prob"].reshape(N, K)
+        kl = np.mean(np.log(qs) - Qs, axis=1) + logZs
+        return kl
+
     @overrides
     def evaluate(self, epoch, train_info):
         logger.log("Collecting samples for evaluation")
@@ -543,6 +819,11 @@ class VDDPG(OnlineAlgorithm, Serializable):
             policy=self.eval_policy
         )
         rewards, terminals, obs, actions, next_obs = split_paths(paths)
+
+        # temperarily turn on these so that _update_feed_dict can work
+        # this will not impact the training process
+        self.train_actor = True
+        self.train_critic = True
         feed_dict = self._update_feed_dict(rewards, terminals, obs, actions,
                                            next_obs)
 
@@ -556,6 +837,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             target_qf_outputs,
             ys,
             kappa,  # N x K x K
+            qf_next_avg_diff,
         ) = self.sess.run(
             [
                 self.actor_surrogate_loss,
@@ -566,6 +848,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 self.target_qf.output,
                 self.ys,
                 self.kernel.kappa,
+                self.q_next_avg_diff,
             ],
             feed_dict=feed_dict)
         average_discounted_return = np.mean(
@@ -587,11 +870,6 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.last_statistics.update(OrderedDict([
             ('Epoch', epoch),
             # ('PolicySurrogateLoss', policy_loss),
-            #HT: why are the policy outputs info helpful?
-            # ('PolicyMeanOutput', np.mean(policy_outputs)),
-            # ('PolicyStdOutput', np.std(policy_outputs)),
-            # ('TargetPolicyMeanOutput', np.mean(target_policy_outputs)),
-            # ('TargetPolicyStdOutput', np.std(target_policy_outputs)),
             ('CriticLoss', qf_loss),
             ('AverageDiscountedReturn', average_discounted_return),
         ]))
@@ -607,6 +885,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
         )
         self.last_statistics.update(
             create_stats_ordered_dict('KappaSum',kappa_sum)
+        )
+        self.last_statistics.update(
+            create_stats_ordered_dict('TargetQfAvgDiff',qf_next_avg_diff)
         )
 
         es_path_returns = train_info["es_path_returns"]
@@ -628,28 +909,112 @@ class VDDPG(OnlineAlgorithm, Serializable):
             self.last_statistics.update(create_stats_ordered_dict(
                 'TrainingPathLengths', es_path_lengths))
 
+        # log the entropy regularized objective
+        discounted_regularized_returns = []
+        entropy_reward_ratios = []
+        for path in paths:
+            entropies = self.policy.compute_entropy(
+                path["observations"], n_sample=self.eval_entropy_n_sample)
+            entropy_bonuses = np.concatenate([entropies[1:], [0]])
+            discounted_rewards = special.discount_return(
+                path["rewards"], self.discount
+            )
+            discounted_entropies = special.discount_return(
+                entropy_bonuses,  self.discount
+            )
+            discounted_regularized_returns.append(
+                discounted_rewards + discounted_entropies
+            )
+            entropy_reward_ratios.append(
+                discounted_entropies / discounted_rewards
+            )
+        self.last_statistics.update(create_stats_ordered_dict(
+            'DiscRegReturn', discounted_regularized_returns))
+        self.last_statistics.update(create_stats_ordered_dict(
+            'EntropyRewardRatio', entropy_reward_ratios))
 
-        # Create figure for plotting the environment.
-        fig = plt.figure(figsize=(12, 7))
-        ax = fig.add_subplot(111)
+        kls = self.compute_kl(obs,
+            K=self.eval_kl_n_sample,
+            K_part=self.eval_kl_n_sample_part,
+        )
+        self.last_statistics.update(create_stats_ordered_dict(
+            'KL', kls))
 
-        true_env = self.env
-        while isinstance(true_env, ProxyEnv):
-            true_env = true_env._wrapped_env
-        if hasattr(true_env, "log_stats"):
-            env_stats = true_env.log_stats(self, epoch, paths, ax)
+
+        # log kl(pi | exp(Q))
+
+        ## Create figure for plotting the environment.
+        #fig = plt.figure(figsize=(12, 7))
+        #if self.axis3d:
+        #    from mpl_toolkits.mplot3d import Axes3D
+        #    ax = fig.add_subplot(111, projection='3d')
+        #else:
+        #    ax = fig.add_subplot(111)
+
+        #true_env = self.env
+        #while isinstance(true_env, ProxyEnv):
+        #    true_env = true_env._wrapped_env
+        #if hasattr(true_env, "log_stats"):
+        #    env_stats = true_env.log_stats(self, epoch, paths, ax)
+        #    self.last_statistics.update(env_stats)
+
+        ## Close and save figs.
+        #snapshot_dir = logger.get_snapshot_dir()
+        #img_file = os.path.join(snapshot_dir, 'itr_%d_test_paths.png' % epoch)
+
+        #plt.draw()
+        #plt.pause(0.001)
+
+        #plt.savefig(img_file, dpi=100)
+        #plt.cla()
+        #plt.close('all')
+
+        # Collect environment info.
+        snapshot_dir = logger.get_snapshot_dir()
+        env = self.env
+        while isinstance(env, ProxyEnv):
+            env = env._wrapped_env
+
+        if hasattr(env, "log_stats"):
+            env_stats = env.log_stats(self, epoch, paths)
             self.last_statistics.update(env_stats)
 
-        # Close and save figs.
-        snapshot_dir = logger.get_snapshot_dir()
-        img_file = os.path.join(snapshot_dir, 'itr_%d_test_paths.png' % epoch)
+        if hasattr(env, 'plot_paths'):
+            img_file = os.path.join(snapshot_dir,
+                                    'env_itr_%05d.png' % epoch)
 
-        plt.draw()
-        plt.pause(0.001)
+            self._ax_env.clear()
+            env.plot_paths(paths, self._ax_env)
+            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+            self._ax_env.set_ylim(self.env_plot_settings['ylim'])
 
-        plt.savefig(img_file, dpi=100)
-        plt.cla()
-        plt.close('all')
+            plt.pause(0.001)
+            plt.draw()
+
+            self._fig_env.savefig(img_file, dpi=100)
+
+        # Collect actor and critic info (save just plots)
+        if hasattr(self.qf, 'plot') and self.q_plot_settings is not None:
+            img_file = os.path.join(snapshot_dir,
+                                    'q_itr_%05d.png' % epoch)
+
+            [ax.clear() for ax in self._ax_q_lst]
+            self.qf.plot(
+                ax_lst=self._ax_q_lst,
+                obs_lst=self.q_plot_settings['obs_lst'],
+                action_dims=self.q_plot_settings['action_dims'],
+                xlim=self.q_plot_settings['xlim'],
+                ylim=self.q_plot_settings['ylim'],
+            )
+
+            self.policy.plot_samples(self._ax_q_lst,
+                                     self.q_plot_settings['obs_lst'],
+                                     self.K)
+
+            plt.pause(0.001)
+            plt.draw()
+
+            self._fig_q.savefig(img_file, dpi=100)
 
         for key, value in self.last_statistics.items():
             logger.record_tabular(key, value)
@@ -679,3 +1044,71 @@ class VDDPG(OnlineAlgorithm, Serializable):
         Serializable.__setstate__(self, d)
         self.qf.set_param_values(d["qf_params"])
         self.policy.set_param_values(d["policy_params"])
+
+    def _do_training(self):
+        self.train_critic = (np.mod(
+            self.critic_train_counter,
+            self.critic_train_frequency,
+        ) == 0)
+        self.train_actor = (np.mod(
+            self.actor_train_counter,
+            self.actor_train_frequency,
+        ) == 0)
+        self.update_target = (np.mod(
+            self.update_target_counter,
+            self.update_target_frequency,
+        ) == 0)
+
+        super()._do_training()
+
+        self.critic_train_counter = np.mod(
+            self.critic_train_counter + 1,
+            self.critic_train_frequency
+        )
+        self.actor_train_counter = np.mod(
+            self.actor_train_counter + 1,
+            self.actor_train_frequency,
+        )
+        self.update_target_counter = np.mod(
+            self.update_target_counter + 1,
+            self.update_target_frequency,
+        )
+
+## Use the following code to test whether the exp(Q-Qmax) code works
+# import tensorflow as tf
+# import numpy as np
+#
+# q_next = tf.placeholder(shape=(2,3,4),dtype=tf.float32)
+# weights = tf.placeholder(shape=(2,3,1),dtype=tf.float32)
+#
+#
+# q_next_max = tf.reduce_max(
+#     q_next,
+#     axis=1,
+#     keep_dims=True,
+#     name="q_next_max",
+# ) # N x 1 x M
+# exp_q_next_minus_max = tf.exp(q_next - q_next_max)  # N x K x M
+# q_next1 = q_next_max[:,0,:] + tf.log(tf.reduce_mean(
+#     exp_q_next_minus_max / weights,
+#     axis=1,
+#     keep_dims=False,
+#     name="q_next1",
+# ))
+#
+#
+# ## inf errors?
+# exp_q_next = tf.exp(q_next)  # N x K x M
+# weighted_exp_q_samples = exp_q_next / weights
+# # N x M
+# q_next2 = tf.log(tf.reduce_mean(weighted_exp_q_samples, axis=1), name="q_next2")
+#
+# diff = q_next1 - q_next2
+#
+# with tf.Session() as sess:
+#     feed = {
+#         q_next: np.random.randn(2,3,4) * 1,
+#         weights: np.random.uniform(low=1,high=2,size=(2,3,1)),
+#     }
+#     results = sess.run([q_next1,q_next2, diff], feed)
+#     print(results)

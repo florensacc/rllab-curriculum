@@ -6,6 +6,7 @@ import numpy as np
 import chainer
 from chainer import serializers
 from chainer import functions as F
+from chainer import links as L
 
 from sandbox.sandy.async_rl.agents.base import Agent
 from sandbox.sandy.async_rl.utils import chainer_utils
@@ -91,8 +92,6 @@ class A3CLSTM(chainer.ChainList, A3CModel):
         self.lstm.h.unchain_backward()
         self.lstm.c.unchain_backward()
 
-
-
 class A3CAgent(Agent,Shareable,Picklable):
     """A3C: Asynchronous Advantage Actor-Critic.
 
@@ -124,7 +123,7 @@ class A3CAgent(Agent,Shareable,Picklable):
         if model_type == "ff":
             self.shared_model = A3CFF(n_actions,shared_weights,img_size=img_size)
         elif model_type == "lstm":
-            self.shared_model == A3CLSTM(n_actions,img_size=img_size)
+            self.shared_model = A3CLSTM(n_actions,img_size=img_size)
         else:
             raise NotImplementedError
 
