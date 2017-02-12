@@ -187,7 +187,10 @@ class SwimmerUndirectedEnv(MujocoEnv, Serializable):
         # plot the q-value at the initial state
         ax_qf = fig.add_subplot(212)
         ax_qf.grid(True)
-        lim = algo.policy.output_scale
+        if hasattr(algo.policy, "output_scale"):
+            lim = algo.policy.output_scale
+        else:
+            lim = 1.
         ax_qf.set_xlim((-lim, lim))
         ax_qf.set_ylim((-lim, lim))
         obs = paths[0]["observations"][0]
