@@ -18,7 +18,17 @@ import tensorflow as tf
 import cloudpickle
 
 
-# test if logit transofmration is useful
+# kuma hopefully numerically stable
+
+def shallow_processor(context):
+    this = checkerboard_condition_fn_gen()[0](context)
+    that = checkerboard_condition_fn_gen()[1](context)
+    processed_context = nn.conv2d(tf.concat(3, [this, that]), 32)
+    for _ in range(3):
+        processed_context = nn.gated_resnet(processed_context)
+
+
+    return processed_context
 
 class VG(VariantGenerator):
     @variant
@@ -33,7 +43,7 @@ class VG(VariantGenerator):
 
 def run_task(v):
     logit = v["logit"]
-    f = normalize_legacy
+    f = normalize
     hybrid = False
 
     dataset = Cifar10Dataset(dequantized=False) # dequantization left to flow
@@ -88,10 +98,26 @@ def run_task(v):
     if logit:
         cur = shift(logitize(cur))
 
+    blocks = 4
+    filters = 32
+    nr_mix = 4
+    def go(x):
+        shp = int_shape(x)
+        chns = shp[3]
+        x = nn.conv2d(x, filters)
+        for _ in range(blocks):
+            x = nn.gated_resnet(x)
+        temp = nn.conv2d(x, chns * 2 * nr_mix)
+        return tf.reshape(
+            temp,
+            shp[:3] + [chns*2, nr_mix]
+        ) * 0.1
     dist = DequantizedFlow(
         base_dist=cur,
-        noise_dist=FixedSpatialTruncatedLogisticDequant(
-            shape=[32, 32, 3],
+        # noise_dist=UniformDequant(),
+        noise_dist=FlowBasedDequant(
+            shape=[32,32,3],
+            context_processor=shallow_processor,
         ),
     )
 
@@ -99,8 +125,10 @@ def run_task(v):
         dataset=dataset,
         dist=dist,
         init_batch_size=1024,
-        train_batch_size=256, # also testing resuming from diff bs
-        optimizer=AdamaxOptimizer(learning_rate=2e-4),
+        train_batch_size=64, # also testing resuming from diff bs
+        optimizer=AdamaxOptimizer(
+            learning_rate=1e-4,
+        ),
         save_every=20,
         # # for debug
         debug=False,
@@ -125,7 +153,7 @@ for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="final_spatial_tlogit_dequnt",
+        exp_prefix="0209_flow_based_dequant",
         variant=v,
 
         mode="local",

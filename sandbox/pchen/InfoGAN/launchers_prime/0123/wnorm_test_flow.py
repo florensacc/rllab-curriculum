@@ -20,6 +20,8 @@ import cloudpickle
 
 # test if weight norm on flow has an effect
 
+# normalizing the flow improves both train and vali by 0.04 bits
+
 class VG(VariantGenerator):
     @variant
     def wnorm(self):
@@ -34,7 +36,7 @@ class VG(VariantGenerator):
 def run_task(v):
     wnorm = v["wnorm"]
     if wnorm:
-        f = normalize
+        f = normalize_legacy
     else:
         f = lambda x: x
     hybrid = False

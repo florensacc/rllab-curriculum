@@ -1,5 +1,6 @@
 import functools
 import itertools
+from collections import defaultdict
 from contextlib import contextmanager
 
 import tensorflow as tf
@@ -9,12 +10,13 @@ from prettytensor.pretty_tensor_class import Layer
 from progressbar import ProgressBar
 
 from rllab.core.serializable import Serializable
-from rllab.misc.ext import AttrDict
+from rllab.misc.ext import AttrDict, extract
 from rllab.misc.overrides import overrides
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import CustomPhase, resconv_v1_customconv, plstmconv_v1, int_shape, \
-    universal_int_shape, get_linear_ar_mask
+    universal_int_shape, get_linear_ar_mask, tf_go, safe_log
 import sandbox.pchen.InfoGAN.infogan.misc.imported.scopes as scopes
 import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
+import rllab.misc.logger as logger
 
 TINY = 1e-8
 
@@ -32,6 +34,7 @@ def set_current_seed(seed):
 def get_current_seed():
     return seeds[-1] if len(seeds) > 0 else None
 
+INSPECT = defaultdict(list)
 
 class Distribution(Serializable):
     @property
@@ -271,8 +274,8 @@ class Gaussian(Distribution):
             )
             # forget it untill we code it numerically more stable param
             # prior_stddev = tf.get_variable("prior_stddev_%s" % self._name, initializer=prior_mean)
-        self._prior_mean = tf.reshape(tf.cast(prior_mean, floatX), [1, -1])
-        self._prior_stddev = tf.reshape(tf.cast(prior_stddev, floatX), [1, -1])
+        self._prior_mean = tf.reshape(tf.cast(prior_mean, floatX), [1, dim])
+        self._prior_stddev = tf.reshape(tf.cast(prior_stddev, floatX), [1, dim])
 
     @property
     def dim(self):
@@ -329,7 +332,7 @@ class Gaussian(Distribution):
     def sample_logli(self, dist_info):
         mean = dist_info["mean"]
         stddev = dist_info["stddev"]
-        epsilon = tf.random_normal(tf.shape(mean), seed=get_current_seed())
+        epsilon = tf.random_normal(universal_int_shape(mean), seed=get_current_seed())
         out = mean + epsilon * stddev
         return out, self.logli(out, dist_info)
 
@@ -463,16 +466,209 @@ class Bernoulli(Distribution):
 
     def prior_dist_info(self, batch_size):
         return dict(p=0.5 * tf.ones([batch_size, self.dim]))
-
-class TruncatedLogistic(Distribution):
-    def __init__(self, shape, lo, hi):
+    
+class PiecewiseLinear(Distribution):
+    # return [-1, 1) by piece-wise linear density in [-1,0) and [0,1)
+    def __init__(
+            self, shape,
+    ):
         Serializable.quick_init(self, locals())
 
         self._shape = shape
         self._dim = np.prod(shape)
-        assert hi > lo
-        self._lo = (np.ones([1, self._dim]) * lo).astype(np.float32)
-        self._hi = (np.ones([1, self._dim]) * hi).astype(np.float32)
+
+    @property
+    def dim(self):
+        return self._dim
+
+    @property
+    def dist_flat_dim(self):
+        return self._dim * 2
+
+    @property
+    def effective_dim(self):
+        return self._dim
+
+    @property
+    def dist_info_keys(self):
+        return ["a1", "a2", "b"]
+
+    def intercept(self, a1, a2):
+        return (2. + a1 - a2) / 4
+
+    def inverse_cdf(self, p, dist_info):
+        a1, a2, b = dist_info["a1"], dist_info["a2"], dist_info["b"]
+        kink_p = b - a1/2.
+        b1 = b - a1
+        p = tf.clip_by_value(p, 0., kink_p - 1e-2)
+        # not yet numerically stable
+        return tf.select(
+            p < kink_p,
+            tf.select(
+                tf.abs(a1) > 1e-2,
+                (-b1+tf.sqrt(b1**2.+2*a1*p+1e-8))/(a1+1e-8) - 1.,
+                p/(b1 + 1e-8) - 1.,
+                ),
+            tf.select(
+                tf.abs(a2) > 1e-2,
+                (-b+tf.sqrt(b**2+2*a2*(p-kink_p)+1e-8))/(a2+1e-8),
+                (p-kink_p)/(b+1e-8)
+            )
+        )
+
+    def logli(self, x_var, dist_info):
+        a1, a2, b = dist_info["a1"], dist_info["a2"], dist_info["b"]
+        pdf = tf.select(
+            x_var < 0.,
+            b + a1 * x_var,
+            b + a2 * x_var,
+            )
+        return tf.reduce_sum(
+            tf.log(pdf + 1e-20),
+            reduction_indices=[1]
+        )
+
+    def activate_dist(self, flat_dist):
+        a1 = tf.tanh(flat_dist[:, :self.dim])
+        a2 = tf.tanh(flat_dist[:, self.dim:])
+        b = self.intercept(a1, a2)
+        return dict(
+            a1=a1, a2=a2, b=b
+        )
+
+    def sample_logli(self, dist_info):
+        a1, a2, b = dist_info["a1"], dist_info["a2"], dist_info["b"]
+        p = tf.random_uniform(
+            shape=universal_int_shape(a1),
+            maxval=1.,
+        )
+        samples = self.inverse_cdf(p, dist_info)
+        logli = self.logli(samples, dist_info)
+        samples = tf.Print(samples, [
+            tf.check_numerics(samples,"samples"), tf.check_numerics(logli, "logli"),
+            tf.gradients(logli, a1),
+            tf.gradients(logli, a2),
+            tf.gradients(logli, b)
+        ])
+
+        return tf.reshape(
+            samples,
+            [-1]+list(self._shape)
+        ), logli
+
+    def prior_dist_info(self, batch_size):
+        return self.activate_dist(
+            np.zeros([batch_size, self.dist_flat_dim])
+        )
+
+class Kumaraswamy(Distribution):
+    # return [0, 1) by Kumuaraswamy(a,b)
+    def __init__(
+            self, shape,
+    ):
+        Serializable.quick_init(self, locals())
+
+        self._shape = shape
+        self._dim = np.prod(shape)
+
+    @property
+    def dim(self):
+        return self._dim
+
+    @property
+    def dist_flat_dim(self):
+        return self._dim * 2
+
+    @property
+    def effective_dim(self):
+        return self._dim
+
+    @property
+    def dist_info_keys(self):
+        return ["a", "b"]
+
+    def inverse_cdf(self, p, dist_info):
+        a, b = extract(dist_info, "a", "b")
+        return (
+            1. - (1. - p) ** (1. / b)
+        ) ** (1. / a)
+
+    def logli(self, x_var, dist_info):
+        a, b = extract(dist_info, "a", "b")
+        raw = tf.log(a) + tf.log(b) + (a-1.)*tf.log(x_var+1e-7) + (b-1.)*tf.log(1.-x_var**a+1e-7)
+
+        return tf.reduce_sum(
+            raw,
+            reduction_indices=[1]
+        )
+
+    def activate_dist(self, flat_dist):
+        # K(0.01, 0.01) can create extremely U-shaped distribution already
+        a = tf.exp(flat_dist[:, :self.dim]) + .01
+        b = tf.exp(flat_dist[:, self.dim:]) + .01
+        return dict(
+            a=a, b=b
+        )
+
+    def sample_logli(self, dist_info):
+        a, b = extract(dist_info, "a", "b")
+        p = tf.random_uniform(
+            shape=universal_int_shape(a),
+            maxval=1.,
+        )
+        # samples = self.inverse_cdf(p, dist_info)
+        # samples = (
+        #            1. - (1. - p) ** (1. / b)
+        #        ) ** (1. / a)
+        samples = tf.clip_by_value(
+                      1. - (1. - p) ** (1. / b)
+                      , 1e-7, 1
+                  ) ** (1. / a)
+        # with tf.device("/cpu:0"):
+        #     with tf.control_dependencies([
+        #         tf.assert_non_negative(samples),
+        #         tf.assert_less_equal(samples, 1.),
+        #         tf.Print(samples, [
+        #             "min", tf.reduce_min(1. - (1. - p) ** (1. / b)),
+        #             "max", tf.reduce_max(1. - (1. - p) ** (1. / b)),
+        #         ])
+        #     ]):
+        #         samples = tf.identity(samples)
+        raw = tf.log(a) + tf.log(b) + (a-1.)*tf.log(samples+1e-7) + (b-1.)*tf.log(
+            (1. - p) ** (1. / b) + 1e-7
+        )
+        logli = tf.reduce_sum(raw, reduction_indices=[1])
+
+        # logli = self.logli(samples, dist_info)
+        # samples = tf.Print(samples, [
+        #     tf.check_numerics(samples,"samples"), tf.check_numerics(logli, "logli"),
+        #     tf.check_numerics(tf.gradients(logli, a), "fake grad a"),
+        # ])
+
+        INSPECT["kuma"].append(locals())
+        return tf.reshape(
+            samples,
+            [-1]+list(self._shape)
+        ), logli
+
+    def prior_dist_info(self, batch_size):
+        return self.activate_dist(
+            np.zeros([batch_size, self.dist_flat_dim])
+        )
+
+THRESHOLD = 1e-3
+
+class Logistic(Distribution):
+    def __init__(
+            self, shape,
+            init_scale=1., init_mean=1.,
+    ):
+        Serializable.quick_init(self, locals())
+
+        self._shape = shape
+        self._dim = np.prod(shape)
+        self._init_mean = init_mean
+        self._init_scale = init_scale
 
     @property
     def dim(self):
@@ -493,23 +689,152 @@ class TruncatedLogistic(Distribution):
     def cdf(self, x_var, dist_info):
         mu = dist_info["mu"]
         scale = dist_info["scale"]
-        return tf.nn.sigmoid((x_var - mu) / scale)
+        return tf.nn.sigmoid((x_var - mu) / (scale + 1e-7))
 
     def inverse_cdf(self, p, dist_info):
         mu = dist_info["mu"]
         scale = dist_info["scale"]
+        p = tf.clip_by_value(p, 1e-6, 1-1e-6)
         return mu + scale * (tf.log(p) - tf.log(1 - p))
 
     def logli(self, x_var, dist_info):
-        raise NotImplemented
+        x_var = tf.reshape(x_var, [-1, self.dim])
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        bs = int_shape(mu)[0]
+        # untruncated logprob calculation
+        neg_standardized = -(x_var - mu)/(scale + 1e-7)
+        neg_standardized = neg_standardized
+        raw_logli = neg_standardized - tf.log(scale + 1e-20) \
+                    - 2. * tf.nn.softplus(neg_standardized)
+
+        return tf.reduce_sum(raw_logli, reduction_indices=[1])
 
     def entropy(self, dist_info):
         raise NotImplemented
 
     def activate_dist(self, flat_dist):
         return dict(
-            mu=(flat_dist[:, :self.dim]),
-            scale=tf.exp(flat_dist[:, self.dim:]),
+            mu=self._init_mean * (flat_dist[:, :self.dim]),
+            scale=self._init_scale * tf.exp(flat_dist[:, self.dim:]),
+        )
+
+    def sample_logli(self, dist_info):
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        bs = int_shape(mu)[0]
+        p = tf.random_uniform(
+            shape=universal_int_shape(mu),
+            minval=1e-20,
+            maxval=1. - 1e-20,
+        )
+        samples = self.inverse_cdf(p, dist_info)
+
+        return tf.reshape(samples, [-1]+list(self._shape)), self.logli(samples, dist_info)
+
+    def prior_dist_info(self, batch_size):
+        return dict(
+            mu=tf.zeros([batch_size, self._dim]),
+            scale=tf.zeros([batch_size, self._dim]),
+        )
+
+class TruncatedLogistic(Distribution):
+    def __init__(
+            self, shape, lo, hi,
+            init_scale=0.3, init_mean=2.,
+            # init_scale=1, init_mean=1.,
+    ):
+        Serializable.quick_init(self, locals())
+
+        self._shape = shape
+        self._dim = np.prod(shape)
+        assert hi > lo
+        self._lo = (np.ones([1, self._dim]) * lo).astype(np.float32)
+        self._hi = (np.ones([1, self._dim]) * hi).astype(np.float32)
+        self._init_mean = init_mean
+        self._init_scale = init_scale
+
+    @property
+    def dim(self):
+        return self._dim
+
+    @property
+    def dist_flat_dim(self):
+        return self._dim * 2
+
+    @property
+    def effective_dim(self):
+        return self._dim
+
+    @property
+    def dist_info_keys(self):
+        return ["mu", "scale"]
+
+    def cdf(self, x_var, dist_info):
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        return tf.nn.sigmoid((x_var - mu) / (scale + 1e-7))
+
+    def inverse_cdf(self, p, dist_info):
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        p = tf.clip_by_value(p, 1e-6, 1-1e-6)
+        return mu + scale * (tf.log(p) - tf.log(1 - p))
+
+    def logli(self, x_var, dist_info):
+        x_var = tf.reshape(x_var, [-1, self.dim])
+        mu = dist_info["mu"]
+        scale = dist_info["scale"]
+        bs = int_shape(mu)[0]
+        p_lo, p_hi = self.cdf(self._lo, dist_info), self.cdf(self._hi, dist_info)
+        span = p_hi - p_lo
+        # untruncated logprob calculation
+        neg_standardized = -(x_var - mu)/(scale + 1e-7)
+        neg_standardized = tf.check_numerics(neg_standardized, "neg_std")
+        # neg_standardized = tf.Print(
+        #     neg_standardized, [
+        #         "neg_std_max", tf.reduce_max(neg_standardized),
+        #         "scale_min", tf.reduce_min(scale),
+        #         "mu_max", tf.reduce_max(mu),
+        #     ]
+        # )
+        # log_exp_approx = tf.select(
+        #     neg_standardized > 70.,
+        #     neg_standardized,
+        #     tf.select(
+        #         neg_standardized < -10.,
+        #         tf.exp(neg_standardized),
+        #         tf.log(1. + tf.exp(neg_standardized))
+        #     )
+        # )
+        log_exp_approx = tf.nn.softplus(neg_standardized)
+        # log_exp_approx = tf.Print(
+        #     log_exp_approx, [
+        #         "span_min", tf.reduce_min(span),
+        #         "softplux_approx_mu", tf.reduce_mean(log_exp_approx),
+        #         "softplux_approx_min", tf.reduce_min(log_exp_approx),
+        #         "softplux_approx_max", tf.reduce_max(log_exp_approx),
+        #     ]
+        # )
+        raw_logli = neg_standardized - tf.log(scale + 1e-20) \
+                    - 2. * log_exp_approx
+
+        logli_out = tf.select(
+            span > THRESHOLD,
+            raw_logli - tf.log(
+                tf.clip_by_value(span, 1e-7, 1.)
+            ),
+            tf.tile(-tf.log(self._hi - self._lo), [bs, 1])
+        )
+        return tf.reduce_sum(logli_out, reduction_indices=[1])
+
+    def entropy(self, dist_info):
+        raise NotImplemented
+
+    def activate_dist(self, flat_dist):
+        return dict(
+            mu=self._init_mean * (flat_dist[:, :self.dim]),
+            scale=self._init_scale * tf.exp(flat_dist[:, self.dim:]),
         )
 
     def sample_logli(self, dist_info):
@@ -520,25 +845,18 @@ class TruncatedLogistic(Distribution):
         span = p_hi - p_lo
         p_delta = tf.random_uniform(
             shape=universal_int_shape(mu),
-            maxval=span,
-        )
+            maxval=1.,
+        ) * span
         samples = self.inverse_cdf(p_lo+p_delta, dist_info)
 
         # untruncated logprob calculation
-        neg_standardized = -(samples - mu)/scale
-        log_exp_approx = tf.select(
-            neg_standardized > 70.,
-            neg_standardized,
-            tf.select(
-                neg_standardized < -10.,
-                tf.exp(neg_standardized),
-                tf.log(1. + tf.exp(neg_standardized))
-            )
-        )
-        raw_logli = neg_standardized - tf.log(scale) \
+        neg_standardized = -(samples - mu)/(scale + 1e-7)
+        neg_standardized = tf.check_numerics(neg_standardized, "neg_std")
+        log_exp_approx = tf.nn.softplus(neg_standardized)
+        raw_logli = neg_standardized - tf.log(scale + 1e-20) \
                     - 2. * log_exp_approx
 
-        THRESHOLD = 1e-3
+        span = tf.check_numerics(span, "cdf_span")
         samples_out = tf.select(
             span > THRESHOLD,
             samples,
@@ -550,7 +868,9 @@ class TruncatedLogistic(Distribution):
         )
         logli_out = tf.select(
             span > THRESHOLD,
-            raw_logli - tf.log(span),
+            raw_logli - tf.log(
+                tf.clip_by_value(span, 1e-7, 1.)
+            ),
             tf.tile(-tf.log(self._hi - self._lo), [bs, 1])
         )
         # logli_out = tf.Print(
@@ -975,6 +1295,14 @@ class Mixture(Distribution):
         for dist, p in pairs:
             assert self._dim == dist.dim
 
+    def init_mode(self):
+        for d, _ in self._pairs:
+            d.init_mode()
+
+    def train_mode(self):
+        for d, _ in self._pairs:
+            d.train_mode()
+
     def split(self, x):
         def go():
             i = 0
@@ -1063,10 +1391,15 @@ class Mixture(Distribution):
                 pair[0].activate_dist(iflat)
             )
             for pair, iflat in zip(self._pairs, infos)
-            ]
-        bs = int(samples[0].get_shape()[0])
+        ]
+        shp = int_shape(samples[0])
+        samples = [
+            tf.reshape(itr, [shp[0], -1]) for itr in samples
+        ]
+        bs = shp[0]
         prob = np.asarray([[p for _, p in self._pairs]] * bs)
-        ids = tf.multinomial(tf.log(prob), num_samples=1, seed=get_current_seed())[:, 0]
+        # ids = tf.multinomial(tf.log(prob), num_samples=1, seed=get_current_seed())[:, 0]
+        ids = tf.multinomial(tf.log(prob), num_samples=1, seed=get_current_seed())
         onehot_table = tf.constant(np.eye(len(self._pairs), dtype=np.float32))
         onehot = tf.nn.embedding_lookup(onehot_table, ids)
         # return onehot, tf.constant(0.) + samples, tf.reduce_sum(
@@ -1077,7 +1410,7 @@ class Mixture(Distribution):
             tf.reshape(onehot, [bs, len(infos), 1]) * tf.transpose(samples, [1, 0, 2]),
             reduction_indices=1
         )
-        return out, self.logli(out, dist_info)
+        return tf.reshape(out, shp), self.logli(out, dist_info)
 
     def sample_one_mode(self, dist_info, mode):
         infos = dist_info["infos"]
@@ -2531,6 +2864,182 @@ class CondPixelCNN(Distribution):
     def activate_dist(self, flat):
         return dict(context=flat)
 
+class GeneralizedShearingFlow(Distribution):
+    def __init__(
+            self,
+            base_dist,
+            nn_builder,
+            condition_fn,
+            effect_fn,
+            combine_fn,
+            backwad_join_fn,
+            forward_join_fn,
+    ):
+        # fix me later about how to serailzie fn?
+        # Serializable.quick_init(self, locals())
+
+        global G_IDX
+        G_IDX += 1
+        self._name = "Shearing_%s" % (G_IDX)
+        assert base_dist
+        assert nn_builder
+        assert condition_fn
+        assert effect_fn
+        assert combine_fn
+        self._base_dist = base_dist
+        self._nn_template = tf.make_template(self._name, nn_builder)
+        self._condition_set = condition_fn
+        self._effect_set = effect_fn
+        self._combine = combine_fn
+        self._backward_join = backwad_join_fn
+        self._forward_join = forward_join_fn
+
+        self.train_mode()
+
+    @overrides
+    def init_mode(self):
+        self._custom_phase = CustomPhase.init
+        self._base_dist.init_mode()
+
+    @overrides
+    def train_mode(self):
+        self._custom_phase = CustomPhase.train
+        self._base_dist.train_mode()
+
+    @property
+    def dim(self):
+        return self._base_dist.dim
+
+    @property
+    def effective_dim(self):
+        return self._base_dist.effective_dim
+
+    def infer(self, x_var, dist_info):
+        condition = self._condition_set(x_var)
+        effect = self._effect_set(x_var)
+
+        counters = {}
+        with scopes.default_arg_scope(
+                counters=counters, init=self._custom_phase == CustomPhase.init,
+                ema=None
+        ):
+            join_params = self._nn_template(condition)
+
+        return condition, effect, join_params
+
+    def logli(self, x_var, dist_info):
+        condition, effect, join_params = self.infer(x_var, dist_info)
+        effect_shp = nn.int_shape(effect)
+        joined, logdiff = self._backward_join(effect, join_params)
+        eps = self._combine(condition, joined)
+
+        return self._base_dist.logli(eps, dist_info) + logdiff
+
+    def logli_init_prior(self, x_var):
+        return self._base_dist.logli_init_prior(x_var)
+
+    def prior_dist_info(self, batch_size):
+        return self._base_dist.prior_dist_info(batch_size)
+
+    def sample_logli(self, dist_info):
+        eps, logpeps = self._base_dist.sample_logli(dist_info)
+        condition, effect, join_params = self.infer(eps, dist_info)
+        effect_shp = nn.int_shape(effect)
+        joined, logdiff = self._forward_join(effect, join_params)
+        x = self._combine(condition, joined)
+
+        return x, logpeps + logdiff
+
+    @property
+    def dist_info_keys(self):
+        return self._base_dist.dist_info_keys
+
+    @property
+    def dist_flat_dim(self):
+        return self._base_dist.dist_flat_dim
+
+    def activate_dist(self, flat):
+        return self._base_dist.activate_dist(flat)
+
+    def nonreparam_logli(self, x_var, dist_info):
+        raise "not defined"
+
+def LinearShearingFlow(
+        base_dist,
+        nn_builder,
+        condition_fn,
+        effect_fn,
+        combine_fn,
+):
+    def backwad_join_fn(effect, join_params):
+        chns = int_shape(join_params)[-1] // 2
+        mu = join_params[:, :, :, chns:]
+        logstd = tf.tanh(join_params[:, :, :, :chns])
+        joined = effect * tf.exp(logstd) + mu
+        return joined, tf.reduce_sum(logstd, [1,2,3])
+
+    def forward_join_fn(effect, join_params):
+        chns = int_shape(join_params)[-1] // 2
+        mu = join_params[:, :, :, chns:]
+        logstd = tf.tanh(join_params[:, :, :, :chns])
+        joined = (effect - mu) / tf.exp(logstd)
+        return joined, tf.reduce_sum(logstd, [1,2,3])
+
+    return GeneralizedShearingFlow(
+        base_dist,
+        nn_builder,
+        condition_fn,
+        effect_fn,
+        combine_fn,
+        backwad_join_fn=backwad_join_fn,
+        forward_join_fn=forward_join_fn,
+    )
+
+def LeakyLinearShearingFlow(
+        base_dist,
+        nn_builder,
+        condition_fn,
+        effect_fn,
+        combine_fn,
+        leakiness=1.,
+        double=False,
+):
+    multiple = 3 if double else 2
+    def backwad_join_fn(effect, join_params):
+        chns = int_shape(join_params)[-1] // multiple
+        mu = join_params[:, :, :, chns:2*chns]
+        logstd = tf.tanh(join_params[:, :, :, :chns])
+        logstd = tf.select(
+            effect >= 0,
+            logstd,
+            tf.tanh(join_params[:,:,:,chns*2:]) if double else
+                tf.ones_like(logstd) * tf.log(leakiness)
+        )
+        joined = effect * tf.exp(logstd) + mu
+        return joined, tf.reduce_sum(logstd, [1,2,3])
+
+    def forward_join_fn(effect, join_params):
+        chns = int_shape(join_params)[-1] // multiple
+        mu = join_params[:, :, :, chns:2*chns]
+        logstd = tf.tanh(join_params[:, :, :, :chns])
+        logstd = tf.select(
+            (effect - mu) >= 0,
+            logstd,
+            tf.tanh(join_params[:,:,:,chns*2:]) if double else
+                tf.ones_like(logstd) * tf.log(leakiness)
+        )
+        joined = (effect - mu) / tf.exp(logstd)
+        return joined, tf.reduce_sum(logstd, [1,2,3])
+
+    return GeneralizedShearingFlow(
+        base_dist,
+        nn_builder,
+        condition_fn,
+        effect_fn,
+        combine_fn,
+        backwad_join_fn=backwad_join_fn,
+        forward_join_fn=forward_join_fn,
+    )
 
 class ShearingFlow(Distribution):
     def __init__(
@@ -2641,16 +3150,24 @@ class ReshapeFlow(Distribution):
             base_dist,
             forward_fn,
             backward_fn,
-            logli_diff_fn=lambda x: 0.,
             debug=False,
+            name="reshape",
     ):
         global G_IDX
         G_IDX += 1
-        self._name = "reshape_%s" % (G_IDX)
+        self._name = "%s_%s" % (name, G_IDX)
         self._base_dist = base_dist
-        self._forward = forward_fn
-        self._backward = backward_fn
-        self._logli_diff = logli_diff_fn
+        def _this_template(mode, *args, **kwargs):
+            if mode == "forward":
+                return forward_fn(*args, **kwargs)
+            elif mode == "backward":
+                return backward_fn(*args, **kwargs)
+
+            assert False
+        this_template = tf.make_template(self._name, _this_template)
+
+        self._forward = functools.partial(this_template, "forward")
+        self._backward = functools.partial(this_template, "backward")
         self._debug = debug
 
         self.train_mode()
@@ -2674,15 +3191,32 @@ class ReshapeFlow(Distribution):
         return self._base_dist.effective_dim
 
     def logli(self, x_var, dist_info):
-        eps = self._backward(x_var)
-        log_diff = self._logli_diff(x_var)
-        log_diff = tf.Print(log_diff, [x_var, log_diff]) if self._debug else log_diff
-        return self._base_dist.logli(eps, dist_info) + log_diff
+        with scopes.default_arg_scope(
+                counters={}, init=self._custom_phase == CustomPhase.init,
+                ema=None
+        ):
+            arr_maybe = self._backward(x_var)
+            if isinstance(arr_maybe, (tuple, list)):
+                eps, log_diff = arr_maybe
+            else:
+                eps = arr_maybe
+                log_diff = 0.
+            log_diff = tf.Print(log_diff, [x_var, log_diff]) if self._debug else log_diff
+            return self._base_dist.logli(eps, dist_info) + log_diff
 
     def sample_logli(self, dist_info):
-        eps, logpeps = self._base_dist.sample_logli(dist_info)
-        x = self._forward(eps)
-        return x, logpeps + self._logli_diff(x)
+        with scopes.default_arg_scope(
+                counters={}, init=self._custom_phase == CustomPhase.init,
+                ema=None
+        ):
+            eps, logpeps = self._base_dist.sample_logli(dist_info)
+            arr_maybe = self._forward(eps)
+            if isinstance(arr_maybe, (tuple, list)):
+                x, log_diff = arr_maybe
+            else:
+                x = arr_maybe
+                log_diff = 0.
+            return x, logpeps + log_diff
 
     def prior_dist_info(self, batch_size):
         return self._base_dist.prior_dist_info(batch_size)
@@ -2833,11 +3367,12 @@ class UniformDequant(DequantizationDistribution):
         dim = np.prod(shp[1:])
         return tf.random_uniform(shp, maxval=self._width), (-dim * np.log(self._width)).astype(np.float32)
 
-class TruncatedLogisticDequant(DequantizationDistribution):
+class FixedSpatialTruncatedLogisticDequant(DequantizationDistribution):
     def __init__(
             self,
             shape,
             width=1. / 256,
+            scale=1.,
     ):
         global G_IDX
         G_IDX += 1
@@ -2846,6 +3381,7 @@ class TruncatedLogisticDequant(DequantizationDistribution):
         dim = np.prod(shape)
         self._shape = shape
         self._dim = dim
+        self._scale = scale
         pshp = [1, dim]
         self._mu = tf.get_variable(
             self._name + "_mu",
@@ -2881,7 +3417,7 @@ class TruncatedLogisticDequant(DequantizationDistribution):
             return tf.tile(x, [batch_size, 1])
         return dict(
             mu=expand(self._mu),
-            scale=tf.exp(expand(self._log_scale)),
+            scale=tf.exp(expand(self._log_scale)) * self._scale,
         )
 
     def sample_logli(self, dist_info):
@@ -2893,8 +3429,290 @@ class TruncatedLogisticDequant(DequantizationDistribution):
         scaling = self._width / 2.
         return (eps+1.) * scaling, logli_eps - tf.log(scaling) * self._dim
 
+class FactorizedEncodingSpatialPiecewiseLinearDequant(DequantizationDistribution):
+    def __init__(
+            self,
+            shape,
+            nn_builder,
+            width=1. / 256,
+            nr_mixtures=1,
+    ):
+        global G_IDX
+        G_IDX += 1
+        self._name = "FactorizedEncodingPiecewiseLinearDequant_%s" % (G_IDX)
+        self._nn_template = tf.make_template(self._name, nn_builder)
+        self._width = width
+        dim = np.prod(shape)
+        self._shape = shape
+        self._dim = dim
+        self._nr_mixtures = nr_mixtures
+
+        assert nr_mixtures == 1
+        self._delegate_dist = PiecewiseLinear(shape, )
+        # if nr_mixtures == 1:
+        #     self._delegate_dist = truncatedlogistic(shape, -1., 1.)
+        # else:
+        # self._delegate_dist = Mixture(
+        #     [
+        #         (
+        #             TruncatedLogistic(
+        #                 shape, -1., 1.,
+        #             ),
+        #             1./nr_mixtures
+        #         )
+        #         for _ in range(nr_mixtures)
+        #         ]
+        # )
+
+        self.init_mode()
+
+    @overrides
+    def init_mode(self):
+        self._custom_phase = CustomPhase.init
+        self._delegate_dist.init_mode()
+
+    @overrides
+    def train_mode(self):
+        self._custom_phase = CustomPhase.train
+        self._delegate_dist.train_mode()
+
+    def sample_logli(self, dist_info):
+        condition = dist_info["condition"]
+        with scopes.default_arg_scope(
+                counters={}, init=self._custom_phase == CustomPhase.init,
+                ema=None
+        ):
+            info_tensor = self._nn_template(condition)
+            if self._nr_mixtures != 1:
+                # ensure the mixture reshape is correct
+                shp = int_shape(info_tensor)
+                ndim = len(shp)
+                assert shp[-1] == self._nr_mixtures
+                info_tensor = tf.transpose(
+                    info_tensor,
+                    [0, ndim-1, ] + list(range(1, ndim-1))
+                )
+            delegate_info_flat = tf.reshape(
+                info_tensor,
+                [-1, self._delegate_dist.dist_flat_dim]
+            )
+        eps, logli_eps = self._delegate_dist.sample_logli(
+            self._delegate_dist.activate_dist(delegate_info_flat)
+        )
+        scaling = self._width / 2.
+        return (eps+1.) * scaling, logli_eps - tf.log(scaling) * self._dim
+
+class FactorizedEncodingSpatialKumaraswamyDequant(DequantizationDistribution):
+    def __init__(
+            self,
+            shape,
+            nn_builder,
+            width=1. / 256,
+            nr_mixtures=1,
+    ):
+        global G_IDX
+        G_IDX += 1
+        self._name = "FactorizedEncodingKumarasawamyDequant_%s" % (G_IDX)
+        self._nn_template = tf.make_template(self._name, nn_builder)
+        self._width = width
+        dim = np.prod(shape)
+        self._shape = shape
+        self._dim = dim
+        self._nr_mixtures = nr_mixtures
+
+        # assert nr_mixtures == 1
+        # self._delegate_dist = Kumaraswamy(shape, )
+        self._delegate_dist = Mixture(
+            [
+                (
+                    Kumaraswamy(
+                        shape,
+                    ),
+                    1./nr_mixtures
+                )
+                for _ in range(nr_mixtures)
+                ]
+        )
+        # if nr_mixtures == 1:
+        #     self._delegate_dist = truncatedlogistic(shape, -1., 1.)
+        # else:
+        # self._delegate_dist = Mixture(
+        #     [
+        #         (
+        #             TruncatedLogistic(
+        #                 shape, -1., 1.,
+        #             ),
+        #             1./nr_mixtures
+        #         )
+        #         for _ in range(nr_mixtures)
+        #         ]
+        # )
+
+        self.init_mode()
+
+    @overrides
+    def init_mode(self):
+        self._custom_phase = CustomPhase.init
+        self._delegate_dist.init_mode()
+
+    @overrides
+    def train_mode(self):
+        self._custom_phase = CustomPhase.train
+        self._delegate_dist.train_mode()
+
+    def sample_logli(self, dist_info):
+        condition = dist_info["condition"]
+        with scopes.default_arg_scope(
+                counters={}, init=self._custom_phase == CustomPhase.init,
+                ema=None
+        ):
+            info_tensor = self._nn_template(condition)
+            if self._nr_mixtures != 1:
+                # ensure the mixture reshape is correct
+                shp = int_shape(info_tensor)
+                ndim = len(shp)
+                assert shp[-1] == self._nr_mixtures
+                info_tensor = tf.transpose(
+                    info_tensor,
+                    [0, ndim-1, ] + list(range(1, ndim-1))
+                )
+            delegate_info_flat = tf.reshape(
+                info_tensor,
+                [-1, self._delegate_dist.dist_flat_dim]
+            )
+        eps, logli_eps = self._delegate_dist.sample_logli(
+            self._delegate_dist.activate_dist(delegate_info_flat)
+        )
+        scaling = self._width
+        return (eps) * scaling, logli_eps - tf.log(scaling) * self._dim
+
+class FactorizedEncodingSpatialTruncatedLogisticDequant(DequantizationDistribution):
+    def __init__(
+            self,
+            shape,
+            nn_builder,
+            width=1. / 256,
+            nr_mixtures=1,
+    ):
+        global G_IDX
+        G_IDX += 1
+        self._name = "FactorizedEncodingTruncatedLogisticDequant_%s" % (G_IDX)
+        self._nn_template = tf.make_template(self._name, nn_builder)
+        self._width = width
+        dim = np.prod(shape)
+        self._shape = shape
+        self._dim = dim
+        self._nr_mixtures = nr_mixtures
+
+        # self._delegate_dist = TruncatedLogistic(shape, -1., 1.)
+        # if nr_mixtures == 1:
+        #     self._delegate_dist = truncatedlogistic(shape, -1., 1.)
+        # else:
+        self._delegate_dist = Mixture(
+           [
+               (
+                   TruncatedLogistic(
+                       shape, -1., 1.,
+                   ),
+                   1./nr_mixtures
+               )
+               for _ in range(nr_mixtures)
+           ]
+        )
+
+        self.init_mode()
+
+    @overrides
+    def init_mode(self):
+        self._custom_phase = CustomPhase.init
+        self._delegate_dist.init_mode()
+
+    @overrides
+    def train_mode(self):
+        self._custom_phase = CustomPhase.train
+        self._delegate_dist.train_mode()
+
+    def sample_logli(self, dist_info):
+        condition = dist_info["condition"]
+        with scopes.default_arg_scope(
+                counters={}, init=self._custom_phase == CustomPhase.init,
+                ema=None
+        ):
+            info_tensor = self._nn_template(condition)
+            if self._nr_mixtures != 1:
+                # ensure the mixture reshape is correct
+                shp = int_shape(info_tensor)
+                ndim = len(shp)
+                assert shp[-1] == self._nr_mixtures
+                info_tensor = tf.transpose(
+                    info_tensor,
+                    [0, ndim-1, ] + list(range(1, ndim-1))
+                )
+            delegate_info_flat = tf.reshape(
+                info_tensor,
+                [-1, self._delegate_dist.dist_flat_dim]
+            )
+        eps, logli_eps = self._delegate_dist.sample_logli(
+            self._delegate_dist.activate_dist(delegate_info_flat)
+        )
+        scaling = self._width / 2.
+        return (eps+1.) * scaling, logli_eps - tf.log(scaling) * self._dim
+
+
+class FlowBasedDequant(DequantizationDistribution):
+    def __init__(
+            self,
+            shape,
+            context_processor,
+            flow_builder,
+            width=1. / 256,
+
+    ):
+        global G_IDX
+        G_IDX += 1
+        self._name = "FlowBasedDequant_%s" % (G_IDX)
+        self._width = width
+        dim = np.prod(shape)
+
+        self._shape = shape
+        self._dim = dim
+        self._context_processor = tf.make_template(self._name + "_cp", context_processor)
+
+        self._delegate = flow_builder()
+
+        self.init_mode()
+
+    @overrides
+    def init_mode(self):
+        self._custom_phase = CustomPhase.init
+        self._delegate.init_mode()
+
+    @overrides
+    def train_mode(self):
+        self._custom_phase = CustomPhase.train
+        self._delegate.train_mode()
+
+    def sample_logli(self, dist_info):
+        condition = dist_info["condition"]
+        bs = universal_int_shape(condition)[0]
+        condition = tf.reshape(
+            condition, [bs, 32, 32, 3]
+        )
+
+        with scopes.default_arg_scope(
+                counters={}, init=self._custom_phase == CustomPhase.init
+        ):
+            processed = self._context_processor(condition)
+
+        with scopes.default_arg_scope(
+            context=processed,
+        ):
+            return self._delegate.sample_logli(
+                self._delegate.prior_dist_info(batch_size=bs)
+            )
+
 # TODO: this has wrong impl for sampling
-def normalize(dist):
+def normalize_legacy(dist):
     def normalize_per_dim(x):
         mu, inv_std = nn.init_normalization(x)
         return -mu, tf.log(inv_std)
@@ -2906,21 +3724,78 @@ def normalize(dist):
         combine_fn=lambda _, x: x,
     )
 
+def normalize(dist):
+    def normalize_per_dim(x):
+        mu, inv_std = nn.init_normalization(x)
+        return mu, inv_std
+
+    init_mode = []
+    @scopes.add_arg_scope_only("init")
+    def forward(eps, init, ):
+        if init:
+            logger.log("Init used in sampling pass")
+            assert len(init_mode) == 0
+            init_mode.append("forward")
+        else:
+            assert len(init_mode) == 1
+        mu, inv_std = normalize_per_dim(eps)
+        sum_log_inv_std = tf.reduce_sum(tf.log(inv_std))
+        if init_mode[0] == "forward":
+            return (eps - mu) * inv_std, -sum_log_inv_std
+        else:
+            return eps / inv_std + mu, sum_log_inv_std
+
+    @scopes.add_arg_scope_only("init")
+    def backward(x, init, ):
+        if init:
+            logger.log("Init used in inference pass")
+            assert len(init_mode) == 0
+            init_mode.append("backward")
+        else:
+            assert len(init_mode) == 1
+        mu, inv_std = normalize_per_dim(x)
+        sum_log_inv_std = tf.reduce_sum(tf.log(inv_std))
+        if init_mode[0] == "backward":
+            return (x - mu) * inv_std, sum_log_inv_std
+        else:
+            return x / inv_std + mu, -sum_log_inv_std
+
+    return ReshapeFlow(
+        dist,
+        forward_fn=forward,
+        backward_fn=backward,
+        name="normalize",
+    )
+
+
 def shift(dist, offset=0.5 + (1/256/2)):
     return ReshapeFlow(
         dist,
         forward_fn=lambda eps: eps - offset,
         backward_fn=lambda x: x + offset,
         debug=False,
+        name="shift",
     )
 
 def logitize(dist, coeff=0.90):
     # apply logit(coeff*x)
+    # logli_diff_fn = lambda x: tf.reduce_sum(
+    #     -tf.log(x - coeff*(x**2)),
+    #     reduction_indices=[1,2,3]
+    # )
+    logli_diff_fn = lambda x: tf.reduce_sum(
+        -safe_log(x*coeff) - safe_log(1-x*coeff) \
+          + tf.log(coeff),
+        reduction_indices=[1,2,3]
+    )
+    def forward(eps):
+        x = tf.nn.sigmoid(eps) / coeff
+        return x, logli_diff_fn(x)
     return ReshapeFlow(
         dist,
-        forward_fn=lambda eps: (1. / (1. + tf.exp(-eps))) / coeff,
-        backward_fn=lambda x: tf.log(coeff*x) - tf.log(1-coeff*x),
-        logli_diff_fn=lambda x: tf.reduce_sum(-tf.log(x - coeff*(x**2)), reduction_indices=[1,2,3]),
+        forward_fn=forward,
+        backward_fn=lambda x: (tf.log(coeff*x) - tf.log(1-coeff*x), logli_diff_fn(x)),
         debug=False,
+        name="logit",
     )
 

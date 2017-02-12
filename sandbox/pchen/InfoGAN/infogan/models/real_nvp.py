@@ -1,4 +1,3 @@
-from sandbox.pchen.InfoGAN.infogan.algos.dist_trainer import DistTrainer
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import tf_go, AdamaxOptimizer, average_grads
 from sandbox.pchen.InfoGAN.infogan.misc.distributions import *
 
@@ -9,8 +8,8 @@ import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
 import rllab.misc.logger as logger
 
 
-@scopes.add_arg_scope
-def resnet_blocks_gen(blocks=4, filters=64):
+@scopes.add_arg_scope_only("blocks", "filters", "squash")
+def resnet_blocks_gen(blocks=4, filters=64, squash=tf.tanh):
     def go(x):
         chns = int_shape(x)[3]
         x = nn.conv2d(x, filters)
@@ -18,8 +17,27 @@ def resnet_blocks_gen(blocks=4, filters=64):
             x = nn.gated_resnet(x)
         temp = nn.conv2d(x, chns * 2)
         mu = temp[:, :, :, chns:]
-        logstd = tf.tanh(temp[:, :, :, :chns])  # might want learn scaling
+        logstd = (temp[:, :, :, :chns])  # might want learn scaling
+        if squash:
+            logstd = squash(logstd)
         return mu, logstd
+
+    return go
+
+@scopes.add_arg_scope_only("blocks", "filters", "multiple")
+def resnet_blocks_gen_raw(blocks=4, filters=64, multiple=2):
+    def go(x):
+        chns = int_shape(x)[3]
+        x = nn.conv2d(x, filters)
+        for _ in range(blocks):
+            x = nn.gated_resnet(x)
+        temp = nn.conv2d(x, chns * multiple)
+        return temp
+        # mu = temp[:, :, :, chns:]
+        # logstd = (temp[:, :, :, :chns])  # might want learn scaling
+        # if squash:
+        #     logstd = squash(logstd)
+        # return mu, logstd
 
     return go
 

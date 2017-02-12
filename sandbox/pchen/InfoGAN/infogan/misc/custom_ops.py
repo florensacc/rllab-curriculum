@@ -1672,6 +1672,19 @@ def cached_assign(var):
         pass
     return var_assignments[var]
 
+def restore(sess, ema):
+    assert ema
+    ema_keys = list(ema._averages.keys())
+    ema_avgs = [ema._averages[k] for k in ema_keys]
+    avg_vals = sess.run(ema_avgs)
+    ops = []
+    feed = {}
+    for var, avg in zip(ema_keys, avg_vals):
+        holder, op = cached_assign(var)
+        ops.append(op)
+        feed[holder] = avg
+    sess.run(ops, feed)
+
 @contextmanager
 def temp_restore(sess, ema):
     if ema is None:
@@ -1730,3 +1743,9 @@ from tensorflow.python.client import device_lib
 def get_available_gpus():
     local_device_protos = device_lib.list_local_devices()
     return [x.name for x in local_device_protos if x.device_type == 'GPU']
+
+
+def safe_log(x):
+    return tf.log(
+        tf.maximum(x, 1e-22)
+    )

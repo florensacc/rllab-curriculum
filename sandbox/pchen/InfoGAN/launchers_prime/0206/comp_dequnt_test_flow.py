@@ -18,21 +18,29 @@ import tensorflow as tf
 import cloudpickle
 
 
-# test if logit transofmration is useful
+# kuma hopefully numerically stable
 
 class VG(VariantGenerator):
     @variant
-    def logit(self):
+    def dequant(self):
         return [
-            True,
+            "uniform",
+            "kuma",
         ]
+
+    @variant
+    def nr_mix(self, dequant):
+        if dequant == "uniform":
+            return [1]
+        else:
+            return [1, 3, 5, 10]
 
     @variant
     def seed(self):
         return [42,]
 
 def run_task(v):
-    logit = v["logit"]
+    logit = True
     f = normalize_legacy
     hybrid = False
 
@@ -88,19 +96,42 @@ def run_task(v):
     if logit:
         cur = shift(logitize(cur))
 
+    blocks = 4
+    filters = 32
+    nr_mix = v["nr_mix"]
+    def go(x):
+        shp = int_shape(x)
+        chns = shp[3]
+        x = nn.conv2d(x, filters)
+        for _ in range(blocks):
+            x = nn.gated_resnet(x)
+        temp = nn.conv2d(x, chns * 2 * nr_mix)
+        return tf.reshape(
+            temp,
+            shp[:3] + [chns*2, nr_mix]
+        ) * 0.1
+    if v["dequant"] == "uniform":
+        noise_dist = UniformDequant()
+    else:
+        noise_dist=FactorizedEncodingSpatialKumaraswamyDequant(
+            shape=[32, 32, 3],
+            nn_builder=go,
+            nr_mixtures=nr_mix,
+        )
     dist = DequantizedFlow(
         base_dist=cur,
-        noise_dist=FixedSpatialTruncatedLogisticDequant(
-            shape=[32, 32, 3],
-        ),
+        # noise_dist=UniformDequant(),
+        noise_dist=noise_dist,
     )
 
     algo = DistTrainer(
         dataset=dataset,
         dist=dist,
         init_batch_size=1024,
-        train_batch_size=256, # also testing resuming from diff bs
-        optimizer=AdamaxOptimizer(learning_rate=2e-4),
+        train_batch_size=64, # also testing resuming from diff bs
+        optimizer=AdamaxOptimizer(
+            learning_rate=1e-3,
+        ),
         save_every=20,
         # # for debug
         debug=False,
@@ -113,35 +144,36 @@ variants = VG().variants()
 
 print("#Experiments:", len(variants))
 
+
 config.AWS_INSTANCE_TYPE = "p2.xlarge"
 config.AWS_SPOT = True
 config.AWS_SPOT_PRICE = '1.23'
 config.AWS_REGION_NAME = 'us-west-2'
 config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[config.AWS_REGION_NAME]
-config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[config.AWS_REGION_NAME]
+config.AWS_IMAGE_ID = "ami-31b43151" #config.ALL_REGION_AWS_IMAGE_IDS[config.AWS_REGION_NAME]
 config.AWS_SECURITY_GROUP_IDS = config.ALL_REGION_AWS_SECURITY_GROUP_IDS[config.AWS_REGION_NAME]
 
 for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="final_spatial_tlogit_dequnt",
+        exp_prefix="0208_dequnt_test_hopeful_again",
         variant=v,
 
-        mode="local",
+        # mode="local",
 
         # mode="local_docker",
         # env=dict(
         #     CUDA_VISIBLE_DEVICES="5"
         # ),
 
-        # mode="ec2",
+        mode="ec2",
         #
         use_gpu=True,
         snapshot_mode="last",
         docker_image="dementrock/rllab3-shared-gpu-cuda80",
         seed=v["seed"],
-        terminate_machine=True,
+        # terminate_machine=False,
         # pre_commands=[
         #     "nvidia-modprobe -u -c=0",
         # ],

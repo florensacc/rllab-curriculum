@@ -30,7 +30,7 @@ with scopes.arg_scope(
     for i in range(8):
         cf, ef, merge = checkerboard_condition_fn_gen(i, True) # fixme: for now
         cur = ShearingFlow(
-            normalize(cur),
+            normalize_legacy(cur),
             nn_builder=resnet_blocks_gen(),
             condition_fn=cf,
             effect_fn=ef,
@@ -41,7 +41,7 @@ with scopes.arg_scope(
     for i in range(8):
         cf, ef, merge = channel_condition_fn_gen(i, )
         cur = ShearingFlow(
-            normalize(cur),
+            normalize_legacy(cur),
             nn_builder=resnet_blocks_gen(),
             condition_fn=cf,
             effect_fn=ef,
@@ -60,7 +60,7 @@ with scopes.arg_scope(
     for i in range(8):
         cf, ef, merge = checkerboard_condition_fn_gen(i, True) # fixme: for now
         cur = ShearingFlow(
-            normalize(cur),
+            normalize_legacy(cur),
             nn_builder=resnet_blocks_gen(),
             condition_fn=cf,
         effect_fn=ef,

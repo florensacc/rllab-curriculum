@@ -33,13 +33,19 @@ class VG(VariantGenerator):
 
 def run_task(v):
     logit = v["logit"]
-    f = normalize_legacy
+    f = normalize
     hybrid = False
 
-    dataset = Cifar10Dataset(dequantized=False) # dequantization left to flow
+    dataset = Cifar10Dataset(dequantized=False)
     flat_dim = dataset.image_dim
 
+    this_flow = LeakyLinearShearingFlow
+
+    flow_nr = 2
+    blocks = 4
+
     noise = Gaussian(flat_dim)
+    # noise = Logistic([flat_dim], init_scale=0.5)
     shape = [-1, 16, 16, 12]
     shaped_noise = ReshapeFlow(
         noise,
@@ -48,21 +54,21 @@ def run_task(v):
     )
 
     cur = shaped_noise
-    for i in range(4):
+    for i in range(4 * flow_nr):
         cf, ef, merge = checkerboard_condition_fn_gen(i, (i<2) )
-        cur = ShearingFlow(
+        cur = this_flow(
             f(cur),
-            nn_builder=resnet_blocks_gen(),
+            nn_builder=resnet_blocks_gen_raw(blocks),
             condition_fn=cf,
             effect_fn=ef,
             combine_fn=merge,
         )
 
-    for i in range(4):
+    for i in range(4 * flow_nr):
         cf, ef, merge = channel_condition_fn_gen(i, )
-        cur = ShearingFlow(
+        cur = this_flow(
             f(cur),
-            nn_builder=resnet_blocks_gen(),
+            nn_builder=resnet_blocks_gen_raw(blocks),
             condition_fn=cf,
             effect_fn=ef,
             combine_fn=merge,
@@ -75,11 +81,11 @@ def run_task(v):
         backward_fn=lambda x: tf_go(x, debug=False).space_to_depth(2).value,
     )
     cur = upsampled
-    for i in range(3):
+    for i in range(3 * flow_nr):
         cf, ef, merge = checkerboard_condition_fn_gen(i, (i<2) if hybrid else True)
-        cur = ShearingFlow(
+        cur = this_flow(
             f(cur),
-            nn_builder=resnet_blocks_gen(),
+            nn_builder=resnet_blocks_gen_raw(blocks),
             condition_fn=cf,
             effect_fn=ef,
             combine_fn=merge,
@@ -89,21 +95,20 @@ def run_task(v):
         cur = shift(logitize(cur))
 
     dist = DequantizedFlow(
-        base_dist=cur,
-        noise_dist=FixedSpatialTruncatedLogisticDequant(
-            shape=[32, 32, 3],
-        ),
+        cur,
+        UniformDequant()
     )
 
     algo = DistTrainer(
         dataset=dataset,
         dist=dist,
         init_batch_size=1024,
-        train_batch_size=256, # also testing resuming from diff bs
-        optimizer=AdamaxOptimizer(learning_rate=2e-4),
+        train_batch_size=64, # also testing resuming from diff bs
+        optimizer=AdamaxOptimizer(
+            learning_rate=1e-3,
+        ),
         save_every=20,
-        # # for debug
-        debug=False,
+        # debug=True,
         # resume_from="/home/peter/rllab-private/data/local/global_proper_deeper_flow/"
         # checkpoint_dir="data/local/test_debug",
     )
@@ -125,7 +130,7 @@ for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="final_spatial_tlogit_dequnt",
+        exp_prefix="0210_deep_leaky_flow",
         variant=v,
 
         mode="local",
@@ -136,7 +141,10 @@ for v in variants[:]:
         # ),
 
         # mode="ec2",
-        #
+        aws_config=dict(
+            placement=dict(AvailabilityZone="us-west-2b"),
+        ),
+
         use_gpu=True,
         snapshot_mode="last",
         docker_image="dementrock/rllab3-shared-gpu-cuda80",

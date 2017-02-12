@@ -18,9 +18,15 @@ import tensorflow as tf
 import cloudpickle
 
 
-# test if logit transofmration is useful
+# to contrast
 
 class VG(VariantGenerator):
+    @variant
+    def depth(self):
+        return [
+            0
+        ]
+
     @variant
     def logit(self):
         return [
@@ -33,7 +39,7 @@ class VG(VariantGenerator):
 
 def run_task(v):
     logit = v["logit"]
-    f = normalize_legacy
+    f = normalize
     hybrid = False
 
     dataset = Cifar10Dataset(dequantized=False) # dequantization left to flow
@@ -48,7 +54,7 @@ def run_task(v):
     )
 
     cur = shaped_noise
-    for i in range(4):
+    for i in range(6):
         cf, ef, merge = checkerboard_condition_fn_gen(i, (i<2) )
         cur = ShearingFlow(
             f(cur),
@@ -75,7 +81,7 @@ def run_task(v):
         backward_fn=lambda x: tf_go(x, debug=False).space_to_depth(2).value,
     )
     cur = upsampled
-    for i in range(3):
+    for i in range(8):
         cf, ef, merge = checkerboard_condition_fn_gen(i, (i<2) if hybrid else True)
         cur = ShearingFlow(
             f(cur),
@@ -88,19 +94,59 @@ def run_task(v):
     if logit:
         cur = shift(logitize(cur))
 
+    depth = v["depth"]
+    if depth == 0:
+        dequant_noise = UniformDequant()
+    else:
+        def shallow_processor(context):
+            this = checkerboard_condition_fn_gen()[0](context)
+            that = checkerboard_condition_fn_gen()[1](context)
+            processed_context = nn.conv2d(tf.concat(3, [this, that]), 32)
+            for _ in range(depth):
+                processed_context = nn.gated_resnet(processed_context)
+            return processed_context
+        def flow_builder():
+            from sandbox.pchen.InfoGAN.infogan.models.real_nvp import checkerboard_condition_fn_gen
+            from sandbox.pchen.InfoGAN.infogan.models.real_nvp import resnet_blocks_gen
+            base = Gaussian(flat_dim)
+            shape = [32, 32, 3]
+            shaped_noise = ReshapeFlow(
+                base,
+                forward_fn=lambda x: tf.reshape(x, [-1] + list(shape)),
+                backward_fn=lambda x: tf_go(x).reshape([-1, base.dim]).value,
+            )
+            f = normalize
+            cur = shaped_noise
+            for i in range(depth):
+                cf, ef, merge = checkerboard_condition_fn_gen(i, True)
+                cur = ShearingFlow(
+                    f(cur),
+                    nn_builder=resnet_blocks_gen(blocks=2, filters=24),
+                    condition_fn=cf,
+                    effect_fn=ef,
+                    combine_fn=merge,
+                )
+            return logitize(cur, coeff=256.)
+        dequant_noise = FlowBasedDequant(
+            shape=[32,32,3],
+            context_processor=shallow_processor,
+            flow_builder=flow_builder,
+        )
+
     dist = DequantizedFlow(
         base_dist=cur,
-        noise_dist=FixedSpatialTruncatedLogisticDequant(
-            shape=[32, 32, 3],
-        ),
+        # noise_dist=UniformDequant(),
+        noise_dist=dequant_noise,
     )
 
     algo = DistTrainer(
         dataset=dataset,
         dist=dist,
         init_batch_size=1024,
-        train_batch_size=256, # also testing resuming from diff bs
-        optimizer=AdamaxOptimizer(learning_rate=2e-4),
+        train_batch_size=64, # also testing resuming from diff bs
+        optimizer=AdamaxOptimizer(
+            learning_rate=1e-3,
+        ),
         save_every=20,
         # # for debug
         debug=False,
@@ -125,7 +171,7 @@ for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="final_spatial_tlogit_dequnt",
+        exp_prefix="0211_deep_unif_dequant",
         variant=v,
 
         mode="local",

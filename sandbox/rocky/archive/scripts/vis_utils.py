@@ -119,6 +119,7 @@ def plot_std(means, stds):
     plt.fill_between(plot.get_xdata(), means-1*stds, means+1*stds,
         alpha=0.3, facecolor=color,
         linewidth=0)
+    return plot
 
 def batch_plot(*args, **kwargs):
     patches = []

@@ -33,13 +33,14 @@ class VG(VariantGenerator):
 
 def run_task(v):
     logit = v["logit"]
-    f = normalize_legacy
+    f = normalize
     hybrid = False
 
-    dataset = Cifar10Dataset(dequantized=False) # dequantization left to flow
+    dataset = Cifar10Dataset(dequantized=False)
     flat_dim = dataset.image_dim
 
-    noise = Gaussian(flat_dim)
+    # noise = Gaussian(flat_dim)
+    noise = Logistic([flat_dim], init_scale=2.)
     shape = [-1, 16, 16, 12]
     shaped_noise = ReshapeFlow(
         noise,
@@ -89,21 +90,20 @@ def run_task(v):
         cur = shift(logitize(cur))
 
     dist = DequantizedFlow(
-        base_dist=cur,
-        noise_dist=FixedSpatialTruncatedLogisticDequant(
-            shape=[32, 32, 3],
-        ),
+        cur,
+        UniformDequant()
     )
 
     algo = DistTrainer(
         dataset=dataset,
         dist=dist,
         init_batch_size=1024,
-        train_batch_size=256, # also testing resuming from diff bs
-        optimizer=AdamaxOptimizer(learning_rate=2e-4),
+        train_batch_size=64, # also testing resuming from diff bs
+        optimizer=AdamaxOptimizer(
+            learning_rate=1e-3,
+        ),
         save_every=20,
-        # # for debug
-        debug=False,
+        # debug=True,
         # resume_from="/home/peter/rllab-private/data/local/global_proper_deeper_flow/"
         # checkpoint_dir="data/local/test_debug",
     )
@@ -125,7 +125,7 @@ for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="final_spatial_tlogit_dequnt",
+        exp_prefix="0209_redo_normal_nn_logitize_test",
         variant=v,
 
         mode="local",
@@ -136,7 +136,7 @@ for v in variants[:]:
         # ),
 
         # mode="ec2",
-        #
+
         use_gpu=True,
         snapshot_mode="last",
         docker_image="dementrock/rllab3-shared-gpu-cuda80",

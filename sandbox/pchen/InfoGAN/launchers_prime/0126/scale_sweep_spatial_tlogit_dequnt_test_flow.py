@@ -22,9 +22,9 @@ import cloudpickle
 
 class VG(VariantGenerator):
     @variant
-    def logit(self):
+    def scale(self):
         return [
-            True,
+            1., 2., 0.5, 0.2,
         ]
 
     @variant
@@ -32,9 +32,10 @@ class VG(VariantGenerator):
         return [42,]
 
 def run_task(v):
-    logit = v["logit"]
+    logit = False
     f = normalize_legacy
     hybrid = False
+    scale = v["scale"]
 
     dataset = Cifar10Dataset(dequantized=False) # dequantization left to flow
     flat_dim = dataset.image_dim
@@ -99,8 +100,8 @@ def run_task(v):
         dataset=dataset,
         dist=dist,
         init_batch_size=1024,
-        train_batch_size=256, # also testing resuming from diff bs
-        optimizer=AdamaxOptimizer(learning_rate=2e-4),
+        train_batch_size=64, # also testing resuming from diff bs
+        optimizer=AdamaxOptimizer(learning_rate=1e-4),
         save_every=20,
         # # for debug
         debug=False,
@@ -125,18 +126,18 @@ for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="final_spatial_tlogit_dequnt",
+        exp_prefix="scale_sweep_spatial_tlogit_dequnt",
         variant=v,
 
-        mode="local",
+        # mode="local",
 
         # mode="local_docker",
         # env=dict(
         #     CUDA_VISIBLE_DEVICES="5"
         # ),
 
-        # mode="ec2",
-        #
+        mode="ec2",
+
         use_gpu=True,
         snapshot_mode="last",
         docker_image="dementrock/rllab3-shared-gpu-cuda80",

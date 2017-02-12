@@ -18,7 +18,7 @@ import tensorflow as tf
 import cloudpickle
 
 
-# test if logit transofmration is useful
+# kuma hopefully numerically stable
 
 class VG(VariantGenerator):
     @variant
@@ -88,23 +88,43 @@ def run_task(v):
     if logit:
         cur = shift(logitize(cur))
 
+    blocks = 4
+    filters = 32
+    nr_mix = 4
+    def go(x):
+        shp = int_shape(x)
+        chns = shp[3]
+        x = nn.conv2d(x, filters)
+        for _ in range(blocks):
+            x = nn.gated_resnet(x)
+        temp = nn.conv2d(x, chns * 2 * nr_mix)
+        return tf.reshape(
+            temp,
+            shp[:3] + [chns*2, nr_mix]
+        ) * 0.1
     dist = DequantizedFlow(
         base_dist=cur,
-        noise_dist=FixedSpatialTruncatedLogisticDequant(
+        # noise_dist=UniformDequant(),
+        noise_dist=FactorizedEncodingSpatialKumaraswamyDequant(
             shape=[32, 32, 3],
+            nn_builder=go,
+            nr_mixtures=nr_mix,
         ),
     )
 
     algo = DistTrainer(
         dataset=dataset,
         dist=dist,
+        max_iter=3000,
         init_batch_size=1024,
         train_batch_size=256, # also testing resuming from diff bs
-        optimizer=AdamaxOptimizer(learning_rate=2e-4),
+        optimizer=AdamaxOptimizer(
+            learning_rate=1e-3,
+        ),
         save_every=20,
         # # for debug
         debug=False,
-        # resume_from="/home/peter/rllab-private/data/local/global_proper_deeper_flow/"
+        resume_from="/home/peter/rllab-private/data/local/0205-kuma-nf-mixture-fac-encoding-spatial-dequnt/0205_kuma_nf_mixture_fac_encoding_spatial_dequnt_2017_02_06_21_58_08_0001/"
         # checkpoint_dir="data/local/test_debug",
     )
     algo.train()
@@ -125,7 +145,7 @@ for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="final_spatial_tlogit_dequnt",
+        exp_prefix="0207_resume_kuma_nf_mixture_fac_encoding_spatial_dequnt",
         variant=v,
 
         mode="local",

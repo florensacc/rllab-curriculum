@@ -88,10 +88,26 @@ def run_task(v):
     if logit:
         cur = shift(logitize(cur))
 
+    blocks = 4
+    filters = 32
+    nr_mix = 8
+    def go(x):
+        shp = int_shape(x)
+        chns = shp[3]
+        x = nn.conv2d(x, filters)
+        for _ in range(blocks):
+            x = nn.gated_resnet(x)
+        temp = nn.conv2d(x, chns * 2 * nr_mix)
+        return tf.reshape(
+            temp,
+            shp[:3] + [chns*2, nr_mix]
+        )
     dist = DequantizedFlow(
         base_dist=cur,
-        noise_dist=FixedSpatialTruncatedLogisticDequant(
+        noise_dist=FactorizedEncodingSpatialTruncatedLogisticDequant(
             shape=[32, 32, 3],
+            nn_builder=go,
+            nr_mixtures=nr_mix,
         ),
     )
 
@@ -99,7 +115,7 @@ def run_task(v):
         dataset=dataset,
         dist=dist,
         init_batch_size=1024,
-        train_batch_size=256, # also testing resuming from diff bs
+        train_batch_size=256 // 1, # also testing resuming from diff bs
         optimizer=AdamaxOptimizer(learning_rate=2e-4),
         save_every=20,
         # # for debug
@@ -125,7 +141,7 @@ for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="final_spatial_tlogit_dequnt",
+        exp_prefix="0130_mixture_fac_encoding_spatial_tlogit_dequnt",
         variant=v,
 
         mode="local",

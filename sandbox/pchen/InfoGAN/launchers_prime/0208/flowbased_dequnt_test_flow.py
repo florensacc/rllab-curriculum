@@ -18,7 +18,39 @@ import tensorflow as tf
 import cloudpickle
 
 
-# test if logit transofmration is useful
+# kuma hopefully numerically stable
+
+def shallow_flow_builder(base, context):
+    from sandbox.pchen.InfoGAN.infogan.models.real_nvp import checkerboard_condition_fn_gen, resnet_blocks_gen, tf_go, channel_condition_fn_gen
+    from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp, flatten, assign_to_gpu, \
+        average_grads, temp_restore, np_logsumexp, get_available_gpus, restore
+
+
+    processed_context = nn.conv2d(context, 32)
+    for _ in range(3):
+        processed_context = nn.gated_resnet(processed_context)
+
+    shape = [-1, 32, 32, 3]
+    shaped_noise = ReshapeFlow(
+        base,
+        forward_fn=lambda x: tf.reshape(x, shape),
+        backward_fn=lambda x: tf_go(x).reshape([-1, base.dim]).value,
+    )
+
+    f = normalize
+    cur = shaped_noise
+    with scopes.default_arg_scope(context=processed_context):
+        for i in range(3):
+            cf, ef, merge = checkerboard_condition_fn_gen(i, True)
+            cur = ShearingFlow(
+                f(cur),
+                nn_builder=resnet_blocks_gen(),
+                condition_fn=cf,
+                effect_fn=ef,
+                combine_fn=merge,
+            )
+        logitized = logitize(cur, coeff=256.)
+    return logitized
 
 class VG(VariantGenerator):
     @variant
@@ -33,7 +65,7 @@ class VG(VariantGenerator):
 
 def run_task(v):
     logit = v["logit"]
-    f = normalize_legacy
+    f = normalize
     hybrid = False
 
     dataset = Cifar10Dataset(dequantized=False) # dequantization left to flow
@@ -88,10 +120,27 @@ def run_task(v):
     if logit:
         cur = shift(logitize(cur))
 
+    blocks = 4
+    filters = 32
+    nr_mix = 4
+    def go(x):
+        shp = int_shape(x)
+        chns = shp[3]
+        x = nn.conv2d(x, filters)
+        for _ in range(blocks):
+            x = nn.gated_resnet(x)
+        temp = nn.conv2d(x, chns * 2 * nr_mix)
+        return tf.reshape(
+            temp,
+            shp[:3] + [chns*2, nr_mix]
+        ) * 0.1
     dist = DequantizedFlow(
         base_dist=cur,
-        noise_dist=FixedSpatialTruncatedLogisticDequant(
+        # noise_dist=UniformDequant(),
+        noise_dist=FactorizedEncodingSpatialKumaraswamyDequant(
             shape=[32, 32, 3],
+            nn_builder=go,
+            nr_mixtures=nr_mix,
         ),
     )
 
@@ -99,8 +148,10 @@ def run_task(v):
         dataset=dataset,
         dist=dist,
         init_batch_size=1024,
-        train_batch_size=256, # also testing resuming from diff bs
-        optimizer=AdamaxOptimizer(learning_rate=2e-4),
+        train_batch_size=64, # also testing resuming from diff bs
+        optimizer=AdamaxOptimizer(
+            learning_rate=1e-3,
+        ),
         save_every=20,
         # # for debug
         debug=False,
@@ -125,7 +176,7 @@ for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="final_spatial_tlogit_dequnt",
+        exp_prefix="test_0205_kuma_nf_mixture_fac_encoding_spatial_dequnt",
         variant=v,
 
         mode="local",

@@ -90,8 +90,8 @@ def run_task(v):
 
     dist = DequantizedFlow(
         base_dist=cur,
-        noise_dist=FixedSpatialTruncatedLogisticDequant(
-            shape=[32, 32, 3],
+        noise_dist=UniformDequant(
+
         ),
     )
 
@@ -99,11 +99,12 @@ def run_task(v):
         dataset=dataset,
         dist=dist,
         init_batch_size=1024,
-        train_batch_size=256, # also testing resuming from diff bs
-        optimizer=AdamaxOptimizer(learning_rate=2e-4),
+        train_batch_size=64*4, # also testing resuming from diff bs
+        max_iter=3000,
+        optimizer=AdamaxOptimizer(learning_rate=2e-3),
         save_every=20,
         # # for debug
-        debug=False,
+        # updates_per_iter=10,
         # resume_from="/home/peter/rllab-private/data/local/global_proper_deeper_flow/"
         # checkpoint_dir="data/local/test_debug",
     )
@@ -125,7 +126,7 @@ for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="final_spatial_tlogit_dequnt",
+        exp_prefix="0127_new_dequnt",
         variant=v,
 
         mode="local",

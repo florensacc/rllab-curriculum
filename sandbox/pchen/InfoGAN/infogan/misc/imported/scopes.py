@@ -128,7 +128,6 @@ def default_arg_scope(**kwargs):
   """
   return arg_scope(list(_DECORATED_OPS.values()), **kwargs)
 
-
 def add_arg_scope(func):
   """Decorates a function with args so it can be used within an arg_scope.
   Args:
@@ -147,6 +146,25 @@ def add_arg_scope(func):
     return func(*args, **current_args)
   _add_op(func)
   return func_with_args
+
+def add_arg_scope_only(*only):
+  def go(func):
+    @functools.wraps(func)
+    def func_with_args(*args, **kwargs):
+      current_scope = _current_arg_scope()
+      current_args = kwargs
+      key_func = (func.__module__, func.__name__)
+      if key_func in current_scope:
+        current_args = current_scope[key_func].copy()
+        if only:
+          current_args = dict(
+            (k, v) for k, v in current_args.items() if k in only
+          )
+        current_args.update(kwargs)
+      return func(*args, **current_args)
+    _add_op(func)
+    return func_with_args
+  return go
 
 
 def has_arg_scope(func):
