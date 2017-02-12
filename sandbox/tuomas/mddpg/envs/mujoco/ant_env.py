@@ -27,7 +27,8 @@ class AntEnv(MujocoEnv, Serializable):
     def step(self, action):
         self.forward_dynamics(action)
         comvel = self.get_body_comvel("torso")
-        forward_reward = comvel[0]
+        #forward_reward = comvel[0]
+        speed_reward = np.sum(comvel[0:2]**2)
         lb, ub = self.action_bounds
         scaling = (ub - lb) * 0.5
 
@@ -38,7 +39,8 @@ class AntEnv(MujocoEnv, Serializable):
         contact_cost = 0.5 * 1e-3 * np.sum(
             np.square(np.clip(self.model.data.cfrc_ext, -1, 1))),
         survive_reward = 0.05
-        reward = (forward_reward - ctrl_cost - contact_cost + survive_reward
+        #reward = (forward_reward - ctrl_cost - contact_cost + survive_reward
+        reward = (speed_reward - ctrl_cost - contact_cost + survive_reward
                   - action_violation_cost)
         state = self._state
         notdone = np.isfinite(state).all() and 0.2 <= state[2] <= 1.0

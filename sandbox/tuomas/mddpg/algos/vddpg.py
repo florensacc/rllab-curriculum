@@ -747,6 +747,11 @@ class VDDPG(OnlineAlgorithm, Serializable):
         # Init critic + actor figure.
         # TODO: Figure out to set the size automatically
         if self.q_plot_settings is not None:
+            # Make sure the observations are given as np array.
+            self.q_plot_settings['obs_lst'] = (
+                np.array(self.q_plot_settings['obs_lst'])
+            )
+
             self._fig_q = plt.figure(figsize=(7, 7))
 
             self._ax_q_lst = []
@@ -897,8 +902,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
             self._ax_env.clear()
             env.plot_paths(paths, self._ax_env)
-            self._ax_env.set_xlim(self.q_plot_settings['xlim'])
-            self._ax_env.set_ylim(self.q_plot_settings['ylim'])
+            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+            self._ax_env.set_ylim(self.env_plot_settings['ylim'])
 
             plt.pause(0.001)
             plt.draw()
@@ -915,7 +920,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 ax_lst=self._ax_q_lst,
                 obs_lst=self.q_plot_settings['obs_lst'],
                 action_dims=self.q_plot_settings['action_dims'],
-                axis_lims=self.q_plot_settings['axis_lims']
+                xlim=self.q_plot_settings['xlim'],
+                ylim=self.q_plot_settings['ylim'],
             )
 
             self.policy.plot_samples(self._ax_q_lst,
