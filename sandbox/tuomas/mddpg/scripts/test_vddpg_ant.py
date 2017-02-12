@@ -22,7 +22,7 @@ flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_float('actor_lr', 0.01, 'Base learning rate for actor.')
 flags.DEFINE_float('critic_lr', 0.001, 'Base learning rate for critic.')
-flags.DEFINE_integer('path_length', 100, 'Maximum path length.')
+flags.DEFINE_integer('path_length', 500, 'Maximum path length.')
 flags.DEFINE_integer('n_particles', 32, 'Number of particles.')
 flags.DEFINE_string('alg', 'vddpg', 'Algorithm.')
 flags.DEFINE_string('save_path', '', 'Path where the plots are saved.')
@@ -53,12 +53,16 @@ def test():
         #soft_target_tau=1.0
         max_path_length=FLAGS.path_length,
         batch_size=64,  # only need recent samples, though it's slow
-        scale_reward=0.1,
+        scale_reward=1.,
         train_actor=True,
         train_critic=True,
         q_target_type='soft',
         K=FLAGS.n_particles,
-        alpha=0,#100.,
+        alpha=1.,
+        n_eval_paths=5,
+        critic_train_frequency=1,
+        actor_train_frequency=1,
+        update_target_frequency=5000,
     )
 
     policy_kwargs = dict(
@@ -80,15 +84,15 @@ def test():
     )
 
     env_plot_settings = dict(
-        xlim=(-4, 4),
-        ylim=(-4, 4),
+        xlim=(-5, 5),
+        ylim=(-5, 5),
     )
 
     # ----------------------------------------------------------------------
 
     #es = DummyExplorationStrategy()
-    #es = OUStrategy(env_spec=env.spec, mu=0, theta=0.15, sigma=0.03, clip=False)
-    es = OUStrategy(env_spec=env.spec, mu=0, theta=0.15, sigma=0.3, clip=False)
+    es = OUStrategy(env_spec=env.spec, mu=0, theta=0.15, sigma=0.03, clip=False)
+    #es = OUStrategy(env_spec=env.spec, mu=0, theta=0.15, sigma=0.3, clip=False)
 
     qf = FeedForwardCritic(
         "critic",

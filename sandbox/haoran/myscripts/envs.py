@@ -80,6 +80,10 @@ class EnvChooser(object):
             from sandbox.tuomas.mddpg.envs.hopper_env import \
                 HopperEnv
             env = HopperEnv(**kwargs)
+        elif env_name == "tuomas_ant":
+            from sandbox.tuomas.mddpg.envs.mujoco.ant_env import \
+                AntEnv
+            env = AntEnv(**kwargs)
         elif env_name == "gym_walker":
             from sandbox.haoran.mddpg.envs.mujoco.gym_walker2d_env import \
                 Walker2DEnv

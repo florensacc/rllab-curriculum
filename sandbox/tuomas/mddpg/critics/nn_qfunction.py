@@ -161,7 +161,7 @@ class FeedForwardCritic(NNCritic):
                           b_initializer=self.output_b_init,
                           reuse_variables=True)
 
-    def plot(self, ax_lst, obs_lst, action_dims, axis_lims):
+    def plot(self, ax_lst, obs_lst, action_dims, xlim, ylim):
         """
         Plots level curves of critic output.
 
@@ -171,10 +171,9 @@ class FeedForwardCritic(NNCritic):
         :return:
         """
         assert len(action_dims) == 2
-        assert len(axis_lims) == 2
 
-        xx = np.arange(axis_lims[0][0], axis_lims[0][1], 0.05)
-        yy = np.arange(axis_lims[1][0], axis_lims[1][1], 0.05)
+        xx = np.arange(xlim[0], xlim[1], 0.05)
+        yy = np.arange(ylim[0], ylim[1], 0.05)
         X, Y = np.meshgrid(xx, yy)
 
         actions = np.zeros((X.size, self.action_dim))
