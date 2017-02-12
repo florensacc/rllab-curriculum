@@ -33,12 +33,24 @@ def resnet_blocks_gen_raw(blocks=4, filters=64, multiple=2):
             x = nn.gated_resnet(x)
         temp = nn.conv2d(x, chns * multiple)
         return temp
-        # mu = temp[:, :, :, chns:]
-        # logstd = (temp[:, :, :, :chns])  # might want learn scaling
-        # if squash:
-        #     logstd = squash(logstd)
-        # return mu, logstd
+    return go
 
+@scopes.add_arg_scope_only("blocks", "filters", "multiple", "nl")
+def densenet_blocks_gen_raw(blocks=3, filters=16, multiple=2, nl=tf.nn.elu):
+    def go(x):
+        chns = int_shape(x)[3]
+        xs = [x]
+        for _ in range(blocks):
+            new_in = nl(
+                tf.concat(3, xs) * .6 / len(xs)
+            )
+            new_x = nn.conv2d(nl(nn.nin(new_in, filters * 4)), filters)
+            xs.append(new_x)
+        final_in = nl(
+            tf.concat(3, xs) * .6 / len(xs)
+        )
+        temp = nn.conv2d(final_in, chns * multiple)
+        return temp
     return go
 
 
