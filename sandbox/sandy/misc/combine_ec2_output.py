@@ -1,9 +1,12 @@
 """ Combines all output h5 files from the specified experiment into a single
-    h5 output file. Assumes that there are no conflicting keys
+    h5 output file. Assumes that there are no conflicting keys.
+    (This is for adversarial attack experiments, to make analysis of results
+    easier.)
 """
 #!/usr/bin/env python
 
 import h5py
+import itertools
 import json
 import os
 import os.path as osp
@@ -17,21 +20,20 @@ if USE_GPU:
     print("Theano config:", theano.config.device, theano.config.floatX)
 
 from sandbox.sandy.misc.util import get_time_stamp, to_iterable
-from sandbox.sandy.adversarial.shared import load_models
+from sandbox.sandy.shared.model import load_models
 
 BASE_DIR = "/home/shhuang/src/rllab-private/data/s3/adv-rollouts"
-EXP_IDX = "exp011"
+EXP_IDX = "exp014"
 H5_FNAME = 'fgsm_allvariants.h5'
 PARAMS_FNAME = "params.json"
 
-MODEL_DIR = '/home/shhuang/src/rllab-private/sandbox/sandy/adversarial/trained_models/'
+MODEL_DIR = '/home/shhuang/src/rllab-private/sandbox/sandy/adversarial/trained_models_recurrent/'
 AVG_RETURN_KEY = 'avg_return'
 H5_BASE_PATH = 'results'
 CHOSEN_NORM_EPS_FNAME = ""
 #CHOSEN_NORM_EPS_FNAME = "/home/shhuang/src/rllab-private/data/s3/adv-rollouts/exp010/transfer_exp_to_run_20170126_144940_538112.p"
 
 TEST_TRANSFER = True
-
 
 def copy_over(from_g, to_g):
     for k in from_g:
@@ -54,8 +56,7 @@ def get_params_from_experiment(base_dir, exp_idx, params_fname):
     games = []
     norms = []
     eps = []
-    experiments = []
-    batch_size = -1
+    exp_names = []
     threshold_perf = -1
     threshold_n = -1
 
@@ -74,32 +75,26 @@ def get_params_from_experiment(base_dir, exp_idx, params_fname):
         games += to_iterable(params['games'])
         norms += to_iterable(params['norms'])
         eps += to_iterable(params['fgsm_eps'])
-        experiments += to_iterable(params['experiments'])
-        if batch_size == -1:
-            batch_size = params['batch_size']
-            threshold_perf = params['threshold_perf']
-            threshold_n = params['threshold_n']
-        else:
-            assert batch_size == params['batch_size']
-            assert threshold_perf == params['threshold_perf']
-            assert threshold_n == params['threshold_n']
+        exp_names += to_iterable(params['exp_names'])
+        threshold_perf = params['threshold_perf']
+        threshold_n = params['threshold_n']
 
     games = list(set(games))
     norms = list(set(norms))
     eps = list(set(eps))
-    experiments = list(set(experiments))
-    return games, norms, eps, experiments, batch_size, threshold_perf, threshold_n
+    exp_names = list(set(exp_names))
+    return games, norms, eps, exp_names, threshold_perf, threshold_n
 
 def check_missing(cumul_h5, base_dir, exp_idx, params_fname=PARAMS_FNAME):
-    # Make sure all norms, experiments, games, and eps are tested on (i.e., that
+    # Make sure all norms, exp_names, games, and eps are tested on (i.e., that
     # none of the EC2 runs crashed midway)
-    games, norms, eps, experiments, batch_size, threshold_perf, threshold_n = \
+    games, norms, eps, exp_names, threshold_perf, threshold_n = \
             get_params_from_experiment(base_dir, exp_idx, params_fname)
 
     print("Games:", games)
     print("Norms:", norms)
     print("Eps:", eps)
-    print("Experiments:", experiments)
+    print("Experiments:", exp_names)
 
     chosen_norm_eps = None
     if CHOSEN_NORM_EPS_FNAME != "":
@@ -108,15 +103,15 @@ def check_missing(cumul_h5, base_dir, exp_idx, params_fname=PARAMS_FNAME):
     # Need to make sure A
     cumul_f = h5py.File(cumul_h5, 'r')
 
-    policies = load_models(games, experiments, MODEL_DIR, \
-                           batch_size, threshold_perf, threshold_n)
+    policies = load_models(games, exp_names, MODEL_DIR, \
+                           threshold_perf, threshold_n)
     for game in policies:
-        game_policies = []
-        for algo_name in policies[game]:
-            game_policies += policies[game][algo_name]
+        game_policies = list(itertools.chain.from_iterable(policies[game].values()))
+        #for algo_name in policies[game]:
+        #    game_policies += policies[game][algo_name]
 
         for norm in norms:
-            if chosen_norm_eps:
+            if chosen_norm_eps is not None:
                 eps = [x[2] for x in chosen_norm_eps if x[0] == game and x[1] == norm]
                 print("Game, norm, eps:", game, norm, eps)
 
@@ -125,7 +120,7 @@ def check_missing(cumul_h5, base_dir, exp_idx, params_fname=PARAMS_FNAME):
                     for policy_target in game_policies:
                         if not TEST_TRANSFER and policy_adv != policy_target:
                             continue
-                        path = osp.join(H5_BASE_PATH, norm, str(e), policy_adv[3], policy_target[3], AVG_RETURN_KEY)
+                        path = osp.join(H5_BASE_PATH, norm, str(e), policy_adv.model_name, policy_target.model_name, AVG_RETURN_KEY)
                         if path not in cumul_f:
                             print("WARNING: path", path, "not in file")
     cumul_f.close()

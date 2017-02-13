@@ -22,6 +22,17 @@ SCALE = 255.0
 
 RGB2Y_COEFF = np.array([0.2126, 0.7152, 0.0722])  # Y = np.dot(rgb, RGB2Y_COEFF)
 
+def get_base_env(obj):
+    # Find level of obj that contains base environment, i.e., the env that links to ALE
+    # (New version of Monitor in OpenAI gym adds an extra level of wrapping)
+    while True:
+        if not hasattr(obj, 'env'):
+            return None
+        if hasattr(obj.env, 'ale'):
+            return obj.env
+        else:
+            obj = obj.env
+
 class AtariEnv(GymEnv):
     def __init__(self, env_name, record_video=False, video_schedule=None, \
                  log_dir=None, record_log=True, force_reset=False, **kwargs):

@@ -12,7 +12,7 @@ import pickle
 
 from sandbox.sandy.adversarial.io_util import get_param_names, get_all_result_paths
 from sandbox.sandy.adversarial.select_norm_eps_transfer import get_returns_by_game_exp_norm, EXP_IDX_TO_NAME
-from sandbox.sandy.adversarial.shared import load_models
+from sandbox.sandy.shared.model_load import load_models
 from sandbox.sandy.misc.util import get_time_stamp
 
 SELECTION_TYPE = 'lower_than'  # Options: "in_range", "lower_than"
@@ -39,7 +39,7 @@ def select_adv_target_norm_eps(h5_file, range_ratio=0.7, lower_than_ratios=[0.25
     avg_returns = get_returns_by_game_exp_norm(h5_file)
 
     # Only pay attention to top two models for each game + training algo combo
-    best_policies = load_models(GAMES, EXPERIMENTS, MODEL_DIR, BATCH_SIZE, \
+    best_policies = load_models(GAMES, EXPERIMENTS, MODEL_DIR, \
                                 threshold=0, num_threshold=2, load_model=False)
 
     # key: game, exp_name
