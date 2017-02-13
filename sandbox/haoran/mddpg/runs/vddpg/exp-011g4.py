@@ -1,7 +1,7 @@
 """
 Variational DDPG (online, consevative)
 
-Continue exp-011g,g2, with
+Continue exp-011g,g2 (repeat exp-011g3 but replacing alpha w/ scale_reward),
 + fix svgd_target = 'pre-action' and update_target_frequency = 1000
 + K_critic: 100 -> 50. Reduce computation time.
 + clip entropies (only with upper bound)
@@ -42,7 +42,7 @@ exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/vddpg/" + exp_index
 mode = "ec2"
 ec2_instance = "c4.4xlarge"
-subnet = "us-west-1c"
+subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 config.AWS_IMAGE_ID = "ami-85d181e5" # with docker already pulled
 
@@ -94,10 +94,6 @@ class VG(VariantGenerator):
         return [1]
 
     @variant
-    def temperature_annealer(self):
-        return [1]
-
-    @variant
     def qf_learning_rate(self):
         return [1e-3]
 
@@ -133,23 +129,23 @@ class VG(VariantGenerator):
         ]
 
     @variant
-    def alpha_annealer(self):
+    def scale_reward_annealer(self):
         return [
-            # dict(
-            #     init_value=0.1,
-            #     final_value=0.1,
-            #     stop_iter=1,
-            # ), # equivalent to scale_reward = 10 in exp-011g, g2
             dict(
                 init_value=10,
-                final_value=0.1,
+                final_value=10,
+                stop_iter=1,
+            ), # equivalent to scale_reward = 10 in exp-011g, g2
+            dict(
+                init_value=0.1,
+                final_value=10,
                 stop_iter=499,
             ),
             dict(
-                init_value=10,
-                final_value=0.001,
+                init_value=0.1,
+                final_value=1000,
                 stop_iter=499,
-            ), # should get to alpha = 0.1 at iteration 250
+            ), # should get to scale_reward = 10 at iteration 250
         ]
 
 variants = VG().variants()
@@ -302,11 +298,11 @@ for v in variants:
         "kernel",
         dim=env.action_space.flat_dim,
     )
-    alpha_annealer = LogLinearAnnealer(
-        init_value=v["alpha_annealer"]["init_value"],
-        final_value=v["alpha_annealer"]["final_value"],
+    scale_reward_annealer = LogLinearAnnealer(
+        init_value=v["scale_reward_annealer"]["init_value"],
+        final_value=v["scale_reward_annealer"]["final_value"],
         n_iter=alg_kwargs["n_epochs"],
-        stop_iter=v["alpha_annealer"]["stop_iter"],
+        stop_iter=v["scale_reward_annealer"]["stop_iter"],
     )
     algorithm = VDDPG(
         env=env,
@@ -317,7 +313,7 @@ for v in variants:
         qf=qf,
         q_prior=None,
         K=K,
-        alpha_annealer=alpha_annealer,
+        scale_reward_annealer=scale_reward_annealer,
         **alg_kwargs
     )
 
