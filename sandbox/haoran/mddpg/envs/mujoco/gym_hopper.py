@@ -9,10 +9,12 @@ class HopperEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         use_forward_reward=True,
         use_alive_bonus=True,
         use_ctrl_cost=True,
+        include_xpos=False,
     ):
         self.use_forward_reward = use_forward_reward
         self.use_alive_bonus = use_alive_bonus
         self.use_ctrl_cost = use_ctrl_cost
+        self.include_xpos = include_xpos
         mujoco_env.MujocoEnv.__init__(self, 'hopper.xml', 4)
         utils.EzPickle.__init__(self)
         self.observation_space = convert_gym_space(self.observation_space)
@@ -38,10 +40,16 @@ class HopperEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         return ob, reward, done, {"com": com}
 
     def _get_obs(self):
-        return np.concatenate([
-            self.model.data.qpos.flat[1:],
-            np.clip(self.model.data.qvel.flat,-10,10)
-        ])
+        if self.include_xpos:
+            return np.concatenate([
+                self.model.data.qpos.flat,
+                np.clip(self.model.data.qvel.flat,-10,10)
+            ])
+        else:
+            return np.concatenate([
+                self.model.data.qpos.flat[1:],
+                np.clip(self.model.data.qvel.flat,-10,10)
+            ])
 
     def reset_model(self):
         qpos = self.init_qpos + np.random.uniform(low=-.005, high=.005, size=self.model.nq)
@@ -60,6 +68,7 @@ class HopperEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             self.use_forward_reward,
             self.use_alive_bonus,
             self.use_ctrl_cost,
+            self.include_xpos,
         ])
         return params
 
@@ -67,6 +76,7 @@ class HopperEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.use_forward_reward = params[0]
         self.use_alive_bonus = params[1]
         self.use_ctrl_cost = params[2]
+        self.include_xpos = params[3]
 
 
     def log_stats(self, alg, epoch, paths):

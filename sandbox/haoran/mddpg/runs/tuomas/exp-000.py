@@ -172,7 +172,9 @@ for v in variants:
         alg_kwargs = dict(
             epoch_length=10000,
             n_epochs=500,
-            n_eval_paths=10,
+            n_eval_paths=2,
+            eval_kl_n_sample=1,
+            eval_kl_n_sample_part=1,
         )
     alg_kwargs.update(shared_alg_kwargs)
     if env_name == "hopper":

@@ -17,6 +17,7 @@ exp_prefix = args.exp_prefix
 bucket = config.BUCKET
 
 # grab all exp_name, instance_id corresponding to the give exp_prefix
+# beward that sometimes you need a '/' at the end
 client = boto3.client('ec2')
 response = client.describe_instances(
     Filters=[
