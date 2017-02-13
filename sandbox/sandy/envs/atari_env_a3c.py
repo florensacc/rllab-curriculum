@@ -2,10 +2,9 @@
 """
 import copy
 
-from sandbox.sandy.envs.atari_env import AtariEnv
+from sandbox.sandy.envs.atari_env import AtariEnv, get_base_env
 from sandbox.sandy.async_rl.shareable.base import Shareable
 from sandbox.sandy.async_rl.utils.picklable import Picklable
-from sandbox.sandy.adversarial.shared import get_base_env
 
 class AtariEnvA3C(AtariEnv, Shareable, Picklable):
     def __init__(self, env_name, record_video=False, video_schedule=None, \

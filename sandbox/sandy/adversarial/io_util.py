@@ -5,8 +5,8 @@ import os
 
 from sandbox.sandy.misc.util import create_dir_if_needed, get_time_stamp
 
-def init_all_output_file(output_dir, adv_name, algo_param_names, batch_size, \
-                         fname=None):
+def init_all_output_file(output_dir, adv_name, algo_param_names, \
+                         batch_size=None, fname=None):
     create_dir_if_needed(output_dir)
     if fname is None:
         fname = adv_name + '_allvariants.h5'
@@ -15,7 +15,8 @@ def init_all_output_file(output_dir, adv_name, algo_param_names, batch_size, \
     f = h5py.File(output_h5, 'w')
     f['adv_type'] = adv_name
     f['algo_param_names'] = ';'.join(algo_param_names)
-    f['batch_size'] = batch_size
+    if batch_size is not None:
+        f['batch_size'] = batch_size
     f.create_group('results')
     f.close()
 

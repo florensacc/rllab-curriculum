@@ -2,8 +2,7 @@
 """
 import copy
 
-from sandbox.sandy.envs.atari_env import AtariEnv
-from sandbox.sandy.adversarial.shared import get_base_env
+from sandbox.sandy.envs.atari_env import AtariEnv, get_base_env
 
 class AtariEnvDQN(AtariEnv):
     def __init__(self, env_name, record_video=False, video_schedule=None, \

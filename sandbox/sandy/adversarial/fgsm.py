@@ -4,15 +4,15 @@ import argparse
 import numpy as np
 
 from sandbox.sandy.adversarial.io_util import init_output_file, save_rollout_step
-from sandbox.sandy.adversarial.shared import get_average_return, load_model
+from sandbox.sandy.shared.model_load import load_model
+from sandbox.sandy.shared.model_rollout import get_average_return
 from sandbox.sandy.misc.util import get_softmax
 
 SUPPORTED_NORMS = ['l1', 'l2', 'l-inf']
-SAVE_OUTPUT = True  # Save adversarial perturbations to time-stamped h5 file
+SAVE_OUTPUT = False  # Save adversarial perturbations to time-stamped h5 file
 DEFAULT_OUTPUT_DIR = '/home/shhuang/src/rllab-private/data/local/rollouts'
 
 N = 10  # Number of trajectory rollouts to perform
-BATCH_SIZE = 20000  # Should be large enough to ensure that there are at least N trajs
 
 FGSM_EPS = [0.0005, 0.001, 0.002, 0.004, 0.008, 0.016, 0.032, 0.064, 0.128]  # Amount to change each pixel (1.0 / 256 = 0.00390625)
 #FGSM_EPS = [0.004]  # Amount to change each pixel (1.0 / 256 = 0.00390625)
@@ -20,8 +20,8 @@ FGSM_EPS = [0.0005, 0.001, 0.002, 0.004, 0.008, 0.016, 0.032, 0.064, 0.128]  # A
 #FGSM_EPS = [0.004, 0.008, 0.016, 0.032]
 FGSM_RANDOM_SEED = 0
 
-OBS_MIN = -1  # minimum possible value for input x (NOTE: domain-specific)
-OBS_MAX = +1  # maximum possible value for input x (NOTE: domain-specific)
+OBS_MIN = 0  # minimum possible value for input x (NOTE: domain-specific)
+OBS_MAX = 1  # maximum possible value for input x (NOTE: domain-specific)
 
 def fgsm_perturbation_linf(grad_x, fgsm_eps):
     sign_grad_x = np.sign(grad_x)
@@ -68,8 +68,16 @@ def get_grad_x_a3c(obs, algo):
     # Calculate loss between predicted action distribution and the action distribution
     # that places all weight on the argmax action
     ce_loss = -1 * F.log(1.0 / F.sum(F.exp(logits - max_logits)))
+
+    # The next three lines that clear gradients are probably not necessary (since
+    # the Variables' gradients get initialized to None), but there just in case
+    for x in [statevar, logits, max_logits, ce_loss]:
+        x.cleargrad()
+    algo.cur_agent.model.cleargrads()
+
     ce_loss.backward(retain_grad=True)
-    grad_x = statevar.grad[0]
+    grad_x = np.array(statevar.grad[0])  # statevar.grad is 4D (first dim = # batches)
+
     # For debugging:
     #print("A3C:", abs(grad_x).max(), abs(grad_x).sum() / grad_x.size, ce_loss.data)
     return grad_x
@@ -209,13 +217,14 @@ def main():
     assert args.norm in SUPPORTED_NORMS, "Norm must be one of: " + str(SUPPORTED_NORMS)
 
     # Load model from saved file
-    algo, env = load_model(args.params_file, BATCH_SIZE)
+    algo, env = load_model(args.params_file)
 
     # Run policy rollouts for N trajectories, get average return
     #avg_return, paths = get_average_return(algo, FGSM_RANDOM_SEED, N)
     #print("Return:", avg_return)
 
     for fgsm_eps in FGSM_EPS:
+        output_h5 = None
         if SAVE_OUTPUT:
             output_h5 = init_output_file(args.output_dir, args.prefix, 'fgsm', \
                                          {'eps': fgsm_eps, 'norm': args.norm})
