@@ -26,7 +26,7 @@ cur = shaped_noise
 for i in range(12):
     cf, ef, merge = checkerboard_condition_fn_gen(i, i<3) # fixme: for now
     cur = ShearingFlow(
-        normalize(cur),
+        normalize_legacy(cur),
         nn_builder=resnet_blocks_gen(),
         condition_fn=cf,
         effect_fn=ef,
@@ -37,7 +37,7 @@ for i in range(12):
 for i in range(3):
     cf, ef, merge = channel_condition_fn_gen(i, )
     cur = ShearingFlow(
-        normalize(cur),
+        normalize_legacy(cur),
         nn_builder=resnet_blocks_gen(),
         condition_fn=cf,
         effect_fn=ef,
@@ -56,7 +56,7 @@ cur = upsampled
 for i in range(3):
     cf, ef, merge = checkerboard_condition_fn_gen(i, i<3) # fixme: for now
     cur = ShearingFlow(
-        normalize(cur),
+        normalize_legacy(cur),
         nn_builder=resnet_blocks_gen(),
         condition_fn=cf,
         effect_fn=ef,
@@ -66,7 +66,7 @@ for i in range(3):
 for i in range(3):
     cf, ef, merge = channel_condition_fn_gen(i, )
     cur = ShearingFlow(
-        normalize(cur),
+        normalize_legacy(cur),
         nn_builder=resnet_blocks_gen(),
         condition_fn=cf,
         effect_fn=ef,
@@ -83,7 +83,7 @@ cur = upsampled
 for i in range(3):
     cf, ef, merge = checkerboard_condition_fn_gen(i, i < 2) # fixme: for now
     cur = ShearingFlow(
-        normalize(cur),
+        normalize_legacy(cur),
         nn_builder=resnet_blocks_gen(),
         condition_fn=cf,
         effect_fn=ef,
@@ -91,7 +91,7 @@ for i in range(3):
     )
 
 dist = OldDequantizedFlow(
-    normalize(cur)
+    normalize_legacy(cur)
 )
 
 fol = "data/local/norm_deeper_vcollapse_global_proper_deeper_flow"

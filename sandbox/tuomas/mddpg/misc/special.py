@@ -112,7 +112,14 @@ def discount_cumsum(x, discount):
 
 
 def discount_return(x, discount):
-    return np.sum(x * (discount ** np.arange(len(x)))[:, None])
+    # np does not give a warning if we feed a 1D input but use the computation
+    # for 2D input. The result will be wrong.
+    if len(x.shape) == 1:
+        return np.sum(x * (discount ** np.arange(len(x))))
+    elif len(x.shape) == 2:
+        return np.sum(x * (discount ** np.arange(len(x)))[:, None])
+    else:
+        raise NotImplementedError
 
 
 def rk4(derivs, y0, t, *args, **kwargs):

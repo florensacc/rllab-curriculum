@@ -77,7 +77,13 @@ class VDDPG(OnlineAlgorithm, Serializable):
             actor_train_frequency=1,
             update_target_frequency=1,
             debug_mode=False,
+            # evaluation
             axis3d=False,
+            q_plot_settings=None,
+            env_plot_settings=None,
+            eval_kl_n_sample=10,
+            eval_kl_n_sample_part=10,
+            alpha_annealer=None,
             **kwargs
     ):
         """
@@ -91,6 +97,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
         :param qf_learning_rate: Learning rate of the critic
         :param policy_learning_rate: Learning rate of the actor
         :param Q_weight_decay: How much to decay the weights for Q
+        :param eval_kl_n_sample: (large values slow dow computation)
+        :param eval_kl_n_sample_part: (large values slow dow computation)
         :return:
         """
         assert ((Ks is None and temperatures is None) or
@@ -130,6 +138,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.update_target = True
         self.debug_mode = debug_mode
         self.axis3d = axis3d
+        self.q_plot_settings = q_plot_settings
+        self.env_plot_settings = env_plot_settings
 
         self.alpha_placeholder = tf.placeholder(tf.float32,
                                                 shape=(),
@@ -168,6 +178,13 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.eval_sampler = ParallelSampler(self)
         self.n_eval_paths = n_eval_paths
         plt.switch_backend(plt_backend)
+
+        self.eval_kl_n_sample = eval_kl_n_sample
+        self.eval_kl_n_sample_part = eval_kl_n_sample_part
+
+        self.alpha_annealer = alpha_annealer
+
+        self._init_figures()
 
     @overrides
     def _init_tensorflow_ops(self):
@@ -661,7 +678,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 scale = self.policy.output_scale
                 actions = np.random.uniform(
                     low=-scale, high=scale, size=(N, self.K_critic, Da))
-                weights = np.power(2. * scale, Da) * np.ones((N, self.K_critic))
+                weights = np.power(2. * scale, -Da) * np.ones((N, self.K_critic))
                     # 1/p = volume of the action space
             elif self.target_action_dist == "gaussian":
                 ## old Gaussian sampling: may accidentally get low prob samples
@@ -729,6 +746,79 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         return t
 
+    def _init_figures(self):
+        # Init environment figure.
+        if self.env_plot_settings is not None:
+            self._fig_env = plt.figure(figsize=(7, 7))
+            self._ax_env = self._fig_env.add_subplot(111)
+            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+            self._ax_env.set_ylim(self.env_plot_settings['ylim'])
+
+        # Init critic + actor figure.
+        # TODO: Figure out to set the size automatically
+        if self.q_plot_settings is not None:
+            # Make sure the observations are given as np array.
+            self.q_plot_settings['obs_lst'] = (
+                np.array(self.q_plot_settings['obs_lst'])
+            )
+
+            self._fig_q = plt.figure(figsize=(7, 7))
+
+            self._ax_q_lst = []
+            n_states = len(self.q_plot_settings['obs_lst'])
+            for i in range(n_states):
+                ax = self._fig_q.add_subplot(100 + n_states * 10 + i + 1)
+                self._ax_q_lst.append(ax)
+
+
+    def compute_kl_entropy(self, observations, K, K_part):
+        """
+        K: number of particles to estimate log(q) / log(bar{p})
+        K_part: number of particles to estimate the partition function
+        """
+        TINY = 1e-8
+        N = observations.shape[0]
+        Da = self.policy.action_dim
+        Do = self.policy.observation_dim
+
+        # compute the partition function
+        scale = self.policy.output_scale
+        actions_part = np.random.uniform(
+            low=-scale, high=scale, size=(N * K_part, Da))
+        weights = np.power(2. * scale, -Da) * np.ones((N, K_part))
+        Qs_part = self.sess.run(
+            self.qf.output,
+            self.qf.get_feed_dict(
+                obs=np.tile(observations, (1, K_part)).reshape(-1, Do),
+                action=actions_part,
+            )
+        ).reshape(N, K_part)
+        Qs_part_max = np.amax(Qs_part, axis=1, keepdims=True)
+        logZs = Qs_part_max[:,0] + np.log(np.mean(
+            np.exp(Qs_part - Qs_part_max) / weights,
+            axis=1
+        )) # (N,)
+            # logZs are also the soft values
+
+        # compute kl(q | bar{p})
+        obs = np.tile(observations, (1, K)).reshape(-1, Do)
+        actions, info = self.policy.get_actions(obs, with_prob=True)
+        Qs = self.sess.run(
+            self.qf.output,
+            self.qf.get_feed_dict(obs, actions),
+        ).reshape(N, K)
+
+        qs = info["prob"].reshape(N, K)
+        entropies = np.mean(-np.log(qs + TINY), axis=1)
+        kl = np.mean(np.log(qs + TINY) - Qs, axis=1) + logZs
+
+        entropy_bound = Da * np.log(2. * self.policy.output_scale)
+            # the uniform policy has entropy - log (1/volume) = log(volume)
+            # if output_scale = 1, the bound is Da * 0.7
+        entropies_clipped = np.minimum(entropies, entropy_bound)
+
+        return kl, entropies_clipped
+
     @overrides
     def evaluate(self, epoch, train_info):
         logger.log("Collecting samples for evaluation")
@@ -789,13 +879,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.last_statistics.update(OrderedDict([
             ('Epoch', epoch),
             # ('PolicySurrogateLoss', policy_loss),
-            #HT: why are the policy outputs info helpful?
-            # ('PolicyMeanOutput', np.mean(policy_outputs)),
-            # ('PolicyStdOutput', np.std(policy_outputs)),
-            # ('TargetPolicyMeanOutput', np.mean(target_policy_outputs)),
-            # ('TargetPolicyStdOutput', np.std(target_policy_outputs)),
             ('CriticLoss', qf_loss),
             ('AverageDiscountedReturn', average_discounted_return),
+            ('Alpha', self.alpha)
         ]))
         # self.last_statistics.update(create_stats_ordered_dict('Ys', ys))
         self.last_statistics.update(create_stats_ordered_dict('QfOutput',
@@ -833,32 +919,113 @@ class VDDPG(OnlineAlgorithm, Serializable):
             self.last_statistics.update(create_stats_ordered_dict(
                 'TrainingPathLengths', es_path_lengths))
 
+        # log the entropy regularized objective
+        # we should scale down the entropies if we have scaled up
+        discounted_regularized_returns = []
+        entropy_reward_ratios = []
+        all_kls = []
+        for path in paths:
+            kls, entropies = self.compute_kl_entropy(
+                    path["observations"],
+                    K=self.eval_kl_n_sample,
+                    K_part=self.eval_kl_n_sample_part,
+                )
+            all_kls = np.concatenate([all_kls, kls])
+            entropy_bonuses = np.concatenate([[0], entropies[1:]])
+            discounted_rewards = special.discount_return(
+                path["rewards"], self.discount
+            )
+            discounted_entropies = special.discount_return(
+                entropy_bonuses,  self.discount
+            )
+            discounted_regularized_returns.append(
+                discounted_rewards + self.alpha * discounted_entropies
+            )
+            entropy_reward_ratios.append(
+                self.alpha * discounted_entropies / discounted_rewards
+            )
+        self.last_statistics.update(create_stats_ordered_dict(
+            'DiscRegReturn', discounted_regularized_returns))
+        self.last_statistics.update(create_stats_ordered_dict(
+            'EntropyRewardRatio', entropy_reward_ratios))
+        self.last_statistics.update(create_stats_ordered_dict(
+            'KL', all_kls))
 
-        # Create figure for plotting the environment.
-        fig = plt.figure(figsize=(12, 7))
-        if self.axis3d:
-            from mpl_toolkits.mplot3d import Axes3D
-            ax = fig.add_subplot(111, projection='3d')
-        else:
-            ax = fig.add_subplot(111)
 
-        true_env = self.env
-        while isinstance(true_env, ProxyEnv):
-            true_env = true_env._wrapped_env
-        if hasattr(true_env, "log_stats"):
-            env_stats = true_env.log_stats(self, epoch, paths, ax)
+        # log kl(pi | exp(Q))
+
+        ## Create figure for plotting the environment.
+        #fig = plt.figure(figsize=(12, 7))
+        #if self.axis3d:
+        #    from mpl_toolkits.mplot3d import Axes3D
+        #    ax = fig.add_subplot(111, projection='3d')
+        #else:
+        #    ax = fig.add_subplot(111)
+
+        #true_env = self.env
+        #while isinstance(true_env, ProxyEnv):
+        #    true_env = true_env._wrapped_env
+        #if hasattr(true_env, "log_stats"):
+        #    env_stats = true_env.log_stats(self, epoch, paths, ax)
+        #    self.last_statistics.update(env_stats)
+
+        ## Close and save figs.
+        #snapshot_dir = logger.get_snapshot_dir()
+        #img_file = os.path.join(snapshot_dir, 'itr_%d_test_paths.png' % epoch)
+
+        #plt.draw()
+        #plt.pause(0.001)
+
+        #plt.savefig(img_file, dpi=100)
+        #plt.cla()
+        #plt.close('all')
+
+        # Collect environment info.
+        snapshot_dir = logger.get_snapshot_dir()
+        env = self.env
+        while isinstance(env, ProxyEnv):
+            env = env._wrapped_env
+
+        if hasattr(env, "log_stats"):
+            env_stats = env.log_stats(self, epoch, paths)
             self.last_statistics.update(env_stats)
 
-        # Close and save figs.
-        snapshot_dir = logger.get_snapshot_dir()
-        img_file = os.path.join(snapshot_dir, 'itr_%d_test_paths.png' % epoch)
+        if hasattr(env, 'plot_paths'):
+            img_file = os.path.join(snapshot_dir,
+                                    'env_itr_%05d.png' % epoch)
 
-        plt.draw()
-        plt.pause(0.001)
+            self._ax_env.clear()
+            env.plot_paths(paths, self._ax_env)
+            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+            self._ax_env.set_ylim(self.env_plot_settings['ylim'])
 
-        plt.savefig(img_file, dpi=100)
-        plt.cla()
-        plt.close('all')
+            plt.pause(0.001)
+            plt.draw()
+
+            self._fig_env.savefig(img_file, dpi=100)
+
+        # Collect actor and critic info (save just plots)
+        if hasattr(self.qf, 'plot') and self.q_plot_settings is not None:
+            img_file = os.path.join(snapshot_dir,
+                                    'q_itr_%05d.png' % epoch)
+
+            [ax.clear() for ax in self._ax_q_lst]
+            self.qf.plot(
+                ax_lst=self._ax_q_lst,
+                obs_lst=self.q_plot_settings['obs_lst'],
+                action_dims=self.q_plot_settings['action_dims'],
+                xlim=self.q_plot_settings['xlim'],
+                ylim=self.q_plot_settings['ylim'],
+            )
+
+            self.policy.plot_samples(self._ax_q_lst,
+                                     self.q_plot_settings['obs_lst'],
+                                     self.K)
+
+            plt.pause(0.001)
+            plt.draw()
+
+            self._fig_q.savefig(img_file, dpi=100)
 
         for key, value in self.last_statistics.items():
             logger.record_tabular(key, value)
@@ -917,6 +1084,13 @@ class VDDPG(OnlineAlgorithm, Serializable):
             self.update_target_counter + 1,
             self.update_target_frequency,
         )
+
+    @overrides
+    def update_training_settings(self, epoch):
+        if self.scale_reward_annealer is not None:
+            self.scale_reward = self.scale_reward_annealer.get_new_value(epoch)
+        if self.alpha_annealer is not None:
+            self.alpha = self.alpha_annealer.get_new_value(epoch)
 
 ## Use the following code to test whether the exp(Q-Qmax) code works
 # import tensorflow as tf

@@ -13,7 +13,7 @@ from rllab.misc.ext import delete
 import sys
 import sandbox.pchen.InfoGAN.infogan.misc.imported.plotting as plotting
 from sandbox.pchen.InfoGAN.infogan.misc.custom_ops import AdamaxOptimizer, logsumexp, flatten, assign_to_gpu, \
-    average_grads, temp_restore, np_logsumexp, get_available_gpus
+    average_grads, temp_restore, np_logsumexp, get_available_gpus, restore
 
 
 class DistTrainer(object):
@@ -32,6 +32,7 @@ class DistTrainer(object):
             checkpoint_dir=None,
             resume_from=None,
             debug=False,
+            restart_from_nan=False,
     ):
         self._dist = dist
         self._optimizer = optimizer
@@ -53,6 +54,7 @@ class DistTrainer(object):
         assert self._checkpoint_dir, "checkpoint can't be none"
         self._resume_from = resume_from
         self._debug = debug
+        self._restart_from_nan = restart_from_nan
 
     def construct_init(self):
         self._dist.init_mode()
@@ -93,6 +95,17 @@ class DistTrainer(object):
                 logprobs.append(logprob)
                 tower_loss = -logprob
                 tower_grads = self._optimizer.compute_gradients(tower_loss)
+                # # clipping attempt
+                # tower_grads = [
+                #     (tf.clip_by_value(grad, -1., 1.), var)
+                #     for grad, var in tower_grads
+                # ]
+                # # gradient numerics check
+                if self._debug:
+                    tower_grads = [
+                    (tf.check_numerics(grad, var.name), var)
+                    for grad, var in tower_grads
+                ]
                 tower_grads_lst.append(tower_grads)
 
         with tf.variable_scope("optim"):
@@ -141,6 +154,34 @@ class DistTrainer(object):
 
         return imgs
 
+    def interact(self, embed=True):
+        sess = tf.Session(
+            config=tf.ConfigProto(allow_soft_placement=True) if self._debug else None
+        )
+
+        assert self._resume_from
+        init_inp = self.construct_init()
+        logger.log("opt_inited w/ init=True")
+        train_inp, train_logs, trainer, ema = self.construct_train()
+        train_log_names, train_log_vars = zip(*train_logs.items())
+        logger.log("opt_inited w/ init=False")
+        sample_imgs = self.construct_eval()
+        logger.log("opt_inited w/ eval")
+
+        saver = tf.train.Saver()
+
+        with sess.as_default():
+            print("resuming from %s" % self._resume_from)
+            fn = tf.train.latest_checkpoint(self._resume_from)
+            if fn is None:
+                print("cant find latest checkpoint, treating as checkpoint file")
+                fn = self._resume_from
+            saver.restore(sess, fn)
+            logger.log("Restore finished")
+            if embed:
+                import IPython; IPython.embed()
+        return locals()
+
 
     def train(self):
         sess = tf.Session()
@@ -183,7 +224,7 @@ class DistTrainer(object):
                     for output in op.outputs:
                         if output.dtype in [dtypes.float16, dtypes.float32, dtypes.float64]:
                             if "save" in op.name or "data_init" in op.name or "optim" in op.name or "ExponentialMovingAverage" in op.name or "eval" in op.name:
-                                print("ignoring " + op.name)
+                                # print("ignoring " + op.name)
                                 continue
                             message = op.name + ":" + str(output.value_index) + "; traceback: " + "|||".join(" ".join(str(item) for item in items) for items in op.traceback)
                             with ops.control_dependencies(check_op):
@@ -194,16 +235,20 @@ class DistTrainer(object):
             for itr in range(self._max_iter):
                 for update_i in ProgressBar()(range(self._updates_per_iter)):
                     try:
+                        this_batch = self.train_batch()
                         log_vals = sess.run(
                             (trainer,) + train_log_vars,
-                            {train_inp: self.train_batch()}
+                            {train_inp: this_batch}
                         )[1:]
                         train_log_vals.append(log_vals)
                         assert not np.any(np.isnan(log_vals))
 
                     except BaseException as e:
                         print("exception caught: %s" % e)
-                        import IPython; IPython.embed()
+                        if ("NaN" in e.message) and self._restart_from_nan:
+                            restore(sess, ema)
+                        else:
+                            import IPython; IPython.embed()
 
                 if itr % self._eval_every == 0:
                     # same eval strategy for now
@@ -218,6 +263,8 @@ class DistTrainer(object):
                             vali_log_vals.append(log_vals)
 
                         samples = sess.run(sample_imgs)
+                        # convert to a form that plt likes
+                        samples = np.clip(samples+0.5, 0., 1.)
                         img_tile = plotting.img_tile(samples, aspect_ratio=1., border_color=1., stretch=True)
                         _ = plotting.plot_img(img_tile, title=None, )
                         plotting.plt.savefig("%s/samples_itr_%s.png" % (self._checkpoint_dir, itr))
