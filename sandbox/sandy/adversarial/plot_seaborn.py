@@ -9,10 +9,12 @@ from pandas import DataFrame
 from sandbox.sandy.adversarial.io_util import get_param_names, get_all_result_paths
 
 # Options: ['no-transfer', 'transfer-policy', 'transfer-algorithm']
-#PLOT_TYPES = ['no-transfer', 'transfer-policy', 'transfer-algorithm']
-PLOT_TYPES = ['no-transfer']
-PLOT_TARGET = ['exp027', 'exp035c', 'exp036']
-PLOT_ADV = ['exp027', 'exp035c', 'exp036']
+PLOT_TYPES = ['no-transfer', 'transfer-policy', 'transfer-algorithm']
+#PLOT_TYPES = ['no-transfer']
+#PLOT_TARGET = ['exp027', 'exp035c', 'exp036']
+#PLOT_ADV = ['exp027', 'exp035c', 'exp036']
+PLOT_TARGET = ['exp037']
+PLOT_ADV = ['exp037']
 SAVE_AS_PDF = True
 SHOW_PLOT = False
 NORMS = {'l1': r'$\ell 1$',
@@ -171,7 +173,7 @@ def main():
     args = parser.parse_args()
 
     plot_returns(args.returns_h5, ('norm', 'FGSM Norm'), ('fgsm_eps', r'$\epsilon$'), ('avg_return', 'Average Return'), \
-            {'exp027':"TRPO", 'exp035c':'DQN', 'exp036':'A3C'}, screen_print=True)
+            {'exp027':"TRPO", 'exp035c':'DQN', 'exp036':'A3C', 'exp037':'A3C LSTM'}, screen_print=True)
 
 if __name__ == "__main__":
     main()

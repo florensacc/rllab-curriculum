@@ -9,9 +9,11 @@ from sandbox.sandy.misc.util import create_dir_if_needed
 from sandbox.sandy.adversarial.vis import obs_to_rgb, action_prob_to_rgb, \
                                           PROB_HEIGHT_RATIO, WHITE
 
-BASE_DIR = "/home/shhuang/src/rllab-private/data/local/adv-rollouts/exp012b"
 VIDEO_BACKGROUND = "/home/shhuang/src/rllab-private/sandbox/sandy/adversarial/video_text_{norm}.png"
-OUTPUT_DIR = "/home/shhuang/src/rllab-private/data/local/adv-rollouts/exp012b/arxiv_videos"
+#BASE_DIR = "/home/shhuang/src/rllab-private/data/local/adv-rollouts/exp012b"
+#OUTPUT_DIR = "/home/shhuang/src/rllab-private/data/local/adv-rollouts/exp012b/arxiv_videos"
+BASE_DIR = "/home/shhuang/src/rllab-private/data/local/adv-rollouts/exp013"
+OUTPUT_DIR = "/home/shhuang/src/rllab-private/data/local/adv-rollouts/exp013/arxiv_videos"
 SCALE = 4
 OFFSET_Y = 95
 PAD = 5

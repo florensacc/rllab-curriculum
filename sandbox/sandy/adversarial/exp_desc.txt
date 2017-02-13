@@ -17,4 +17,7 @@ exp011.py: EC2 run, applying FGSM to all four games, trained with TRPO, A3C, and
 exp012.py: Visualize interesting white-box rollouts for arXiv paper --> scrapped
 exp012b.py: Visualize interesting white-box rollouts for arXiv paper.
             Forgot to save something in exp012.py
-exp013.py: Visualize interesting black-box rollouts for arXiv paper
+exp013.py: Visualize interesting *black-box* rollouts for arXiv paper. And redo
+           the white-box rollouts, with correct epsilons.
+exp014.py: EC2 run, applying FGSM to A3C LSTM policies, for all four games.
+           With transferability.
