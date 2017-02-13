@@ -69,7 +69,7 @@ class HopperEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.use_ctrl_cost = params[2]
 
 
-    def log_stats(self, alg, epoch, paths, ax):
+    def log_stats(self, alg, epoch, paths):
         # forward distance
         progs = []
         for path in paths:
@@ -85,8 +85,6 @@ class HopperEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             'env: ForwardProgressDiff': np.max(progs) - np.min(progs),
         }
 
-        HopperEnv.plot_paths(paths, ax)
-
         return stats
 
     @staticmethod
@@ -96,9 +94,6 @@ class HopperEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             xx = com[:, 0]
             zz = com[:, 2]
             ax.plot(xx, zz, 'b')
-        xlim = np.ceil(np.max(np.abs(xx)))
-        ax.set_xlim((-xlim, xlim))
-        ax.set_ylim((0, 1))
 
     def terminate(self):
         pass
