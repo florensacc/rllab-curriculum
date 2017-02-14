@@ -749,8 +749,12 @@ class VDDPG(OnlineAlgorithm, Serializable):
     def _init_figures(self):
         # Init environment figure.
         if self.env_plot_settings is not None:
+            if "figsize" not in self.env_plot_settings.keys():
+                figsize = (7,7)
+            else:
+                figsize = self.env_plot_settings['figsize']
             self._fig_env = plt.figure(
-                figsize=self.env_plot_settings['figsize'],
+                figsize=figsize,
             )
             self._ax_env = self._fig_env.add_subplot(111)
             self._ax_env.set_xlim(self.env_plot_settings['xlim'])
@@ -941,10 +945,10 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 entropy_bonuses,  self.discount
             )
             discounted_regularized_returns.append(
-                discounted_rewards + self.alpha * discounted_entropies
+                discounted_rewards + self.alpha / self.scale_reward * discounted_entropies
             )
             entropy_reward_ratios.append(
-                self.alpha * discounted_entropies / discounted_rewards
+                self.alpha / self.scale_reward * discounted_entropies / discounted_rewards
             )
         self.last_statistics.update(create_stats_ordered_dict(
             'DiscRegReturn', discounted_regularized_returns))
