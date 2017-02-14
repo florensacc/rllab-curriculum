@@ -749,7 +749,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
     def _init_figures(self):
         # Init environment figure.
         if self.env_plot_settings is not None:
-            self._fig_env = plt.figure(figsize=(7, 7))
+            self._fig_env = plt.figure(
+                figsize=self.env_plot_settings['figsize'],
+            )
             self._ax_env = self._fig_env.add_subplot(111)
             self._ax_env.set_xlim(self.env_plot_settings['xlim'])
             self._ax_env.set_ylim(self.env_plot_settings['ylim'])
