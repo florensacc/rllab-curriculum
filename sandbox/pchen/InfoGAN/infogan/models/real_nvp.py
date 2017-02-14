@@ -54,7 +54,7 @@ def densenet_blocks_gen_raw(blocks=3, filters=16, multiple=2, nl=tf.nn.elu):
     return go
 
 @scopes.add_arg_scope_only("blocks", "filters", "multiple", "nl")
-def gated_densenet_blocks_gen_raw(blocks=3, filters=16, multiple=2, nl=tf.nn.elu):
+def gated_densenet_blocks_gen_raw(blocks=4, filters=16, multiple=2, nl=tf.nn.elu):
     @scopes.add_arg_scope_only("context")
     def go(x, context=None):
         chns = int_shape(x)[3]

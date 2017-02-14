@@ -18,7 +18,7 @@ import tensorflow as tf
 import cloudpickle
 
 
-# aux loss
+# kuma hopefully numerically stable
 
 class VG(VariantGenerator):
     @variant
@@ -28,37 +28,26 @@ class VG(VariantGenerator):
         ]
 
     @variant
-    def flow_depth(self):
-        return [
-            6, 12
-        ]
-
-    @variant
-    def aux_loss_coeff(self):
-        return [
-            0., 0.01, 0.05,
-        ]
-
-    @variant
     def block_type(self):
         return [
-            "gated_resnet",
+            # "gated_resnet",
             # "densenet",
+            "gated_densenet",
         ]
 
     @variant
     def filters(self, block_type):
         if block_type == "gated_resnet":
-            return [64]
+            return [32, 64]
         else:
             return [
-                8
+                8, 12, 24
             ]
 
     @variant
     def blocks(self):
         return [
-            3,
+            2, 3, 4,
         ]
 
     @variant
@@ -74,6 +63,7 @@ class VG(VariantGenerator):
 def run_task(v):
     print("Running task: ", v)
     logit = v["logit"]
+    f = normalize
     hybrid = False
 
     dataset = Cifar10Dataset(dequantized=False) # dequantization left to flow
@@ -81,16 +71,6 @@ def run_task(v):
     filters = v["filters"]
     blocks = v["blocks"]
     block_type = v["block_type"]
-
-    aux_loss_coeff = v["aux_loss_coeff"]
-    if np.any(np.allclose(aux_loss_coeff, 0.)):
-        f = normalize
-    else:
-        def f(dist):
-            return PseudoMixture([
-                (normalize(dist), 1.-aux_loss_coeff),
-                (Gaussian(flat_dim), aux_loss_coeff),
-            ])
 
     noise = Gaussian(flat_dim)
     shape = [-1, 16, 16, 12]
@@ -103,6 +83,8 @@ def run_task(v):
         nn_builder_gen = resnet_blocks_gen_raw
     elif block_type == "densenet":
         nn_builder_gen = densenet_blocks_gen_raw
+    elif block_type == "gated_densenet":
+        nn_builder_gen = gated_densenet_blocks_gen_raw
     else:
         raise NotImplemented
 
@@ -135,7 +117,7 @@ def run_task(v):
             backward_fn=lambda x: tf_go(x, debug=False).space_to_depth(2).value,
         )
         cur = upsampled
-        for i in range(v["flow_depth"]):
+        for i in range(4):
             cf, ef, merge = checkerboard_condition_fn_gen(i, (i<2) if hybrid else True)
             cur = LinearShearingFlow(
                 f(cur),
@@ -225,7 +207,7 @@ for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="0213_auxloss_depth_flow_based_dequant",
+        exp_prefix="0212_shallow_arch_search_flow_based_dequant",
         variant=v,
 
         # mode="local",
@@ -236,9 +218,6 @@ for v in variants[:]:
         # ),
 
         mode="ec2",
-        aws_config=dict(
-            placement=dict(AvailabilityZone="us-west-2b"),
-        ),
         #
         use_gpu=True,
         snapshot_mode="last",
