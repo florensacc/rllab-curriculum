@@ -18,42 +18,24 @@ import tensorflow as tf
 import cloudpickle
 
 
-# more flows better but is it just densenet not sufficiently expressive?
+# kuma hopefully numerically stable
 
 class VG(VariantGenerator):
     @variant
     def depth(self):
         return [
-            4
+            6
         ]
 
     @variant
-    def flow_depth(self):
+    def filters(self):
         return [
-            6, 8, 12, 16
+            16,
         ]
 
     @variant
-    def block_type(self):
-        return [
-            # "gated_resnet",
-            "densenet",
-        ]
-
-    @variant
-    def filters(self, block_type):
-        if block_type == "gated_resnet":
-            return [32, 64]
-        else:
-            return [
-                8
-            ]
-
-    @variant
-    def blocks(self):
-        return [
-            2,
-        ]
+    def depth_ratio(self, filters):
+        return [10]
 
     @variant
     def logit(self):
@@ -66,7 +48,7 @@ class VG(VariantGenerator):
         return [42,]
 
 def run_task(v):
-    print("Running task: ", v)
+    print("Exp", v)
     logit = v["logit"]
     f = normalize
     hybrid = False
@@ -74,8 +56,7 @@ def run_task(v):
     dataset = Cifar10Dataset(dequantized=False) # dequantization left to flow
     flat_dim = dataset.image_dim
     filters = v["filters"]
-    blocks = v["blocks"]
-    block_type = v["block_type"]
+    depth_ratio = v["depth_ratio"]
 
     noise = Gaussian(flat_dim)
     shape = [-1, 16, 16, 12]
@@ -84,30 +65,24 @@ def run_task(v):
         forward_fn=lambda x: tf.reshape(x, shape),
         backward_fn=lambda x: tf_go(x).reshape([-1, noise.dim]).value,
     )
-    if block_type == "gated_resnet":
-        nn_builder_gen = resnet_blocks_gen_raw
-    elif block_type == "densenet":
-        nn_builder_gen = densenet_blocks_gen_raw
-    else:
-        raise NotImplemented
 
-    with scopes.arg_scope([nn_builder_gen], filters=filters, blocks=blocks):
+    with scopes.arg_scope([resnet_blocks_gen], filters=filters):
         cur = shaped_noise
-        for i in range(3):
+        for i in range(3 * depth_ratio):
             cf, ef, merge = checkerboard_condition_fn_gen(i, (i<2) )
-            cur = LinearShearingFlow(
+            cur = ShearingFlow(
                 f(cur),
-                nn_builder=nn_builder_gen(),
+                nn_builder=resnet_blocks_gen(),
                 condition_fn=cf,
                 effect_fn=ef,
                 combine_fn=merge,
             )
 
-        for i in range(2):
+        for i in range(2 * depth_ratio):
             cf, ef, merge = channel_condition_fn_gen(i, )
-            cur = LinearShearingFlow(
+            cur = ShearingFlow(
                 f(cur),
-                nn_builder=nn_builder_gen(),
+                nn_builder=resnet_blocks_gen(),
                 condition_fn=cf,
                 effect_fn=ef,
                 combine_fn=merge,
@@ -120,11 +95,11 @@ def run_task(v):
             backward_fn=lambda x: tf_go(x, debug=False).space_to_depth(2).value,
         )
         cur = upsampled
-        for i in range(v["flow_depth"]):
+        for i in range(4 * depth_ratio):
             cf, ef, merge = checkerboard_condition_fn_gen(i, (i<2) if hybrid else True)
-            cur = LinearShearingFlow(
+            cur = ShearingFlow(
                 f(cur),
-                nn_builder=nn_builder_gen(),
+                nn_builder=resnet_blocks_gen(),
                 condition_fn=cf,
                 effect_fn=ef,
             combine_fn=merge,
@@ -141,12 +116,12 @@ def run_task(v):
             this = checkerboard_condition_fn_gen()[0](context)
             that = checkerboard_condition_fn_gen()[1](context)
             processed_context = nn.conv2d(tf.concat(3, [this, that]), 32)
-            for _ in range(2):
+            for _ in range(5):
                 processed_context = nn.gated_resnet(processed_context)
             return processed_context
         def flow_builder():
             from sandbox.pchen.InfoGAN.infogan.models.real_nvp import checkerboard_condition_fn_gen
-            from sandbox.pchen.InfoGAN.infogan.models.real_nvp import resnet_blocks_gen_raw
+            from sandbox.pchen.InfoGAN.infogan.models.real_nvp import resnet_blocks_gen
             base = Gaussian(flat_dim)
             shape = [32, 32, 3]
             shaped_noise = ReshapeFlow(
@@ -158,9 +133,9 @@ def run_task(v):
             cur = shaped_noise
             for i in range(depth):
                 cf, ef, merge = checkerboard_condition_fn_gen(i, True)
-                cur = LinearShearingFlow(
+                cur = ShearingFlow(
                     f(cur),
-                    nn_builder=nn_builder_gen(blocks=2, filters=24),
+                    nn_builder=resnet_blocks_gen(blocks=2, filters=24),
                     condition_fn=cf,
                     effect_fn=ef,
                     combine_fn=merge,
@@ -187,6 +162,7 @@ def run_task(v):
             learning_rate=1e-3,
         ),
         save_every=20,
+        exp_avg=0.9995,
         # # for debug
         debug=False,
         # resume_from="/home/peter/rllab-private/data/local/global_proper_deeper_flow/"
@@ -206,24 +182,22 @@ config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[config.AWS_REGION_NAME]
 config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[config.AWS_REGION_NAME]
 config.AWS_SECURITY_GROUP_IDS = config.ALL_REGION_AWS_SECURITY_GROUP_IDS[config.AWS_REGION_NAME]
 
-for v in variants[:]:
+i = 0
+for v in variants[i:i+1]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="0212_depth_search_flow_based_dequant",
+        exp_prefix="0214_even_deeper_flow_based_dequant",
         variant=v,
 
-        # mode="local",
+        mode="local",
 
         # mode="local_docker",
         # env=dict(
         #     CUDA_VISIBLE_DEVICES="5"
         # ),
 
-        mode="ec2",
-        aws_config=dict(
-            placement=dict(AvailabilityZone="us-west-2b"),
-        ),
+        # mode="ec2",
         #
         use_gpu=True,
         snapshot_mode="last",

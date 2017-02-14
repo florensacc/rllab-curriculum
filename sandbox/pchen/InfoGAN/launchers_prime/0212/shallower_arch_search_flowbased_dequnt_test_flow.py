@@ -18,7 +18,8 @@ import tensorflow as tf
 import cloudpickle
 
 
-# kuma hopefully numerically stable
+# each block shaves off 0.04 bits
+# 32 -> 64 shaves off 0.08 bits
 
 class VG(VariantGenerator):
     @variant
