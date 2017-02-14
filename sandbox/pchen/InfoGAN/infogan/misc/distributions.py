@@ -292,6 +292,7 @@ class Gaussian(Distribution):
     def logli(self, x_var, dist_info):
         mean = dist_info["mean"]
         stddev = dist_info["stddev"]
+        x_var = tf.reshape(x_var, [-1, self.dim])
         epsilon = (x_var - mean) / (stddev + TINY)
         return tf.reduce_sum(
             - 0.5 * np.log(2 * np.pi) - tf.log(stddev + TINY) - 0.5 * tf.square(epsilon),
@@ -1343,7 +1344,10 @@ class Mixture(Distribution):
             idist_info = dist.activate_dist(idist_info_flat)
             loglips.append(dist.logli(x, idist_info) + tf.log(p))
         variate = tf.reduce_max(loglips, reduction_indices=0, keep_dims=True)
-        return tf.log(tf.reduce_sum(tf.exp(loglips - variate), reduction_indices=0, keep_dims=True) + TINY) + variate
+        return tf.reshape(
+            tf.log(tf.reduce_sum(tf.exp(loglips - variate), reduction_indices=0, keep_dims=True) + TINY) + variate,
+            [-1]
+        )
 
     def mode(self, x, dist_info):
         infos = dist_info["infos"]
@@ -1439,6 +1443,22 @@ class Mixture(Distribution):
             dict["infos"]
         )
 
+class PseudoMixture(Mixture):
+    def sample_logli(self, dist_info):
+        base = self._pairs[0][0]
+        return base.sample_logli(
+            base.activate_dist(dist_info["infos"][0])
+        )
+
+    # def prior_dist_info(self, batch_size):
+    #     return self._pairs[0][0].prior_dist_info(batch_size)
+    #
+    # @property
+    # def dist_info_keys(self):
+    #     return self._pairs[0][0].dist_info_keys
+    #
+    # def activate_dist(self, flat_dist):
+    #     return self._pairs[0][0].activate_dist(flat_dist)
 
 dist_book = pt.bookkeeper_for_default_graph()
 
@@ -2910,6 +2930,9 @@ class GeneralizedShearingFlow(Distribution):
     def dim(self):
         return self._base_dist.dim
 
+    def deactivate_dist(self, dict):
+        return self._base_dist.deactivate_dist(dict)
+
     @property
     def effective_dim(self):
         return self._base_dist.effective_dim
@@ -3079,6 +3102,9 @@ class ShearingFlow(Distribution):
         self._custom_phase = CustomPhase.train
         self._base_dist.train_mode()
 
+    def deactivate_dist(self, dict):
+        return self._base_dist.deactivate_dist(dict)
+
     @property
     def dim(self):
         return self._base_dist.dim
@@ -3189,6 +3215,9 @@ class ReshapeFlow(Distribution):
     @property
     def effective_dim(self):
         return self._base_dist.effective_dim
+
+    def deactivate_dist(self, dict):
+        return self._base_dist.deactivate_dist(dict)
 
     def logli(self, x_var, dist_info):
         with scopes.default_arg_scope(
@@ -3724,10 +3753,11 @@ def normalize_legacy(dist):
         combine_fn=lambda _, x: x,
     )
 
-def normalize(dist):
+@scopes.add_arg_scope_only("init_scale")
+def normalize(dist, init_scale=1.):
     def normalize_per_dim(x):
         mu, inv_std = nn.init_normalization(x)
-        return mu, inv_std
+        return mu, inv_std * init_scale
 
     init_mode = []
     @scopes.add_arg_scope_only("init")

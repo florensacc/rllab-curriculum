@@ -188,6 +188,22 @@ class DistTrainer(object):
 
         init_inp = self.construct_init()
         logger.log("opt_inited w/ init=True")
+
+        total_parameters = 0
+        for variable in tf.trainable_variables():
+            # shape is an array of tf.Dimension
+            shape = variable.get_shape()
+            # print(shape) print(len(shape))
+            variable_parametes = 1
+            for dim in shape:
+                # print(dim)
+                variable_parametes *= dim.value
+            # print(variable_parametes)
+            total_parameters += variable_parametes
+        logger.log("# of parameter vars %s" % len(tf.trainable_variables()))
+        logger.log("total parameters %s" % total_parameters)
+
+
         train_inp, train_logs, trainer, ema = self.construct_train()
         train_log_names, train_log_vars = zip(*train_logs.items())
         logger.log("opt_inited w/ init=False")

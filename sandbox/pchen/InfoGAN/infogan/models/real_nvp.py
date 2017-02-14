@@ -33,13 +33,51 @@ def resnet_blocks_gen_raw(blocks=4, filters=64, multiple=2):
             x = nn.gated_resnet(x)
         temp = nn.conv2d(x, chns * multiple)
         return temp
-        # mu = temp[:, :, :, chns:]
-        # logstd = (temp[:, :, :, :chns])  # might want learn scaling
-        # if squash:
-        #     logstd = squash(logstd)
-        # return mu, logstd
-
     return go
+
+@scopes.add_arg_scope_only("blocks", "filters", "multiple", "nl")
+def densenet_blocks_gen_raw(blocks=3, filters=16, multiple=2, nl=tf.nn.elu):
+    def go(x):
+        chns = int_shape(x)[3]
+        xs = [x]
+        for _ in range(blocks):
+            new_in = nl(
+                tf.concat(3, xs) * .6 / len(xs)
+            )
+            new_x = nn.conv2d(nl(nn.nin(new_in, filters * 4)), filters)
+            xs.append(new_x)
+        final_in = nl(
+            tf.concat(3, xs) * .6 / len(xs)
+        )
+        temp = nn.conv2d(final_in, chns * multiple)
+        return temp
+    return go
+
+@scopes.add_arg_scope_only("blocks", "filters", "multiple", "nl")
+def gated_densenet_blocks_gen_raw(blocks=4, filters=16, multiple=2, nl=tf.nn.elu):
+    @scopes.add_arg_scope_only("context")
+    def go(x, context=None):
+        chns = int_shape(x)[3]
+        xs = [x]
+        for _ in range(blocks):
+            new_in = nn.concat_elu(
+                tf.concat(3, xs) * .6 / len(xs)
+            )
+            c1 = nn.concat_elu(nn.conv2d(nl(nn.nin(new_in, filters * 4)), filters))
+            c2 = nn.nin(c1, filters*2, nonlinearity=None, init_scale=0.1)
+            if context is not None:
+                context = nl(nn.nin(context, filters*2))
+                c2 = c2 + context
+            c3 = c2[:,:,:,:filters] * tf.nn.sigmoid(c2[:,:,:,filters:])
+
+            xs.append(c3)
+        final_in = nn.concat_elu(
+            tf.concat(3, xs) * .6 / len(xs)
+        )
+        temp = nn.nin(final_in, chns * multiple)
+        return temp
+    return go
+
 
 
 def checkerboard_condition_fn_gen(bin=0, h_collapse=True):
