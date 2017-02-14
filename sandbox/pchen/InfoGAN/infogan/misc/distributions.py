@@ -3753,10 +3753,11 @@ def normalize_legacy(dist):
         combine_fn=lambda _, x: x,
     )
 
-def normalize(dist):
+@scopes.add_arg_scope_only("init_scale")
+def normalize(dist, init_scale=1.):
     def normalize_per_dim(x):
         mu, inv_std = nn.init_normalization(x)
-        return mu, inv_std
+        return mu, inv_std * init_scale
 
     init_mode = []
     @scopes.add_arg_scope_only("init")

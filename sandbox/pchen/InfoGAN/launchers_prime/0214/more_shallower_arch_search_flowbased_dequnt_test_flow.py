@@ -18,7 +18,8 @@ import tensorflow as tf
 import cloudpickle
 
 
-# more flows better but is it just densenet not sufficiently expressive?
+# each block shaves off 0.04 bits
+# 32 -> 64 shaves off 0.08 bits
 
 class VG(VariantGenerator):
     @variant
@@ -28,31 +29,21 @@ class VG(VariantGenerator):
         ]
 
     @variant
-    def flow_depth(self):
-        return [
-            6, 8, 12, 16
-        ]
-
-    @variant
     def block_type(self):
         return [
-            # "gated_resnet",
-            "densenet",
+            "gated_resnet",
         ]
 
     @variant
     def filters(self, block_type):
         if block_type == "gated_resnet":
-            return [32, 64]
-        else:
-            return [
-                8
-            ]
+            return [16, 64, 128, 256]
+            # return [32, 64]
 
     @variant
     def blocks(self):
         return [
-            2,
+            4, 7
         ]
 
     @variant
@@ -120,7 +111,7 @@ def run_task(v):
             backward_fn=lambda x: tf_go(x, debug=False).space_to_depth(2).value,
         )
         cur = upsampled
-        for i in range(v["flow_depth"]):
+        for i in range(4):
             cf, ef, merge = checkerboard_condition_fn_gen(i, (i<2) if hybrid else True)
             cur = LinearShearingFlow(
                 f(cur),
@@ -210,7 +201,7 @@ for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="0212_depth_search_flow_based_dequant",
+        exp_prefix="0212_shallow_arch_search_flow_based_dequant",
         variant=v,
 
         # mode="local",
