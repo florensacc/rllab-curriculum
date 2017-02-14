@@ -18,7 +18,7 @@ import tensorflow as tf
 import cloudpickle
 
 
-# kuma hopefully numerically stable
+# aux loss
 
 class VG(VariantGenerator):
     @variant
@@ -30,20 +30,26 @@ class VG(VariantGenerator):
     @variant
     def flow_depth(self):
         return [
-            6, 8, 12, 16
+            6, 12
+        ]
+
+    @variant
+    def aux_loss_coeff(self):
+        return [
+            0., 0.01, 0.05,
         ]
 
     @variant
     def block_type(self):
         return [
-            # "gated_resnet",
-            "densenet",
+            "gated_resnet",
+            # "densenet",
         ]
 
     @variant
     def filters(self, block_type):
         if block_type == "gated_resnet":
-            return [32, 64]
+            return [64]
         else:
             return [
                 8
@@ -52,7 +58,7 @@ class VG(VariantGenerator):
     @variant
     def blocks(self):
         return [
-            2,
+            3,
         ]
 
     @variant
@@ -68,7 +74,6 @@ class VG(VariantGenerator):
 def run_task(v):
     print("Running task: ", v)
     logit = v["logit"]
-    f = normalize
     hybrid = False
 
     dataset = Cifar10Dataset(dequantized=False) # dequantization left to flow
@@ -76,6 +81,16 @@ def run_task(v):
     filters = v["filters"]
     blocks = v["blocks"]
     block_type = v["block_type"]
+
+    aux_loss_coeff = v["aux_loss_coeff"]
+    if np.any(np.allclose(aux_loss_coeff, 0.)):
+        f = normalize
+    else:
+        def f(dist):
+            return PseudoMixture([
+                (normalize(dist), 1.-aux_loss_coeff),
+                (Gaussian(flat_dim), aux_loss_coeff),
+            ])
 
     noise = Gaussian(flat_dim)
     shape = [-1, 16, 16, 12]
@@ -210,17 +225,17 @@ for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="0212_depth_search_flow_based_dequant",
+        exp_prefix="0213_auxloss_depth_flow_based_dequant",
         variant=v,
 
-        # mode="local",
+        mode="local",
 
         # mode="local_docker",
         # env=dict(
         #     CUDA_VISIBLE_DEVICES="5"
         # ),
 
-        mode="ec2",
+        # mode="ec2",
         aws_config=dict(
             placement=dict(AvailabilityZone="us-west-2b"),
         ),

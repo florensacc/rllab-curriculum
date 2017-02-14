@@ -24,35 +24,26 @@ class VG(VariantGenerator):
     @variant
     def depth(self):
         return [
-            4
-        ]
-
-    @variant
-    def flow_depth(self):
-        return [
-            6, 8, 12, 16
+            6
         ]
 
     @variant
     def block_type(self):
         return [
             # "gated_resnet",
-            "densenet",
+            "gated_densenet",
         ]
 
     @variant
     def filters(self, block_type):
-        if block_type == "gated_resnet":
-            return [32, 64]
-        else:
-            return [
-                8
-            ]
+        return [
+            24
+        ]
 
     @variant
     def blocks(self):
         return [
-            2,
+            4,
         ]
 
     @variant
@@ -84,16 +75,21 @@ def run_task(v):
         forward_fn=lambda x: tf.reshape(x, shape),
         backward_fn=lambda x: tf_go(x).reshape([-1, noise.dim]).value,
     )
-    if block_type == "gated_resnet":
-        nn_builder_gen = resnet_blocks_gen_raw
-    elif block_type == "densenet":
-        nn_builder_gen = densenet_blocks_gen_raw
-    else:
-        raise NotImplemented
+    # if block_type == "gated_resnet":
+    #     nn_builder_gen = resnet_blocks_gen_raw
+    # elif block_type == "densenet":
+    #     nn_builder_gen = densenet_blocks_gen_raw
+    # else:
+    #     raise NotImplemented
+
+    filters = 32
+    blocks = 4
+    # nn_builder_gen = resnet_blocks_gen_raw
+    nn_builder_gen = gated_densenet_blocks_gen_raw
 
     with scopes.arg_scope([nn_builder_gen], filters=filters, blocks=blocks):
         cur = shaped_noise
-        for i in range(3):
+        for i in range(8):
             cf, ef, merge = checkerboard_condition_fn_gen(i, (i<2) )
             cur = LinearShearingFlow(
                 f(cur),
@@ -103,7 +99,7 @@ def run_task(v):
                 combine_fn=merge,
             )
 
-        for i in range(2):
+        for i in range(4):
             cf, ef, merge = channel_condition_fn_gen(i, )
             cur = LinearShearingFlow(
                 f(cur),
@@ -120,7 +116,7 @@ def run_task(v):
             backward_fn=lambda x: tf_go(x, debug=False).space_to_depth(2).value,
         )
         cur = upsampled
-        for i in range(v["flow_depth"]):
+        for i in range(8):
             cf, ef, merge = checkerboard_condition_fn_gen(i, (i<2) if hybrid else True)
             cur = LinearShearingFlow(
                 f(cur),
@@ -182,11 +178,12 @@ def run_task(v):
         dataset=dataset,
         dist=dist,
         init_batch_size=1024,
-        train_batch_size=64, # also testing resuming from diff bs
+        train_batch_size=64*2, # also testing resuming from diff bs
         optimizer=AdamaxOptimizer(
-            learning_rate=1e-3,
+            learning_rate=2e-3,
         ),
         save_every=20,
+        exp_avg=0.9995,
         # # for debug
         debug=False,
         # resume_from="/home/peter/rllab-private/data/local/global_proper_deeper_flow/"
@@ -210,20 +207,17 @@ for v in variants[:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="0212_depth_search_flow_based_dequant",
+        exp_prefix="0213_paramdebug_deep_dense_flow_based_dequant",
         variant=v,
 
-        # mode="local",
+        mode="local",
 
         # mode="local_docker",
         # env=dict(
         #     CUDA_VISIBLE_DEVICES="5"
         # ),
 
-        mode="ec2",
-        aws_config=dict(
-            placement=dict(AvailabilityZone="us-west-2b"),
-        ),
+        # mode="ec2",
         #
         use_gpu=True,
         snapshot_mode="last",

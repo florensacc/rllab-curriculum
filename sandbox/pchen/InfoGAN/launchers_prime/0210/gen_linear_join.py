@@ -18,7 +18,9 @@ import tensorflow as tf
 import cloudpickle
 
 
-# test if logit transofmration is useful
+
+# no sign of life for leaky join and double join
+
 
 class VG(VariantGenerator):
     @variant
