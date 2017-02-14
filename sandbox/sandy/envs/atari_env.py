@@ -11,6 +11,7 @@ from rllab.envs.base import Step
 from rllab.misc.overrides import overrides
 from rllab.spaces.box import Box
 from sandbox.sandy.envs.gym_env import GymEnv
+from sandbox.sandy.misc.util import row_concat
 
 DEFAULT_IMG_HEIGHT = 42
 DEFAULT_IMG_WIDTH = 42
@@ -85,7 +86,8 @@ class AtariEnv(GymEnv):
         if self.persistent_adv:
             return self.last_adv_frames
         else:
-            return np.r_[self.last_frames[:-1,:,:], self.last_adv_frames[-1,:,:][np.newaxis,:,:]]
+            return 
+            return row_concat(self.last_frames[:-1,:,:], self.last_adv_frames[-1,:,:][np.newaxis,:,:])
 
     def set_adversary_fn(self, fn_handle):
         self.adversary_fn = fn_handle
@@ -104,8 +106,8 @@ class AtariEnv(GymEnv):
             self.clear_last_frames()
         else:
             next_obs = self.preprocess_obs(next_obs)
-            self.last_frames = np.r_[self.last_frames[1:,:,:], next_obs[np.newaxis,:,:]]
-            self.last_adv_frames = np.r_[self.last_adv_frames[1:,:,:], next_obs[np.newaxis,:,:]]
+            self.last_frames = row_concat(self.last_frames[1:,:,:], next_obs[np.newaxis,:,:])
+            self.last_adv_frames = row_concat(self.last_adv_frames[1:,:,:], next_obs[np.newaxis,:,:])
 
             if self.adversary_fn is not None:
                 # Compute adversarial perturbation for next_obs

@@ -38,10 +38,11 @@ class A3CModel(chainer.Link):
 
 class A3CFF(chainer.ChainList, A3CModel):
 
-    def __init__(self, n_actions, shared_weights=True, img_size=84):
+    def __init__(self, n_actions, shared_weights=True, n_input_channels=4, img_size=84):
         self.shared_weights = shared_weights
         if shared_weights:
-            self.head = dqn_head.NIPSDQNHead(img_size=img_size) # observation -> feature
+            self.head = dqn_head.NIPSDQNHead(n_input_channels=n_input_channels, \
+                                             img_size=img_size) # observation -> feature
             self.pi = policy.FCSoftmaxPolicy(
                 self.head.n_output_channels, n_actions)
             self.v = v_function.FCVFunction(self.head.n_output_channels)
@@ -65,8 +66,9 @@ class A3CFF(chainer.ChainList, A3CModel):
 
 class A3CLSTM(chainer.ChainList, A3CModel):
 
-    def __init__(self, n_actions, img_size=84):
-        self.head = dqn_head.NIPSDQNHead(img_size=img_size)
+    def __init__(self, n_actions, n_input_channels=4, img_size=84):
+        self.head = dqn_head.NIPSDQNHead(n_input_channels=n_input_channels, \
+                                         img_size=img_size)
         self.pi = policy.FCSoftmaxPolicy(
             self.head.n_output_channels, n_actions)
         self.v = v_function.FCVFunction(self.head.n_output_channels)
@@ -114,6 +116,7 @@ class A3CAgent(Agent,Shareable,Picklable):
                  phase="Train",
                  sync_t_gap_limit=np.inf,
                  shared_weights=True,
+                 n_input_channels=4,
                  img_size=84
                  ):
         self.init_params = locals()
@@ -121,9 +124,13 @@ class A3CAgent(Agent,Shareable,Picklable):
 
         # Globally shared model
         if model_type == "ff":
-            self.shared_model = A3CFF(n_actions,shared_weights,img_size=img_size)
+            self.shared_model = A3CFF(n_actions, shared_weights, \
+                                      n_input_channels=n_input_channels, \
+                                      img_size=img_size)
         elif model_type == "lstm":
-            self.shared_model = A3CLSTM(n_actions,img_size=img_size)
+            self.shared_model = A3CLSTM(n_actions, \
+                                        n_input_channels=n_input_channels, \
+                                        img_size=img_size)
         else:
             raise NotImplementedError
 

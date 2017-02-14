@@ -23,3 +23,13 @@ def get_softmax(x):
     x = x.flatten()
     softmax_x = np.exp(x - np.max(x)) / np.sum(np.exp(x - np.max(x)), axis=0)
     return softmax_x
+
+def row_concat(a,b):
+    # Handles empty array, which np.r_ does not
+    import numpy as np
+    if 0 in a.shape:
+        return np.array(b)
+    elif 0 in b.shape:
+        return np.array(a)
+    else:
+        return np.r_[a,b]
