@@ -1,12 +1,8 @@
 """
 Variational DDPG (online, consevative)
 
-Repeat exp-011g, with
-* code refactored by Tuomas
-* measure the exact entropy regularized objective
-* log kl in the evaluation phase
-* compare preaction and scaled-tanh
-* try smaller update gaps (100, 500, 1000)
+Continue exp-009. Try VDDPG on hopper w/ only alive bonus.
+Copied from exp-011g2.
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
@@ -54,12 +50,12 @@ plot = False
 class VG(VariantGenerator):
     @variant
     def zzseed(self):
-        return [0, 100, 200, 300, 400, 500, 600, 700, 800, 900]
+        return [0, 100, 200, 300, 400]
 
     @variant
     def env_name(self):
         return [
-            "swimmer_undirected"
+            "gym_hopper",
         ]
     @variant
     def max_path_length(self):
@@ -71,7 +67,7 @@ class VG(VariantGenerator):
 
     @variant
     def svgd_target(self):
-        return ["scaled-tanh", "pre-action"]
+        return ["pre-action"]
 
     @variant
     def q_target_type(self):
@@ -89,7 +85,7 @@ class VG(VariantGenerator):
 
     @variant
     def scale_reward(self):
-        return [10]
+        return [1, 0.1, 10]
 
     @variant
     def qf_learning_rate(self):
@@ -112,25 +108,8 @@ class VG(VariantGenerator):
         return [1]
 
     @variant
-    def prog_threshold(self):
-        return [1.5]
-
-    @variant
     def train_frequency(self):
         return [
-            # assuming the current is fixed, 0.999^5000 = 0.00672
-            dict(
-                actor_train_frequency=1,
-                critic_train_frequency=1,
-                update_target_frequency=100,
-                train_repeat=1,
-            ),
-            dict(
-                actor_train_frequency=1,
-                critic_train_frequency=1,
-                update_target_frequency=500,
-                train_repeat=1,
-            ),
             dict(
                 actor_train_frequency=1,
                 critic_train_frequency=1,
@@ -138,6 +117,17 @@ class VG(VariantGenerator):
                 train_repeat=1,
             ),
         ]
+    @variant
+    def use_forward_reward(self):
+        return [True]
+
+    @variant
+    def include_xpos(self):
+        return [True]
+
+    @variant
+    def reset_after_fall(self):
+        return [False]
 
 variants = VG().variants()
 batch_tasks = []
@@ -145,6 +135,17 @@ print("#Experiments: %d" % len(variants))
 for v in variants:
     # non-variant params -----------------------------------
     # >>>>>>
+    env_plot_settings = dict(
+        figsize=(15,5),
+        xlim=(-10,10),
+        ylim=(0,1),
+    )
+    q_plot_settings = dict(
+        xlim=(-1, 1),
+        ylim=(-1, 1),
+        obs_lst=((0,)*12,),
+        action_dims=(0, 1),
+    )
     # algo
     seed=v["zzseed"]
     env_name = v["env_name"]
@@ -158,14 +159,15 @@ for v in variants:
         alpha=v["alpha"],
         q_target_type=v["q_target_type"],
         svgd_target="pre-action" if v["svgd_target"] == "pre-action" else "action",
-        K_critic=100,
+        K_critic=50,
         target_action_dist=v["target_action_dist"],
         train_repeat=v["train_frequency"]["train_repeat"],
         actor_train_frequency=v["train_frequency"]["actor_train_frequency"],
         critic_train_frequency=v["train_frequency"]["critic_train_frequency"],
         update_target_frequency=v["train_frequency"]["update_target_frequency"],
         debug_mode=False,
-        env_plot_settings=dict(xlim=-1, ylim=1),
+        env_plot_settings=env_plot_settings,
+        q_plot_settings=q_plot_settings,
     )
     if "local" in mode and sys.platform == 'darwin':
         shared_alg_kwargs["plt_backend"] = "MacOSX"
@@ -200,7 +202,9 @@ for v in variants:
         }
     elif env_name == "gym_hopper":
         env_kwargs = {
-            "use_forward_reward": v["use_forward_reward"]
+            "use_forward_reward": v["use_forward_reward"],
+            "include_xpos": v["include_xpos"],
+            "reset_after_fall": v["reset_after_fall"],
         }
     else:
         env_kwargs = {}

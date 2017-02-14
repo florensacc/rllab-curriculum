@@ -7,9 +7,10 @@ import os.path as osp
 import subprocess
 
 SOURCE_DIR = "/home/shhuang/src/rllab-private/data/s3/"
-TARGET_DIR = "/home/shhuang/src/rllab-private/sandbox/sandy/adversarial/trained_models"
+TARGET_DIR = "/home/shhuang/src/rllab-private/sandbox/sandy/adversarial/trained_models_recurrent"
 # Experiments to copy over
-EXPERIMENTS = ['trpo/exp027', 'async-rl/exp036', 'deep-q-rl/exp035c']
+#EXPERIMENTS = ['trpo/exp027', 'async-rl/exp036', 'deep-q-rl/exp035c']
+EXPERIMENTS = ['async-rl/exp037']
 PROGRESS_FNAME = 'progress.csv'
 
 def main():

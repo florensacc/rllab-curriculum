@@ -1,12 +1,13 @@
 """
 Variational DDPG (online, consevative)
 
-Repeat exp-011g, with
-* code refactored by Tuomas
-* measure the exact entropy regularized objective
-* log kl in the evaluation phase
-* compare preaction and scaled-tanh
-* try smaller update gaps (100, 500, 1000)
+Continue exp-011g,g2, with
++ fix svgd_target = 'pre-action' and update_target_frequency = 1000
++ K_critic: 100 -> 50. Reduce computation time.
++ clip entropies (only with upper bound)
++ correctly computed objective function (fixed the discounted sum issue)
+* compare soft or mean targets
+* try different alpha annealing
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
@@ -15,6 +16,7 @@ from rllab.envs.normalized_env import normalize
 from rllab.exploration_strategies.ou_strategy import OUStrategy
 from sandbox.rocky.tf.envs.base import TfEnv
 from sandbox.haoran.myscripts.envs import EnvChooser
+from sandbox.haoran.mddpg.misc.annealer import LogLinearAnnealer
 from sandbox.tuomas.mddpg.kernels.gaussian_kernel import \
     SimpleAdaptiveDiagonalGaussianKernel
 from sandbox.tuomas.mddpg.critics.nn_qfunction import FeedForwardCritic
@@ -71,11 +73,11 @@ class VG(VariantGenerator):
 
     @variant
     def svgd_target(self):
-        return ["scaled-tanh", "pre-action"]
+        return ["pre-action"]
 
     @variant
     def q_target_type(self):
-        return ["soft"]
+        return ["mean", "soft"]
 
     @variant
     def target_action_dist(self):
@@ -89,7 +91,11 @@ class VG(VariantGenerator):
 
     @variant
     def scale_reward(self):
-        return [10]
+        return [1]
+
+    @variant
+    def temperature_annealer(self):
+        return [1]
 
     @variant
     def qf_learning_rate(self):
@@ -118,25 +124,32 @@ class VG(VariantGenerator):
     @variant
     def train_frequency(self):
         return [
-            # assuming the current is fixed, 0.999^5000 = 0.00672
-            dict(
-                actor_train_frequency=1,
-                critic_train_frequency=1,
-                update_target_frequency=100,
-                train_repeat=1,
-            ),
-            dict(
-                actor_train_frequency=1,
-                critic_train_frequency=1,
-                update_target_frequency=500,
-                train_repeat=1,
-            ),
             dict(
                 actor_train_frequency=1,
                 critic_train_frequency=1,
                 update_target_frequency=1000,
                 train_repeat=1,
             ),
+        ]
+
+    @variant
+    def alpha_annealer(self):
+        return [
+            # dict(
+            #     init_value=0.1,
+            #     final_value=0.1,
+            #     stop_iter=1,
+            # ), # equivalent to scale_reward = 10 in exp-011g, g2
+            dict(
+                init_value=10,
+                final_value=0.1,
+                stop_iter=499,
+            ),
+            dict(
+                init_value=10,
+                final_value=0.001,
+                stop_iter=499,
+            ), # should get to alpha = 0.1 at iteration 250
         ]
 
 variants = VG().variants()
@@ -158,7 +171,7 @@ for v in variants:
         alpha=v["alpha"],
         q_target_type=v["q_target_type"],
         svgd_target="pre-action" if v["svgd_target"] == "pre-action" else "action",
-        K_critic=100,
+        K_critic=50,
         target_action_dist=v["target_action_dist"],
         train_repeat=v["train_frequency"]["train_repeat"],
         actor_train_frequency=v["train_frequency"]["actor_train_frequency"],
@@ -177,7 +190,7 @@ for v in variants:
             epoch_length = 110,
             min_pool_size = 100,
             eval_samples = 100,
-            n_epochs = 10,
+            n_epochs = 500,
         )
     else:
         alg_kwargs = dict(
@@ -289,6 +302,12 @@ for v in variants:
         "kernel",
         dim=env.action_space.flat_dim,
     )
+    alpha_annealer = LogLinearAnnealer(
+        init_value=v["alpha_annealer"]["init_value"],
+        final_value=v["alpha_annealer"]["final_value"],
+        n_iter=alg_kwargs["n_epochs"],
+        stop_iter=v["alpha_annealer"]["stop_iter"],
+    )
     algorithm = VDDPG(
         env=env,
         exploration_strategy=es,
@@ -298,6 +317,7 @@ for v in variants:
         qf=qf,
         q_prior=None,
         K=K,
+        alpha_annealer=alpha_annealer,
         **alg_kwargs
     )
 

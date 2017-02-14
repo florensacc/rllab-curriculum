@@ -81,9 +81,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
             axis3d=False,
             q_plot_settings=None,
             env_plot_settings=None,
-            eval_entropy_n_sample=10,
             eval_kl_n_sample=10,
             eval_kl_n_sample_part=10,
+            alpha_annealer=None,
             **kwargs
     ):
         """
@@ -97,7 +97,6 @@ class VDDPG(OnlineAlgorithm, Serializable):
         :param qf_learning_rate: Learning rate of the critic
         :param policy_learning_rate: Learning rate of the actor
         :param Q_weight_decay: How much to decay the weights for Q
-        :param eval_entropy_n_sample: (large values slow dow computation)
         :param eval_kl_n_sample: (large values slow dow computation)
         :param eval_kl_n_sample_part: (large values slow dow computation)
         :return:
@@ -180,9 +179,10 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.n_eval_paths = n_eval_paths
         plt.switch_backend(plt_backend)
 
-        self.eval_entropy_n_sample = eval_entropy_n_sample
         self.eval_kl_n_sample = eval_kl_n_sample
         self.eval_kl_n_sample_part = eval_kl_n_sample_part
+
+        self.alpha_annealer = alpha_annealer
 
         self._init_figures()
 
@@ -749,7 +749,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
     def _init_figures(self):
         # Init environment figure.
         if self.env_plot_settings is not None:
-            self._fig_env = plt.figure(figsize=(7, 7))
+            self._fig_env = plt.figure(
+                figsize=self.env_plot_settings['figsize'],
+            )
             self._ax_env = self._fig_env.add_subplot(111)
             self._ax_env.set_xlim(self.env_plot_settings['xlim'])
             self._ax_env.set_ylim(self.env_plot_settings['ylim'])
@@ -771,11 +773,12 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 self._ax_q_lst.append(ax)
 
 
-    def compute_kl(self, observations, K, K_part):
+    def compute_kl_entropy(self, observations, K, K_part):
         """
         K: number of particles to estimate log(q) / log(bar{p})
         K_part: number of particles to estimate the partition function
         """
+        TINY = 1e-8
         N = observations.shape[0]
         Da = self.policy.action_dim
         Do = self.policy.observation_dim
@@ -790,15 +793,16 @@ class VDDPG(OnlineAlgorithm, Serializable):
             self.qf.get_feed_dict(
                 obs=np.tile(observations, (1, K_part)).reshape(-1, Do),
                 action=actions_part,
-            ) # N x K_part
+            )
         ).reshape(N, K_part)
         Qs_part_max = np.amax(Qs_part, axis=1, keepdims=True)
         logZs = Qs_part_max[:,0] + np.log(np.mean(
             np.exp(Qs_part - Qs_part_max) / weights,
             axis=1
         )) # (N,)
+            # logZs are also the soft values
 
-        # compute kl(p | bar{p})
+        # compute kl(q | bar{p})
         obs = np.tile(observations, (1, K)).reshape(-1, Do)
         actions, info = self.policy.get_actions(obs, with_prob=True)
         Qs = self.sess.run(
@@ -807,8 +811,15 @@ class VDDPG(OnlineAlgorithm, Serializable):
         ).reshape(N, K)
 
         qs = info["prob"].reshape(N, K)
-        kl = np.mean(np.log(qs) - Qs, axis=1) + logZs
-        return kl
+        entropies = np.mean(-np.log(qs + TINY), axis=1)
+        kl = np.mean(np.log(qs + TINY) - Qs, axis=1) + logZs
+
+        entropy_bound = Da * np.log(2. * self.policy.output_scale)
+            # the uniform policy has entropy - log (1/volume) = log(volume)
+            # if output_scale = 1, the bound is Da * 0.7
+        entropies_clipped = np.minimum(entropies, entropy_bound)
+
+        return kl, entropies_clipped
 
     @overrides
     def evaluate(self, epoch, train_info):
@@ -872,6 +883,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             # ('PolicySurrogateLoss', policy_loss),
             ('CriticLoss', qf_loss),
             ('AverageDiscountedReturn', average_discounted_return),
+            ('Alpha', self.alpha)
         ]))
         # self.last_statistics.update(create_stats_ordered_dict('Ys', ys))
         self.last_statistics.update(create_stats_ordered_dict('QfOutput',
@@ -910,12 +922,18 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 'TrainingPathLengths', es_path_lengths))
 
         # log the entropy regularized objective
+        # we should scale down the entropies if we have scaled up
         discounted_regularized_returns = []
         entropy_reward_ratios = []
+        all_kls = []
         for path in paths:
-            entropies = self.policy.compute_entropy(
-                path["observations"], n_sample=self.eval_entropy_n_sample)
-            entropy_bonuses = np.concatenate([entropies[1:], [0]])
+            kls, entropies = self.compute_kl_entropy(
+                    path["observations"],
+                    K=self.eval_kl_n_sample,
+                    K_part=self.eval_kl_n_sample_part,
+                )
+            all_kls = np.concatenate([all_kls, kls])
+            entropy_bonuses = np.concatenate([[0], entropies[1:]])
             discounted_rewards = special.discount_return(
                 path["rewards"], self.discount
             )
@@ -923,22 +941,17 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 entropy_bonuses,  self.discount
             )
             discounted_regularized_returns.append(
-                discounted_rewards + discounted_entropies
+                discounted_rewards + self.alpha * discounted_entropies
             )
             entropy_reward_ratios.append(
-                discounted_entropies / discounted_rewards
+                self.alpha * discounted_entropies / discounted_rewards
             )
         self.last_statistics.update(create_stats_ordered_dict(
             'DiscRegReturn', discounted_regularized_returns))
         self.last_statistics.update(create_stats_ordered_dict(
             'EntropyRewardRatio', entropy_reward_ratios))
-
-        kls = self.compute_kl(obs,
-            K=self.eval_kl_n_sample,
-            K_part=self.eval_kl_n_sample_part,
-        )
         self.last_statistics.update(create_stats_ordered_dict(
-            'KL', kls))
+            'KL', all_kls))
 
 
         # log kl(pi | exp(Q))
@@ -1073,6 +1086,13 @@ class VDDPG(OnlineAlgorithm, Serializable):
             self.update_target_counter + 1,
             self.update_target_frequency,
         )
+
+    @overrides
+    def update_training_settings(self, epoch):
+        if self.scale_reward_annealer is not None:
+            self.scale_reward = self.scale_reward_annealer.get_new_value(epoch)
+        if self.alpha_annealer is not None:
+            self.alpha = self.alpha_annealer.get_new_value(epoch)
 
 ## Use the following code to test whether the exp(Q-Qmax) code works
 # import tensorflow as tf

@@ -15,10 +15,12 @@ from sandbox.haoran.mddpg.misc.rllab_util import split_paths
 from sandbox.haoran.myscripts.myutilities import get_true_env
 from sandbox.haoran.myscripts.tf_utils import adam_clipped_op
 from sandbox.haoran.mddpg.misc.simple_replay_pool import SimpleReplayPool
+from rllab.envs.proxy_env import ProxyEnv
 from rllab.misc import logger
 from rllab.misc import special
 from rllab.misc.overrides import overrides
 from rllab.core.serializable import Serializable
+import gc
 
 TARGET_PREFIX = "target_"
 
@@ -45,6 +47,8 @@ class DDPG(OnlineAlgorithm, Serializable):
             critic_grad_clip=0,
             actor_grad_clip=0,
             axis3d=False,
+            env_plot_settings=None,
+            q_plot_settings=None,
             **kwargs
     ):
         """
@@ -77,8 +81,35 @@ class DDPG(OnlineAlgorithm, Serializable):
         self.critic_grad_clip = critic_grad_clip
         self.actor_grad_clip = actor_grad_clip
         self.axis3d = axis3d
+        self.env_plot_settings = env_plot_settings
+        self.q_plot_settings = q_plot_settings
 
         super().__init__(env, policy, exploration_strategy, **kwargs)
+        self._init_figures()
+
+    def _init_figures(self):
+        # Init environment figure.
+        if self.env_plot_settings is not None:
+            self._fig_env = plt.figure(figsize=(7, 7))
+            self._ax_env = self._fig_env.add_subplot(111)
+            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+            self._ax_env.set_ylim(self.env_plot_settings['ylim'])
+
+        # Init critic + actor figure.
+        # TODO: Figure out to set the size automatically
+        if self.q_plot_settings is not None:
+            # Make sure the observations are given as np array.
+            self.q_plot_settings['obs_lst'] = (
+                np.array(self.q_plot_settings['obs_lst'])
+            )
+
+            self._fig_q = plt.figure(figsize=(7, 7))
+
+            self._ax_q_lst = []
+            n_states = len(self.q_plot_settings['obs_lst'])
+            for i in range(n_states):
+                ax = self._fig_q.add_subplot(100 + n_states * 10 + i + 1)
+                self._ax_q_lst.append(ax)
 
     @overrides
     def _init_tensorflow_ops(self):
@@ -341,35 +372,56 @@ class DDPG(OnlineAlgorithm, Serializable):
             self.last_statistics.update(create_stats_ordered_dict(
                 'TrainingReturns', train_returns))
 
-        # Create figure for plotting the environment.
-        fig = plt.figure(figsize=(12, 7))
-        if self.axis3d:
-            from mpl_toolkits.mplot3d import Axes3D
-            ax = fig.add_subplot(111, projection='3d')
-        else:
-            ax = fig.add_subplot(111)
+        snapshot_dir = logger.get_snapshot_dir()
+        env = self.env
+        while isinstance(env, ProxyEnv):
+            env = env._wrapped_env
 
-        true_env = get_true_env(self.env)
-        if hasattr(true_env, "log_stats"):
-            env_stats = true_env.log_stats(self, epoch, paths, ax)
+        if hasattr(env, "log_stats"):
+            env_stats = env.log_stats(self, epoch, paths)
             self.last_statistics.update(env_stats)
 
-        # Close and save figs.
-        snapshot_dir = logger.get_snapshot_dir()
-        if snapshot_dir is None:
-            snapshot_dir = '/tmp/ddpg/'
-            os.system('mkdir -p %s'%(snapshot_dir))
-        img_file = os.path.join(snapshot_dir, 'itr_%d_test_paths.png' % epoch)
+        if hasattr(env, 'plot_paths'):
+            img_file = os.path.join(snapshot_dir,
+                                    'env_itr_%05d.png' % epoch)
 
-        plt.draw()
-        plt.pause(0.001)
+            self._ax_env.clear()
+            env.plot_paths(paths, self._ax_env)
+            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+            self._ax_env.set_ylim(self.env_plot_settings['ylim'])
 
-        plt.savefig(img_file, dpi=100)
-        plt.cla()
-        plt.close('all')
+            plt.pause(0.001)
+            plt.draw()
+
+            self._fig_env.savefig(img_file, dpi=100)
+
+        # Collect actor and critic info (save just plots)
+        if hasattr(self.qf, 'plot') and self.q_plot_settings is not None:
+            img_file = os.path.join(snapshot_dir,
+                                    'q_itr_%05d.png' % epoch)
+
+            [ax.clear() for ax in self._ax_q_lst]
+            self.qf.plot(
+                ax_lst=self._ax_q_lst,
+                obs_lst=self.q_plot_settings['obs_lst'],
+                action_dims=self.q_plot_settings['action_dims'],
+                xlim=self.q_plot_settings['xlim'],
+                ylim=self.q_plot_settings['ylim'],
+            )
+
+            self.policy.plot_samples(self._ax_q_lst,
+                                     self.q_plot_settings['obs_lst'],
+                                     self.K)
+
+            plt.pause(0.001)
+            plt.draw()
+
+            self._fig_q.savefig(img_file, dpi=100)
 
         for key, value in self.last_statistics.items():
             logger.record_tabular(key, value)
+
+        gc.collect()
 
         return self.last_statistics
 

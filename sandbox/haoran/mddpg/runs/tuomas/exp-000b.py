@@ -1,15 +1,13 @@
 """
-Variational DDPG (online, consevative)
+Variational DDPG
 
-Repeat exp-011g, with
-* code refactored by Tuomas
-* measure the exact entropy regularized objective
-* log kl in the evaluation phase
-* compare preaction and scaled-tanh
-* try smaller update gaps (100, 500, 1000)
+Try vddpg on Ant with speed as reward. See if we can get some diverse behavior.
+Continue exp-000, with
+* different scale_reward
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
+import numpy as np
 import joblib
 from rllab.envs.normalized_env import normalize
 from rllab.exploration_strategies.ou_strategy import OUStrategy
@@ -37,7 +35,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
-exp_prefix = "mddpg/vddpg/" + exp_index
+exp_prefix = "tuomas/vddpg/" + exp_index
 mode = "ec2"
 ec2_instance = "c4.4xlarge"
 subnet = "us-west-1c"
@@ -54,12 +52,12 @@ plot = False
 class VG(VariantGenerator):
     @variant
     def zzseed(self):
-        return [0, 100, 200, 300, 400, 500, 600, 700, 800, 900]
+        return [0, 100, 200, 300, 400]
 
     @variant
     def env_name(self):
         return [
-            "swimmer_undirected"
+            "tuomas_ant"
         ]
     @variant
     def max_path_length(self):
@@ -71,7 +69,8 @@ class VG(VariantGenerator):
 
     @variant
     def svgd_target(self):
-        return ["scaled-tanh", "pre-action"]
+        return ["pre-action"]
+        # return ["action"]
 
     @variant
     def q_target_type(self):
@@ -89,7 +88,11 @@ class VG(VariantGenerator):
 
     @variant
     def scale_reward(self):
-        return [10]
+        return [10, 0.1, 0.01]
+
+    @variant
+    def alpha(self):
+        return [1]
 
     @variant
     def qf_learning_rate(self):
@@ -100,37 +103,12 @@ class VG(VariantGenerator):
         return [1]
 
     @variant
-    def dist_reward(self):
-        return [1.]
-
-    @variant
     def network_size(self):
         return [200]
 
     @variant
-    def alpha(self):
-        return [1]
-
-    @variant
-    def prog_threshold(self):
-        return [1.5]
-
-    @variant
     def train_frequency(self):
         return [
-            # assuming the current is fixed, 0.999^5000 = 0.00672
-            dict(
-                actor_train_frequency=1,
-                critic_train_frequency=1,
-                update_target_frequency=100,
-                train_repeat=1,
-            ),
-            dict(
-                actor_train_frequency=1,
-                critic_train_frequency=1,
-                update_target_frequency=500,
-                train_repeat=1,
-            ),
             dict(
                 actor_train_frequency=1,
                 critic_train_frequency=1,
@@ -138,7 +116,6 @@ class VG(VariantGenerator):
                 train_repeat=1,
             ),
         ]
-
 variants = VG().variants()
 batch_tasks = []
 print("#Experiments: %d" % len(variants))
@@ -149,7 +126,22 @@ for v in variants:
     seed=v["zzseed"]
     env_name = v["env_name"]
     K = v["K"]
-    output_scale = 2. if v["svgd_target"] == "scaled-tanh" else 1.
+    #output_scale = 2. if v["svgd_target"] == "action" else 1.
+    output_scale = 2. if v["svgd_target"] == "action" else 1.
+
+    # Plotter settings.
+    q_plot_settings = dict(
+        xlim=(-2, 2),
+        ylim=(-2, 2),
+        obs_lst=((0,)*125,),
+        action_dims=(0, 1),
+    )
+
+    env_plot_settings = dict(
+        xlim=(-5, 5),
+        ylim=(-5, 5),
+    )
+
     shared_alg_kwargs = dict(
         max_path_length=v["max_path_length"],
         scale_reward=v["scale_reward"],
@@ -157,7 +149,7 @@ for v in variants:
         soft_target_tau=v["tau"],
         alpha=v["alpha"],
         q_target_type=v["q_target_type"],
-        svgd_target="pre-action" if v["svgd_target"] == "pre-action" else "action",
+        svgd_target=v["svgd_target"],
         K_critic=100,
         target_action_dist=v["target_action_dist"],
         train_repeat=v["train_frequency"]["train_repeat"],
@@ -165,7 +157,6 @@ for v in variants:
         critic_train_frequency=v["train_frequency"]["critic_train_frequency"],
         update_target_frequency=v["train_frequency"]["update_target_frequency"],
         debug_mode=False,
-        env_plot_settings=dict(xlim=-1, ylim=1),
     )
     if "local" in mode and sys.platform == 'darwin':
         shared_alg_kwargs["plt_backend"] = "MacOSX"
@@ -177,15 +168,15 @@ for v in variants:
             epoch_length = 110,
             min_pool_size = 100,
             eval_samples = 100,
-            n_epochs = 10,
+            n_epochs = 1,
         )
     else:
         alg_kwargs = dict(
             epoch_length=10000,
             n_epochs=500,
-            n_eval_paths=10,
-            eval_kl_n_sample=1000,
-            eval_kl_n_sample_part=1000,
+            n_eval_paths=2,
+            eval_kl_n_sample=1,
+            eval_kl_n_sample_part=1,
         )
     alg_kwargs.update(shared_alg_kwargs)
     if env_name == "hopper":
@@ -193,7 +184,7 @@ for v in variants:
             "alive_coeff": 0.5
         }
     elif env_name in ["swimmer_undirected", "tuomas_hopper"]:
-        env_kwargs = {
+            env_kwargs = {
             "random_init_state": False,
             "dist_reward": v["dist_reward"],
             "prog_threshold": v["prog_threshold"],
@@ -257,8 +248,9 @@ for v in variants:
     env_chooser = EnvChooser()
     env = TfEnv(normalize(
         env_chooser.choose_env(env_name,**env_kwargs),
-        clip=(not (v["svgd_target"] == "scaled-tanh")),
+        clip=(not (v["svgd_target"] == "action")),
     ))
+
     qf = FeedForwardCritic(
         "critic",
         env.observation_space.flat_dim,
@@ -271,7 +263,7 @@ for v in variants:
         mu=0,
         theta=0.15,
         sigma=v["ou_sigma"],
-        clip=(not (v["svgd_target"] == "scaled-tanh")),
+        clip=(not (v["svgd_target"] == "action")),
     )
     policy = StochasticNNPolicy(
         scope_name="actor",
@@ -298,6 +290,8 @@ for v in variants:
         qf=qf,
         q_prior=None,
         K=K,
+        q_plot_settings=q_plot_settings,
+        env_plot_settings=env_plot_settings,
         **alg_kwargs
     )
 
@@ -326,6 +320,7 @@ for v in variants:
             sync_log_on_termination=True,
             sync_all_data_node_to_s3=True,
             terminate_machine=("test" not in mode),
+            python_command="python3",
         )
         batch_tasks = []
         if "test" in mode:

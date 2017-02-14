@@ -1,27 +1,18 @@
 """
 Variational DDPG (online, consevative)
 
-Repeat exp-011g, with
-* code refactored by Tuomas
-* measure the exact entropy regularized objective
-* log kl in the evaluation phase
-* compare preaction and scaled-tanh
-* try smaller update gaps (100, 500, 1000)
+Test DDPG on Hopper w/o reset.
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
-import joblib
+from sandbox.haoran.mddpg.algos.ddpg import DDPG
+from sandbox.haoran.mddpg.policies.nn_policy import FeedForwardPolicy
+from sandbox.haoran.mddpg.qfunctions.nn_qfunction import FeedForwardCritic
+from sandbox.haoran.myscripts.envs import EnvChooser
+from sandbox.rocky.tf.envs.base import TfEnv
 from rllab.envs.normalized_env import normalize
 from rllab.exploration_strategies.ou_strategy import OUStrategy
-from sandbox.rocky.tf.envs.base import TfEnv
-from sandbox.haoran.myscripts.envs import EnvChooser
-from sandbox.tuomas.mddpg.kernels.gaussian_kernel import \
-    SimpleAdaptiveDiagonalGaussianKernel
-from sandbox.tuomas.mddpg.critics.nn_qfunction import FeedForwardCritic
-from sandbox.tuomas.mddpg.policies.stochastic_policy import StochasticNNPolicy
-from sandbox.tuomas.mddpg.policies.stochastic_policy import \
-    DummyExplorationStrategy, StochasticPolicyMaximizer
-from sandbox.tuomas.mddpg.algos.vddpg import VDDPG
+from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 
 """ others """
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
@@ -39,8 +30,8 @@ from rllab.misc.instrument import VariantGenerator, variant
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/vddpg/" + exp_index
 mode = "ec2"
-ec2_instance = "c4.4xlarge"
-subnet = "us-west-1c"
+ec2_instance = "c4.2xlarge"
+subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 config.AWS_IMAGE_ID = "ami-85d181e5" # with docker already pulled
 
@@ -54,34 +45,16 @@ plot = False
 class VG(VariantGenerator):
     @variant
     def zzseed(self):
-        return [0, 100, 200, 300, 400, 500, 600, 700, 800, 900]
+        return [0, 100, 200, 300, 400]
 
     @variant
     def env_name(self):
         return [
-            "swimmer_undirected"
+            "gym_hopper"
         ]
     @variant
     def max_path_length(self):
         return [500]
-
-    @variant
-    def K(self):
-        return [16]
-
-    @variant
-    def svgd_target(self):
-        return ["scaled-tanh", "pre-action"]
-
-    @variant
-    def q_target_type(self):
-        return ["soft"]
-
-    @variant
-    def target_action_dist(self):
-        return [
-            "uniform",
-        ]
 
     @variant
     def ou_sigma(self):
@@ -89,7 +62,7 @@ class VG(VariantGenerator):
 
     @variant
     def scale_reward(self):
-        return [10]
+        return [1]
 
     @variant
     def qf_learning_rate(self):
@@ -100,37 +73,12 @@ class VG(VariantGenerator):
         return [1]
 
     @variant
-    def dist_reward(self):
-        return [1.]
-
-    @variant
     def network_size(self):
         return [200]
 
     @variant
-    def alpha(self):
-        return [1]
-
-    @variant
-    def prog_threshold(self):
-        return [1.5]
-
-    @variant
     def train_frequency(self):
         return [
-            # assuming the current is fixed, 0.999^5000 = 0.00672
-            dict(
-                actor_train_frequency=1,
-                critic_train_frequency=1,
-                update_target_frequency=100,
-                train_repeat=1,
-            ),
-            dict(
-                actor_train_frequency=1,
-                critic_train_frequency=1,
-                update_target_frequency=500,
-                train_repeat=1,
-            ),
             dict(
                 actor_train_frequency=1,
                 critic_train_frequency=1,
@@ -139,55 +87,72 @@ class VG(VariantGenerator):
             ),
         ]
 
+    @variant
+    def include_xpos(self):
+        return [True]
+
+    @variant
+    def reset_after_fall(self):
+        return [False]
+
+    @variant
+    def use_forward_reward(self):
+        return [True]
+
+
 variants = VG().variants()
 batch_tasks = []
 print("#Experiments: %d" % len(variants))
 for v in variants:
     # non-variant params -----------------------------------
     # >>>>>>
+    # Plotter settings.
+    q_plot_settings = dict(
+        xlim=(-1, 1),
+        ylim=(-1, 1),
+        obs_lst=((0,)*6,),
+        action_dims=(0, 1),
+    )
+
+    env_plot_settings = dict(
+        xlim=(-10, 10),
+        ylim=(0, 1),
+    )
     # algo
     seed=v["zzseed"]
     env_name = v["env_name"]
-    K = v["K"]
-    output_scale = 2. if v["svgd_target"] == "scaled-tanh" else 1.
-    shared_alg_kwargs = dict(
+    shared_ddpg_kwargs = dict(
         max_path_length=v["max_path_length"],
         scale_reward=v["scale_reward"],
         qf_learning_rate=v["qf_learning_rate"],
         soft_target_tau=v["tau"],
-        alpha=v["alpha"],
-        q_target_type=v["q_target_type"],
-        svgd_target="pre-action" if v["svgd_target"] == "pre-action" else "action",
-        K_critic=100,
-        target_action_dist=v["target_action_dist"],
-        train_repeat=v["train_frequency"]["train_repeat"],
         actor_train_frequency=v["train_frequency"]["actor_train_frequency"],
         critic_train_frequency=v["train_frequency"]["critic_train_frequency"],
         update_target_frequency=v["train_frequency"]["update_target_frequency"],
+        env_plot_settings=env_plot_settings,
+        q_plot_settings=q_plot_settings,
         debug_mode=False,
-        env_plot_settings=dict(xlim=-1, ylim=1),
     )
     if "local" in mode and sys.platform == 'darwin':
-        shared_alg_kwargs["plt_backend"] = "MacOSX"
+        shared_ddpg_kwargs["plt_backend"] = "MacOSX"
     else:
-        shared_alg_kwargs["plt_backend"] = "Agg"
+        shared_ddpg_kwargs["plt_backend"] = "Agg"
 
     if mode == "local_test" or mode == "local_docker_test":
-        alg_kwargs = dict(
-            epoch_length = 110,
+        ddpg_kwargs = dict(
+            epoch_length = 200,
             min_pool_size = 100,
             eval_samples = 100,
-            n_epochs = 10,
+            n_epochs = 5,
         )
     else:
-        alg_kwargs = dict(
+        ddpg_kwargs = dict(
             epoch_length=10000,
             n_epochs=500,
-            n_eval_paths=10,
-            eval_kl_n_sample=1000,
-            eval_kl_n_sample_part=1000,
+            eval_samples=v["max_path_length"] * 2,
+                # deterministic env and policy: only need 1 traj sample
         )
-    alg_kwargs.update(shared_alg_kwargs)
+    ddpg_kwargs.update(shared_ddpg_kwargs)
     if env_name == "hopper":
         env_kwargs = {
             "alive_coeff": 0.5
@@ -200,7 +165,9 @@ for v in variants:
         }
     elif env_name == "gym_hopper":
         env_kwargs = {
-            "use_forward_reward": v["use_forward_reward"]
+            "use_forward_reward": v["use_forward_reward"],
+            "include_xpos": v["include_xpos"],
+            "reset_after_fall": v["reset_after_fall"],
         }
     else:
         env_kwargs = {}
@@ -257,7 +224,7 @@ for v in variants:
     env_chooser = EnvChooser()
     env = TfEnv(normalize(
         env_chooser.choose_env(env_name,**env_kwargs),
-        clip=(not (v["svgd_target"] == "scaled-tanh")),
+        clip=True,
     ))
     qf = FeedForwardCritic(
         "critic",
@@ -271,34 +238,21 @@ for v in variants:
         mu=0,
         theta=0.15,
         sigma=v["ou_sigma"],
-        clip=(not (v["svgd_target"] == "scaled-tanh")),
+        clip=True,
     )
-    policy = StochasticNNPolicy(
+    policy = FeedForwardPolicy(
         scope_name="actor",
         observation_dim=env.observation_space.flat_dim,
         action_dim=env.action_space.flat_dim,
-        sample_dim=env.action_space.flat_dim,
-        freeze_samples=False,
-        K=K,
         output_nonlinearity=tf.nn.tanh,
-        hidden_dims=(v["network_size"], v["network_size"]),
-        W_initializer=None,
-        output_scale=output_scale,
+        observation_hidden_sizes=(v["network_size"], v["network_size"]),
     )
-    kernel = SimpleAdaptiveDiagonalGaussianKernel(
-        "kernel",
-        dim=env.action_space.flat_dim,
-    )
-    algorithm = VDDPG(
-        env=env,
-        exploration_strategy=es,
-        policy=policy,
-        eval_policy=None,
-        kernel=kernel,
-        qf=qf,
-        q_prior=None,
-        K=K,
-        **alg_kwargs
+    algorithm = DDPG(
+        env,
+        es,
+        policy,
+        qf,
+        **ddpg_kwargs
     )
 
     # run -----------------------------------------------------------
