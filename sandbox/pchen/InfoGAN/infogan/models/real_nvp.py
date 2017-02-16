@@ -164,6 +164,26 @@ def channel_condition_fn_gen(bin=0):
 
     return split_gen(id), split_gen((id + 1) % 2), merge
 
+def channel_condition_fn_gen(bin=0):
+    id = bin % 2
+
+    def split_gen(bit):
+        def go(x):
+            shp = int_shape(x)
+            assert len(shp) == 4
+            assert shp[3] % 2 == 0
+            cut = shp[3] // 2
+            return x[:, :, :, :cut] if bit == 0 else x[:, :, :, cut:]
+
+        return go
+
+    def merge(condition, effect):
+        vs = [condition, effect]
+        if id != 0:
+            vs = [effect, condition]
+        return tf.concat(3, vs)
+
+    return split_gen(id), split_gen((id + 1) % 2), merge
 
 def main():
     original = (np.random.normal(size=[3,32,32,6]).astype(np.float32))
