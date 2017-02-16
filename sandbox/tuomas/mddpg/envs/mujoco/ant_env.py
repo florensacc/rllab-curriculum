@@ -11,16 +11,18 @@ class AntEnv(MujocoEnv, Serializable):
 
     FILE = 'ant.xml'
 
-    def __init__(self, direction=None, zpos_cost=False, *args, **kwargs):
+    def __init__(self, direction=None, reward_type="velocity", *args, **kwargs):
         super(AntEnv, self).__init__(*args, **kwargs)
         Serializable.__init__(self, *args, **kwargs)
         if direction is not None:
             assert np.isclose(np.linalg.norm(direction), 1.)
         self.direction = direction
+        self.reward_type = reward_type
 
     def get_param_values(self):
         params = dict(
-            direction=self.direction
+            direction=self.direction,
+            reward_type=self.reward_type,
         )
         return params
 
@@ -39,10 +41,15 @@ class AntEnv(MujocoEnv, Serializable):
     def step(self, action):
         self.forward_dynamics(action)
         comvel = self.get_body_comvel("torso")
-        if self.direction is not None:
-            motion_reward = comvel[0:2].dot(np.array(self.direction))
+        if self.reward_type == "velocity":
+            if self.direction is not None:
+                motion_reward = comvel[0:2].dot(np.array(self.direction))
+            else:
+                motion_reward = np.linalg.norm(comvel[0:2])
+        elif self.reward_type == "distance_from_origin":
+            motion_reward = np.linalg.norm(self.get_body_com("torso")[:2])
         else:
-            motion_reward = np.linalg.norm(comvel[0:2])
+            raise NotImplementedError
 
         lb, ub = self.action_bounds
         scaling = (ub - lb) * 0.5

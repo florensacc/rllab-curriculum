@@ -22,7 +22,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "tuomas/vddpg/" + exp_index
-mode = "local_test"
+mode = "ec2"
 subnet = "us-west-1b"
 ec2_instance = "c4.4xlarge"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
