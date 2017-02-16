@@ -11,7 +11,8 @@ from rllab.misc.ext import set_seed
 from rllab.misc import tensor_utils
 import time
 
-def rollout(sess, env, agent, max_path_length=np.inf, animated=False, speedup=1, qf=None):
+def rollout(sess, env, agent, max_path_length=np.inf,
+    animated=False, speedup=1, qf=None, exploration_strategy=None):
     observations = []
     actions = []
     rewards = []
@@ -23,7 +24,11 @@ def rollout(sess, env, agent, max_path_length=np.inf, animated=False, speedup=1,
     if animated:
         env.render()
     while path_length < max_path_length:
-        a, agent_info = agent.get_action(o)
+        if exploration_strategy is not None:
+            a = exploration_strategy.get_action(path_length, o, agent)
+            agent_info = {}
+        else:
+            a, agent_info = agent.get_action(o)
         next_o, r, d, env_info = env.step(a)
         observations.append(env.observation_space.flatten(o))
         rewards.append(r)
@@ -69,6 +74,7 @@ if __name__ == "__main__":
         help='Fixed random seed for each rollout. Set for reproducibility.')
     parser.add_argument('--no-plot', default=False, action='store_true')
     parser.add_argument('--show-qf', default=False, action='store_true')
+    parser.add_argument('--use-es', default=False, action='store_true')
     parser.add_argument('--plt-backend', type=str, default="")
     args = parser.parse_args()
 
@@ -99,6 +105,17 @@ if __name__ == "__main__":
                 if isinstance(true_env, mujoco_env.MujocoEnv):
                     # Gym mujoco env doesn't use the default np seed
                     true_env._seed(args.seed)
-            path = rollout(sess, env, policy, max_path_length=args.max_path_length,
-                           animated=(not args.no_plot), speedup=args.speedup,
-                           qf=qf)
+            if args.use_es:
+                es = algo.exploration_strategy
+            else:
+                es = None
+            path = rollout(
+                sess,
+                env,
+                policy,
+                max_path_length=args.max_path_length,
+                animated=(not args.no_plot),
+                speedup=args.speedup,
+                qf=qf,
+                exploration_strategy=es,
+            )

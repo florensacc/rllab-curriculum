@@ -59,8 +59,8 @@ class StochasticNNPolicy(NNPolicy):
             Unable to compute prob(action) if sample_dim != action_dim
         """
 
-    def create_network(self):
-        self._create_pls()
+    def create_network(self, sample_input=None):
+        self._create_pls(sample_input=sample_input)
         input_list = [self.observations_placeholder, self._sample_pl]
         if self._temp_dim > 0:
             input_list.append(self._temp_pl)
@@ -102,18 +102,22 @@ class StochasticNNPolicy(NNPolicy):
     def pre_output(self):
         return self._pre_output
 
-    def _create_pls(self):
+    def _create_pls(self, sample_input=None):
+        if sample_input is None:
             self._sample_pl = tf.placeholder(
                 tf.float32,
                 shape=[None, self._sample_dim],
                 name='actor_sample'
             )
-            if self._temp_dim > 0:
-                self._temp_pl = tf.placeholder(
-                    tf.float32,
-                    shape=[None, self._temp_dim],
-                    name='actor_temperature'
-                )
+        else:
+            self._sample_pl = sample_input
+
+        if self._temp_dim > 0:
+            self._temp_pl = tf.placeholder(
+                tf.float32,
+                shape=[None, self._temp_dim],
+                name='actor_temperature'
+            )
 
     def get_feed_dict(self, observations, temperatures=None):
         N = observations.shape[0]
