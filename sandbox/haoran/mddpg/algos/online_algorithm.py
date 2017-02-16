@@ -166,7 +166,8 @@ class OnlineAlgorithm(RLAlgorithm):
                                                                   observation,
                                                                   self.policy)
                     gt.stamp('train: get actions')
-                    action.squeeze()
+                    if len(action.shape) > 1:
+                        action.squeeze()
                     if self.render:
                         self.env.render()
                     next_ob, raw_reward, terminal, info = self.env.step(action)
