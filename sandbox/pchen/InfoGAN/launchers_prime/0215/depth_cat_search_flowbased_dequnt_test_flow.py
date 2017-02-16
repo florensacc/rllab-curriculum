@@ -31,13 +31,13 @@ class VG(VariantGenerator):
     @variant
     def main_sb(self):
         return [
-            True, False
+            False
         ]
 
     @variant
     def noise_sb(self):
         return [
-            True, False
+            False
         ]
 
     @variant
@@ -49,6 +49,10 @@ class VG(VariantGenerator):
     @variant
     def depth_ratio(self, filters):
         return [1]
+
+    @variant
+    def extra_cat(self, filters):
+        return [0, 1, 2]
 
     @variant
     def logit(self):
@@ -78,10 +82,11 @@ def run_task(v):
         forward_fn=lambda x: tf.reshape(x, shape),
         backward_fn=lambda x: tf_go(x).reshape([-1, noise.dim]).value,
     )
+    extra_cat = v["extra_cat"]
     with scopes.arg_scope([nn.conv2d], spatial_bias=v["main_sb"]): # <- this is a bug
         with scopes.arg_scope([resnet_blocks_gen], filters=filters, blocks=5, spatial_bias=v["main_sb"]):
             cur = shaped_noise
-            for i in range(3 * depth_ratio):
+            for i in range(3 * depth_ratio + (4 if extra_cat == 0 else 0)):
                 cf, ef, merge = checkerboard_condition_fn_gen(i, (i<2) )
                 cur = ShearingFlow(
                     f(cur),
@@ -91,7 +96,7 @@ def run_task(v):
                     combine_fn=merge,
                 )
 
-            for i in range(2 * depth_ratio):
+            for i in range(2 * depth_ratio + (4 if extra_cat == 1 else 0)):
                 cf, ef, merge = channel_condition_fn_gen(i, )
                 cur = ShearingFlow(
                     f(cur),
@@ -108,7 +113,7 @@ def run_task(v):
                 backward_fn=lambda x: tf_go(x, debug=False).space_to_depth(2).value,
             )
             cur = upsampled
-            for i in range(6):
+            for i in range(6 + (4 if extra_cat == 2 else 0)):
                 cf, ef, merge = checkerboard_condition_fn_gen(i, (i<2) if hybrid else True)
                 cur = ShearingFlow(
                     f(cur),
@@ -200,7 +205,7 @@ for v in variants[1:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="0215_sb_search_deeper_flow_based_dequant",
+        exp_prefix="0215_depth_cat_search_deeper_flow_based_dequant",
         variant=v,
 
         # mode="local",
