@@ -65,7 +65,7 @@ class CLGANPointEnvLinear(RLAlgorithm):
         hyperparams = self.hyperparams
 
         log_config = format_experiment_log_path(
-            __file__, hyperparams.experiment_type
+            __file__, EXPERIMENT_TYPE
         )
         make_log_dirs(log_config)
 
@@ -74,7 +74,7 @@ class CLGANPointEnvLinear(RLAlgorithm):
 
         report = HTMLReport(log_config.report_file)
 
-        report.add_header("{}, {}".format(hyperparams.experiment_type, log_config.experiment_date_host))
+        report.add_header("{}, {}".format(EXPERIMENT_TYPE, log_config.experiment_date_host))
         report.add_text(format_dict(hyperparams))
 
         tf_session = tf.Session()
