@@ -114,3 +114,18 @@ def plot_gan_samples(gan, limit, fname=None, size=500):
         img = scipy.misc.imread(fp)
         fp.close()
         return img
+
+
+def plot_line_graph(fname=None, *args, **kwargs):
+    plt.clf()
+    plt.plot(*args, **kwargs)
+    if fname is not None:
+        plt.savefig(fname, format='png')
+        return scipy.misc.imread(fname)
+    else:
+        fp = tempfile.TemporaryFile()
+        plt.savefig(fp, format='png')
+        fp.seek(0)
+        img = scipy.misc.imread(fp)
+        fp.close()
+        return img

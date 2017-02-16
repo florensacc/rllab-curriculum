@@ -34,33 +34,32 @@ from sandbox.young_clgan.lib.logging import *
 EXPERIMENT_TYPE = 'cl_gan'
 
 
-def convert_label(labels):
-    # Put good goals last so they will be plotted on top of other goals and be most visible.
-    classes = {
-        0: 'Other',
-        1: 'Low rewards',
-        2: 'High rewards',
-        3: 'Unlearnable',
-        4: 'Good goals',
-    }
-    new_labels = np.zeros(labels.shape[0], dtype=int)
-    new_labels[np.logical_and(labels[:, 0], labels[:, 1])] = 4
-    new_labels[labels[:, 0] == False] = 1
-    new_labels[labels[:, 1] == False] = 2
-    new_labels[
-        np.logical_and(
-            np.logical_and(labels[:, 0], labels[:, 1]),
-            labels[:, 2] == False
-        )
-    ] = 3
-
-    return new_labels, classes
-
-
 class CLGANPointEnvLinear(RLAlgorithm):
 
     def __init__(self, hyperparams):
         self.hyperparams = AttrDict(hyperparams)
+        
+    def convert_label(self, labels):
+        # Put good goals last so they will be plotted on top of other goals and be most visible.
+        classes = {
+            0: 'Other',
+            1: 'Low rewards',
+            2: 'High rewards',
+            3: 'Unlearnable',
+            4: 'Good goals',
+        }
+        new_labels = np.zeros(labels.shape[0], dtype=int)
+        new_labels[np.logical_and(labels[:, 0], labels[:, 1])] = 4
+        new_labels[labels[:, 0] == False] = 1
+        new_labels[labels[:, 1] == False] = 2
+        new_labels[
+            np.logical_and(
+                np.logical_and(labels[:, 0], labels[:, 1]),
+                labels[:, 2] == False
+            )
+        ] = 3
+    
+        return new_labels, classes
 
     def train(self):
         gan_configs = {
@@ -134,6 +133,10 @@ class CLGANPointEnvLinear(RLAlgorithm):
         report.new_row()
 
         all_goals = np.zeros((0, 2))
+        
+        all_mean_rewards = []
+        all_coverage = []
+        
 
         for outer_iter in range(hyperparams.outer_iters):
 
@@ -181,11 +184,15 @@ class CLGANPointEnvLinear(RLAlgorithm):
                     fname='{}/policy_reward_{}.png'.format(log_config.plot_dir, outer_iter),
                     return_rewards=True
                 )
+                
+                all_mean_rewards.append(np.mean(rewards))
+                all_coverage.append(np.mean(rewards >= hyperparams.max_reward))
+                
                 report.add_image(
                     img,
                     'policy performance\n itr: {} \nmean_rewards: {} \ncoverage: {}'.format(
-                        outer_iter, np.mean(rewards),
-                        np.mean(rewards >= hyperparams.max_reward)
+                        outer_iter, all_mean_rewards[-1],
+                        all_coverage[-1]
                     )
                 )
                 report.save()
@@ -205,7 +212,7 @@ class CLGANPointEnvLinear(RLAlgorithm):
                     hyperparams.gan_discriminator_iters
                 )
 
-                plot_labels, classes = convert_label(labels)
+                plot_labels, classes = self.convert_label(labels)
                 img = plot_labeled_samples(
                     goals, plot_labels,
                     classes, hyperparams.goal_range + 5,
@@ -214,3 +221,17 @@ class CLGANPointEnvLinear(RLAlgorithm):
                 report.add_image(img, 'goals\n itr: {}'.format(outer_iter), width=500)
                 report.save()
                 report.new_row()
+                
+        img = plot_line_graph(
+            '{}/mean_rewards.png'.format(log_config.plot_dir),
+            range(hyperparams.outer_iters), all_mean_rewards
+        )
+        report.add_image(img, 'Mean rewards', width=500)
+        
+        img = plot_line_graph(
+            '{}/coverages.png'.format(log_config.plot_dir),
+            range(hyperparams.outer_iters), all_coverage
+        )
+        report.add_image(img, 'Coverages', width=500)
+        report.save()
+        
