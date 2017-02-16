@@ -23,7 +23,7 @@ import os
 import gc
 
 TARGET_PREFIX = "target_"
-
+DUMMY_PREFIX = "dummy_"
 
 def tf_shape(shape):
     """Converts a list of python and tf scalars tensors into a tf vector."""
@@ -199,7 +199,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             scope_name=TARGET_PREFIX + self.policy.scope_name,
         )
         self.dummy_policy = self.policy.get_copy(
-            scope_name="dummy_" + self.policy.scope_name,
+            scope_name=DUMMY_PREFIX + self.policy.scope_name,
         )
 
         if self.q_target_type == 'soft':
