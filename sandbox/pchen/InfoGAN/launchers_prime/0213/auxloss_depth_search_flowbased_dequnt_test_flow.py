@@ -20,6 +20,12 @@ import cloudpickle
 
 # aux loss
 
+# it can learn but it's worse; it could be that the setting
+#  tested here is still too simple/shallow
+# the other take away is that maybe we want to take
+# out the intermediate gaussianization step to really
+# do well
+
 class VG(VariantGenerator):
     @variant
     def depth(self):

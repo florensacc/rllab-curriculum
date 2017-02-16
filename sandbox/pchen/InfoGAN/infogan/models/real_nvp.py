@@ -8,19 +8,20 @@ import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
 import rllab.misc.logger as logger
 
 
-@scopes.add_arg_scope_only("blocks", "filters", "squash")
-def resnet_blocks_gen(blocks=4, filters=64, squash=tf.tanh):
+@scopes.add_arg_scope_only("blocks", "filters", "squash", "spatial_bias")
+def resnet_blocks_gen(blocks=4, filters=64, squash=tf.tanh, spatial_bias=False):
     def go(x):
-        chns = int_shape(x)[3]
-        x = nn.conv2d(x, filters)
-        for _ in range(blocks):
-            x = nn.gated_resnet(x)
-        temp = nn.conv2d(x, chns * 2)
-        mu = temp[:, :, :, chns:]
-        logstd = (temp[:, :, :, :chns])  # might want learn scaling
-        if squash:
-            logstd = squash(logstd)
-        return mu, logstd
+        with scopes.arg_scope([nn.conv2d], spatial_bias=spatial_bias):
+            chns = int_shape(x)[3]
+            x = nn.conv2d(x, filters)
+            for _ in range(blocks):
+                x = nn.gated_resnet(x)
+            temp = nn.conv2d(x, chns * 2)
+            mu = temp[:, :, :, chns:]
+            logstd = (temp[:, :, :, :chns])  # might want learn scaling
+            if squash:
+                logstd = squash(logstd)
+            return mu, logstd
 
     return go
 

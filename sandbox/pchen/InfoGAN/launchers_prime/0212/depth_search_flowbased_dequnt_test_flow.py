@@ -18,7 +18,8 @@ import tensorflow as tf
 import cloudpickle
 
 
-# more flows better but is it just densenet not sufficiently expressive?
+# more flows better but is it just densenet not sufficiently expressive?:q
+
 
 class VG(VariantGenerator):
     @variant
