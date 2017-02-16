@@ -31,13 +31,13 @@ class VG(VariantGenerator):
     @variant
     def main_sb(self):
         return [
-            True, False
+            True,
         ]
 
     @variant
     def noise_sb(self):
         return [
-            True, False
+            True,
         ]
 
     @variant
@@ -48,7 +48,7 @@ class VG(VariantGenerator):
 
     @variant
     def depth_ratio(self, filters):
-        return [1]
+        return [2]
 
     @variant
     def logit(self):
@@ -108,7 +108,7 @@ def run_task(v):
                 backward_fn=lambda x: tf_go(x, debug=False).space_to_depth(2).value,
             )
             cur = upsampled
-            for i in range(6):
+            for i in range(6 * depth_ratio):
                 cf, ef, merge = checkerboard_condition_fn_gen(i, (i<2) if hybrid else True)
                 cur = ShearingFlow(
                     f(cur),
@@ -200,20 +200,20 @@ for v in variants[1:]:
     run_experiment_lite(
         run_task,
         use_cloudpickle=True,
-        exp_prefix="0215_sb_search_deeper_flow_based_dequant",
+        exp_prefix="0215_deep_sb_flow_based_dequant",
         variant=v,
 
-        # mode="local",
+        mode="local",
 
         # mode="local_docker",
         # env=dict(
         #     CUDA_VISIBLE_DEVICES="5"
         # ),
 
-        mode="ec2",
-        aws_config=dict(
-            placement=dict(AvailabilityZone="us-west-2b"),
-        ),
+        # mode="ec2",
+        # aws_config=dict(
+        #     placement=dict(AvailabilityZone="us-west-2b"),
+        # ),
         #
         use_gpu=True,
         snapshot_mode="last",
