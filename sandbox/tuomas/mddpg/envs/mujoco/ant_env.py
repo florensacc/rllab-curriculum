@@ -11,9 +11,21 @@ class AntEnv(MujocoEnv, Serializable):
 
     FILE = 'ant.xml'
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, direction=None, zpos_cost=False, *args, **kwargs):
         super(AntEnv, self).__init__(*args, **kwargs)
         Serializable.__init__(self, *args, **kwargs)
+        if direction is not None:
+            assert np.isclose(np.linalg.norm(direction), 1.)
+        self.direction = direction
+
+    def get_param_values(self):
+        params = dict(
+            direction=self.direction
+        )
+        return params
+
+    def set_param_values(self, params):
+        self.__dict__.update(params)
 
     def get_current_obs(self):
         return np.concatenate([
@@ -27,8 +39,11 @@ class AntEnv(MujocoEnv, Serializable):
     def step(self, action):
         self.forward_dynamics(action)
         comvel = self.get_body_comvel("torso")
-        #forward_reward = comvel[0]
-        speed_reward = np.sum(comvel[0:2]**2)
+        if self.direction is not None:
+            motion_reward = comvel[0:2].dot(np.array(self.direction))
+        else:
+            motion_reward = np.linalg.norm(comvel[0:2])
+
         lb, ub = self.action_bounds
         scaling = (ub - lb) * 0.5
 
@@ -39,8 +54,7 @@ class AntEnv(MujocoEnv, Serializable):
         contact_cost = 0.5 * 1e-3 * np.sum(
             np.square(np.clip(self.model.data.cfrc_ext, -1, 1))),
         survive_reward = 0.05
-        #reward = (forward_reward - ctrl_cost - contact_cost + survive_reward
-        reward = (speed_reward - ctrl_cost - contact_cost + survive_reward
+        reward = (motion_reward - ctrl_cost - contact_cost + survive_reward
                   - action_violation_cost)
         state = self._state
         notdone = np.isfinite(state).all() and 0.2 <= state[2] <= 1.0
@@ -60,3 +74,18 @@ class AntEnv(MujocoEnv, Serializable):
         logger.record_tabular('MinForwardProgress', np.min(progs))
         logger.record_tabular('StdForwardProgress', np.std(progs))
 
+    def log_stats(self, algo, epoch, paths):
+        # forward distance
+        progs = []
+        for path in paths:
+            coms = path["env_infos"]["com"]
+            progs.append(coms[-1][0] - coms[0][0])
+                # x-coord of com at the last time step minus the 1st step
+        stats = {
+            'env: ForwardProgressAverage': np.mean(progs),
+            'env: ForwardProgressMax': np.max(progs),
+            'env: ForwardProgressMin': np.min(progs),
+            'env: ForwardProgressStd': np.std(progs),
+        }
+
+        return stats
