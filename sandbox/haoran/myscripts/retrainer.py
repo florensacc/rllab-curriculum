@@ -73,6 +73,11 @@ class Retrainer(object):
             self.reload_snapshot()
         return self.algo.policy
 
+    def get_env(self):
+        if not hasattr(self, "algo"):
+            self.reload_snapshot()
+        return self.algo.env
+
     def reload_variant(self):
         self.grab_file("variant.json")
         local_variant_file = osp.join(self.local_log_dir, "variant.json")

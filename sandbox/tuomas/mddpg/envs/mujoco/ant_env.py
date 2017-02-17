@@ -13,7 +13,7 @@ class AntEnv(MujocoEnv, Serializable):
 
     def __init__(self, direction=None, reward_type="velocity", *args, **kwargs):
         super(AntEnv, self).__init__(*args, **kwargs)
-        Serializable.__init__(self, *args, **kwargs)
+        Serializable.quick_init(self, locals())
         if direction is not None:
             assert np.isclose(np.linalg.norm(direction), 1.)
         self.direction = direction
@@ -76,10 +76,14 @@ class AntEnv(MujocoEnv, Serializable):
             path["observations"][-1][-3] - path["observations"][0][-3]
             for path in paths
         ]
-        logger.record_tabular('AverageForwardProgress', np.mean(progs))
-        logger.record_tabular('MaxForwardProgress', np.max(progs))
-        logger.record_tabular('MinForwardProgress', np.min(progs))
-        logger.record_tabular('StdForwardProgress', np.std(progs))
+        logger.record_tabular(
+            'env: ForwardProgressAverage', np.mean(progs))
+        logger.record_tabular(
+            'env: ForwardProgressMax', np.max(progs))
+        logger.record_tabular(
+            'env: ForwardProgressMin', np.min(progs))
+        logger.record_tabular(
+            'env: ForwardProgressStd', np.std(progs))
 
     def log_stats(self, algo, epoch, paths):
         # forward distance
