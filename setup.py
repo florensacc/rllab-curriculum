@@ -12,4 +12,7 @@ setup(
     name='rllab',
     version='0.0.1-dev',
     packages=find_packages(),
-    install_requires=_read_requirements_file())
+    install_requires=_read_requirements_file(),
+    package_data={
+        '': ['*.pyx', '*.pxd', '*.pxi'],
+    })
