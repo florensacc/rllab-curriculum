@@ -21,7 +21,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
-exp_prefix = "tuomas/vddpg/" + exp_index
+exp_prefix = "mddpg/vddpg/" + exp_index
 mode = "ec2_test"
 subnet = "us-west-1b"
 ec2_instance = "c4.4xlarge"
