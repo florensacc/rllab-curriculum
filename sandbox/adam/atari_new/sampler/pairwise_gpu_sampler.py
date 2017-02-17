@@ -3,8 +3,8 @@ import numpy as np
 import multiprocessing as mp
 from sandbox.adam.util import struct
 from ctypes import c_bool
-from sandbox.adam.gpar2.sampler.base import BaseGpuSampler
-from sandbox.adam.gpar2.sampler.prog_bar import ProgBarCounter
+from sandbox.adam.atari_new.sampler.base import BaseGpuSampler
+from sandbox.adam.atari_new.sampler.prog_bar import ProgBarCounter
 import gtimer as gt
 import psutil
 import copy
@@ -30,7 +30,6 @@ def get_space_properties(space_obj):
 
 
 def get_env_info_shapes(env, act):
-    env.reset()
     o, r, d, env_info = env.step(act)
     env.reset()
     env_info_shapes = dict()

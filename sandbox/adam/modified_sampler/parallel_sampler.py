@@ -21,10 +21,12 @@ def _worker_init(G, worker_id):
         import os
         os.environ['THEANO_FLAGS'] = 'device=cpu'
         os.environ['CUDA_VISIBLE_DEVICES'] = ""
+        # os.environ['MKL_NUM_THREADS'] = '1'
         import psutil
         p = psutil.Process()
         try:
             p.cpu_affinity([worker_id])
+            # print("worker_id: ", worker_id)
         except AttributeError:
             print("Can't set worker CPU affinity, maybe on Mac OS.")
     G.worker_id = worker_id
