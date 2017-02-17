@@ -97,7 +97,7 @@ def run_task(v):
             backward_fn=lambda x: tf_go(x, debug=False).space_to_depth(2).value,
         )
         cur = upsampled
-        for i in range(15):
+        for i in range(10):
             cf, ef, merge = checkerboard_condition_fn_gen(i, (i<2) if hybrid else True)
             cur = ShearingFlow(
                 f(cur),

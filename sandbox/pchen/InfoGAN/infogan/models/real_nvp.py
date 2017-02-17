@@ -8,19 +8,20 @@ import sandbox.pchen.InfoGAN.infogan.misc.imported.nn as nn
 import rllab.misc.logger as logger
 
 
-@scopes.add_arg_scope_only("blocks", "filters", "squash")
-def resnet_blocks_gen(blocks=4, filters=64, squash=tf.tanh):
+@scopes.add_arg_scope_only("blocks", "filters", "squash", "spatial_bias")
+def resnet_blocks_gen(blocks=4, filters=64, squash=tf.tanh, spatial_bias=False):
     def go(x):
-        chns = int_shape(x)[3]
-        x = nn.conv2d(x, filters)
-        for _ in range(blocks):
-            x = nn.gated_resnet(x)
-        temp = nn.conv2d(x, chns * 2)
-        mu = temp[:, :, :, chns:]
-        logstd = (temp[:, :, :, :chns])  # might want learn scaling
-        if squash:
-            logstd = squash(logstd)
-        return mu, logstd
+        with scopes.arg_scope([nn.conv2d], spatial_bias=spatial_bias):
+            chns = int_shape(x)[3]
+            x = nn.conv2d(x, filters)
+            for _ in range(blocks):
+                x = nn.gated_resnet(x)
+            temp = nn.conv2d(x, chns * 2)
+            mu = temp[:, :, :, chns:]
+            logstd = (temp[:, :, :, :chns])  # might want learn scaling
+            if squash:
+                logstd = squash(logstd)
+            return mu, logstd
 
     return go
 
@@ -163,6 +164,26 @@ def channel_condition_fn_gen(bin=0):
 
     return split_gen(id), split_gen((id + 1) % 2), merge
 
+def channel_condition_fn_gen(bin=0):
+    id = bin % 2
+
+    def split_gen(bit):
+        def go(x):
+            shp = int_shape(x)
+            assert len(shp) == 4
+            assert shp[3] % 2 == 0
+            cut = shp[3] // 2
+            return x[:, :, :, :cut] if bit == 0 else x[:, :, :, cut:]
+
+        return go
+
+    def merge(condition, effect):
+        vs = [condition, effect]
+        if id != 0:
+            vs = [effect, condition]
+        return tf.concat(3, vs)
+
+    return split_gen(id), split_gen((id + 1) % 2), merge
 
 def main():
     original = (np.random.normal(size=[3,32,32,6]).astype(np.float32))

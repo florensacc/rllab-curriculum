@@ -30,6 +30,7 @@ def get_space_properties(space_obj):
 
 
 def get_env_info_shapes(env, act):
+    env.reset()
     o, r, d, env_info = env.step(act)
     env.reset()
     env_info_shapes = dict()
@@ -132,11 +133,14 @@ class PairwiseGpuSampler(BaseGpuSampler):
 
     @gt.wrap
     @overrides
-    def obtain_samples(self, itr):
+    def obtain_samples(self, itr, batch_size=None):
         """ Only master (GPU) thread executes this method """
         if self.set_cpu_affinity:
             self.par_objs.process.cpu_affinity([0])
         self.par_objs.loop_ctrl.barrier.wait()  # signal workers to re-enter
+
+        if not batch_size:
+            batch_size = self.batch_size
 
         shareds = self.par_objs.shareds  # some shortcuts
         act_waiters = self.par_objs.sync.act_waiters
@@ -162,7 +166,7 @@ class PairwiseGpuSampler(BaseGpuSampler):
         # all_rew = [None] * 2
         all_done = np.empty(len(shareds.done[0]), dtype='bool')  # buffer
 
-        pbar = ProgBarCounter(self.batch_size)
+        pbar = ProgBarCounter(batch_size)
 
         [b.acquire() for b in step_blockers[0]]
 
@@ -230,7 +234,7 @@ class PairwiseGpuSampler(BaseGpuSampler):
                     sims_agent_info[j][i] = []
                     sims_env_info[j][i] = []
             if any(all_done):
-                continue_sampling = (cum_length_complete_paths < self.batch_size)
+                continue_sampling = (cum_length_complete_paths < batch_size)
                 pbar.update(cum_length_complete_paths)
             all_obs[j] = obs_flatten_n(next_obs)  # (flatten doesn't necessarily copy)
             all_act[j] = act_flatten_n(next_act)

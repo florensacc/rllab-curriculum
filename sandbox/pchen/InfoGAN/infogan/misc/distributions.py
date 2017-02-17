@@ -1683,6 +1683,7 @@ class AR(Distribution):
         return iaf_mu, (iaf_logstd)
 
     def logli(self, x_var, dist_info):
+        x_var = tf.reshape(x_var, [-1, self._dim])
         iaf_mu, iaf_logstd = self.infer(x_var)
         z = x_var / tf.exp(iaf_logstd) - iaf_mu
         if self._reverse:
@@ -1739,6 +1740,9 @@ class AR(Distribution):
 
     def activate_dist(self, flat):
         return self._base_dist.activate_dist(flat)
+
+    def deactivate_dist(self, info):
+        return self._base_dist.deactivate_dist(info)
 
     def nonreparam_logli(self, x_var, dist_info):
         raise "not defined"
@@ -3829,3 +3833,86 @@ def logitize(dist, coeff=0.90):
         name="logit",
     )
 
+class Factorization(Distribution):
+    def __init__(
+            self,
+            forward_fn,
+            backward_fn,
+            dists,
+    ):
+        Serializable.quick_init(self, locals())
+
+        self._forward = forward_fn
+        self._backward = backward_fn
+        assert len(dists) >= 1
+        self._dists = dists
+        self._dim = sum([dist.dim for dist in dists])
+        self._dist_flat_dim = sum([dist.dist_flat_dim for dist in dists])
+
+    def init_mode(self):
+        for d in self._dists:
+            d.init_mode()
+
+    def train_mode(self):
+        for d in self._dists:
+            d.train_mode()
+
+    @property
+    def dim(self):
+        return self._dim
+
+    @property
+    def dist_flat_dim(self):
+        return self._dist_flat_dim
+
+    @property
+    def effective_dim(self):
+        return self._dim
+
+    def logli(self, x, dist_info):
+        infos = dist_info["infos"]
+        loglis = []
+        xs = self._backward(x)
+        assert len(xs) == len(self._dists)
+        for ix, idist, idist_info_flat in zip(xs, self._dists, infos):
+            idist_info = idist.activate_dist(idist_info_flat)
+            loglis.append(idist.logli(ix, idist_info))
+        return tf.reduce_sum(loglis, reduction_indices=0)
+
+    def sample_logli(self, dist_info):
+        infos = dist_info["infos"]
+        sample_xs = []
+        loglis = []
+        for idist, idist_info_flat in zip(self._dists, infos):
+            idist_info = idist.activate_dist(idist_info_flat)
+            isample, ilogli = idist.sample_logli(idist_info)
+            sample_xs.append(isample)
+            loglis.append(ilogli)
+        sample = self._forward(*sample_xs)
+        return sample, tf.reduce_sum(loglis, reduction_indices=0)
+
+    @property
+    def dist_info_keys(self):
+        return ["infos"]
+
+    def activate_dist(self, flat_dist):
+        def go():
+            i = 0
+            for dist in self._dists:
+                yield flat_dist[:, i:i + dist.dist_flat_dim]
+                i += dist.dist_flat_dim
+
+        return dict(infos=list(go()))
+
+    def prior_dist_info(self, batch_size):
+        return dict(infos=[
+            dist.deactivate_dist(dist.prior_dist_info(batch_size))
+            for dist in self._dists
+            ])
+
+
+    def deactivate_dist(self, dict):
+        return tf.concat(
+            1,
+            dict["infos"]
+        )
