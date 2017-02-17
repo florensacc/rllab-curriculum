@@ -32,11 +32,6 @@ class MetaPolicy(FeedForwardPolicy):
         self.subpolicy_original_sample_pl = self.subpolicy._sample_pl
 
         self.subpolicy_sample_input = super().create_network()
-        # self.subpolicy_sample_input = tf.random_normal(
-        #     (1, self.subpolicy._sample_dim),
-        #     mean=0.,
-        #     stddev=1.,
-        # )
         self.subpolicy.observations_placeholder = self.observations_placeholder
         return self.subpolicy.create_network(
             sample_input=self.subpolicy_sample_input
@@ -66,6 +61,14 @@ class MetaPolicy(FeedForwardPolicy):
             observations=np.array([observation]),
             samples=np.array([sample]),
         )[0]
+
+    # temporary debugging code
+    # @overrides
+    # def get_action(self, obs):
+    #     sample = self.get_sample(obs)
+    #     print(sample)
+    #     action = self.get_action_from_sample(obs, sample)
+    #     return action, {}
 
     @overrides
     def reset(self):
