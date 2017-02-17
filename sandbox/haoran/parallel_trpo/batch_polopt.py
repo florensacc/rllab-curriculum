@@ -375,6 +375,8 @@ class ParallelBatchPolopt(RLAlgorithm):
             barriers.dgnstc.wait()
 
             if self.rank == 0:
+                self.env.log_diagnostics(samples_data["paths"])
+
                 num_traj = sum(shareds.num_traj)
                 n_steps = sum(shareds.num_steps)
 
