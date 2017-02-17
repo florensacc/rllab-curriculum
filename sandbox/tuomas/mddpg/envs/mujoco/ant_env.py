@@ -11,18 +11,21 @@ class AntEnv(MujocoEnv, Serializable):
 
     FILE = 'ant.xml'
 
-    def __init__(self, direction=None, reward_type="velocity", *args, **kwargs):
+    def __init__(self, direction=None, reward_type="velocity",
+        reset_penalty=None, *args, **kwargs):
         super(AntEnv, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
         if direction is not None:
             assert np.isclose(np.linalg.norm(direction), 1.)
         self.direction = direction
         self.reward_type = reward_type
+        self.reset_penalty = reset_penalty
 
     def get_param_values(self):
         params = dict(
             direction=self.direction,
             reward_type=self.reward_type,
+            reset_penalty=self.reset_penalty,
         )
         return params
 
@@ -64,8 +67,11 @@ class AntEnv(MujocoEnv, Serializable):
         reward = (motion_reward - ctrl_cost - contact_cost + survive_reward
                   - action_violation_cost)
         state = self._state
-        notdone = np.isfinite(state).all() and 0.2 <= state[2] <= 1.0
+        notdone = np.isfinite(state).all() and 0.4 <= state[2] <= 1.0
         done = not notdone
+        if self.reset_penalty:
+            done = False
+            reward -= self.reset_penalty
         ob = self.get_current_obs()
         return Step(ob, float(reward), done, com=self.get_body_com("torso"))
         #return Step(ob, float(reward), done)

@@ -181,7 +181,7 @@ class MultiGoalEnv(Env, Serializable):
     def set_param_values(self, params):
         pass
 
-    def log_stats(self, algo, epoch, paths, ax):
+    def log_stats(self, algo, epoch, paths):
         # compute number of goals reached
         n_goal = len(self.goal_positions)
         goal_reached = [False] * n_goal

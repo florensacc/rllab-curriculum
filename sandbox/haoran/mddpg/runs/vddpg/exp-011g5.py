@@ -22,7 +22,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/vddpg/" + exp_index
-mode = "ec2_test"
+mode = "ec2"
 subnet = "us-west-1b"
 ec2_instance = "c4.4xlarge"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
@@ -133,7 +133,7 @@ class VG(VariantGenerator):
 
     @variant
     def update_target_frequency(self):
-        return [10000, 1000]
+        return [10000]
 
 variants = VG().variants()
 batch_tasks = []
