@@ -16,7 +16,7 @@ class MultiGoalEnv(Env, Serializable):
     state: position
     action: velocity
     """
-    def __init__(self):
+    def __init__(self, goal_reward=10):
         Serializable.quick_init(self, locals())
 
         self.dynamics = PointDynamics(dim=2, sigma=0)
@@ -32,7 +32,7 @@ class MultiGoalEnv(Env, Serializable):
             dtype=np.float32
         )
         self.goal_threshold = 1.
-        self.goal_reward = 10.
+        self.goal_reward = goal_reward
         self.action_cost_coeff = 10.
         self.xlim = (-7, 7)
         self.ylim = (-7, 7)
@@ -132,6 +132,16 @@ class MultiGoalEnv(Env, Serializable):
         line, = ax.plot(xx, yy, style)
         return line
 
+    @staticmethod
+    def plot_paths(paths, ax):
+        line_lst = []
+        for path in paths:
+            positions = path["env_infos"]["pos"]
+            xx = positions[:, 0]
+            yy = positions[:, 1]
+            line_lst += ax.plot(xx, yy, 'b')
+        return line_lst
+
     def compute_reward(self, observation, action):
         # penalize the L2 norm of acceleration
         action_cost = np.sum(action ** 2) * self.action_cost_coeff
@@ -196,7 +206,7 @@ class MultiGoalEnv(Env, Serializable):
     def set_param_values(self, params):
         pass
 
-    def log_stats(self, epoch, paths):
+    def log_stats(self, alg, epoch, paths):
         n_goal = len(self.goal_positions)
         goal_reached = [False] * n_goal
 

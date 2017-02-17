@@ -8,6 +8,7 @@ from rllab.envs.proxy_env import ProxyEnv
 from rllab.envs.normalized_env import normalize
 from rllab.exploration_strategies.ou_strategy import OUStrategy
 
+from rllab.core.serializable import Serializable
 
 from sandbox.tuomas.mddpg.policies.stochastic_policy import \
     DummyExplorationStrategy, StochasticPolicyMaximizer
@@ -48,6 +49,7 @@ elif FLAGS.policy == 'stochastic':
 class AlgTest(Alg):
 
     def __init__(self, *args, **kwargs):
+        Serializable.quick_init(self, locals())
         super(AlgTest, self).__init__(*args, **kwargs)
 
         self.lim_a = 2.
@@ -184,7 +186,7 @@ class AlgTest(Alg):
                 ax_critic.plot(x, y, '*')
 
                 # Plot eval_actor
-                max_action = self.eval_policy.get_action(obs)
+                max_action, _ = self.eval_policy.get_action(obs)
                 ax_critic.plot(max_action[0], max_action[1], '*r')
 
             plt.draw()

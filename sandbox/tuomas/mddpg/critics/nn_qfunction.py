@@ -50,7 +50,7 @@ class NNCritic(NeuralNetwork):
             )
             self.variable_scope = variable_scope
 
-    def get_weight_tied_copy(self, action_input):
+    def get_weight_tied_copy(self, action_input=None, observation_input=None):
         """
         HT: basically, re-run __init__ with specified kwargs. In particular,
         the variable scope doesn't change, and self.observations_placeholder
@@ -66,14 +66,17 @@ class NNCritic(NeuralNetwork):
             observation_dim=self.observation_dim,
             action_dim=self.action_dim,
             action_input=action_input,
+            observation_input=observation_input,
             reuse=True,
         )
 
     def create_network(self, action_input, observation_input):
         raise NotImplementedError
 
-    def get_feed_dict(self, obs, action=None):
-        feed = {self.observations_placeholder: obs}
+    def get_feed_dict(self, obs=None, action=None):
+        feed = {}
+        if obs is not None:
+            feed[self.observations_placeholder] = obs
         if action is not None:
             feed[self.actions_placeholder] = action
 
@@ -112,7 +115,7 @@ class FeedForwardCritic(NNCritic):
                          observation_input=observation_input,
                          reuse=reuse)
 
-    def get_weight_tied_copy(self, action_input, observation_input):
+    def get_weight_tied_copy(self, action_input=None, observation_input=None):
         return self.__class__(
             scope_name=self.scope_name,
             observation_dim=self.observation_dim,
