@@ -65,6 +65,13 @@ class VG(VariantGenerator):
                 seed=0
             ),
         ]
+    @variant
+    def random_init_state(self):
+        return [False]
+
+    @variant
+    def direction(self):
+        return [(1., 0.)]
 
 
 variants = VG().variants()
@@ -101,7 +108,8 @@ for v in variants:
     if env_name == "tuomas_ant":
         env_kwargs = {
             "reward_type": "velocity",
-            "direction": (1., 0.),
+            "direction": v["direction"],
+            "random_init_state": v["random_init_state"],
         }
     else:
         env_kwargs = {}
