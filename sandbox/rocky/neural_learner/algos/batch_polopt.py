@@ -169,47 +169,61 @@ class BatchPolopt(RLAlgorithm):
     def process_samples(self, itr, paths):
         return self.sample_procesor.process_samples(itr, paths)
 
-    def train(self):
-        with tf.Session() as sess:
-            # writer = tf.train.SummaryWriter(logger.get_tf_summary_dir(), sess.graph)
-            # logger.set_tf_summary_writer(writer)
-            # summary_op = tf.merge_all_summaries()
+    def train(self, sess=None):
+        session_created = False
+        if sess is None:
+            sess = tf.Session()
+            sess.__enter__()
+            session_created = True
+        # Only initialize variables that have not been initialized
 
-            sess.run(tf.initialize_all_variables())
+        uninitialized_vars = []
+        for var in tf.all_variables():
+            try:
+                sess.run(var)
+            except tf.errors.FailedPreconditionError:
+                uninitialized_vars.append(var)
+        sess.run(tf.initialize_variables(uninitialized_vars))
 
-            logger.log("Starting worker...")
-            self.start_worker()
-            logger.log("Worker started")
-            start_time = time.time()
-            for itr in range(self.start_itr, self.n_itr):
-                itr_start_time = time.time()
-                with logger.prefix('itr #%d | ' % itr):
-                    logger.log("Obtaining samples...")
-                    paths = self.obtain_samples(itr)
-                    logger.log("Processing samples...")
-                    samples_data = self.process_samples(itr, paths)
-                    logger.log("Optimizing policy...")
-                    self.optimize_policy(itr, samples_data)
-                    logger.log("Logging diagnostics...")
-                    self.log_diagnostics(paths)
-                    logger.log("Saving snapshot...")
-                    params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
-                    if self.store_paths:
-                        params["paths"] = samples_data["paths"]
-                    logger.save_itr_params(itr, params, use_cloudpickle=self.use_cloudpickle)
-                    logger.log("Saved")
-                    logger.log("Evaluating on additional environments")
-                    self.post_eval_policy(itr)
-                    logger.log("Evaluated")
-                    logger.record_tabular('Time', time.time() - start_time)
-                    logger.record_tabular('ItrTime', time.time() - itr_start_time)
-                    logger.dump_tabular(with_prefix=False)
-                    if self.plot:
-                        self.update_plot()
-                        if self.pause_for_plot:
-                            input("Plotting evaluation run: Press Enter to "
-                                  "continue...")
+        # writer = tf.train.SummaryWriter(logger.get_tf_summary_dir(), sess.graph)
+        # logger.set_tf_summary_writer(writer)
+        # summary_op = tf.merge_all_summaries()
+
+        logger.log("Starting worker...")
+        self.start_worker()
+        logger.log("Worker started")
+        start_time = time.time()
+        for itr in range(self.start_itr, self.n_itr):
+            itr_start_time = time.time()
+            with logger.prefix('itr #%d | ' % itr):
+                logger.log("Obtaining samples...")
+                paths = self.obtain_samples(itr)
+                logger.log("Processing samples...")
+                samples_data = self.process_samples(itr, paths)
+                logger.log("Optimizing policy...")
+                self.optimize_policy(itr, samples_data)
+                logger.log("Logging diagnostics...")
+                self.log_diagnostics(paths)
+                logger.log("Saving snapshot...")
+                params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
+                if self.store_paths:
+                    params["paths"] = samples_data["paths"]
+                logger.save_itr_params(itr, params, use_cloudpickle=self.use_cloudpickle)
+                logger.log("Saved")
+                logger.log("Evaluating on additional environments")
+                self.post_eval_policy(itr)
+                logger.log("Evaluated")
+                logger.record_tabular('Time', time.time() - start_time)
+                logger.record_tabular('ItrTime', time.time() - itr_start_time)
+                logger.dump_tabular(with_prefix=False)
+                if self.plot:
+                    self.update_plot()
+                    if self.pause_for_plot:
+                        input("Plotting evaluation run: Press Enter to "
+                              "continue...")
         self.shutdown_worker()
+        if session_created:
+            sess.__exit__(None, None, None)
 
     def log_diagnostics(self, paths):
         self.env.log_diagnostics(paths)

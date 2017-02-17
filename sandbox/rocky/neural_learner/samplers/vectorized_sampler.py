@@ -57,6 +57,15 @@ class VectorizedSampler(Sampler):
             policy_time += time.time() - t
             t = time.time()
             next_obses, rewards, dones, env_infos = self.vec_env.step(actions, max_path_length=max_path_length)
+
+            if np.any(dones):
+                new_obses = self.vec_env.reset(dones)
+                reset_idx = 0
+                for idx, done in enumerate(dones):
+                    if done:
+                        next_obses[idx] = new_obses[reset_idx]
+                        reset_idx += 1
+
             env_time += time.time() - t
 
             t = time.time()

@@ -14,6 +14,8 @@ class InterpolateQFunction(Serializable):
         reuse=False,
     ):
         """
+        WARNING: if you normalize the environment (either the observation or
+        action space), the computation breaks
         :param discrete_Q: an (ns, na) matrix
         """
         Serializable.quick_init(self, locals())

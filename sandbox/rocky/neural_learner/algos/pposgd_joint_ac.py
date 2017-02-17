@@ -113,6 +113,11 @@ class PPOSGD(BatchPolopt):
                 state_dim = rnn_network.state_dim
                 recurrent_layer = rnn_network.recurrent_layer
                 state_init_param = rnn_network.state_init_param
+            elif hasattr(self.policy, "head_network"):
+                rnn_network = self.policy.head_network
+                state_dim = rnn_network.state_dim
+                recurrent_layer = rnn_network.recurrent_layer
+                state_init_param = rnn_network.state_init_param
             else:
                 state_dim = self.policy.l_rnn.state_dim
                 recurrent_layer = self.policy.l_rnn

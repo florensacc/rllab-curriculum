@@ -77,11 +77,14 @@ class DiagonalGaussianKernel(Kernel):
             tf.square(xs_weighted),
             2, keep_dims=True
         ) # N x K x 1, computes yj^2
+
+
         D = -0.5 * (
             r - # yj^2
             2 * tf.batch_matmul(xs_weighted, xs_weighted, adj_y=True) + # yj*yk
             tf.transpose(r,[0,2,1]) # yk^2
         )
+
         kappa = tf.exp(D)
         return kappa
 
@@ -105,8 +108,42 @@ class DiagonalGaussianKernel(Kernel):
         #    axis=2
         #) # N x K x K x d: (x_j - x_k)
 
+        kappa_grads = - kappa * self.diag_kappa_grads * diff
+        return kappa_grads
 
-        kappa_grads = - kappa *  self.diag_kappa_grads * diff
+    def get_asymmetric_kappa(self, ys):
+        """
+        :param ys: Actions that we want to update  (N, K2, d)
+        :return: Kernel matrix (N, K1, K2, d)
+        """
+        xs = self.fixed_actions_pl
+        xs = tf.expand_dims(xs, axis=2)  # N x K1 x 1 x d
+        ys = tf.expand_dims(ys, axis=1)  # N x 1 x K2 x d
+
+        diff = xs - ys  # N x K1 x K2 x d
+        weighted_diff = diff * tf.sqrt(self.diag_kappa_grads)  # N x K1 x K2 x d
+        weighted_dist = tf.reduce_sum(weighted_diff**2, axis=3)  # N x K1 x K2
+
+        kappa = tf.exp(-0.5 * weighted_dist)
+
+        return kappa
+
+    def get_asymmetric_kappa_grads(self, ys):
+        """
+        :param ys:
+        :return: N x K1(i) x K2(j) x d tensor with elements
+            \nabla_{x_i}\kappa(xi, yj)
+        """
+        xs = self.fixed_actions_pl
+        kappa = self.get_asymmetric_kappa(ys)  # N x K1 x K2
+        kappa = tf.expand_dims(kappa, axis=3)  # N x K1 x K2 x 1
+
+        xs = tf.expand_dims(xs, axis=2)  # N x K1 x 1 x d
+        ys = tf.expand_dims(ys, axis=1)  # N x 1 x K2 x d
+
+        diff = xs - ys  # N x K1 x K2 x d
+        kappa_grads = - kappa * self.diag_kappa_grads * diff  # N x K1 x K2 x d
+
         return kappa_grads
 
 
@@ -116,10 +153,11 @@ class SimpleAdaptiveDiagonalGaussianKernel(DiagonalGaussianKernel):
     Since tensorflow doesn't allow computing the median in the graph, we do it
     in np and then feed the values back
     """
-    def __init__(self, scope_name, dim, h_min=1e-3):
+    def __init__(self, scope_name, dim, h_min=1e-3, sparse_update=False):
         self.scope_name = scope_name
         self.dim = dim
         self.h_min = h_min
+        self.sparse_update = sparse_update
 
         Serializable.quick_init(self, locals())
         with tf.variable_scope(self.scope_name):
@@ -134,8 +172,23 @@ class SimpleAdaptiveDiagonalGaussianKernel(DiagonalGaussianKernel):
                 dim=1,
             ) # N x 1 x 1 x d
 
-    def update(self, algo, actor_feed):
-        xs = self.sess.run(algo.policy.output, actor_feed) # N x K x d
+            # Placeholder for the fixed actions
+            self.fixed_actions_pl = tf.placeholder(tf.float32,
+                                                   (None, None, self.dim))
+
+    def update(self, algo, actor_feed, multiheaded=True, K=None):
+        # TODO(TH): hacky fix. To make this work on stochastic policies,
+        # we need to pass the number of particles
+        # in order to reshape the policy output back to N x K x d
+        if algo.svgd_target == "action":
+            xs = self.sess.run(algo.policy.output, actor_feed) #N x K x d or N*K x d
+        elif algo.svgd_target == "pre-action":
+            xs = self.sess.run(algo.policy.pre_output, actor_feed) #N x K x d or N*K x d
+        else:
+            raise NotImplementedError
+            
+        if not multiheaded:
+            xs = np.reshape(xs, (-1, K, self.dim))
         N, K, d = xs.shape
         assert self.dim == d
         assert K > 1, "cannot compute pairwise distance if K = 1"
@@ -149,7 +202,7 @@ class SimpleAdaptiveDiagonalGaussianKernel(DiagonalGaussianKernel):
             # x is K x D
             dist = distance.pdist(x)
 
-            # the fisrt h is suggested by the SVGD paper
+            # the first h is suggested by the SVGD paper
             # h = np.median(dist)**2 / np.log(K)
             # the second h is used in Thomas' code for particle GPS
             h = 0.5 * np.median(dist) / np.log(K+1)
@@ -161,6 +214,8 @@ class SimpleAdaptiveDiagonalGaussianKernel(DiagonalGaussianKernel):
         extra_feed = {
             self.diag_placeholder: self.diags
         }
+        if self.sparse_update:
+            extra_feed[self.fixed_actions_pl] = xs  # N x K x d
         return extra_feed
 
 class SimpleDiagonalConstructor(object):

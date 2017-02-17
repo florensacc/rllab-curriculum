@@ -9,6 +9,7 @@ def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1):
     rewards = []
     agent_infos = []
     env_infos = []
+    dones = []
     o = env.reset()
     agent.reset()
     path_length = 0
@@ -22,6 +23,7 @@ def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1):
         actions.append(env.action_space.flatten(a))
         agent_infos.append(agent_info)
         env_infos.append(env_info)
+        dones.append(d)
         path_length += 1
         if d:
             break
@@ -39,4 +41,6 @@ def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1):
         rewards=tensor_utils.stack_tensor_list(rewards),
         agent_infos=tensor_utils.stack_tensor_dict_list(agent_infos),
         env_infos=tensor_utils.stack_tensor_dict_list(env_infos),
+        dones=np.asarray(dones),
+        last_obs=o,
     )

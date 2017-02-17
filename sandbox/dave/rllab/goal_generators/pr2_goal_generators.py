@@ -9,16 +9,21 @@ from six.moves import range
 class PR2CrownSmallRange:
     def __init__(self):
         # Initial tip position: [0.94, 0.17, 0.79]
-        self.radius_low = 0.15   #TODO: this is a fixGoal generator
-        self.radius_high = 0.25
-        self.center = np.array([0.6, 0.2, 0.5249])
+        self.radius_low = 0.1   #TODO: this is a fixGoal generator
+        self.radius_high = 0.2
+
+class PR2CrownLargeRange:
+    def __init__(self):
+        # Initial tip position: [0.94, 0.17, 0.79]
+        self.radius_low = 0.05  #TODO: this is a fixGoal generator
+        self.radius_high = 0.35
 
 
 class PR2SmallRange:
     def __init__(self):
         # Initial tip position: [0.94, 0.17, 0.79]
-        self.low_goal_bounds = np.array([0.4, -0.1, 0.525])     #TODO: this is a fixGoal generator
-        self.high_goal_bounds = np.array([0.7, 0.5, 0.525])
+        self.low_goal_bounds = np.array([0.4, 0.5, 0.5025])   #(0.4, -0.1, )       #TODO: this is a fixGoal generator
+        self.high_goal_bounds = np.array([0.6, 0.2, 0.5025])  #(0.7, 0.5, )
 
 
 class PR2LargeRange:
@@ -27,18 +32,17 @@ class PR2LargeRange:
         # low_goal_boundhuntest12
         # s = np.array([0.3, -0.3, 0.3]) # Bad - contained unreachable goals
         # high_goal_bounds = np.array([0.8, 0.7, 1.3]) # Bad - contained unreachable goals
-        self.low_goal_bounds = np.array([0.3, -0.2, 0.4])
-        self.high_goal_bounds = np.array([0.6, 0.6, 1.2])
+        self.low_goal_bounds = np.array([0.4, -0.2, 0.5025])
+        self.high_goal_bounds = np.array([0.8, 0.8, 1])
 
 
 class PR2FixedGoalGenerator(FixedGoalGenerator):
     """ Always returns the same fixed goal """
     def __init__(self, goal=None):
         # print "Using fixed goal generator"
-        # import pdb
-        # pdb.set_trace()
         if goal is None:
-            goal = (0.6, 0, 0.525)
+            # goal = (0.5, 0.3, 0.5025)
+            goal = (0.55, 0., 0.5025)
             #goal = (0.8, 0.17, 1.0)
         goal = np.array(goal)
         super(PR2FixedGoalGenerator, self).__init__(goal)
@@ -201,38 +205,59 @@ class PR2BoxGoalGeneratorLarge(BoxGoalGenerator):
 
 class PR2TestGoalGenerator(GoalGenerator):
     """ Generate a list of goals that the we test if the policy can achieve """
-    def __init__(self, num_test_goals, obs=None, seed=0, small_range=False):
+    def __init__(self, range=0.3, delta=0.02, times=1, obs=None, seed=0, small_range=False):
         self.goals = []
         # Set the seed so that we produce consistent results
         np.random.seed(seed)
         self.goal_generator = PR2BoxGoalGenerator(small_range=small_range)
-        self.num_test_goals = num_test_goals
-        self.generate_all_goals(obs)
-        self.goal_index = 0
+        self.range = range
+        self.delta = delta
+        self.goal_index = -1
+        self.times = times
+        self.generate_all_goals()
         # Reset the random seed to get randomness
         # np.random.seed(time.time())
         # np.random.seed(datetime.now())
 
-    def generate_all_goals(self, obs):
-        for _ in range(self.num_test_goals):
-            goal = self.goal_generator.generate_goal(obs)
-            self.goals.append(goal)
+    def generate_all_goals(self):
+        num_goals_x = np.int(np.round(self.range/self.delta))
+        for i in range(num_goals_x):
+            for j in range(num_goals_x):
+                goal = np.array([j * self.delta - self.range/2, i * self.delta - self.range/2, 0])
+                self.goals.append(goal)
+        self.goals *= self.times
+        from random import shuffle
+        shuffle(self.goals)
+
 
     def generate_goal(self, obs):
-        goal = self.goals[self.goal_index]
+        if self.goal_index != -1:
+            goal = self.goals[self.goal_index]
+        else:
+            goal = self.goals[0]
+        goal = goal + obs
         self.goal_index += 1
         return goal
 
 
 class PR2CrownGoalGeneratorSmall(CrownGoalGenerator):
-    """ Generate goals randomly from within a box that defines the goal space """
+    """ Generate goals randomly from within a crown that defines the goal space """
     def __init__(self, max_episodes_with_goal=1):
         goal_crown = PR2CrownSmallRange()
-
-        center = goal_crown.center
         radius_low = goal_crown.radius_low
         radius_high = goal_crown.radius_high
 
         super(PR2CrownGoalGeneratorSmall, self).__init__(
-            center, radius_low, radius_high,
+            radius_low, radius_high,
+            max_episodes_with_goal=max_episodes_with_goal)
+
+class PR2CrownGoalGeneratorLarge(CrownGoalGenerator):
+    """ Generate goals randomly from within a crown that defines the goal space """
+    def __init__(self, max_episodes_with_goal=1):
+        goal_crown = PR2CrownLargeRange()
+        radius_low = goal_crown.radius_low
+        radius_high = goal_crown.radius_high
+
+        super(PR2CrownGoalGeneratorLarge, self).__init__(
+            radius_low, radius_high,
             max_episodes_with_goal=max_episodes_with_goal)

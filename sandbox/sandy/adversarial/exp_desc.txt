@@ -1,0 +1,23 @@
+exp000.py: Try out different FGSM adversaries (varied norm and epsilon),
+           for Pong agent trained with train/exp013
+exp001.py: Same as exp000.py, except with (slightly) more variation in rollouts
+exp002.py: Visualize trained policy for Space Invaders, for debugging
+exp003.py: Apply FGSM to multiple games (Chopper Command, Pong, Seaquest,
+           Space Invaders) trained with TRPO.
+exp006.py: Apply FGSM to multiple games (Chopper Command, Pong, Seaquest,
+           Space Invaders) trained with A3C.
+***All experiments after this have obs_min set correctly to 0, not -1***
+exp009.py: EC2 practice run, applying FGSM to Seaquest, trained with TRPO, A3C,
+           and DQN. (No transferability for now.)
+exp010.py: EC2 run, applying FGSM to all four games, trained with TRPO, A3C, and
+           DQN. (No transferability). Will use output from this run to select
+           FGSM epsilons for each norm, when testing transferability.
+exp011.py: EC2 run, applying FGSM to all four games, trained with TRPO, A3C, and
+           DQN. With transferability.
+exp012.py: Visualize interesting white-box rollouts for arXiv paper --> scrapped
+exp012b.py: Visualize interesting white-box rollouts for arXiv paper.
+            Forgot to save something in exp012.py
+exp013.py: Visualize interesting *black-box* rollouts for arXiv paper. And redo
+           the white-box rollouts, with correct epsilons.
+exp014.py: EC2 run, applying FGSM to A3C LSTM policies, for all four games.
+           With transferability.

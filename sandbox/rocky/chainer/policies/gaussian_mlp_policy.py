@@ -1,3 +1,4 @@
+from rllab.core.serializable import Serializable
 from sandbox.rocky.chainer.core.link_powered import LinkPowered
 from sandbox.rocky.chainer.distributions.diagonal_gaussian import DiagonalGaussian
 from sandbox.rocky.chainer.policies.base import StochasticPolicy
@@ -9,14 +10,15 @@ import chainer.functions as F
 from rllab.misc import logger
 
 
-class GaussianMLPPolicy(StochasticPolicy, LinkPowered, chainer.Chain):
+class GaussianMLPPolicy(StochasticPolicy, LinkPowered, chainer.Chain, Serializable):
     def __init__(
             self,
             env_spec,
             hidden_sizes=(32, 32),
-            hidden_nonlinearity=F.Tanh(),
+            hidden_nonlinearity=F.tanh,
             output_nonlinearity=None,
     ):
+        Serializable.quick_init(self, locals())
         StochasticPolicy.__init__(self, env_spec=env_spec)
         chainer.Chain.__init__(self)
         obs_dim = env_spec.observation_space.flat_dim
@@ -43,11 +45,8 @@ class GaussianMLPPolicy(StochasticPolicy, LinkPowered, chainer.Chain):
         return dict(mean=mean, log_std=log_std)
 
     def get_action(self, observation):
-        flat_obs = self.observation_space.flatten(observation)
-        mean = self.mean_network(np.asarray([flat_obs], dtype=np.float32)).data[0]
-        log_std = self.l_log_std().data
-        action = np.random.normal(size=mean.shape) * np.exp(log_std) + mean
-        return action, dict(mean=mean, log_std=log_std)
+        actions, agent_infos = self.get_actions([observation])
+        return actions[0], {k: v[0] for k, v in agent_infos.items()}
 
     def get_actions(self, observations):
         flat_obs = self.observation_space.flatten_n(observations)

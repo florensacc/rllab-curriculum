@@ -325,3 +325,12 @@ class MjViewer(object):
         mjlib.mjr_freeContext(byref(self.con))
         mjlib.mjv_freeObjects(byref(self.objects))
         self.running = False
+
+    def set_window_pose(self, xpos, ypos):
+        glfw.set_window_pos(self.window, xpos, ypos)
+
+    def set_window_size(self, width, height):
+        glfw.set_window_size(self.window, width, height)
+
+    def set_window_title(self, title):
+        glfw.set_window_title(self.window, title)

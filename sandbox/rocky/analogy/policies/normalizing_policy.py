@@ -1,4 +1,3 @@
-from sandbox.rocky.tf.core.parameterized import Parameterized
 from sandbox.rocky.tf.policies.base import Policy
 from rllab.core.serializable import Serializable
 import tensorflow as tf

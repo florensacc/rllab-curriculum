@@ -1,24 +1,28 @@
 import numpy as np
-from rllab.misc import tensor_utils
 import time
-from rllab.envs.normalized_env import NormalizedEnv  # this is just to check if the env passed is a normalized maze
+from rllab.misc import tensor_utils
+from rllab.envs.normalized_env import NormalizedEnv  # to check if env is normalized => no method get_current_obs()
 
 
 def rollout_snn(env, agent, max_path_length=np.inf, reset_start_rollout=True,
                 switch_lat_every=0, animated=False, speedup=1):
+    """
+    :param reset_start_rollout: whether to reset at the start of every rollout
+    :param switch_lat_every: potential change in latents (by resetting the agent with forced resample lat)
+    """
     observations = []
     actions = []
     rewards = []
     agent_infos = []
     env_infos = []
     if reset_start_rollout:
-        o = env.reset()  # otherwise it will never advance!!
+        o = env.reset()  # in case rollout is called to produce parts of a trajectory: otherwise it will never advance!!
     else:
         if isinstance(env, NormalizedEnv):
             o = env.wrapped_env.get_current_obs()
         else:
             o = env.get_current_obs()
-    agent.reset()  # this resamples a latent!
+    agent.reset()  # this resamples a latent in SNNs!
     path_length = 0
     if animated:
         env.render()

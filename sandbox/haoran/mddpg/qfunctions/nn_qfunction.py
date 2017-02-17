@@ -12,6 +12,7 @@ class NNCritic(NeuralNetwork):
             observation_dim,
             action_dim,
             action_input=None,
+            observation_input=None,
             reuse=False,
             **kwargs
     ):
@@ -20,6 +21,7 @@ class NNCritic(NeuralNetwork):
         self.observation_dim = observation_dim
         self.action_dim = action_dim
         self.action_input = action_input
+        self.observation_input = observation_input
         self.reuse = reuse
 
         with tf.variable_scope(self.scope_name, reuse=reuse) as variable_scope:
@@ -31,12 +33,18 @@ class NNCritic(NeuralNetwork):
                 )
             else:
                 self.actions_placeholder = action_input
-            self.observations_placeholder = tf.placeholder(
-                tf.float32,
-                shape=[None, observation_dim],
-                name='critic_observations',
+            if observation_input is None:
+                self.observations_placeholder = tf.placeholder(
+                    tf.float32,
+                    shape=[None, observation_dim],
+                    name='critic_observations',
+                )
+            else:
+                self.observations_placeholder = observation_input
+            self._output = self.create_network(
+                self.actions_placeholder,
+                self.observations_placeholder,
             )
-            self._output = self.create_network(self.actions_placeholder)
             self.variable_scope = variable_scope
 
     def get_weight_tied_copy(self, action_input):
@@ -58,8 +66,16 @@ class NNCritic(NeuralNetwork):
             reuse=True,
         )
 
-    def create_network(self, action_input):
+    def create_network(self, action_input, observation_input):
         raise NotImplementedError
+
+    def get_feed_dict(self, obs, action=None):
+        feed = {self.observations_placeholder: obs}
+        if action is not None:
+            feed[self.actions_placeholder] = action
+
+        return feed
+
 
 class FeedForwardCritic(NNCritic):
     def __init__(
@@ -68,6 +84,7 @@ class FeedForwardCritic(NNCritic):
             observation_dim,
             action_dim,
             action_input=None,
+            observation_input=None,
             reuse=False,
             hidden_W_init=None,
             hidden_b_init=None,
@@ -88,14 +105,17 @@ class FeedForwardCritic(NNCritic):
         self.observation_hidden_sizes = observation_hidden_sizes
         self.hidden_nonlinearity = hidden_nonlinearity
         super().__init__(scope_name, observation_dim, action_dim,
-                         action_input=action_input, reuse=reuse)
+                         action_input=action_input,
+                         observation_input=observation_input,
+                         reuse=reuse)
 
-    def get_weight_tied_copy(self, action_input):
+    def get_weight_tied_copy(self, action_input, observation_input):
         return self.__class__(
             scope_name=self.scope_name,
             observation_dim=self.observation_dim,
             action_dim=self.action_dim,
             action_input=action_input,
+            observation_input=observation_input,
             reuse=True,
             hidden_W_init=self.hidden_W_init,
             hidden_b_init=self.hidden_b_init,
@@ -106,9 +126,9 @@ class FeedForwardCritic(NNCritic):
             hidden_nonlinearity=self.hidden_nonlinearity,
         )
 
-    def create_network(self, action_input):
+    def create_network(self, action_input, observation_input):
         with tf.variable_scope("observation_mlp") as _:
-            observation_output = mlp(self.observations_placeholder,
+            observation_output = mlp(observation_input,
                                      self.observation_dim,
                                      self.observation_hidden_sizes,
                                      self.hidden_nonlinearity,
@@ -116,7 +136,11 @@ class FeedForwardCritic(NNCritic):
                                      b_initializer=self.hidden_b_init,
                                      reuse_variables=True)
         embedded = tf.concat(1, [observation_output, action_input])
-        embedded_dim = self.action_dim + self.observation_hidden_sizes[-1]
+        if len(self.observation_hidden_sizes) == 0:
+            embedded_dim = self.action_dim + self.observation_dim
+        else:
+            embedded_dim = self.action_dim + self.observation_hidden_sizes[-1]
+
         with tf.variable_scope("fusion_mlp") as _:
             fused_output = mlp(embedded,
                                embedded_dim,

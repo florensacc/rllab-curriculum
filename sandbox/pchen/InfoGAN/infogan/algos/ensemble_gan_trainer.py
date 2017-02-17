@@ -153,11 +153,12 @@ class EnsembleGANTrainer(object):
                 raise Exception("sup")
 
             # specific to 2nd approx adaptive kl size
-            self.natural_step_var = tf.Variable(
-                initial_value=1./TINY_G_P if self.natural_anneal_len else self.natural_step,
-                name="natural_step",
-                trainable=False,
-            )
+            if self.natural_anneal_len or self.natural_step:
+                self.natural_step_var = tf.Variable(
+                    initial_value=1./TINY_G_P if self.natural_anneal_len else self.natural_step,
+                    name="natural_step",
+                    trainable=False,
+                )
             if self.natural_step is None or self.natural_g_only:
                 real_d_tgt = tf.ones_like(real_d_logits)
                 fake_d_tgt = tf.zeros_like(fake_d_logits)

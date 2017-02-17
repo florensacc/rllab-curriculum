@@ -12,6 +12,9 @@ from rllab import config
 import os
 
 
+exp_name = "fetch-relative-general-dagger-10"
+
+
 def _kill_job(args):
     job_id, force = args
     try:

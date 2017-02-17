@@ -20,10 +20,10 @@ def split_paths(paths):
                                 np.zeros_like(path["observations"][0:1])))
         next_obs.append(next_obs_i)
 
-        terminal_i = np.zeros_like(path["rewards"])
+        terminal_i = np.zeros((path["rewards"].shape[0],))
         terminal_i[-1] = 1
         terminals.append(terminal_i)
-    rewards = np.hstack(rewards)
+    rewards = np.concatenate(rewards, axis=0)
     terminals = np.hstack(terminals)
     obs = np.vstack(obs)
     actions = np.vstack(actions)

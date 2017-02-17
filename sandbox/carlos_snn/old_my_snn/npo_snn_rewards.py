@@ -20,12 +20,12 @@ from sandbox.carlos_snn.envs.hierarchized_snn_env import hierarchize_snn
 import numpy as np
 from rllab.algos.base import RLAlgorithm
 from rllab.sampler import parallel_sampler
+
 from rllab.misc import special
 from rllab.misc import tensor_utils
 from rllab.algos import util
 import os.path as osp
-from sandbox.carlos_snn.sampler.utils_snn import rollout_snn
-from sandbox.carlos_snn.sampler.utils import rollout
+from rllab.sampler.utils import rollout
 import collections
 import gc
 
@@ -33,13 +33,14 @@ import gc
 class BatchSampler_snn(BatchSampler):
     def __init__(self,
                  *args,  # this collects algo, passing it to BatchSampler in the super __init__
-                 reward_coef_mi=0,
-                 reward_coef_bonus=None,
-                 bonus_evaluator=None,
+                 reward_coef_mi=0,  # this is for the regressor bonus, not the grid
+                 reward_coef_bonus=None,  # this is the total bonus from the bonus evaluator. it's a LIST
+                 bonus_evaluator=None,  # list of bonus evals
                  latent_regressor=None,
                  logged_MI=None,  # a list of tuples specifying the (obs,actions) that are regressed to find the latents
                  hallucinator=None,
                  n_hallu=0,
+                 self_normalize=False, # this is for the hallucinated samples importance weight
                  # virtual_reset=False,
                  switch_lat_every=0,
                  **kwargs
@@ -55,6 +56,7 @@ class BatchSampler_snn(BatchSampler):
         self.logged_MI = logged_MI  # a list of tuples specifying the (obs,actions) that are regressed to find the latents
         self.hallucinator = hallucinator
         self.n_hallu = n_hallu
+        self.self_normalize = self_normalize
         # self.virtual_reset = virtual_reset
         self.switch_lat_every = switch_lat_every
 
@@ -88,13 +90,6 @@ class BatchSampler_snn(BatchSampler):
                 temp_lat_reg = Latent_regressor(**extra_regressor_args)
                 self.other_regressors.append(temp_lat_reg)
 
-    def _worker_collect_one_path(self, G, max_path_length, scope=None):
-        G = parallel_sampler._get_scoped_G(G, scope)
-        # print('####\nthe switch_lat_every in the sampler is ', self.switch_lat_every)
-        path = rollout_snn(G.env, G.policy, max_path_length, switch_lat_every=self.switch_lat_every)
-        return path, len(path["rewards"])
-
-
     def sample_paths(
             self,
             policy_params,
@@ -119,10 +114,11 @@ class BatchSampler_snn(BatchSampler):
                 parallel_sampler._worker_set_env_params,
                 [(env_params, scope)] * parallel_sampler.singleton_pool.n_parallel
             )
+
         return parallel_sampler.singleton_pool.run_collect(
-            self._worker_collect_one_path,  # use the run_each with the proper rollout above
+            parallel_sampler._worker_collect_one_path_snn,  # now this is defined in parallel_sampler also!
             threshold=max_samples,
-            args=(max_path_length, scope),
+            args=(max_path_length, self.switch_lat_every, scope),
             show_prog_bar=True
         )
 
@@ -158,12 +154,13 @@ class BatchSampler_snn(BatchSampler):
             with logger.prefix(' Latent_regressor '):
                 self.latent_regressor.fit(paths)
 
-                for i, path in enumerate(paths):
-                    path['logli_latent_regressor'] = self.latent_regressor.predict_log_likelihood(
-                        [path], [path['agent_infos']['latents']])[0]  # this is for paths usually..
+                if self.reward_coef_mi:
+                    for i, path in enumerate(paths):
+                        path['logli_latent_regressor'] = self.latent_regressor.predict_log_likelihood(
+                            [path], [path['agent_infos']['latents']])[0]  # this is for paths usually..
 
-                    path['rewards'] += self.reward_coef_mi * path[
-                        'logli_latent_regressor']  # the logli of the latent is the variable of the mutual information
+                        path['rewards'] += self.reward_coef_mi * path[
+                            'logli_latent_regressor']  # the logli of the latent is the variable of the mutual information
 
         # for the extra bonus
         for b, b_eval in enumerate(self.bonus_evaluator):
@@ -184,7 +181,7 @@ class BatchSampler_snn(BatchSampler):
             if len(hallucinated) == 0:
                 return real_samples
             all_samples = [real_samples] + hallucinated
-            if self.algo.self.algo.normalize:
+            if self.self_normalize:
                 all_importance_weights = np.asarray([x["importance_weights"] for x in all_samples])
                 # It is important to use the mean instead of the sum. Otherwise, the computation of the weighted KL
                 # divergence will be incorrect
@@ -243,7 +240,6 @@ class NPO_snn(NPO):
         self.L2_ub = L2_ub
         self.reward_coef_kl = reward_coef_kl
         self.KL_ub = KL_ub
-
 
         sampler_cls = BatchSampler_snn
         sampler_args = {'switch_lat_every': switch_lat_every,

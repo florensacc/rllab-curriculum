@@ -1,4 +1,5 @@
 import numpy as np
+import rllab.misc.logger as logger
 import pickle as pkl
 import pickle as cPkl
 import gzip, zipfile, tarfile
@@ -1069,6 +1070,10 @@ class Dataset(object):
     def epochs_completed(self):
         return self._epochs_completed
 
+    def rewind(self):
+        assert self._epochs_completed != -1, "rewind on init"
+        self._index_in_epoch = 0
+
     def next_batch(self, batch_size):
         """Return the next `batch_size` examples from this data set."""
         start = self._index_in_epoch
@@ -1100,6 +1105,11 @@ class BinarizedDataset(Dataset):
         source, label = super(BinarizedDataset, self).next_batch(batch_size)
         rand = np.random.random(source.shape)
         return (rand <= source) * 1., label
+
+class DequantizedDataset(Dataset):
+    def next_batch(self, batch_size):
+        x, label = super(DequantizedDataset, self).next_batch(batch_size)
+        return x + np.random.uniform(low=0., high=1./256, size=x.shape), label
 
 class FaceDataset(object):
     def __init__(self):
@@ -1372,22 +1382,19 @@ class Caltech101Dataset(object):
         return self._image_shape
 
 class Cifar10Dataset(object):
-    def __init__(self, scale=1., scramble_vai=False, scramble_vali_ch=False):
+    def __init__(self, scale=1., dequantized=False):
         self._image_shape = (32, 32, 3)
         self._image_dim = np.prod(self._image_shape)
 
         train_x, train_y, test_x, test_y = load_cifar10(normalize=True)
-        self.train = Dataset(train_x * scale)
-        # self.test = Dataset(valid)
-        if scramble_vai:
-            test_x = test_x.reshape(
-                [-1, self._image_dim]
-            )[:, np.random.permutation(self._image_dim)].reshape(
-                [-1] + list(self._image_shape)
-            )
-        if scramble_vali_ch:
-            test_x = test_x[:, :, :, np.random.permutation(3)]
-        self.validation = Dataset(test_x * scale)
+        if dequantized:
+            assert np.allclose(scale, 1.)
+            self.train = DequantizedDataset(train_x * scale)
+            self.validation = DequantizedDataset(test_x * scale)
+        else:
+            self.train = Dataset(train_x * scale)
+            self.validation = Dataset(test_x * scale)
+
 
     def transform(self, data):
         return data
@@ -1404,6 +1411,7 @@ class Cifar10Dataset(object):
 
 class ImageNet32Dataset(object):
     def __init__(self, scale=1., scramble_vai=False, scramble_vali_ch=False):
+        logger.log("imgnet_32 pre init")
         self._image_shape = (32, 32, 3)
         self._image_dim = np.prod(self._image_shape)
 
@@ -1419,6 +1427,7 @@ class ImageNet32Dataset(object):
         if scramble_vali_ch:
             test_x = test_x[:, :, :, np.random.permutation(3)]
         self.validation = Dataset(test_x * scale)
+        logger.log("imgnet_32 post init")
 
     def transform(self, data):
         return data

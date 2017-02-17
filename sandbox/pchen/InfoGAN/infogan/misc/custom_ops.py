@@ -1,10 +1,14 @@
 from contextlib import contextmanager
+from collections import namedtuple
 
 import enum
 import prettytensor as pt
 import tensorflow as tf
 from prettytensor.pretty_tensor_class import Phase, join_pretty_tensors, PrettyTensor
 import numpy as np
+
+from rllab.core.serializable import Serializable
+
 
 class CustomPhase(enum.Enum):
     """Some nodes are different depending on the phase of the graph construction.
@@ -14,6 +18,23 @@ class CustomPhase(enum.Enum):
     train = 1999
     test = 2999
     init = 3999
+
+# Anneal = namedtuple("Anneal", ["start", "end", "length"], )
+
+class Anneal(Serializable):
+    def __init__(self, start, end, length, delay=0):
+        Serializable.quick_init(self, locals())
+        def go(x):
+            epoch = max([x - delay, 0])
+            if epoch <= length:
+                desired = start + (end - start) / length * epoch
+            else:
+                desired = end
+            return desired
+        self.go = go
+
+    def __call__(self, x):
+        return self.go(x)
 
 
 class conv_batch_norm(pt.VarStoreMethod):
@@ -1651,6 +1672,19 @@ def cached_assign(var):
         pass
     return var_assignments[var]
 
+def restore(sess, ema):
+    assert ema
+    ema_keys = list(ema._averages.keys())
+    ema_avgs = [ema._averages[k] for k in ema_keys]
+    avg_vals = sess.run(ema_avgs)
+    ops = []
+    feed = {}
+    for var, avg in zip(ema_keys, avg_vals):
+        holder, op = cached_assign(var)
+        ops.append(op)
+        feed[holder] = avg
+    sess.run(ops, feed)
+
 @contextmanager
 def temp_restore(sess, ema):
     if ema is None:
@@ -1684,3 +1718,34 @@ def temp_restore(sess, ema):
         #     [tf.assign(var, avg) for var, avg in zip(ema_keys, old_vals)]
         # )
 
+class tf_go(object):
+    def __init__(self, x, debug=False):
+        self.value = x
+        self.debug = debug
+
+    def __getattr__(self, name):
+        # who cares?
+        def go(*args, **kwargs):
+            try:
+                if self.debug:
+                    print("Calling %s on %s" % (name, self.value))
+                method = eval("tf.%s" % name)
+                tf_val = method(*([self.value]+(list(args) if args else [])), **kwargs)
+                return tf_go(tf_val)
+            except:
+                print("Exception while calling %s on %s" % (name, self.value))
+                raise
+        return go
+
+
+from tensorflow.python.client import device_lib
+
+def get_available_gpus():
+    local_device_protos = device_lib.list_local_devices()
+    return [x.name for x in local_device_protos if x.device_type == 'GPU']
+
+
+def safe_log(x):
+    return tf.log(
+        tf.maximum(x, 1e-22)
+    )

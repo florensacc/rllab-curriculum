@@ -19,6 +19,8 @@ from rllab import spaces
 import tensorflow as tf
 import numpy as np
 
+scale = 1./3.
+
 class OneStepEnv(Env):
     def __init__(self, observation_dim,
         action_lb, action_ub, fixed_observation):
@@ -77,7 +79,7 @@ class MixtureGaussianCritic(NNCritic):
             **kwargs
         )
 
-    def create_network(self, action_input):
+    def create_network(self, action_input, observation_input):
         # unnormalized density
         output = tf.log(tf.add_n([
             w * (1./tf.sqrt(2. * np.pi * tf.square(sigma)) *
@@ -218,8 +220,8 @@ class MDDPGTest(MDDPG):
 
         plt.draw()
         plt.legend(['q','p'])
-        plt.xlim([-3, 3])
-        plt.ylim([0,0.5])
+        plt.xlim([-3 * scale, 3 * scale])
+        plt.ylim([0,0.3 * 1./ scale])
         plt.pause(0.001)
 
 
@@ -243,8 +245,8 @@ def test():
 
     # two modes
     weights = np.array([1./3., 2./3.],np.float32)
-    mus = np.array([-2., 2.],np.float32)
-    sigmas = np.array([1., 1.],np.float32)
+    mus = np.array([-2., 2.],np.float32) * scale
+    sigmas = np.array([1., 1.],np.float32) * scale
 
     # one mode
     # weights = np.array([1.],np.float32)
@@ -261,6 +263,7 @@ def test():
         policy_learning_rate=0.1, # note: this is higher than DDPG's 1e-4
         batch_size=1, # only need recent samples, though it's slow
         alpha=1, # 1 is the SVGD default
+        svgd_target="pre-action",
     )
     q_target_type = "none" # do not update the critic
 
@@ -295,7 +298,8 @@ def test():
         env.action_space.flat_dim,
         K=K,
         shared_hidden_sizes=tuple(),
-        independent_hidden_sizes=tuple(),
+        independent_hidden_sizes=(10,),
+        output_nonlinearity=tf.nn.tanh,
         scalar_network=True,
     )
     if adaptive_kernel:

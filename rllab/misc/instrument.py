@@ -359,7 +359,8 @@ def run_experiment_lite(
         periodic_sync=True,
         periodic_sync_interval=15,
         sync_all_data_node_to_s3=True,
-        use_cloudpickle=False,
+        use_cloudpickle=True,
+        pre_commands=None,
         **kwargs):
     """
     Serialize the stubbed method call and run the experiment using the specified mode.
@@ -393,6 +394,7 @@ def run_experiment_lite(
         batch_tasks = [
             dict(
                 kwargs,
+                pre_commands=pre_commands,
                 stub_method_call=stub_method_call,
                 exp_name=exp_name,
                 log_dir=log_dir,
@@ -433,6 +435,8 @@ def run_experiment_lite(
             del task["variant"]
         task["remote_log_dir"] = osp.join(
             config.AWS_S3_PATH, exp_prefix.replace("_", "-"), task["exp_name"])
+        task["env"] = task.get("env", dict()) or dict()
+        task["env"]["RLLAB_USE_GPU"] = str(use_gpu)
 
     if mode not in ["local", "local_docker"] and not remote_confirmed and not dry and confirm_remote:
         remote_confirmed = query_yes_no(
@@ -485,7 +489,7 @@ def run_experiment_lite(
             del task["remote_log_dir"]
             env = task.pop("env", None)
             command = to_docker_command(
-                task,
+                task,  # these are the params. Pre and Post command can be here
                 docker_image=docker_image,
                 script=script,
                 env=env,
@@ -629,6 +633,10 @@ def to_local_command(params, python_command="python", script=osp.join(config.PRO
         command = "THEANO_FLAGS='device=gpu,dnn.enabled=auto,floatX=float32' " + command
     for k, v in config.ENV.items():
         command = ("%s=%s " % (k, v)) + command
+    pre_commands = params.pop("pre_commands", None)
+    post_commands = params.pop("post_commands", None)
+    if pre_commands is not None or post_commands is not None:
+        print("Not executing the pre_commands: ", pre_commands, ", nor post_commands: ", post_commands)
 
     for k, v in params.items():
         if isinstance(v, dict):
@@ -773,6 +781,11 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
     sio.write("""
         export AWS_DEFAULT_REGION={aws_region}
     """.format(aws_region=config.AWS_REGION_NAME))
+    sio.write("""
+        curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"
+        unzip awscli-bundle.zip
+        sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
+    """)
     if config.FAST_CODE_SYNC:
         # sio.write("""
         #     aws s3 cp {code_full_path} /tmp/rllab_code.tar.gz --region {aws_region}
@@ -867,6 +880,11 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
                         fi
                     done & echo log sync initiated
                 """.format(log_dir=log_dir, remote_log_dir=remote_log_dir))
+        # if use_gpu:
+        #     sio.write("""
+        #         for i in {1..800}; do su -c "nvidia-modprobe -u -c=0" ubuntu && break || sleep 3; done
+        #         systemctl start nvidia-docker
+        #     """)
         sio.write("""
             {command}
         """.format(command=to_docker_command(params, docker_image, python_command=python_command, script=script,
@@ -925,6 +943,9 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
         user_data = dedent(sio.getvalue())
     else:
         user_data = full_script
+    print(full_script)
+    with open("/tmp/full_script", "w") as f:
+        f.write(full_script)
 
     instance_args = dict(
         ImageId=aws_config["image_id"],
@@ -938,6 +959,7 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
         IamInstanceProfile=dict(
             Name=aws_config["iam_instance_profile_name"],
         ),
+        **config.AWS_EXTRA_CONFIGS,
     )
 
     if len(instance_args["NetworkInterfaces"]) > 0:

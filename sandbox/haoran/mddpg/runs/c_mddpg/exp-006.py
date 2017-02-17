@@ -38,12 +38,14 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/c_mddpg/" + exp_index
-mode = "local_test"
-ec2_instance = "c4.4xlarge"
+mode = "ec2"
+ec2_instance = "c4.2xlarge"
 subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
+config.AWS_IMAGE_ID = "ami-309ccd50" # with docker already pulled
 
-n_parallel = 1 # only for local exp
+n_task_per_instance = 10
+n_parallel = 4 # only for local exp
 snapshot_mode = "all"
 snapshot_gap = 10
 plot = False
@@ -52,8 +54,8 @@ sync_s3_pkl = True
 # variant params ---------------------------------------------------
 class VG(VariantGenerator):
     @variant
-    def seed(self):
-        return [0,100,200]
+    def zzseed(self):
+        return [0,100,200,300,400,500,600,700,800,900]
 
     @variant
     def env_name(self):
@@ -62,12 +64,11 @@ class VG(VariantGenerator):
         ]
     @variant
     def K(self):
-        return [8,
-            2, 4, 8]
+        return [4, 8, 16, 32]
 
     @variant
     def alpha(self):
-        return [1, 10, 100]
+        return [0, 0.01, 0.1, 1, 10]
 
     @variant
     def sigma(self):
@@ -104,13 +105,13 @@ class VG(VariantGenerator):
         ]
 
 variants = VG().variants()
-
+batch_tasks = []
 print("#Experiments: %d" % len(variants))
 for v in variants:
     # non-variant params -----------------------------------
     # >>>>>>
     # algo
-    seed=v["seed"]
+    seed=v["zzseed"]
     env_name = v["env_name"]
     K = v["K"]
     adaptive_kernel = True
@@ -135,7 +136,7 @@ for v in variants:
         )
     else:
         ddpg_kwargs = dict(
-            epoch_length=10000,
+            epoch_length=1000,
             batch_size=64,
             n_epochs=100,
         )
@@ -199,9 +200,13 @@ for v in variants:
     env_chooser = EnvChooser()
     env = TfEnv(normalize(env_chooser.choose_env(env_name,**env_kwargs)))
 
-    data_loader = DataLoader(
-        "sandbox/haoran/mddpg/envs/multi_goal_grid_1.pkl", 'mQ')
-    grid_size = 1.
+    data_file = "sandbox/haoran/mddpg/envs/multi_goal_goal_4_grid_0.5.pkl"
+    if "ec2" in mode:
+        data_file = "/root/code/rllab/" + data_file
+        # need to use absolute path, since the python command is not executed
+        # in the rllab directory
+    data_loader = DataLoader(data_file, 'mQ')
+    grid_size = 0.5
     s_grid_sizes = [grid_size] * 2
     a_grid_sizes = s_grid_sizes
     qf = InterpolateQFunction(
@@ -250,25 +255,33 @@ for v in variants:
     )
 
     # run -----------------------------------------------------------
-
-    run_experiment_lite(
-        algorithm.train(),
-        n_parallel=n_parallel,
-        exp_prefix=exp_prefix,
-        exp_name=exp_name,
-        seed=seed,
-        snapshot_mode=snapshot_mode,
-        snapshot_gap=snapshot_gap,
-        mode=actual_mode,
-        variant=v,
-        plot=plot,
-        sync_s3_pkl=sync_s3_pkl,
-        sync_log_on_termination=True,
-        sync_all_data_node_to_s3=True,
+    print(v)
+    batch_tasks.append(
+        dict(
+            stub_method_call=algorithm.train(),
+            exp_name=exp_name,
+            seed=seed,
+            snapshot_mode=snapshot_mode,
+            snapshot_gap=snapshot_gap,
+            variant=v,
+            plot=plot,
+            n_parallel=n_parallel,
+        )
     )
-
-    if "test" in mode:
-        sys.exit(0)
+    if len(batch_tasks) >= n_task_per_instance:
+        run_experiment_lite(
+            batch_tasks=batch_tasks,
+            exp_prefix=exp_prefix,
+            mode=actual_mode,
+            sync_s3_pkl=True,
+            sync_s3_log=True,
+            sync_log_on_termination=True,
+            sync_all_data_node_to_s3=True,
+            terminate_machine="test" not in mode,
+        )
+        batch_tasks = []
+        if "test" in mode:
+            sys.exit(0)
 
 if ("local" not in mode) and ("test" not in mode):
     os.system("chmod 444 %s"%(__file__))

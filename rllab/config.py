@@ -41,6 +41,8 @@ AWS_SECURITY_GROUP_IDS = []
 
 AWS_NETWORK_INTERFACES = []
 
+AWS_EXTRA_CONFIGS = dict()
+
 AWS_REGION_NAME = "us-east-1"
 
 CODE_SYNC_IGNORES = ["*.git/*", "*data/*", "*.pod/*"]
@@ -65,6 +67,7 @@ KUBE_DEFAULT_NODE_SELECTOR = {
 }
 
 MUJOCO_KEY_PATH = osp.expanduser("~/.mujoco")
+# MUJOCO_KEY_PATH = osp.join(osp.dirname(__file__), "../vendor/mujoco")
 
 ENV = {}
 

@@ -1,6 +1,3 @@
-
-
-
 from rllab.spaces.box import Box as TheanoBox
 import tensorflow as tf
 

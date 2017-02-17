@@ -6,8 +6,9 @@ import numpy as np
 
 from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
-from rllab.core.network import MLP
-from sandbox.dave.rllab.core.alexnet import AlexNet
+from rllab.core.network import MLP, ConvNetwork
+from sandbox.dave.rllab.core.alexnet import AlexNet, VanillaConvNet
+from sandbox.dave.rllab.core.dilatated_vgg import DilatedVGG
 from sandbox.dave.rllab.spaces import Box
 from sandbox.dave.rllab.core.lasagne_layers import *
 from rllab.core.serializable import Serializable
@@ -17,8 +18,6 @@ from rllab.misc import logger
 from rllab.misc import ext
 from rllab.distributions.diagonal_gaussian import DiagonalGaussian
 import theano.tensor as TT
-
-import pdb
 
 class DepthGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
     def __init__(
@@ -69,13 +68,17 @@ class DepthGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
         obs_dim = env_spec.observation_space.flat_dim
         action_dim = env_spec.action_space.flat_dim
         l_input = L.InputLayer(shape=(None,) + (obs_dim,), name="input_layer")
-
         # create network
         if mean_network is None:
-            l_obs_robot = CropLayer(l_input, start_index=None, end_index=23)
-            l_image = CropLayer(l_input, start_index=23, end_index=None)
-            l_image = L.ReshapeLayer(l_image, (-1, 3, 227, 227))
-            conv_network = AlexNet(input_layer=l_image)
+            l_obs_robot = CropLayer(l_input, start_index=None, end_index=20)
+            l_image = CropLayer(l_input, start_index=20, end_index=None)
+            l_image = L.ReshapeLayer(l_image, (-1, 3, 99, 99))
+            conv_network = AlexNet(l_image)
+            # conv_network = DilatedVGG(l_image)
+            # import pdb; pdb.set_trace()
+            # conv_network = ConvNetwork(input_shape = (3, 227, 227), output_dim=10, hidden_sizes = (64, 64),
+            #                             conv_filters = (32,), conv_filter_sizes = ((3, 3),), conv_strides = (1,),
+            #                            conv_pads = (0,))
             # l_input = L.ConcatLayer([l_obs_robot, conv_network.input_layer])
 
             l_conv_out = conv_network.output_layer
@@ -130,10 +133,14 @@ class DepthGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             warm_params = dict(np.load(self.npz_path))
             self.set_params_old(warm_params)
 
-        # for i, layer in enumerate(mean_network.layers):
-        #     if i > 0:
-        #         mean_network._layers[i].params[mean_network._layers[i].W].remove("trainable")
-        #         mean_network._layers[i].params[mean_network._layers[i].b].remove("trainable")
+        for i, (name, layer) in enumerate(conv_network.layers.items()):
+            if 'conv' in name:
+                try:
+                    layer.params[layer.W].remove("trainable")
+                    layer.params[layer.b].remove("trainable")
+
+                except AttributeError:
+                    pass
         mean_var, log_std_var = L.get_output([l_mean, l_log_std])
 
         if self.min_std is not None:
@@ -151,7 +158,6 @@ class DepthGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             inputs=[obs_var],
             outputs=[mean_var, log_std_var],
         )
-
     @overrides
     def get_params_internal(self, **tags):
         return L.get_all_params(
@@ -177,7 +183,9 @@ class DepthGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             raise TypeError
 
         for param in local_params:
-            param.set_value(params_value_by_name[param.name])
+            if 'conv' in param.name:
+                param.set_value(params_value_by_name[param.name])
+
 
     def dist_info_sym(self, obs_var, state_info_vars=None):
         mean_var, log_std_var = L.get_output([self._l_mean, self._l_log_std], obs_var)
@@ -219,10 +227,6 @@ class DepthGaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
     def log_diagnostics(self, paths):
         log_stds = np.vstack([path["agent_infos"]["log_std"] for path in paths])
         logger.record_tabular('AveragePolicyStd', np.mean(np.exp(log_stds)))
-        logger.record_tabular('Weight1', L.get_all_param_values(self.train_out)[1][1])
-        logger.record_tabular('Weight2', L.get_all_param_values(self.train_out)[1][2])
-        logger.record_tabular('Weight3', L.get_all_param_values(self.train_out)[1][3])
-        logger.record_tabular('Weightend', L.get_all_param_values(self._l_mean)[-4][3][0])
 
     @property
     def distribution(self):

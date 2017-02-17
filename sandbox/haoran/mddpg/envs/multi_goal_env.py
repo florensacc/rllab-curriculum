@@ -4,7 +4,12 @@ from rllab.core.serializable import Serializable
 from rllab.misc import logger
 from rllab.envs.base import Env
 from rllab.spaces.box import Box
+from sandbox.haoran.mddpg.policies.mnn_policy import MNNPolicy
+from sandbox.tuomas.mddpg.policies.stochastic_policy import StochasticNNPolicy
 
+import os
+import gc
+import json
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -26,8 +31,8 @@ class MultiGoalEnv(Env, Serializable):
             [
                 [5, 0],
                 [-5, 0],
-                # [0, 5],
-                # [0, -5]
+                [0, 5],
+                [0, -5]
             ],
             dtype=np.float32
         )
@@ -137,8 +142,12 @@ class MultiGoalEnv(Env, Serializable):
         point = self.ax.plot(x,y,'b*')
         self.dynamic_plots = point
 
+        plt.draw()
+        plt.pause(0.001)
         if close:
             self.fixed_plots = None
+            self.fig = None
+
 
     def plot_position_cost(self,ax):
         delta = 0.01
@@ -168,6 +177,121 @@ class MultiGoalEnv(Env, Serializable):
 
     def get_param_values(self):
         return None
+
+    def set_param_values(self, params):
+        pass
+
+    def log_stats(self, algo, epoch, paths, ax):
+        # compute number of goals reached
+        n_goal = len(self.goal_positions)
+        goal_reached = [False] * n_goal
+
+        for path in paths:
+            last_obs = path["observations"][-1]
+            for i, goal in enumerate(self.goal_positions):
+                if np.linalg.norm(last_obs - goal) < self.goal_threshold:
+                    goal_reached[i] = True
+
+        stats = {
+            "env:goal_reached": goal_reached.count(True)
+        }
+
+        # plot q-values at selected states
+        # snapshot_gap = logger.get_snapshot_gap()
+        # if snapshot_gap <= 0 or \
+        #     np.mod(epoch + 1, snapshot_gap) == 0 or \
+        #     epoch == 0:
+
+        snapshot_dir = logger.get_snapshot_dir()
+        variant_file = os.path.join(
+            snapshot_dir,
+            "variant.json",
+        )
+        with open(variant_file) as vf:
+            variant = json.load(vf)
+        img_file = os.path.join(
+            snapshot_dir,
+            "itr_%d_qf.png"%(epoch),
+        )
+        self.plot_qf(algo, variant, img_file)
+        return stats
+
+    def eval_qf(self, sess, qf, o, lim):
+        xx = np.arange(-lim, lim, 0.05)
+        X, Y = np.meshgrid(xx, xx)
+        all_actions = np.vstack([X.ravel(), Y.ravel()]).transpose()
+        obs = np.array([o] * all_actions.shape[0])
+
+        feed = {
+            qf.observations_placeholder: obs,
+            qf.actions_placeholder: all_actions
+        }
+        Q = sess.run(qf.output, feed).reshape(X.shape)
+        return X, Y, Q
+
+    def plot_qf(self, algo, variant, img_file):
+        lim = 2.
+
+        # Set up all critic plots.
+        critic_fig = plt.figure(figsize=(20, 7))
+        ax_critics = []
+        for i in range(3):
+            ax = critic_fig.add_subplot(130 + i + 1)
+            ax_critics.append(ax)
+            plt.axis('equal')
+            ax.set_xlim((-lim, lim))
+            ax.set_ylim((-lim, lim))
+
+        obss = np.array([[-2.5, 0.0],
+                         [0.0, 0.0],
+                         [2.5, 2.5]])
+
+        for ax_critic, obs in zip(ax_critics, obss):
+
+            X, Y, Q = self.eval_qf(algo.sess, algo.qf, obs, lim)
+
+            ax_critic.clear()
+            cs = ax_critic.contour(X, Y, Q, 20)
+            ax_critic.clabel(cs, inline=1, fontsize=10, fmt='%.0f')
+
+            # sample and plot actions
+            if isinstance(algo.policy, StochasticNNPolicy):
+                all_obs = np.array([obs] * algo.K)
+                all_actions = algo.policy.get_actions(all_obs)[0]
+            elif isinstance(algo.policy, MNNPolicy):
+                all_actions, info = algo.policy.get_action(obs, k="all")
+            else:
+                raise NotImplementedError
+
+            x = all_actions[:, 0]
+            y = all_actions[:, 1]
+            ax_critic.plot(x, y, '*')
+
+            # plot the boundary, counterclockwise from the bottom left
+            ax_critic.plot(
+                [-1, 1, 1, -1, -1],
+                [-1, -1, 1, 1, -1],
+                'k-',
+            )
+
+        # write down the hyperparams in the title of the first axis
+        fig_title = variant["exp_name"] + "\n"
+        for key in sorted(variant.keys()):
+            fig_title += "%s: %s \n"%(key, variant[key])
+
+        # other axes will be the observation point
+        for i in range(len(ax_critics)):
+            ax_title = "state: (%.2f, %.2f)"%(obss[i][0], obss[i][1])
+            if i == 0:
+                ax_title = fig_title + ax_title
+            ax_critics[i].set_title(ax_title, multialignment="left")
+        critic_fig.tight_layout()
+
+        # save to file
+        plt.savefig(img_file, dpi=100)
+        plt.cla()
+        plt.close('all')
+        gc.collect()
 
 
 class PointDynamics(object):

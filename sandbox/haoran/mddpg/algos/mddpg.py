@@ -4,20 +4,24 @@ from sandbox.haoran.mddpg.misc.rllab_util import split_paths
 from sandbox.haoran.mddpg.policies.mnn_policy import MNNPolicy, MNNStrategy
 from sandbox.haoran.mddpg.misc.simple_replay_pool import SimpleReplayPool
 from sandbox.rocky.tf.misc.tensor_utils import flatten_tensor_variables
+from sandbox.haoran.mddpg.misc.sampler import MNNParallelSampler
+from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 
 from rllab.misc import logger
 from rllab.misc import special
 from rllab.misc.overrides import overrides
+from rllab.envs.proxy_env import ProxyEnv
 
 import time
 from collections import OrderedDict
 import numpy as np
 import tensorflow as tf
+from rllab.core.serializable import Serializable
 
 TARGET_PREFIX = "target_"
 
 
-class MDDPG(OnlineAlgorithm):
+class MDDPG(OnlineAlgorithm, Serializable):
     """
     Multiheaded DDPG with Stein Variational Gradient Descent
     """
@@ -39,6 +43,9 @@ class MDDPG(OnlineAlgorithm):
             only_train_critic=False,
             only_train_actor=False,
             resume=False,
+            eval_max_head_repeat=1,
+            use_finalize_ops=True,
+            svgd_target="action",
             **kwargs
     ):
         """
@@ -52,8 +59,16 @@ class MDDPG(OnlineAlgorithm):
         :param qf_learning_rate: Learning rate of the critic
         :param policy_learning_rate: Learning rate of the actor
         :param Q_weight_decay: How much to decay the weights for Q
+        :param alpha: weight on the repelling force in SVGD
+        :param qf_extra_training: train the Q function a few more times
+        :param only_train_critic:
+        :param only_train_actor:
+        :param resume: if you want to keep the params in qf and policy, use this
+            ,otherwise their parameters will be reinitialized during training by
+            _init_tensorflow_ops
         :return:
         """
+        Serializable.quick_init(self, locals())
         self.kernel = kernel
         self.qf = qf
         self.K = K
@@ -66,6 +81,11 @@ class MDDPG(OnlineAlgorithm):
         self.only_train_critic = only_train_critic
         self.only_train_actor = only_train_actor
         self.resume = resume
+        self.eval_max_head_repeat = eval_max_head_repeat
+        self.use_finalize_ops = use_finalize_ops
+        self.svgd_target = svgd_target
+        if svgd_target == "pre-action":
+            assert policy.output_nonlinearity == tf.nn.tanh
 
         assert not (only_train_actor and only_train_critic)
         assert isinstance(policy, MNNPolicy)
@@ -80,11 +100,18 @@ class MDDPG(OnlineAlgorithm):
             qf.set_param_values(qf_params)
             policy.set_param_values(policy_params)
 
+        if self.exploration_strategy.switch_type == "per_path":
+            self.eval_sampler = MNNParallelSampler(self)
+        elif self.exploration_strategy.switch_type == "per_action":
+            self.eval_sampler = BatchSampler(self)
+        else:
+            raise NotImplementedError
+
 
     @overrides
     def _init_tensorflow_ops(self):
         # Initialize variables for get_copy to work
-        self.sess.run(tf.initialize_all_variables())
+        self.sess.run(tf.global_variables_initializer())
         self.target_policy = self.policy.get_copy(
             scope_name=TARGET_PREFIX + self.policy.scope_name,
         )
@@ -111,9 +138,16 @@ class MDDPG(OnlineAlgorithm):
         # TH: It's a bit weird to set class attributes (kernel.kappa and
         # kernel.kappa_grads) outside the class. Could we do this somehow
         # differently?
-        self.kernel.kappa = self.kernel.get_kappa(self.policy.output)
-        self.kernel.kappa_grads = self.kernel.get_kappa_grads(
-            self.policy.output)
+        if self.svgd_target == "action":
+            self.kernel.kappa = self.kernel.get_kappa(self.policy.output)
+            self.kernel.kappa_grads = self.kernel.get_kappa_grads(
+                self.policy.output)
+        elif self.svgd_target == "pre-action":
+            self.kernel.kappa = self.kernel.get_kappa(self.policy.pre_output)
+            self.kernel.kappa_grads = self.kernel.get_kappa_grads(
+                self.policy.pre_output)
+        else:
+            raise NotImplementedError
 
         self.kernel.sess = self.sess
         self.qf.sess = self.sess
@@ -127,7 +161,7 @@ class MDDPG(OnlineAlgorithm):
         if not self.only_train_critic:
             self._init_actor_ops()
         self._init_target_ops()
-        self.sess.run(tf.initialize_all_variables())
+        self.sess.run(tf.global_variables_initializer())
 
     def _init_critic_ops(self):
         self.all_target_qs = [
@@ -197,59 +231,131 @@ class MDDPG(OnlineAlgorithm):
             self.qf.get_weight_tied_copy(self.policy.heads[j])
             for j in range(self.K)
         ]
-        tmp = tf.expand_dims(
-            tf.pack([
-                tf.gradients(
-                    self.critics_with_action_input[j].output,
-                    self.policy.heads[j],
-                )[0]
+        if self.svgd_target == "action":
+            tmp = tf.expand_dims(
+                tf.pack([
+                    tf.gradients(
+                        self.critics_with_action_input[j].output,
+                        self.policy.heads[j],
+                    )[0]
+                    for j in range(self.K)
+                ]),
+                dim=1,
+            )
+
+            qf_grads = tf.transpose(
+                # here the dimensions are (j,k,N,d)
+                tmp,
+                [2,0,1,3]
+                # then it becomse (N,j,k,d)
+            ) # \nabla_a Q(s,a)
+            kappa = tf.expand_dims(
+                self.kernel.kappa,
+                dim=3,
+            )
+            # grad w.r.t. left kernel inut
+            kappa_grads = self.kernel.kappa_grads
+
+            # sum (not avg) over j
+            # using sum ensures that the gradient scale is close to DDPG
+            # since kappa(x,x) = 1, but we may need to use different learning rates
+            # for different numbers of heads
+            # TH: Changed this from sum to average for easier debugging.
+            #action_grads = tf.reduce_sum(
+            action_grads = tf.reduce_mean(
+                kappa * qf_grads + self.alpha * kappa_grads,
+                reduction_indices=1,
+            ) # (N,k,d)
+            # ---------------------------------------------------------------
+
+            # propagate action grads to NN parameter grads
+            # this part computes sum_{i,k,l} (action_grads[i,k,l] *
+            #   d(action[i,k,l]) / d theta), where
+            # i: sample index
+            # k: head index
+            # l: action dimension index
+            # actually grads is not a 1D vector, but a list of tensors corresponding
+            # to weights and biases of different layers; but
+            #   np.concatenate([g.ravel() for g in grads])
+            # gives you the flat gradient
+
+
+            grads = tf.gradients(
+                self.policy.output,
+                all_true_params,
+                grad_ys=action_grads,
+            )
+        elif self.svgd_target == "pre-action":
+            # p(\xi) \propto_{\xi} exp(Q(s, f(\xi))) \prod_l (1-\tanh^2 \xi_l)
+            # head = tanh(pre_head)
+            log_ps = [
+                (
+                    self.critics_with_action_input[j].output
+                    + self.alpha * tf.reduce_sum(
+                        tf.log(1. - tf.square(self.policy.heads[j])),
+                        reduction_indices=1
+                    )
+                ) # length N vector
                 for j in range(self.K)
-            ]),
-            dim=1,
-        )
+            ]
+            #WARN: get nan if self.alpha = 0; reason unknown
 
-        qf_grads = tf.transpose(
-            # here the dimensions are (j,k,N,d)
-            tmp,
-            [2,0,1,3]
-            # then it becomse (N,j,k,d)
-        ) # \nabla_a Q(s,a)
-        kappa = tf.expand_dims(
-            self.kernel.kappa,
-            dim=3,
-        )
-        # grad w.r.t. left kernel inut
-        kappa_grads = self.kernel.kappa_grads
+            tmp = tf.expand_dims(
+                tf.pack([
+                    tf.gradients(
+                        log_ps[j],
+                        self.policy.pre_heads[j], # !
+                    )[0]
+                    for j in range(self.K)
+                ]),
+                dim=1,
+            )
 
-        # sum (not avg) over j
-        # using sum ensures that the gradient scale is close to DDPG
-        # since kappa(x,x) = 1, but we may need to use different learning rates
-        # for different numbers of heads
-        # TH: Changed this from sum to average for easier debugging.
-        #action_grads = tf.reduce_sum(
-        action_grads = tf.reduce_mean(
-            kappa * qf_grads + self.alpha * kappa_grads,
-            reduction_indices=1,
-        ) # (N,k,d)
-        # ---------------------------------------------------------------
+            qf_grads = tf.transpose(
+                # here the dimensions are (j,k,N,d)
+                tmp,
+                [2,0,1,3]
+                # then it becomse (N,j,k,d)
+            ) # \nabla_a Q(s,a)
+            kappa = tf.expand_dims(
+                self.kernel.kappa,
+                dim=3,
+            )
+            # grad w.r.t. left kernel inut
+            kappa_grads = self.kernel.kappa_grads
 
-        # propagate action grads to NN parameter grads
-        # this part computes sum_{i,k,l} (action_grads[i,k,l] *
-        #   d(action[i,k,l]) / d theta), where
-        # i: sample index
-        # k: head index
-        # l: action dimension index
-        # actually grads is not a 1D vector, but a list of tensors corresponding
-        # to weights and biases of different layers; but
-        #   np.concatenate([g.ravel() for g in grads])
-        # gives you the flat gradient
+            # sum (not avg) over j
+            # using sum ensures that the gradient scale is close to DDPG
+            # since kappa(x,x) = 1, but we may need to use different learning rates
+            # for different numbers of heads
+            # TH: Changed this from sum to average for easier debugging.
+            #action_grads = tf.reduce_sum(
+            pre_action_grads = tf.reduce_mean(
+                kappa * qf_grads + self.alpha * kappa_grads,
+                reduction_indices=1,
+            ) # (N,k,d)
+            # ---------------------------------------------------------------
+
+            # propagate action grads to NN parameter grads
+            # this part computes sum_{i,k,l} (action_grads[i,k,l] *
+            #   d(action[i,k,l]) / d theta), where
+            # i: sample index
+            # k: head index
+            # l: action dimension index
+            # actually grads is not a 1D vector, but a list of tensors corresponding
+            # to weights and biases of different layers; but
+            #   np.concatenate([g.ravel() for g in grads])
+            # gives you the flat gradient
 
 
-        grads = tf.gradients(
-            self.policy.output,
-            all_true_params,
-            grad_ys=action_grads,
-        )
+            grads = tf.gradients(
+                self.policy.pre_output,
+                all_true_params,
+                grad_ys=pre_action_grads,
+            )
+
+        else:
+            raise NotImplementedError
 
         # In case you doubt, flat grads is essentially the same as below
         # flat_grads = np.zeros_like(self.policy.get_param_values())
@@ -286,14 +392,19 @@ class MDDPG(OnlineAlgorithm):
 
         # TH: Assign op needs to be run AFTER optimizer. To guarantee the right
         # order, they need to be run with separate tf.run calls.
-        #self.train_actor_op += [
-        self.finalize_actor_op = [
+        assign_ops = [
             tf.assign(true_param, dummy_param)
             for true_param, dummy_param in zip(
                 all_true_params,
                 all_dummy_params,
             )
         ]
+
+        if self.use_finalize_ops:
+            self.finalize_actor_op = assign_ops
+        else:
+            self.train_actor_op += assign_ops
+            self.finalize_actor_op = []
 
     def _init_target_ops(self):
         if not self.only_train_critic:
@@ -381,13 +492,23 @@ class MDDPG(OnlineAlgorithm):
         }
 
     @overrides
-    def evaluate(self, epoch, es_path_returns):
+    def evaluate(self, epoch, train_info):
         logger.log("Collecting samples for evaluation")
-        paths = self.eval_sampler.obtain_samples(
-            itr=epoch,
-            batch_size=self.n_eval_samples,
-            max_path_length=self.max_path_length,
-        )
+        if isinstance(self.eval_sampler, MNNParallelSampler):
+            paths = self.eval_sampler.obtain_samples(
+                itr=epoch,
+                max_path_length=self.max_path_length,
+                max_head_repeat=self.eval_max_head_repeat,
+            )
+        elif isinstance(self.eval_sampler, BatchSampler):
+            paths = self.eval_sampler.obtain_samples(
+                itr=epoch,
+                max_path_length=self.max_path_length,
+                batch_size=self.n_eval_samples,
+            )
+        else:
+            raise NotImplementedError
+
         rewards, terminals, obs, actions, next_obs = split_paths(paths)
         feed_dict = self._update_feed_dict(rewards, terminals, obs, actions,
                                            next_obs)
@@ -449,6 +570,7 @@ class MDDPG(OnlineAlgorithm):
             create_stats_ordered_dict('KappaSum',kappa_sum)
         )
 
+        es_path_returns = train_info["es_path_returns"]
         if len(es_path_returns) == 0 and epoch == 0:
             es_path_returns = [0]
         if len(es_path_returns) > 0:
@@ -458,6 +580,22 @@ class MDDPG(OnlineAlgorithm):
             self.last_statistics.update(create_stats_ordered_dict(
                 'TrainingReturns', train_returns))
 
+        es_path_lengths = train_info["es_path_lengths"]
+        if len(es_path_lengths) == 0 and epoch == 0:
+            es_path_lengths = [0]
+        if len(es_path_lengths) > 0:
+            # if eval is too often, training may not even have collected a full
+            # path
+            self.last_statistics.update(create_stats_ordered_dict(
+                'TrainingPathLengths', es_path_lengths))
+
+        true_env = self.env
+        while isinstance(true_env,ProxyEnv):
+            true_env = true_env._wrapped_env
+        if hasattr(true_env, "log_stats"):
+            env_stats = true_env.log_stats(self, epoch, paths)
+            self.last_statistics.update(env_stats)
+
         for key, value in self.last_statistics.items():
             logger.record_tabular(key, value)
 
@@ -465,9 +603,23 @@ class MDDPG(OnlineAlgorithm):
     def get_epoch_snapshot(self, epoch):
         return dict(
             epoch=epoch,
-            env=self.env,
-            policy=self.policy,
-            es=self.exploration_strategy,
-            qf=self.qf,
-            kernel=self.kernel,
+            # env=self.env,
+            # policy=self.policy,
+            # es=self.exploration_strategy,
+            # qf=self.qf,
+            # kernel=self.kernel,
+            algo=self,
         )
+
+    def __getstate__(self):
+        d = Serializable.__getstate__(self)
+        d.update({
+            "policy_params": self.policy.get_param_values(),
+            "qf_params": self.qf.get_param_values(),
+        })
+        return d
+
+    def __setstate__(self, d):
+        Serializable.__setstate__(self, d)
+        self.qf.set_param_values(d["qf_params"])
+        self.policy.set_param_values(d["policy_params"])

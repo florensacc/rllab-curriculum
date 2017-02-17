@@ -201,16 +201,27 @@ class MujocoEnv(Env):
         self.dcom = new_com - self.current_com
         self.current_com = new_com
 
-    def get_viewer(self):
+    def get_viewer(self, config=None):
         if self.viewer is None:
             self.viewer = MjViewer()
             self.viewer.start()
             self.viewer.set_model(self.model)
+        if config is not None:
+            self.viewer.set_window_pose(config["xpos"], config["ypos"])
+            self.viewer.set_window_size(config["width"], config["height"])
+            self.viewer.set_window_title(config["title"])
         return self.viewer
 
-    def render(self,close=False):
-        viewer = self.get_viewer()
-        viewer.loop_once()
+    def render(self, close=False, mode='human', config=None):
+        if mode == 'human':
+            viewer = self.get_viewer(config=config)
+            viewer.loop_once()
+        elif mode == 'rgb_array':
+            viewer = self.get_viewer(config=config)
+            viewer.loop_once()
+            # self.get_viewer(config=config).render()
+            data, width, height = self.get_viewer(config=config).get_image()
+            return np.fromstring(data, dtype='uint8').reshape(height, width, 3)[::-1,:,:]
         if close:
             self.stop_viewer()
 
@@ -222,6 +233,7 @@ class MujocoEnv(Env):
     def stop_viewer(self):
         if self.viewer:
             self.viewer.finish()
+            self.viewer = None
 
     def release(self):
         # temporarily alleviate the issue (but still some leak)

@@ -17,6 +17,15 @@ def using_tmp_file(content):
         f.close()
 
 
+def tmp_file_name(file_ext=None):
+    f = tempfile.NamedTemporaryFile()
+    f.close()
+    file_name = f.name
+    if file_ext is not None and len(file_ext) > 0:
+        file_name = file_name + "." + file_ext
+    return file_name
+
+
 class ResourceManager(object):
     def __init__(
             self,
@@ -28,18 +37,19 @@ class ResourceManager(object):
 
     def register_data(self, resource_name, content, compress=False):
         with using_tmp_file(content) as f:
-            self._upload(resource_name, f.name, compress=compress)
             self._upload_local(resource_name, f.name)
+            self._upload(resource_name, f.name, compress=compress)
 
     def register_file(self, resource_name, file_name, compress=False):
-        self._upload(resource_name, file_name, compress=compress)
         self._upload_local(resource_name, file_name)
+        self._upload(resource_name, file_name, compress=compress)
 
     def _upload(self, resource_name, file_name, compress=False):
         if compress:
             # upload the compressed file
             compressed_resource_name = resource_name + ".gz"
-            f = tempfile.NamedTemporaryFile(); f.close()
+            f = tempfile.NamedTemporaryFile();
+            f.close()
             file_dir = os.path.dirname(file_name)
             file_name_only = os.path.basename(file_name)
             cmd = [
@@ -96,7 +106,8 @@ class ResourceManager(object):
         if compress:
             try:
                 s3_file_name = s3_file_name + ".gz"
-                f = tempfile.NamedTemporaryFile(); f.close()
+                f = tempfile.NamedTemporaryFile();
+                f.close()
                 local_compressed_file_name = f.name
 
                 subprocess.check_call([
@@ -106,7 +117,8 @@ class ResourceManager(object):
                     s3_file_name,
                     local_compressed_file_name,
                 ])
-                f = tempfile.NamedTemporaryFile(); f.close()
+                f = tempfile.NamedTemporaryFile();
+                f.close()
                 decompress_folder_name = f.name
                 cmd = [
                     "mkdir",
@@ -157,3 +169,8 @@ resource_manager = ResourceManager(
     s3_resource_path=config.AWS_S3_RESOURCE_PATH,
     local_resource_path=os.path.join(config.PROJECT_PATH, "data/resource")
 )
+
+
+register_file = resource_manager.register_file
+register_data = resource_manager.register_data
+get_file = resource_manager.get_file

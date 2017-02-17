@@ -2,12 +2,11 @@ import numpy as np
 
 from rllab.core.serializable import Serializable
 from rllab.core.parameterized import Parameterized
-from rllab.misc.overrides import overrides
 from rllab.misc import logger
 
 # the regressor will be choosen to be from the same distribution as the latents
 from rllab.regressors.gaussian_mlp_regressor import GaussianMLPRegressor
-from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor
+from rllab.regressors.categorical_mlp_regressor import CategoricalMLPRegressor  # could be Categorical_oneAxis
 from sandbox.carlos_snn.regressors.categorical_recurrent_regressor import CategoricalRecurrentRegressor
 from sandbox.carlos_snn.regressors.bernoulli_mlp_regressor import BernoulliMLPRegressor
 from sandbox.carlos_snn.regressors.bernoulli_recurrent_regressor import BernoulliRecurrentRegressor
@@ -30,9 +29,6 @@ class Latent_regressor(Parameterized, Serializable):
             regressor_args=None,  # here goes all args straight to the regressor: hidden_sizes, TR, step_size....
     ):
         """
-        :param env_spec:
-        :param policy:
-        :param recurrent:
         :param predict_all: this is only for the recurrent case, to use all hidden states as predictions
         :param obs_regressed: list of index of the obs variables used to fit the regressor. default string 'all'
         :param act_regressed: list of index of the act variables used to fit the regressor. default string 'all'
@@ -92,7 +88,6 @@ class Latent_regressor(Parameterized, Serializable):
                 )
         elif policy.latent_name == 'categorical':
             if self.recurrent:
-                print('setting a recurrent categorical regressor')
                 self._regressor = CategoricalRecurrentRegressor(  # not implemented
                     input_shape=(self.obs_act_dim,),
                     output_dim=policy.latent_dim,
@@ -101,7 +96,6 @@ class Latent_regressor(Parameterized, Serializable):
                     **regressor_args
                 )
             else:
-                print('setting a MLP categorical regressor')
                 self._regressor = CategoricalMLPRegressor(
                     input_shape=(self.obs_act_dim,),
                     output_dim=policy.latent_dim,
@@ -122,9 +116,7 @@ class Latent_regressor(Parameterized, Serializable):
         logger.log('fitting the regressor...')
         if self.recurrent:
             observations = np.array([p["observations"][:, self.obs_regressed] for p in paths])
-            # print 'the obs shape is: ', np.shape(observations)
             actions = np.array([p["actions"][:, self.act_regressed] for p in paths])
-            # print 'the actions shape is; ', np.shape(actions)
             obs_actions = np.concatenate([observations, actions], axis=2)
             if self.noisify_traj_coef:
                 obs_actions += np.random.normal(loc=0.0,
@@ -188,7 +180,6 @@ class Latent_regressor(Parameterized, Serializable):
             observations = np.array([p["observations"][:, self.obs_regressed] for p in paths])
             actions = np.array([p["actions"][:, self.act_regressed] for p in paths])
             obs_actions = np.concatenate([observations, actions], axis=2)  # latents must match first 2dim: (batch,time)
-            # print 'CF the obs are:', observations, 'CF the act are: ', actions, 'CF the combined are: ', obs_actions
         else:
             observations = np.concatenate([p["observations"][:, self.obs_regressed] for p in paths])
             actions = np.concatenate([p["actions"][:, self.act_regressed] for p in paths])
@@ -223,23 +214,9 @@ class Latent_regressor(Parameterized, Serializable):
         if self.use_only_sign:
             obs_actions = np.sign(obs_actions)
         H_latent = self.policy.latent_dist.entropy(self.policy.latent_dist_info)  # sum of entropies latents in
-        # one timestep (assumes iid)
-        # print 'the latent entropy is: ', H_latent
-        # for one Bernoulli it will be
-        # 1Ber, the latent entropy is:  0.69314716056
-        # 2Ber, the latent entropy is:  1.38629432112
-        # 5Ber, the latent entropy is:  3.4657358028
 
         return H_latent + np.mean(self._regressor.predict_log_likelihood(obs_actions, latents))
 
-        # log_likelihoods = []
-        # for path in paths:
-        #     obs_actions = np.concatenate([path["observations"],path["actions"]], axis=1)
-        #     log_likelihoods.append(self._regressor.predict_log_likelihood(
-        #                                                         obs_actions, path["agent_infos"]["latents"]))
-        # H_latent = self.policy.latent_dist.entropy(self.policy.latent_dist_info) # sum of entropies (assumes iid)
-        # lowb = np.mean(np.sum(log_likelihoods, axis=1))
-        # return H_latent + lowb
 
     def log_diagnostics(self, paths):
         logger.record_tabular(self._regressor._name + 'LowerB_MI', self.lowb_mutual(paths))
