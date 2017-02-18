@@ -8,8 +8,8 @@ from rllab import spaces
 from rllab.envs.base import Step
 from rllab.envs.proxy_env import ProxyEnv
 from rllab.envs.mujoco.maze.maze_env_utils import construct_maze
-from rllab.envs.mujoco.mujoco_env import MODEL_DIR, BIG
 from rllab.envs.mujoco.maze.maze_env_utils import ray_segment_intersect, point_distance
+from rllab.envs.mujoco.mujoco_env import MODEL_DIR, BIG
 from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides
 
