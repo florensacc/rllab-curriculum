@@ -29,13 +29,14 @@ class PendulumEnv(Box2DEnv, Serializable):
         Serializable.__init__(self, *args, **kwargs)
 
     @overrides
-    def reset(self):
+    def reset(self, noisy=True):
         self._set_state(self.initial_state)
         self._invalidate_state_caches()
-        stds = np.array([0.1, 0.01])
-        pos1, v1 = np.random.randn(*stds.shape) * stds
-        self.link1.angle = pos1
-        self.link1.angularVelocity = v1
+        if noisy:
+            stds = np.array([0.1, 0.01])
+            pos1, v1 = np.random.randn(*stds.shape) * stds
+            self.link1.angle = pos1
+            self.link1.angularVelocity = v1
         return self.get_current_obs()
 
     # def get_tip_pos(self):
@@ -51,7 +52,7 @@ class PendulumEnv(Box2DEnv, Serializable):
     @overrides
     def compute_reward(self, action):
         yield
-        tgt_pos = np.asarray([0, 0])
+        tgt_pos = np.asarray([0, -1, 0])
         cur_pos = self.get_current_obs()
         if self.eps_sparse:
             rew = 1 if np.linalg.norm(cur_pos - tgt_pos) < self.eps_sparse else 0

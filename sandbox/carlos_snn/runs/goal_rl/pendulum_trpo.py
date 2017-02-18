@@ -3,6 +3,7 @@ import os
 import os.path as osp
 import argparse
 import random
+import numpy as np
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -16,9 +17,10 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.sampler.stateful_pool import singleton_pool
 from rllab.envs.box2d.pendulum_env import PendulumEnv
 from rllab import config
+from rllab.misc.instrument import VariantGenerator, variant
 
-from sandbox.young_clgan.lib.envs.base import GoalIdxExplorationEnv
-from sandbox.young_clgan.lib.envs.base import UniformGoalGenerator, FixedGoalGenerator, update_env_goal_generator
+from sandbox.young_clgan.lib.envs.base import GoalExplorationEnv, GoalIdxExplorationEnv
+from sandbox.young_clgan.lib.envs.base import UniformGoalGenerator, FixedGoalGenerator, UniformAngleGoalGenerator
 from sandbox.young_clgan.lib.goal import *
 from sandbox.young_clgan.lib.logging import *
 from sandbox.carlos_snn.autoclone import autoclone
@@ -26,7 +28,6 @@ from sandbox.carlos_snn.autoclone import autoclone
 # from sandbox.young_clgan.lib.utils import initialize_parallel_sampler
 # initialize_parallel_sampler()
 
-stub(globals())
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -65,99 +66,122 @@ if __name__ == '__main__':
         n_parallel = 4
     else:
         mode = 'local'
-        n_parallel = 1
+        n_parallel = 4
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
 
-    n_itr = 2000
-    batch_size = 50000
-    max_path_length = 500  # horizon for the robot
+    exp_prefix = 'goal-pendulum-3lim-trpo-new3'
+    vg = VariantGenerator()
+    # algorithm params
+    vg.add('seed', range(30, 60, 10))
+    vg.add('n_itr', [500])
+    vg.add('batch_size', [5000])
+    vg.add('max_path_length', [200])
+    # environemnt params
+    vg.add('goal_generator', [UniformGoalGenerator])
+    vg.add('goal_range', lambda goal_generator: [np.pi] if goal_generator == UniformGoalGenerator else [None])
+    vg.add('angle_idxs', lambda goal_generator: [(0,)] if goal_generator == UniformGoalGenerator else [None])
+    vg.add('goal', [(np.pi, 0), ])
+    vg.add('goal_reward', ['NegativeDistance'])
+    vg.add('goal_weight', [0])
+    vg.add('terminal_bonus', [1])
 
-    for goal_reward in ['InverseDistance', 'NegativeDistance']:
-        for goal_range in [2, 4]:
-            inner_env = normalize(PendulumEnv())
-            goal_generator = UniformGoalGenerator(goal_dim=2, bound=goal_range)
-            env = GoalIdxExplorationEnv(inner_env, goal_generator, goal_reward=goal_reward,
-                                        goal_weight=1)  # this goal_generator will be updated by a uniform after
 
-            policy = GaussianMLPPolicy(
-                env_spec=env.spec,
-                hidden_sizes=(64, 64),
-                # Fix the variance since different goals will require different variances, making this parameter hard to learn.
-                learn_std=False
+    def run_task(v):
+
+        inner_env = normalize(PendulumEnv())
+
+        goal_generator_class = v['goal_generator']
+        if goal_generator_class == UniformGoalGenerator:
+            goal_generator = goal_generator_class(goal_size=np.size(v['goal']), bound=v['goal_range'])
+        else:
+            assert goal_generator_class == FixedGoalGenerator, 'goal generator not recognized!'
+            goal_generator = goal_generator_class(goal=v['goal'])
+
+        env = GoalExplorationEnv(env=inner_env, goal_generator=goal_generator, goal_reward=v['goal_reward'],
+                                 goal_weight=v['goal_weight'], terminal_bonus=v['terminal_bonus'], angle_idxs=v['angle_idxs'])
+
+        policy = GaussianMLPPolicy(
+            env_spec=env.spec,
+            hidden_sizes=(32, 32),
+            # Fix the variance since different goals will require different variances, making this parameter hard to learn.
+            learn_std=False
+        )
+
+        baseline = LinearFeatureBaseline(env_spec=env.spec)
+
+        algo = TRPO(
+            env=env,
+            policy=policy,
+            baseline=baseline,
+            batch_size=v['batch_size'],
+            max_path_length=v['max_path_length'],
+            n_itr=v['n_itr'],
+            discount=0.99,
+            step_size=0.01,
+            plot=False,
+        )
+
+        algo.train()
+
+
+    for vv in vg.variants(randomized=True):
+
+        if mode in ['ec2', 'local_docker']:
+            # # choose subnet
+            # subnet = random.choice(subnets)
+            # config.AWS_REGION_NAME = subnet[:-1]
+            # config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
+            #     config.AWS_REGION_NAME]
+            # config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
+            #     config.AWS_REGION_NAME]
+            # config.AWS_SECURITY_GROUP_IDS = \
+            #     config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
+            #         config.AWS_REGION_NAME]
+            # config.AWS_NETWORK_INTERFACES = [
+            #     dict(
+            #         SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
+            #         Groups=config.AWS_SECURITY_GROUP_IDS,
+            #         DeviceIndex=0,
+            #         AssociatePublicIpAddress=True,
+            #     )
+            # ]
+
+            run_experiment_lite(
+                # use_cloudpickle=False,
+                stub_method_call=run_task,
+                variant=vv,
+                mode=mode,
+                # Number of parallel workers for sampling
+                n_parallel=n_parallel,
+                # Only keep the snapshot parameters for the last iteration
+                snapshot_mode="last",
+                seed=s,
+                # plot=True,
+                exp_prefix=exp_prefix,
+                # exp_name=exp_name,
+                sync_s3_pkl=True,
+                # for sync the pkl file also during the training
+                sync_s3_png=True,
+                # # use this ONLY with ec2 or local_docker!!!
+                pre_commands=[
+                    "pip install --upgrade pip",
+                    "pip install --upgrade theano"
+                ],
             )
-
-            baseline = LinearFeatureBaseline(env_spec=env.spec)
-
-            algo = TRPO(
-                env=env,
-                policy=policy,
-                baseline=baseline,
-                batch_size=batch_size,
-                max_path_length=max_path_length,
-                n_itr=n_itr,
-                discount=0.99,
-                step_size=0.01,
-                plot=False,
+            # if mode == 'local_docker':
+            #     sys.exit()
+        else:
+            run_experiment_lite(
+                # use_cloudpickle=False,
+                stub_method_call=run_task,
+                variant=vv,
+                mode='local',
+                n_parallel=n_parallel,
+                # Only keep the snapshot parameters for the last iteration
+                snapshot_mode="last",
+                seed=vv['seed'],
+                exp_prefix=exp_prefix,
+                # exp_name=exp_name,
             )
-
-            for s in range(30, 60, 10):
-                exp_prefix = 'goal-swimmer-trpo'
-                exp_name = exp_prefix + '_{}range_{}_{}s'.format(goal_range, goal_reward, s)
-                if mode in ['ec2', 'local_docker']:
-                    # # choose subnet
-                    # subnet = random.choice(subnets)
-                    # config.AWS_REGION_NAME = subnet[:-1]
-                    # config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
-                    #     config.AWS_REGION_NAME]
-                    # config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
-                    #     config.AWS_REGION_NAME]
-                    # config.AWS_SECURITY_GROUP_IDS = \
-                    #     config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
-                    #         config.AWS_REGION_NAME]
-                    # config.AWS_NETWORK_INTERFACES = [
-                    #     dict(
-                    #         SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
-                    #         Groups=config.AWS_SECURITY_GROUP_IDS,
-                    #         DeviceIndex=0,
-                    #         AssociatePublicIpAddress=True,
-                    #     )
-                    # ]
-
-                    run_experiment_lite(
-                        use_cloudpickle=False,
-                        stub_method_call=algo.train(),
-                        mode=mode,
-                        # Number of parallel workers for sampling
-                        n_parallel=n_parallel,
-                        # Only keep the snapshot parameters for the last iteration
-                        snapshot_mode="last",
-                        seed=s,
-                        # plot=True,
-                        exp_prefix=exp_prefix,
-                        exp_name=exp_name,
-                        sync_s3_pkl=True,
-                        # for sync the pkl file also during the training
-                        sync_s3_png=True,
-                        # # use this ONLY with ec2 or local_docker!!!
-                        pre_commands=[
-                            "pip install --upgrade pip",
-                            "pip install --upgrade theano"
-                        ],
-                    )
-                    # if mode == 'local_docker':
-                    #     sys.exit()
-                else:
-                    run_experiment_lite(
-                        use_cloudpickle=False,
-                        stub_method_call=algo.train(),
-                        mode='local',
-                        n_parallel=n_parallel,
-                        # Only keep the snapshot parameters for the last iteration
-                        snapshot_mode="last",
-                        seed=s,
-                        # plot=True,
-                        exp_prefix=exp_prefix,
-                        exp_name=exp_name,
-                    )

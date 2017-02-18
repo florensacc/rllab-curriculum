@@ -19,7 +19,8 @@
     </body>
     <joint type="revolute" name="link_joint_1" bodyA="track" bodyB="link1" anchor="0,0"/>
     <control type="torque" joint="link_joint_1" ctrllimit="-3,3"/>
-    <state type="apos" body="link1"/>
+    <state type="apos" body="link1" transform="sin"/>
+    <state type="apos" body="link1" transform="cos"/>
     <state type="avel" body="link1"/>
   </world>
 </box2d>
