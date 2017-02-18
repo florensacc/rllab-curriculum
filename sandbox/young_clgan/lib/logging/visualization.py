@@ -1,4 +1,5 @@
 import tempfile
+import math
 
 import numpy as np
 import scipy.misc
@@ -7,10 +8,9 @@ from sandbox.young_clgan.lib.goal.evaluator import evaluate_goals, convert_label
 from sandbox.young_clgan.lib.envs.base import FixedGoalGenerator
 
 import matplotlib
+
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
-
-
 
 
 def plot_policy_reward(policy, env, limit, horizon=200, max_reward=6000, fname=None, grid_size=60):
@@ -49,8 +49,7 @@ def plot_policy_reward(policy, env, limit, horizon=200, max_reward=6000, fname=N
 
 
 def plot_labeled_samples(samples, labels, limit,
-        fname=None, size=1000, colors = ['red', 'green', 'blue', 'yellow']):
-
+                         fname=None, size=1000, colors=['red', 'green', 'blue', 'yellow']):
     sample_classes, text_labels = convert_label(labels)
     size = min(size, samples.shape[0])
     indices = np.random.choice(samples.shape[0], size, replace=False)
@@ -61,12 +60,12 @@ def plot_labeled_samples(samples, labels, limit,
     plt.clf()
     # text_labels = ['', 'Reward not sensible', 'Goal already accomplished', 'Desired goals']
 
-    #colors = ['b', 'g', 'r', 'y', 'c', 'm']
+    # colors = ['b', 'g', 'r', 'y', 'c', 'm']
     colors = ['k', 'm', 'c', 'y', 'r', 'g', 'b']
 
     unique_classes = list(set(sample_classes))
 
-    assert(len(colors) > max(unique_classes))
+    assert (len(colors) > max(unique_classes))
 
     for i in unique_classes:
         plt.scatter(
