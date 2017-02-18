@@ -130,7 +130,7 @@ class FCGAN(object):
             )
         return np.vstack(generator_samples), np.vstack(generator_noise)
 
-    def train(self, X, Y, outer_iters, generator_iters, discriminator_iters, suppress_generated_goals=False):
+    def train(self, X, Y, outer_iters, generator_iters, discriminator_iters):
         sample_size = X.shape[0]
         train_size = min(
             int(self.configs['batch_size'] * discriminator_iters / 10),
@@ -151,14 +151,9 @@ class FCGAN(object):
             sample_X = X[indices, :]
             sample_Y = Y[indices, :]
 
-            if suppress_generated_goals:
-                generated_X, random_noise = self.sample_generator(train_size)
-                feed_X = np.vstack([sample_X, generated_X])
-                feed_Y = np.vstack([sample_Y, generated_Y])
-            else:
-                random_noise = self.sample_random_noise(train_size)
-                feed_X = np.vstack([sample_X])
-                feed_Y = np.vstack([sample_Y])
+            generated_X, random_noise = self.sample_generator(train_size)
+            feed_X = np.vstack([sample_X, generated_X])
+            feed_Y = np.vstack([sample_Y, generated_Y])
 
             self.train_discriminator(feed_X, feed_Y, discriminator_iters)
             self.train_generator(random_noise, generator_iters)
