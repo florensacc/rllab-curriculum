@@ -36,7 +36,7 @@ from sandbox.young_clgan.lib.logging import *
 EXPERIMENT_TYPE = 'cl_gan'
 
 
-from cl_gan_algo import CLGANPointEnvLinear
+from sandbox.young_clgan.experiments.point_env_linear.cl_gan_algo import CLGANPointEnvLinear
 
 stub(globals())
 
@@ -52,7 +52,7 @@ if __name__ == '__main__':
         min_reward=5,
         max_reward=6000,
         improvement_threshold=10,
-        outer_iters=50,
+        outer_iters=200,
         inner_iters=50,
         pg_batch_size=20000,
         gan_outer_iters=5,

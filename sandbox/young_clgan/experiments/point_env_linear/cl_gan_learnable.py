@@ -34,7 +34,7 @@ from sandbox.young_clgan.lib.logging import *
 
 EXPERIMENT_TYPE = 'cl_gan_learnable'
 
-from cl_gan_learnable_algo import CLGANPointEnvLinear
+from sandbox.young_clgan.experiments.point_env_linear.cl_gan_learnable_algo import CLGANPointEnvLinear
 
 stub(globals())
 

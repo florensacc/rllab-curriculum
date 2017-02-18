@@ -32,7 +32,7 @@ from sandbox.young_clgan.lib.logging import *
 
 EXPERIMENT_TYPE = 'trpo_baseline'
 
-from trpo_baseline_algo import TRPOPointEnvLinear
+from sandbox.young_clgan.experiments.point_env_linear.trpo_baseline_algo import TRPOPointEnvLinear
 
 stub(globals())
 
@@ -40,13 +40,13 @@ from sandbox.young_clgan.lib.utils import AttrDict
 
 
 if __name__ == '__main__':
-    
+
     hyperparams = AttrDict(
         horizon=200,
         goal_size=2,
         goal_range=15,
         max_reward=6000,
-        outer_iters=50,
+        outer_iters=200,
         inner_iters=50,
         pg_batch_size=20000,
         experiment_type=EXPERIMENT_TYPE,
