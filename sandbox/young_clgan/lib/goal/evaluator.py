@@ -4,10 +4,10 @@ import tempfile
 import numpy as np
 
 from rllab.sampler.utils import rollout
+from rllab.misc import logger
 
 from sandbox.young_clgan.lib.envs.base import update_env_goal_generator
 from sandbox.young_clgan.lib.envs.base import FixedGoalGenerator
-
 
 
 class FunctionWrapper(object):
@@ -104,6 +104,7 @@ def convert_label(labels):
 
     return new_labels, classes
 
+
 def evaluate_goals(goals, env, policy, horizon, n_traj=1, n_processes=-1):
     evaluate_goal_wrapper = FunctionWrapper(
         evaluate_goal,
@@ -129,3 +130,8 @@ def evaluate_goal(goal, env, policy, horizon, n_traj=1):
         )
 
     return np.mean(mean_rewards)
+
+
+def evaluate_goal_env(env, policy, horizon, n_goals=10):
+    paths = [rollout(env=env, agent=policy, max_path_length=horizon) for _ in range(n_goals)]
+    env.log_diagnostics(paths)
