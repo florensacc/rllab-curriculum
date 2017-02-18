@@ -1,4 +1,5 @@
 from sandbox.tuomas.mddpg.envs.mujoco.mujoco_env import MujocoEnv
+from sandbox.haoran.myscripts.quaternion import Quaternion
 from rllab.core.serializable import Serializable
 import numpy as np
 
@@ -16,6 +17,7 @@ class AntEnv(MujocoEnv, Serializable):
             reward_type="velocity",
             reset_penalty=None,
             leg_zpos_thr=2.0,
+            flip_thr=0.,
             *args,
             **kwargs
         ):
@@ -27,6 +29,7 @@ class AntEnv(MujocoEnv, Serializable):
         self.reward_type = reward_type
         self.reset_penalty = reset_penalty
         self.leg_zpos_thr = leg_zpos_thr
+        self.flip_thr = flip_thr
 
     def get_param_values(self):
         params = dict(
@@ -34,6 +37,7 @@ class AntEnv(MujocoEnv, Serializable):
             reward_type=self.reward_type,
             reset_penalty=self.reset_penalty,
             leg_zpos_thr=self.leg_zpos_thr,
+            flip_thr=self.flip_thr,
         )
         return params
 
@@ -81,8 +85,17 @@ class AntEnv(MujocoEnv, Serializable):
             self.get_body_com("back_leg")[2],
             self.get_body_com("right_back_leg")[2],
         ]
-        notdone = np.isfinite(state).all() and 0.2 <= state[2] <= 1.0 and \
-            np.max(leg_zpos) < self.leg_zpos_thr
+        # q describes the orientation of the ball
+        q = Quaternion(*tuple(self.model.data.qpos[3:7].ravel()))
+        # z is the z-pos of the bottom of the ball after applying q
+        z = q.rotate(np.array([0., 0., -1.]))[2]
+
+        notdone = all([
+            np.isfinite(state).all(),
+            state[2] <= 1.0, # prevent jumpping
+            # np.max(leg_zpos) < self.leg_zpos_thr,
+            z < self.flip_thr, # prevent flipping
+        ])
         done = not notdone
 
         if self.reset_penalty:
