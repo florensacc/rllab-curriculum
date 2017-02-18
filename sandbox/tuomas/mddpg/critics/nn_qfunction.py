@@ -195,6 +195,8 @@ class FeedForwardCritic(NNCritic):
             cs = ax.contour(X, Y, Q, 20)
             ax.clabel(cs, inline=1, fontsize=10, fmt='%.2f')
 
+        ax.grid(True)
+
 
 class MultiCritic(NNCritic):
     """

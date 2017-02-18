@@ -23,7 +23,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_float('actor_lr', 0.01, 'Base learning rate for actor.')
 flags.DEFINE_float('critic_lr', 0.001, 'Base learning rate for critic.')
 flags.DEFINE_integer('path_length', 100, 'Maximum path length.')
-flags.DEFINE_integer('n_particles', 64, 'Number of particles.')
+flags.DEFINE_integer('n_particles', 100, 'Number of particles.')
 flags.DEFINE_string('save_path', '', 'Path where the plots are saved.')
 flags.DEFINE_string('output', 'default', 'Experiment name.')
 
@@ -33,10 +33,22 @@ snapshot_dir = os.path.join(config.LOG_DIR, 'ant', FLAGS.output)
 logger.add_tabular_output(tabular_log_file)
 logger.set_snapshot_dir(snapshot_dir)
 
+class StepAnnealer():
+    def __init__(self, base_value, step_size, step_period):
+        self._base_value = base_value
+        self._step_size = step_size
+        self._step_period = step_period
+
+    def get_new_value(self, epoch):
+        x = self._base_value * self._step_size ** (epoch // self._step_period)
+        return x
+
 
 def test():
 
-    env = TfEnv(normalize(MultiGoalEnv()))
+    env = TfEnv(normalize(MultiGoalEnv(), clip=False))
+
+    alpha_annealer = StepAnnealer(1.0, 0.3, 99999)  # Don't anneal.
 
     vddpg_kwargs = dict(
         epoch_length=1 * FLAGS.path_length,  # evaluate / plot per SVGD step
@@ -56,14 +68,17 @@ def test():
         train_critic=True,
         q_target_type='soft',
         svgd_target='pre-action',
+        #svgd_target='action',
         K=FLAGS.n_particles,
         alpha=1.,
         n_eval_paths=5,
         critic_train_frequency=1,
         actor_train_frequency=1,
         update_target_frequency=1,
-        critic_subtract_value=False,
-        critic_value_sampler='uniform'
+        critic_subtract_value=True,
+        critic_value_sampler='uniform',
+        alpha_annealer=alpha_annealer,
+        actor_sparse_update=False,
     )
 
     policy_kwargs = dict(
@@ -120,6 +135,7 @@ def test():
     kernel = SimpleAdaptiveDiagonalGaussianKernel(
         "kernel",
         dim=env.action_space.flat_dim,
+        sparse_update=vddpg_kwargs['actor_sparse_update']
     )
 
     algorithm = VDDPG(

@@ -112,6 +112,43 @@ class DiagonalGaussianKernel(Kernel):
         kappa_grads = - kappa *  self.diag_kappa_grads * diff
         return kappa_grads
 
+    def get_asymmetric_kappa(self, ys):
+        """
+        :param ys: Actions that we want to update  (N, K2, d)
+        :return: Kernel matrix (N, K1, K2, d)
+        """
+        xs = self.fixed_actions_pl
+        xs = tf.expand_dims(xs, axis=2)  # N x K1 x 1 x d
+        ys = tf.expand_dims(ys, axis=1)  # N x 1 x K2 x d
+
+        diff = xs - ys  # N x K1 x K2 x d
+        weighted_diff = diff * tf.sqrt(self.diag_kappa_grads)  # N x K1 x K2 x d
+        weighted_dist = tf.reduce_sum(weighted_diff**2, axis=3)  # N x K1 x K2
+
+        kappa = tf.exp(-0.5 * weighted_dist)
+
+        return kappa
+
+    def get_asymmetric_kappa_grads(self, ys):
+        """
+        :param ys:
+        :return: N x K1(i) x K2(j) x d tensor with elements
+            \nabla_{x_i}\kappa(xi, yj)
+        """
+        xs = self.fixed_actions_pl
+        kappa = self.get_asymmetric_kappa(ys)  # N x K1 x K2
+        kappa = tf.expand_dims(kappa, axis=3)  # N x K1 x K2 x 1
+
+        xs = tf.expand_dims(xs, axis=2)  # N x K1 x 1 x d
+        ys = tf.expand_dims(ys, axis=1)  # N x 1 x K2 x d
+
+        diff = xs - ys  # N x K1 x K2 x d
+        kappa_grads = - kappa * self.diag_kappa_grads * diff  # N x K1 x K2 x d
+
+        return kappa_grads
+
+
+
 
 from scipy.spatial import distance
 class SimpleAdaptiveDiagonalGaussianKernel(DiagonalGaussianKernel):
@@ -119,13 +156,18 @@ class SimpleAdaptiveDiagonalGaussianKernel(DiagonalGaussianKernel):
     Since tensorflow doesn't allow computing the median in the graph, we do it
     in np and then feed the values back
     """
-    def __init__(self, scope_name, dim, h_min=1e-3):
+    def __init__(self, scope_name, dim, h_min=1e-3, sparse_update=False):
         self.scope_name = scope_name
         self.dim = dim
         self.h_min = h_min
+        self.sparse_update = sparse_update
 
         Serializable.quick_init(self, locals())
         with tf.variable_scope(self.scope_name):
+            self.fixed_actions_pl = tf.placeholder(tf.float32,
+                                                   (None, None, self.dim),
+                                                   'fixed_actions')
+     
             self.diag_placeholder = tf.placeholder(tf.float32, (None, self.dim))
                 # N x d
             self.diag_kappa = tf.expand_dims(
@@ -178,6 +220,11 @@ class SimpleAdaptiveDiagonalGaussianKernel(DiagonalGaussianKernel):
         extra_feed = {
             self.diag_placeholder: self.diags
         }
+
+        if self.sparse_update:
+            # N*K x d
+            extra_feed[self.fixed_actions_pl] = xs
+
         return extra_feed
 
 class SimpleDiagonalConstructor(object):
