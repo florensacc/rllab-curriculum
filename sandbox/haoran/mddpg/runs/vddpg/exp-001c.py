@@ -35,7 +35,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/vddpg/" + exp_index
-mode = "local"
+mode = "ec2"
 ec2_instance = "c4.2xlarge"
 subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
@@ -61,7 +61,7 @@ class VG(VariantGenerator):
         ]
     @variant
     def K(self):
-        return [64]
+        return [32]
 
     @variant
     def alpha(self):
@@ -120,6 +120,8 @@ for v in variants:
         qf_learning_rate=v["qf_learning_rate"],
         svgd_target=v["svgd_target"],
         target_action_dist=v["target_action_dist"],
+        eval_kl_n_sample=1000,
+        eval_kl_n_sample_part=1000,
     )
     if "local" in mode and sys.platform == 'darwin':
         shared_alg_kwargs["plt_backend"] = "MacOSX"

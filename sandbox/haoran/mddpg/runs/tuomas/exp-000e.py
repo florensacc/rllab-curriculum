@@ -1,18 +1,17 @@
 """
 Variational DDPG (online, consevative)
 
-Train a metapolicy on exp-000, 000b to move the Ant forward.
+Train a meta-env on exp-000, 000b to move the Ant forward.
 Should use i.i.d. standard Gaussian as exploration noise. Since it is the
     default stochastic_policy input.
-* May use unbounded actions for the meta-policy
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
 from sandbox.haoran.mddpg.algos.ddpg import DDPG
-from sandbox.haoran.mddpg.policies.meta_policy import \
-    MetaPolicy, MetaExplorationStrategy
+from sandbox.haoran.mddpg.envs.meta_env import MetaEnv
 from sandbox.haoran.mddpg.gaussian_strategy import GaussianStrategy
 from sandbox.haoran.mddpg.qfunctions.nn_qfunction import FeedForwardCritic
+from sandbox.haoran.mddpg.policies.nn_policy import FeedForwardPolicy
 from sandbox.haoran.myscripts.envs import EnvChooser
 from sandbox.rocky.tf.envs.base import TfEnv
 from sandbox.haoran.myscripts.retrainer import Retrainer
@@ -229,38 +228,41 @@ for v in variants:
 
     # construct objects ----------------------------------
     env_chooser = EnvChooser()
-    env = TfEnv(normalize(
+    base_env = TfEnv(normalize(
         env_chooser.choose_env(env_name,**env_kwargs),
         clip=True,
     ))
-    qf = FeedForwardCritic(
-        "meta_critic",
-        env.observation_space.flat_dim,
-        env.action_space.flat_dim,
-        observation_hidden_sizes=(),
-        embedded_hidden_sizes=(v["network_size"], v["network_size"]),
-    )
-    es = MetaExplorationStrategy(
-        env_spec=env.spec,
-        substrategy=GaussianStrategy(
-            env_spec=env.spec,
-            mu=0.,
-            sigma=1.,
-        )
-    )
     retrainer = Retrainer(
         exp_prefix=v["exp_info"]["exp_prefix"],
         exp_name=v["exp_info"]["exp_name"],
         snapshot_file=v["exp_info"]["snapshot_file"],
         configure_script="",
     )
-    policy = MetaPolicy(
+    meta_env = MetaEnv(
+        env=retrainer.get_env(),
+        transform_policy=retrainer.get_policy(),
+    )
+    env = normalize(meta_env)
+
+    policy = FeedForwardPolicy(
         scope_name="meta_actor",
         observation_dim=env.observation_space.flat_dim,
         action_dim=env.action_space.flat_dim,
-        output_nonlinearity=tf.identity,
+        output_nonlinearity=tf.nn.tanh,
         observation_hidden_sizes=(v["network_size"], v["network_size"]),
-        subpolicy=retrainer.get_policy(),
+    )
+    es = GaussianStrategy(
+        env_spec=env.spec,
+        mu=0.,
+        sigma=meta_env.get_default_sigma_after_normalization(),
+    )
+
+    qf = FeedForwardCritic(
+        "meta_critic",
+        env.observation_space.flat_dim,
+        env.action_space.flat_dim,
+        observation_hidden_sizes=(),
+        embedded_hidden_sizes=(v["network_size"], v["network_size"]),
     )
     algorithm = DDPG(
         env,

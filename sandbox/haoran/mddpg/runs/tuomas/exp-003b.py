@@ -1,22 +1,19 @@
 """
 Variational DDPG (online, consevative)
 
-Train a metapolicy on exp-000, 000b to move the Ant forward.
-Should use i.i.d. standard Gaussian as exploration noise. Since it is the
-    default stochastic_policy input.
-* May use unbounded actions for the meta-policy
+Related to exp-002. Run DDPG on Ant with reward = distance from origin.
++ use a smaller target_update_frequency = 1000
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
 from sandbox.haoran.mddpg.algos.ddpg import DDPG
-from sandbox.haoran.mddpg.policies.meta_policy import \
-    MetaPolicy, MetaExplorationStrategy
-from sandbox.haoran.mddpg.gaussian_strategy import GaussianStrategy
+from sandbox.haoran.mddpg.policies.nn_policy import FeedForwardPolicy
 from sandbox.haoran.mddpg.qfunctions.nn_qfunction import FeedForwardCritic
 from sandbox.haoran.myscripts.envs import EnvChooser
 from sandbox.rocky.tf.envs.base import TfEnv
-from sandbox.haoran.myscripts.retrainer import Retrainer
 from rllab.envs.normalized_env import normalize
+from rllab.exploration_strategies.ou_strategy import OUStrategy
+from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 
 """ others """
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
@@ -33,9 +30,9 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "tuomas/vddpg/" + exp_index
-mode = "ec2_test"
-ec2_instance = "c4.4xlarge"
-subnet = "us-west-1b"
+mode = "ec2"
+ec2_instance = "c4.2xlarge"
+subnet = "us-west-1c"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 config.AWS_IMAGE_ID = "ami-85d181e5" # with docker already pulled
 
@@ -62,11 +59,11 @@ class VG(VariantGenerator):
 
     @variant
     def ou_sigma(self):
-        return [1.]
+        return [0.3]
 
     @variant
     def scale_reward(self):
-        return [1, 10, 100]
+        return [1]
 
     @variant
     def qf_learning_rate(self):
@@ -88,18 +85,6 @@ class VG(VariantGenerator):
                 critic_train_frequency=1,
                 update_target_frequency=1000,
                 train_repeat=1,
-            ),
-        ]
-    @variant
-    def exp_info(self):
-        return [
-            # this Ant can move in many directions fast
-            dict(
-                exp_prefix="tuomas/vddpg/exp-000b",
-                exp_name="exp-000b_20170213_150257_941463_tuomas_ant",
-                snapshot_file="itr_499.pkl",
-                env_name="tuomas_ant",
-                seed=0
             ),
         ]
 
@@ -144,10 +129,10 @@ for v in variants:
 
     if mode == "local_test" or mode == "local_docker_test":
         ddpg_kwargs = dict(
-            epoch_length = 1000,
-            min_pool_size = 1000,
-            eval_samples = v["max_path_length"],
-            n_epochs = 500,
+            epoch_length = 200,
+            min_pool_size = 100,
+            eval_samples = 100,
+            n_epochs = 5,
         )
     else:
         ddpg_kwargs = dict(
@@ -173,8 +158,7 @@ for v in variants:
         }
     elif env_name == "tuomas_ant":
         env_kwargs = {
-            "reward_type": "velocity",
-            "direction": (1., 0.),
+            "reward_type": "distance_from_origin"
         }
     else:
         env_kwargs = {}
@@ -234,33 +218,25 @@ for v in variants:
         clip=True,
     ))
     qf = FeedForwardCritic(
-        "meta_critic",
+        "critic",
         env.observation_space.flat_dim,
         env.action_space.flat_dim,
         observation_hidden_sizes=(),
         embedded_hidden_sizes=(v["network_size"], v["network_size"]),
     )
-    es = MetaExplorationStrategy(
+    es = OUStrategy(
         env_spec=env.spec,
-        substrategy=GaussianStrategy(
-            env_spec=env.spec,
-            mu=0.,
-            sigma=1.,
-        )
+        mu=0,
+        theta=0.15,
+        sigma=v["ou_sigma"],
+        clip=True,
     )
-    retrainer = Retrainer(
-        exp_prefix=v["exp_info"]["exp_prefix"],
-        exp_name=v["exp_info"]["exp_name"],
-        snapshot_file=v["exp_info"]["snapshot_file"],
-        configure_script="",
-    )
-    policy = MetaPolicy(
-        scope_name="meta_actor",
+    policy = FeedForwardPolicy(
+        scope_name="actor",
         observation_dim=env.observation_space.flat_dim,
         action_dim=env.action_space.flat_dim,
-        output_nonlinearity=tf.identity,
+        output_nonlinearity=tf.nn.tanh,
         observation_hidden_sizes=(v["network_size"], v["network_size"]),
-        subpolicy=retrainer.get_policy(),
     )
     algorithm = DDPG(
         env,

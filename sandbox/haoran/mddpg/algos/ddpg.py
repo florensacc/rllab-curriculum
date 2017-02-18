@@ -372,6 +372,15 @@ class DDPG(OnlineAlgorithm, Serializable):
             self.last_statistics.update(create_stats_ordered_dict(
                 'TrainingReturns', train_returns))
 
+        es_path_lengths = train_info["es_path_lengths"]
+        if len(es_path_lengths) == 0 and epoch == 0:
+            es_path_lengths = [0]
+        if len(es_path_lengths) > 0:
+            # if eval is too often, training may not even have collected a full
+            # path
+            self.last_statistics.update(create_stats_ordered_dict(
+                'TrainingPathLengths', es_path_lengths))
+
         snapshot_dir = logger.get_snapshot_dir()
         env = self.env
         while isinstance(env, ProxyEnv):
