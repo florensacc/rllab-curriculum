@@ -10,9 +10,8 @@ class AttrDict(dict):
 
 
 class ExperimentLogger(object):
-    def __init__(
-        self, base_dir, itr=None, snapshot_mode='all', text_file='debug.log',
-        tabular_file='progress.csv', snapshot_gap=1):
+    def __init__(self, base_dir, itr=None, snapshot_mode='all', text_file='debug.log',
+                 tabular_file='progress.csv', snapshot_gap=1, tabular_out=False, text_out=False):
 
         if itr is not None:
             self.log_dir = os.path.join(base_dir, 'itr_{}'.format(itr))
@@ -22,11 +21,20 @@ class ExperimentLogger(object):
         self.tabular_file = os.path.join(self.log_dir, tabular_file)
         self.snapshot_mode = snapshot_mode
         self.snapshot_gap = snapshot_gap
+        self.tabular_out = tabular_out
+        self.text_out = text_out
 
     def __enter__(self):
         self.prev_snapshot_dir = rllab.misc.logger.get_snapshot_dir()
         self.prev_mode = rllab.misc.logger.get_snapshot_mode()
+        # if you want to avoid dumping the data to the outer csv or log file.
+        self.prev_text_file = rllab.misc.logger._text_outputs[0]
+        self.prev_tabular_file = rllab.misc.logger._tabular_outputs[0]
 
+        if not self.tabular_out:
+            rllab.misc.logger.hold_tabular_output(self.prev_tabular_file)
+        if not self.text_out:
+            rllab.misc.logger.remove_text_output(self.prev_text_file)
         rllab.misc.logger.add_text_output(self.text_file)
         rllab.misc.logger.add_tabular_output(self.tabular_file)
         rllab.misc.logger.set_snapshot_dir(self.log_dir)
@@ -35,6 +43,10 @@ class ExperimentLogger(object):
         return self
 
     def __exit__(self, type, value, traceback):
+        if not self.tabular_out:
+            rllab.misc.logger.add_tabular_output(self.prev_tabular_file)
+        if not self.text_out:
+            rllab.misc.logger.add_text_output(self.prev_text_file)
         rllab.misc.logger.set_snapshot_mode(self.prev_mode)
         rllab.misc.logger.set_snapshot_dir(self.prev_snapshot_dir)
         rllab.misc.logger.remove_tabular_output(self.tabular_file)
