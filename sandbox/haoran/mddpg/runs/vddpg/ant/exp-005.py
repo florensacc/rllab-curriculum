@@ -30,7 +30,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/vddpg/ant/" + exp_index
-mode = "local_test"
+mode = "ec2"
 ec2_instance = "c4.2xlarge"
 subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
@@ -90,7 +90,15 @@ class VG(VariantGenerator):
 
     @variant
     def reward_type(self):
-        return ["velocity", "distance_from_origin"]
+        return [
+            "goal",
+            # "velocity",
+            # "distance_from_origin",
+        ]
+
+    @variant
+    def goal(self):
+        return [(10., 0.)]
 
     @variant
     def flip_thr(self):
@@ -99,6 +107,10 @@ class VG(VariantGenerator):
     @variant
     def random_init_state(self):
         return [False]
+
+    @variant
+    def puddle_cost(self):
+        return [100]
 
 
 variants = VG().variants()
@@ -116,8 +128,8 @@ for v in variants:
     )
 
     env_plot_settings = dict(
-        xlim=(-10, 10),
-        ylim=(-10, 10),
+        xlim=(-12, 12),
+        ylim=(-12, 12),
     )
     # algo
     seed=v["zzseed"]
@@ -144,7 +156,7 @@ for v in variants:
             epoch_length = 200,
             min_pool_size = 100,
             eval_samples = 100,
-            n_epochs = 5,
+            n_epochs = 1,
         )
     else:
         ddpg_kwargs = dict(
@@ -205,11 +217,26 @@ for v in variants:
 
     # construct objects ----------------------------------
     puddles = [
-        Puddle(x=-1, y=-1, width=2, height=2, angle=0., cost=1,
-            plot_args=dict(color=(1., 0., 0., 0.2)))
+        Puddle(x=-2, y=-2, width=4, height=1, angle=0., cost=v["puddle_cost"],
+            plot_args=dict(color=(1., 0., 0., 0.2))),
+        Puddle(x=-2, y=1, width=4, height=1, angle=0., cost=v["puddle_cost"],
+            plot_args=dict(color=(1., 0., 0., 0.2))),
+        Puddle(x=4, y=-3, width=1, height=6, angle=0., cost=v["puddle_cost"],
+            plot_args=dict(color=(1., 0., 0., 0.2))),
+        Puddle(x=-5, y=-3, width=1, height=6, angle=0., cost=v["puddle_cost"],
+            plot_args=dict(color=(1., 0., 0., 0.2))),
+        Puddle(x=-5, y=-6, width=10, height=1, angle=0., cost=v["puddle_cost"],
+            plot_args=dict(color=(1., 0., 0., 0.2))),
+        Puddle(x=-5, y=5, width=10, height=1, angle=0., cost=v["puddle_cost"],
+            plot_args=dict(color=(1., 0., 0., 0.2))),
+        Puddle(x=7, y=-6, width=1, height=12, angle=0., cost=v["puddle_cost"],
+            plot_args=dict(color=(1., 0., 0., 0.2))),
+        Puddle(x=-8, y=-6, width=1, height=12, angle=0., cost=v["puddle_cost"],
+            plot_args=dict(color=(1., 0., 0., 0.2))),
     ]
     env_kwargs = {
         "reward_type": v["reward_type"],
+        "goal": v["goal"],
         "flip_thr": v["flip_thr"],
         "puddles": puddles,
         "mujoco_env_args": {

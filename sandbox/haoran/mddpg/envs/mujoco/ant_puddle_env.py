@@ -59,16 +59,18 @@ class AntPuddleEnv(MujocoEnv, Serializable):
 
     def __init__(self,
             puddles=[],
+            reward_type="goal",
             direction=None,
-            reward_type="velocity",
+            goal=(10., 0.),
             flip_thr=0.,
             mujoco_env_args=dict()
         ):
         if direction is not None:
             assert np.isclose(np.linalg.norm(direction), 1.)
         self.puddles = puddles
-        self.direction = direction
         self.reward_type = reward_type
+        self.direction = direction
+        self.goal = goal
         self.flip_thr = flip_thr
 
         # dynamically generate and load the xml file
@@ -89,6 +91,7 @@ class AntPuddleEnv(MujocoEnv, Serializable):
             direction=self.direction,
             reward_type=self.reward_type,
             flip_thr=self.flip_thr,
+            goal=self.goal,
         )
         return params
 
@@ -114,6 +117,11 @@ class AntPuddleEnv(MujocoEnv, Serializable):
                 motion_reward = np.linalg.norm(comvel[0:2])
         elif self.reward_type == "distance_from_origin":
             motion_reward = np.linalg.norm(self.get_body_com("torso")[:2])
+        elif self.reward_type == "goal":
+            pos = self.get_body_com("torso")[:2]
+            motion_reward = np.linalg.norm(
+                pos - np.array(self.goal)
+            )
         else:
             raise NotImplementedError
 
@@ -192,10 +200,16 @@ class AntPuddleEnv(MujocoEnv, Serializable):
         for puddle in self.puddles:
             puddle.plot(ax)
 
+    def plot_goal(self, ax):
+        x, y = self.goal
+        ax.plot(x, y, 'b*', markersize=10)
+
     @overrides
     def plot_paths(self, paths, ax):
         ax.grid(True)
         self.plot_puddles(ax)
+        if self.reward_type == "goal":
+            self.plot_goal(ax)
         for path in paths:
             positions = path["env_infos"]["com"]
             xx = positions[:, 0]
@@ -241,6 +255,17 @@ class AntPuddleEnv(MujocoEnv, Serializable):
                     r=r, g=g, b=b, a=a
                 ),
             ))
+        if self.reward_type == "goal":
+            worldbody.append(ET('geom',
+                type="box",
+                pos="{center_x} {center_y} 0".format(
+                    center_x=self.goal[0],
+                    center_y=self.goal[1],
+                ),
+                size="0.5 0.5 0.01",
+                conaffinity="0", # no contact with other objs
+                rgba="0 0 1 0.8"
+            ))
 
         # output to file
         s = etree.tostring(root, pretty_print=True).decode()
@@ -250,9 +275,6 @@ class AntPuddleEnv(MujocoEnv, Serializable):
         print("Generated the xml file to %s"%(self.file_path))
 
 
-    # def __getstate__(self):
-    #     d = Serializable.__getstate__()
-    #     d["_serializable_initialized"] = self._serializable_initialized
-    #
-    # def __setstate__(self, d):
-    #
+    def viewer_setup(self):
+        self.viewer.cam.trackbodyid = 0
+        self.viewer.cam.distance = 20
