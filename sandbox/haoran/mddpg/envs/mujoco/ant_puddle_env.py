@@ -2,6 +2,7 @@ from sandbox.tuomas.mddpg.envs.mujoco.mujoco_env import MujocoEnv
 from sandbox.haoran.myscripts.quaternion import Quaternion
 from sandbox.haoran.myscripts.myutilities import get_time_stamp
 from rllab.core.serializable import Serializable
+from rllab.mujoco_py import MjViewer
 import numpy as np
 import os
 from matplotlib.patches import Rectangle
@@ -14,7 +15,7 @@ class Puddle(Serializable):
     """
     A puddle is a rectangular high-cost region
     """
-    def __init__(self, x, y, width, height, angle, plot_args, cost):
+    def __init__(self, x, y, width, height, angle, plot_args, cost, hard=False):
         """
         x, y: coordinate of the lower left corner
         """
@@ -29,6 +30,7 @@ class Puddle(Serializable):
         assert "color" in plot_args
         self.plot_args = plot_args
         self.cost = cost
+        self.hard = hard
 
     def plot(self, ax):
         ax.add_patch(Rectangle(
@@ -119,9 +121,11 @@ class AntPuddleEnv(MujocoEnv, Serializable):
             motion_reward = np.linalg.norm(self.get_body_com("torso")[:2])
         elif self.reward_type == "goal":
             pos = self.get_body_com("torso")[:2]
-            motion_reward = np.linalg.norm(
+            motion_reward = 20 - np.linalg.norm(
                 pos - np.array(self.goal)
             )
+            # should better make the rewards positive, otherwise the agent
+            # will prefer termination
         else:
             raise NotImplementedError
 
@@ -133,9 +137,9 @@ class AntPuddleEnv(MujocoEnv, Serializable):
         action_violations = np.maximum(np.maximum(lb - action, action - ub), 0)
         action_violation_cost = np.sum((action_violations / scaling)**2)
 
-        ctrl_cost = 0.5 * 1e-2 * np.sum(np.square(action / scaling))
-        contact_cost = 0.5 * 1e-3 * np.sum(
-            np.square(np.clip(self.model.data.cfrc_ext, -1, 1))),
+        ctrl_cost = 0.5 * 1e-3 * np.sum(np.square(action / scaling))
+        contact_cost = 0.5 * 1e-4 * np.sum(
+            np.square(np.clip(self.model.data.cfrc_ext, -1, 1)))
         survive_reward = 0.05
         pos = state[:2] # 2D position
         puddle_cost = self.compute_puddle_cost(pos)
@@ -187,6 +191,33 @@ class AntPuddleEnv(MujocoEnv, Serializable):
             'env: ForwardProgressMin': np.min(progs),
             'env: ForwardProgressStd': np.std(progs),
         }
+
+        if self.reward_type == "distance_from_origin":
+            dists = []
+            for path in paths:
+                pos = path["env_infos"]["com"][-1][:2] # (x,y) of last time step
+                dists.append(np.linalg.norm(pos))
+            stats = {
+                'env: FinalDistanceFromOriginAverage': np.mean(dists),
+                'env: FinalDistanceFromOriginMax': np.max(dists),
+                'env: FinalDistanceFromOriginMin': np.min(dists),
+                'env: FinalDistanceFromOriginStd': np.std(dists),
+            }
+        elif self.reward_type == "goal":
+            dists = [
+                np.linalg.norm(
+                    path["env_infos"]["com"][-1][:2] - np.array(self.goal)
+                )
+                for path in paths
+            ]
+            stats = {
+                'env: FinalDistanceFromGoalAverage': np.mean(dists),
+                'env: FinalDistanceFromGoalMax': np.max(dists),
+                'env: FinalDistanceFromGoalMin': np.min(dists),
+                'env: FinalDistanceFromGoalStd': np.std(dists),
+            }
+        else:
+            raise NotImplementedError
 
         return stats
 
@@ -240,21 +271,38 @@ class AntPuddleEnv(MujocoEnv, Serializable):
         for puddle in self.puddles:
             r, g, b, a = puddle.plot_args["color"]
 
-            worldbody.append(ET('geom',
-                type="box",
-                pos="{center_x} {center_y} 0".format(
-                    center_x=puddle.x + 0.5 * puddle.width,
-                    center_y=puddle.y + 0.5 * puddle.height,
-                ),
-                size="{half_width} {half_height} 0.01".format(
-                    half_width=0.5 * puddle.width,
-                    half_height=0.5 * puddle.height,
-                ),
-                conaffinity="0", # no contact with other objs
-                rgba="{r} {g} {b} {a}".format(
-                    r=r, g=g, b=b, a=a
-                ),
-            ))
+            if puddle.hard:
+                worldbody.append(ET('geom',
+                    type="box",
+                    pos="{center_x} {center_y} 1".format(
+                        center_x=puddle.x + 0.5 * puddle.width,
+                        center_y=puddle.y + 0.5 * puddle.height,
+                    ),
+                    size="{half_width} {half_height} 1".format(
+                        half_width=0.5 * puddle.width,
+                        half_height=0.5 * puddle.height,
+                    ),
+                    conaffinity="1", # has contact with other objs
+                    rgba="{r} {g} {b} {a}".format(
+                        r=r, g=g, b=b, a=a
+                    ),
+                ))
+            else:
+                worldbody.append(ET('geom',
+                    type="box",
+                    pos="{center_x} {center_y} 0".format(
+                        center_x=puddle.x + 0.5 * puddle.width,
+                        center_y=puddle.y + 0.5 * puddle.height,
+                    ),
+                    size="{half_width} {half_height} 0.01".format(
+                        half_width=0.5 * puddle.width,
+                        half_height=0.5 * puddle.height,
+                    ),
+                    conaffinity="0", # no contact with other objs
+                    rgba="{r} {g} {b} {a}".format(
+                        r=r, g=g, b=b, a=a
+                    ),
+                ))
         if self.reward_type == "goal":
             worldbody.append(ET('geom',
                 type="box",
@@ -275,6 +323,16 @@ class AntPuddleEnv(MujocoEnv, Serializable):
         print("Generated the xml file to %s"%(self.file_path))
 
 
-    def viewer_setup(self):
-        self.viewer.cam.trackbodyid = 0
-        self.viewer.cam.distance = 20
+    def get_viewer(self, config=None):
+        if self.viewer is None:
+            self.viewer = MjViewer()
+            self.viewer.start()
+            self.viewer.set_model(self.model)
+            self.viewer.cam.trackbodyid = 0
+            self.viewer.cam.distance = 30
+            self.viewer.cam.elevation = -70
+        if config is not None:
+            self.viewer.set_window_pose(config["xpos"], config["ypos"])
+            self.viewer.set_window_size(config["width"], config["height"])
+            self.viewer.set_window_title(config["title"])
+        return self.viewer

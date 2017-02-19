@@ -1,7 +1,7 @@
 """
 Variational DDPG (online, consevative)
 
-Test the puddle env
+Test the puddle env with walls
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
@@ -32,7 +32,7 @@ exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/vddpg/ant/" + exp_index
 mode = "ec2"
 ec2_instance = "c4.2xlarge"
-subnet = "us-west-1b"
+subnet = "us-west-1c"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 config.AWS_IMAGE_ID = "ami-85d181e5" # with docker already pulled
 
@@ -86,6 +86,12 @@ class VG(VariantGenerator):
                 update_target_frequency=1000,
                 train_repeat=1,
             ),
+            dict(
+                actor_train_frequency=1,
+                critic_train_frequency=1,
+                update_target_frequency=5000,
+                train_repeat=1,
+            ),
         ]
 
     @variant
@@ -93,7 +99,7 @@ class VG(VariantGenerator):
         return [
             "goal",
             # "velocity",
-            # "distance_from_origin",
+            "distance_from_origin",
         ]
 
     @variant
@@ -110,7 +116,7 @@ class VG(VariantGenerator):
 
     @variant
     def puddle_cost(self):
-        return [100]
+        return [0]
 
 
 variants = VG().variants()
@@ -218,21 +224,21 @@ for v in variants:
     # construct objects ----------------------------------
     puddles = [
         Puddle(x=-2, y=-2, width=4, height=1, angle=0., cost=v["puddle_cost"],
-            plot_args=dict(color=(1., 0., 0., 0.2))),
+            plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
         Puddle(x=-2, y=1, width=4, height=1, angle=0., cost=v["puddle_cost"],
-            plot_args=dict(color=(1., 0., 0., 0.2))),
+            plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
         Puddle(x=4, y=-3, width=1, height=6, angle=0., cost=v["puddle_cost"],
-            plot_args=dict(color=(1., 0., 0., 0.2))),
+            plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
         Puddle(x=-5, y=-3, width=1, height=6, angle=0., cost=v["puddle_cost"],
-            plot_args=dict(color=(1., 0., 0., 0.2))),
+            plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
         Puddle(x=-5, y=-6, width=10, height=1, angle=0., cost=v["puddle_cost"],
-            plot_args=dict(color=(1., 0., 0., 0.2))),
+            plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
         Puddle(x=-5, y=5, width=10, height=1, angle=0., cost=v["puddle_cost"],
-            plot_args=dict(color=(1., 0., 0., 0.2))),
+            plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
         Puddle(x=7, y=-6, width=1, height=12, angle=0., cost=v["puddle_cost"],
-            plot_args=dict(color=(1., 0., 0., 0.2))),
+            plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
         Puddle(x=-8, y=-6, width=1, height=12, angle=0., cost=v["puddle_cost"],
-            plot_args=dict(color=(1., 0., 0., 0.2))),
+            plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
     ]
     env_kwargs = {
         "reward_type": v["reward_type"],
