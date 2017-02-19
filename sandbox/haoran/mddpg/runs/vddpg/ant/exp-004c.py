@@ -2,6 +2,7 @@
 Variational DDPG (online, consevative)
 
 Reset if the ant has flipped over 90 degrees
+Directly trained to move forward
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
@@ -89,7 +90,7 @@ class VG(VariantGenerator):
 
     @variant
     def reward_type(self):
-        return ["velocity", "distance_from_origin"]
+        return ["velocity", "forward_distance"]
 
     @variant
     def flip_thr(self):
@@ -155,10 +156,11 @@ for v in variants:
     ddpg_kwargs.update(shared_ddpg_kwargs)
     env_kwargs = {
         "reward_type": v["reward_type"],
-        "leg_zpos_thr": 10.,
         "flip_thr": v["flip_thr"],
         "random_init_state": v["random_init_state"],
     }
+    if v["reward_type"] == "velocity":
+        env_kwargs["direction"] = (1., 0.)
 
     # other exp setup --------------------------------------
     exp_name = "{exp_index}_{time}_{env_name}".format(

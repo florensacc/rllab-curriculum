@@ -63,6 +63,8 @@ class AntEnv(MujocoEnv, Serializable):
                 motion_reward = np.linalg.norm(comvel[0:2])
         elif self.reward_type == "distance_from_origin":
             motion_reward = np.linalg.norm(self.get_body_com("torso")[:2])
+        elif self.reward_type == "forward_distance":
+            motion_reward = self.get_body_com("torso")[0]
         else:
             raise NotImplementedError
 

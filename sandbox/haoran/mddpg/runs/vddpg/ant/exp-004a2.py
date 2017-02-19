@@ -2,6 +2,8 @@
 Variational DDPG (online, consevative)
 
 Reset if the ant has flipped over 90 degrees
+Compare the performance of relu and tanh
+Also try a slower target update and compare to exp-004
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
@@ -82,7 +84,7 @@ class VG(VariantGenerator):
             dict(
                 actor_train_frequency=1,
                 critic_train_frequency=1,
-                update_target_frequency=1000,
+                update_target_frequency=5000,
                 train_repeat=1,
             ),
         ]
@@ -98,6 +100,10 @@ class VG(VariantGenerator):
     @variant
     def random_init_state(self):
         return [False]
+
+    @variant
+    def hidden_nonlinearity(self):
+        return ["tanh", "relu"]
 
 
 variants = VG().variants()
@@ -228,12 +234,20 @@ for v in variants:
         sigma=v["ou_sigma"],
         clip=True,
     )
+    if v["hidden_nonlinearity"] == "tanh":
+        hidden_nonlinearity = tf.nn.tanh
+    elif v["hidden_nonlinearity"] == "relu":
+        hidden_nonlinearity = tf.nn.relu
+    else:
+        raise NotImplementedError
+
     policy = FeedForwardPolicy(
         scope_name="actor",
         observation_dim=env.observation_space.flat_dim,
         action_dim=env.action_space.flat_dim,
         output_nonlinearity=tf.nn.tanh,
         observation_hidden_sizes=(v["network_size"], v["network_size"]),
+        hidden_nonlinearity=hidden_nonlinearity,
     )
     algorithm = DDPG(
         env,

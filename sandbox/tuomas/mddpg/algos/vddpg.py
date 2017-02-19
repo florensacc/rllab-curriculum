@@ -846,8 +846,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
             # List of holding line objects created by the environment
             self._env_lines = []
-            # self._ax_env.set_xlim(self.env_plot_settings['xlim'])
-            # self._ax_env.set_ylim(self.env_plot_settings['ylim'])
+            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+            self._ax_env.set_ylim(self.env_plot_settings['ylim'])
 
         # Init critic + actor figure.
         if self.q_plot_settings is not None:
@@ -1050,7 +1050,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         # alternatively, we can consider the regularized reward =
         # reward - kl(pi | pi_{uniform})
-        
+
         # lbs, ubs = self.env.action_space.bounds
         # log_p_uniform = -np.sum([
         #     np.log(ub - lb)
@@ -1135,10 +1135,10 @@ class VDDPG(OnlineAlgorithm, Serializable):
             if self._env_lines is not None:
                 [path.remove() for path in self._env_lines]
 
-            #self._ax_env.clear()
+            self._ax_env.clear()
             self._env_lines = env.plot_paths(paths, self._ax_env)
-            # self._ax_env.set_xlim(self.env_plot_settings['xlim'])
-            # self._ax_env.set_ylim(self.env_plot_settings['ylim'])
+            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+            self._ax_env.set_ylim(self.env_plot_settings['ylim'])
 
             plt.pause(0.001)
             plt.draw()
