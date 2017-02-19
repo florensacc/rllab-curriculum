@@ -112,6 +112,10 @@ class EnvChooser(object):
             from sandbox.haoran.mddpg.envs.mujoco.multilink_reacher_env import \
                 MultiLinkReacherEnv
             env = MultiLinkReacherEnv(**kwargs)
+        elif env_name == "ant_puddle":
+            from sandbox.haoran.mddpg.envs.mujoco.ant_puddle_env import \
+                AntPuddleEnv
+            env = AntPuddleEnv(**kwargs)
         else:
             print("Unknown environment %s"%(env_name))
             raise NotImplementedError
