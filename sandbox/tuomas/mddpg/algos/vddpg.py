@@ -123,8 +123,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.actor_learning_rate = policy_learning_rate
         self.alpha = alpha
         self.qf_extra_training = qf_extra_training
-        self.train_critic = train_critic
-        self.train_actor = train_actor
+        self.really_train_critic = train_critic
+        self.really_train_actor = train_actor
         self.actor_sparse_update = actor_sparse_update
         self.critic_subtract_value = critic_subtract_value
         self.critic_value_sampler = critic_value_sampler
@@ -133,13 +133,13 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.target_action_dist = target_action_dist
         self.critic_train_frequency = critic_train_frequency
         self.critic_train_counter = 0
-        self.train_critic = True # shall be modified later
+        self.train_critic = self.really_train_critic # shall be modified later
         self.actor_train_frequency = actor_train_frequency
         self.actor_train_counter = 0
-        self.train_actor = True # shall be modified later
+        self.train_actor = self.really_train_critic # shall be modified later
         self.update_target_frequency = update_target_frequency
         self.update_target_counter = 0
-        self.update_target = True
+        self.update_target = self.train_critic
         self.debug_mode = debug_mode
         self.axis3d = axis3d
         self.q_plot_settings = q_plot_settings
@@ -243,14 +243,23 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 self.kernel.kappa = self.kernel.get_kappa(actions_reshaped)
                 self.kernel.kappa_grads = self.kernel.get_kappa_grads(
                     actions_reshaped)
+
         elif self.svgd_target == "pre-action":
             if self.actor_sparse_update:
-                raise NotImplementedError
-
-            pre_actions_reshaped = tf.reshape(self.policy.pre_output, shape)
-            self.kernel.kappa = self.kernel.get_kappa(pre_actions_reshaped)
-            self.kernel.kappa_grads = self.kernel.get_kappa_grads(
-                pre_actions_reshaped)
+                updated_pre_actions_reshaped = tf.reshape(
+                    self.policy.pre_output, shape
+                )
+                self.kernel.kappa = self.kernel.get_asymmetric_kappa(
+                    updated_pre_actions_reshaped
+                )
+                self.kernel.kappa_grads =self.kernel.get_asymmetric_kappa_grads(
+                    updated_pre_actions_reshaped
+                )
+            else:
+                pre_actions_reshaped = tf.reshape(self.policy.pre_output, shape)
+                self.kernel.kappa = self.kernel.get_kappa(pre_actions_reshaped)
+                self.kernel.kappa_grads = self.kernel.get_kappa_grads(
+                    pre_actions_reshaped)
         else:
             raise NotImplementedError
 
@@ -299,10 +308,25 @@ class VDDPG(OnlineAlgorithm, Serializable):
             observation_input=self.policy.observations_placeholder,
         )
         if self.actor_sparse_update:
-            self.critic_with_static_actions = self.qf.get_weight_tied_copy(
-            action_input=self.kernel.fixed_actions_pl,
-            observation_input=self.policy.observations_placeholder,
-        )
+            if self.svgd_target == 'action':
+                actions = tf.reshape(self.kernel.fixed_actions_pl,
+                                     (-1, Da))
+                self.critic_with_static_actions = self.qf.get_weight_tied_copy(
+                    action_input=actions,
+                    observation_input=None,
+                    #observation_input=self.policy.observations_placeholder,
+                )
+            elif self.svgd_target == 'pre-action':
+                #import pdb; pdb.set_trace()
+                actions = tf.tanh(tf.reshape(self.kernel.fixed_actions_pl,
+                                             (-1, Da)))
+                self.critic_with_static_actions = self.qf.get_weight_tied_copy(
+                    action_input=actions,
+                    #observation_input=self.policy.observations_placeholder,
+                    observation_input=None,
+                )
+            else:
+                raise NotImplementedError
 
         if self.svgd_target == "action":
             if self.q_prior is not None and self.actor_sparse_update:
@@ -360,6 +384,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 grad_ys=action_grads,
             )
         elif self.svgd_target == "pre-action":
+            if self.q_prior is not None and self.actor_sparse_update:
+                raise NotImplementedError
+
             if self.q_prior is not None:
                 self.prior_with_policy_input = self.q_prior.get_weight_tied_copy(
                     action_input=self.policy.output,
@@ -368,20 +395,41 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 p = self.prior_coeff_placeholder
                 log_p_from_Q = ((1.0 - p) * self.critic_with_policy_input.output
                     + p * self.prior_with_policy_input.output)
+            elif self.actor_sparse_update:
+                log_p_from_Q = self.critic_with_static_actions.output  # N*K x 1
             else:
                 log_p_from_Q = self.critic_with_policy_input.output # N*K x 1
+
+
             log_p_from_Q = tf.squeeze(log_p_from_Q) # N*K
 
-            grad_log_p_from_Q = tf.gradients(log_p_from_Q, self.policy.pre_output)
+            if self.actor_sparse_update:
+                grad_log_p_from_Q = tf.gradients(
+                    log_p_from_Q, 
+                    self.kernel.fixed_actions_pl  # These are pre-actions
+                )
+
+                grad_log_p_from_tanh = - 2. * (
+                    tf.tanh(self.kernel.fixed_actions_pl)
+                )  # N*K x Da
+            else:
+                grad_log_p_from_Q = tf.gradients(log_p_from_Q, 
+                                                 self.policy.pre_output)
                 # N*K x Da
-            grad_log_p_from_tanh = - 2. * self.policy.output # N*K x Da
+                grad_log_p_from_tanh = - 2. * self.policy.output # N*K x Da
                 # d/dx(log(1-tanh^2(x))) = -2tanh(x)
+
             grad_log_p = (
                 grad_log_p_from_Q +
                 self.alpha_placeholder * grad_log_p_from_tanh
             )
-            grad_log_p = tf.reshape(grad_log_p,
-                                    tf_shape((-1, self.K_pl, 1, Da)))
+
+            if self.actor_sparse_update:
+                grad_log_p = tf.reshape(grad_log_p,
+                                        tf_shape((-1, self.K_static, 1, Da)))
+            else:
+                grad_log_p = tf.reshape(grad_log_p,
+                                        tf_shape((-1, self.K_pl, 1, Da)))
             # N x K x 1 x Da
 
             kappa = tf.expand_dims(
@@ -1127,7 +1175,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             #env_stats = env.log_stats(epoch, paths)
             self.last_statistics.update(env_stats)
 
-        if hasattr(env, 'plot_paths'):
+        if hasattr(env, 'plot_paths') and self.env_plot_settings is not None:
             img_file = os.path.join(snapshot_dir,
                                     'env_itr_%05d.png' % epoch)
 
@@ -1201,15 +1249,15 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.train_critic = (np.mod(
             self.critic_train_counter,
             self.critic_train_frequency,
-        ) == 0)
+        ) == 0) and self.really_train_critic
         self.train_actor = (np.mod(
             self.actor_train_counter,
             self.actor_train_frequency,
-        ) == 0)
+        ) == 0) and self.really_train_actor
         self.update_target = (np.mod(
             self.update_target_counter,
             self.update_target_frequency,
-        ) == 0)
+        ) == 0) and self.really_train_critic
 
         super()._do_training()
 

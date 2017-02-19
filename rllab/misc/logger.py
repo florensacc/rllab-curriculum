@@ -28,7 +28,8 @@ _text_outputs = []
 _tabular_outputs = []
 
 _text_fds = {}
-_tabular_fds = {}
+_tabular_fds = {}  # key: file_name, value: open file
+_tabular_fds_hold = {}
 _tabular_header_written = set()
 
 _snapshot_dir = None
@@ -95,13 +96,24 @@ def remove_text_output(file_name):
 
 
 def add_tabular_output(file_name):
-    _add_output(file_name, _tabular_outputs, _tabular_fds, mode='w')
+    if file_name in _tabular_fds_hold.keys():
+        _tabular_outputs.append(file_name)
+        _tabular_fds[file_name] = _tabular_fds_hold[file_name]
+    else:
+        _add_output(file_name, _tabular_outputs, _tabular_fds, mode='w')
 
 
 def remove_tabular_output(file_name):
     if file_name in _tabular_header_written:
         _tabular_header_written.remove(file_name)
     _remove_output(file_name, _tabular_outputs, _tabular_fds)
+
+
+def hold_tabular_output(file_name):
+    # what about _tabular_header_written?
+    if file_name in _tabular_outputs:
+        _tabular_outputs.remove(file_name)
+        _tabular_fds_hold[file_name] = _tabular_fds.pop(file_name)
 
 
 def set_snapshot_dir(dir_name):
@@ -243,7 +255,7 @@ class TerminalTablePrinter(object):
 
 table_printer = TerminalTablePrinter()
 
-_tabular_headers = dict()  # None
+_tabular_headers = dict()  # keys are file_names and values are the keys of the header of that tabular file
 
 
 def dump_tabular(*args, **kwargs):
@@ -262,7 +274,7 @@ def dump_tabular(*args, **kwargs):
                 for tabular_file_name, tabular_fd in list(_tabular_fds.items()):
                     keys = tabular_dict.keys()
                     if tabular_file_name in _tabular_headers:
-                        # check against existing keys
+                        # check against existing keys: if new keys re-write Header and pad with NaNs
                         existing_keys = _tabular_headers[tabular_file_name]
                         if not set(existing_keys).issuperset(set(keys)):
                             joint_keys = set(keys).union(set(existing_keys))
@@ -289,6 +301,7 @@ def dump_tabular(*args, **kwargs):
                         writer.writeheader()
                         _tabular_header_written.add(tabular_file_name)
                         _tabular_headers[tabular_file_name] = keys
+                    # add NaNs in all empty fields from the header
                     for key in _tabular_headers[tabular_file_name]:
                         if key not in tabular_dict:
                             tabular_dict[key] = np.nan

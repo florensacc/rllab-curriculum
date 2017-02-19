@@ -87,16 +87,23 @@ class MultiGoalEnv(Env, Serializable):
 
     def step(self, action):
         action = action.ravel()
-        action_norm_sq = np.sum(action**2)
-        if action_norm_sq > self.vel_bound**2:
-            action_cost = self.action_cost_coeff
-        else:
-            action_cost = 0.0
 
         a_lb, a_ub = self.action_space.bounds
+
+        scaling = (a_ub - a_lb) * 0.5
+        action_violations = np.maximum(
+            np.maximum(a_lb - action, action - a_ub), 0
+        )
+        action_cost = 10 * np.sum((action_violations / scaling)**2)
+
         action = np.clip(action, a_lb, a_ub).ravel()
-            # need to ravel because sometimes the input action has
-            # shape (1,2) with tensorflow
+
+        #action_norm_sq = np.sum(action**2)
+        #if action_norm_sq > self.vel_bound**2:
+        #    action_cost = self.action_cost_coeff
+        #else:
+        #    action_cost = 0.0
+
 
         next_obs = self.dynamics.forward(self.observation, action)
         o_lb, o_ub = self.observation_space.bounds

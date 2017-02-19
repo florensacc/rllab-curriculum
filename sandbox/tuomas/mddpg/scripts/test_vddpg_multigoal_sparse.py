@@ -23,7 +23,8 @@ FLAGS = flags.FLAGS
 flags.DEFINE_float('actor_lr', 0.01, 'Base learning rate for actor.')
 flags.DEFINE_float('critic_lr', 0.001, 'Base learning rate for critic.')
 flags.DEFINE_integer('path_length', 100, 'Maximum path length.')
-flags.DEFINE_integer('n_particles', 100, 'Number of particles.')
+flags.DEFINE_integer('n_particles', 10, 'Number of particles.')
+flags.DEFINE_integer('n_fixed', 100, 'Number of particles.')
 flags.DEFINE_string('save_path', '', 'Path where the plots are saved.')
 flags.DEFINE_string('output', 'default', 'Experiment name.')
 
@@ -70,6 +71,7 @@ def test():
         svgd_target='pre-action',
         #svgd_target='action',
         K=FLAGS.n_particles,
+        K_fixed=FLAGS.n_fixed,
         alpha=1.,
         n_eval_paths=5,
         critic_train_frequency=1,
@@ -78,7 +80,7 @@ def test():
         critic_subtract_value=True,
         critic_value_sampler='uniform',
         alpha_annealer=alpha_annealer,
-        actor_sparse_update=False,
+        actor_sparse_update=True,
     )
 
     policy_kwargs = dict(
