@@ -894,8 +894,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
             # List of holding line objects created by the environment
             self._env_lines = []
-            # self._ax_env.set_xlim(self.env_plot_settings['xlim'])
-            # self._ax_env.set_ylim(self.env_plot_settings['ylim'])
+            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+            self._ax_env.set_ylim(self.env_plot_settings['ylim'])
 
         # Init critic + actor figure.
         if self.q_plot_settings is not None:
@@ -1096,6 +1096,45 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.last_statistics.update(create_stats_ordered_dict(
             'KL', all_kls))
 
+        # alternatively, we can consider the regularized reward =
+        # reward - kl(pi | pi_{uniform})
+
+        # lbs, ubs = self.env.action_space.bounds
+        # log_p_uniform = -np.sum([
+        #     np.log(ub - lb)
+        #     for lb, ub in zip(lbs, ubs)
+        # ])
+        # discounted_regularized_returns = []
+        # kl_cost_reward_ratios = []
+        # all_kls = []
+        # for path in paths:
+        #     kls, entropies = self.compute_kl_entropy(
+        #             path["observations"],
+        #             K=self.eval_kl_n_sample,
+        #             K_part=self.eval_kl_n_sample_part,
+        #         )
+        #     all_kls = np.concatenate([all_kls, kls])
+        #     entropy_bonuses = np.concatenate([[0], entropies[1:]])
+        #     kl_costs = -log_p_uniform - entropy_bonuses
+        #     discounted_rewards = special.discount_return(
+        #         path["rewards"], self.discount
+        #     )
+        #     discounted_kl_costs = special.discount_return(
+        #         kl_costs,  self.discount
+        #     )
+        #     discounted_regularized_returns.append(
+        #         discounted_rewards - self.alpha / self.scale_reward * discounted_kl_costs
+        #     )
+        #     kl_cost_reward_ratios.append(
+        #         self.alpha / self.scale_reward * discounted_kl_costs / discounted_rewards
+        #     )
+        # self.last_statistics.update(create_stats_ordered_dict(
+        #     'DiscRegReturn', discounted_regularized_returns))
+        # self.last_statistics.update(create_stats_ordered_dict(
+        #     'KLCostRewardRatio', kl_cost_reward_ratios))
+        # self.last_statistics.update(create_stats_ordered_dict(
+        #     'KL', all_kls))
+
 
         # Collect environment info.
         snapshot_dir = logger.get_snapshot_dir()
@@ -1116,10 +1155,10 @@ class VDDPG(OnlineAlgorithm, Serializable):
             if self._env_lines is not None:
                 [path.remove() for path in self._env_lines]
 
-            #self._ax_env.clear()
+            self._ax_env.clear()
             self._env_lines = env.plot_paths(paths, self._ax_env)
-            # self._ax_env.set_xlim(self.env_plot_settings['xlim'])
-            # self._ax_env.set_ylim(self.env_plot_settings['ylim'])
+            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+            self._ax_env.set_ylim(self.env_plot_settings['ylim'])
 
             plt.pause(0.001)
             plt.draw()

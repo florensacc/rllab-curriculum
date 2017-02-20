@@ -26,6 +26,12 @@ response = client.describe_instances(
             'Values': [
                 exp_prefix,
             ],
+        },
+        {
+            'Name': 'instance-state-name',
+            'Values': [
+                'running',
+            ],
         }
     ]
 )
