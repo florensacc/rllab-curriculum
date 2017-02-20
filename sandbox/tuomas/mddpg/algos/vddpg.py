@@ -1097,34 +1097,6 @@ class VDDPG(OnlineAlgorithm, Serializable):
             'KL', all_kls))
 
 
-        # log kl(pi | exp(Q))
-
-        ## Create figure for plotting the environment.
-        #fig = plt.figure(figsize=(12, 7))
-        #if self.axis3d:
-        #    from mpl_toolkits.mplot3d import Axes3D
-        #    ax = fig.add_subplot(111, projection='3d')
-        #else:
-        #    ax = fig.add_subplot(111)
-
-        #true_env = self.env
-        #while isinstance(true_env, ProxyEnv):
-        #    true_env = true_env._wrapped_env
-        #if hasattr(true_env, "log_stats"):
-        #    env_stats = true_env.log_stats(self, epoch, paths, ax)
-        #    self.last_statistics.update(env_stats)
-
-        ## Close and save figs.
-        #snapshot_dir = logger.get_snapshot_dir()
-        #img_file = os.path.join(snapshot_dir, 'itr_%d_test_paths.png' % epoch)
-
-        #plt.draw()
-        #plt.pause(0.001)
-
-        #plt.savefig(img_file, dpi=100)
-        #plt.cla()
-        #plt.close('all')
-
         # Collect environment info.
         snapshot_dir = logger.get_snapshot_dir()
         env = self.env

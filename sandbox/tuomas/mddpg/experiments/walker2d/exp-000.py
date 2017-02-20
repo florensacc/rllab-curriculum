@@ -34,24 +34,18 @@ from rllab.misc.instrument import VariantGenerator, variant
 
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
-exp_prefix = "tuomas-walker2d"
-#mode = "local_test"  #""ec2"
-mode = "ec2"
+exp_prefix = "walker2d/"
+mode = "local"  #""ec2"
 ec2_instance = "c4.4xlarge"
 subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 config.AWS_IMAGE_ID = "ami-85d181e5" # with docker already pulled
 
-
 n_task_per_instance = 1
-n_parallel = 1 # only for local exp
+n_parallel = 2 # only for local exp
 snapshot_mode = "gap"
 snapshot_gap = 10
 plot = False
-
-if 'test' in mode:
-    exp_prefix = 'test-' + exp_prefix
-
 
 # variant params ---------------------------------------------------
 class VG(VariantGenerator):
@@ -71,7 +65,7 @@ class VG(VariantGenerator):
 
     @variant
     def K(self):
-        return [16, 32]
+        return [16]
 
     @variant
     def svgd_target(self):
@@ -94,35 +88,19 @@ class VG(VariantGenerator):
     @variant
     def scale_reward(self):
         #return [10]  # This was set for the first run.
-        return [0.1, 1, 10]
-
-    @variant
-    def discount(self):
-        return [0.99, 0.999]
+        return [1]
 
     @variant
     def qf_learning_rate(self):
         return [1e-3]
 
     @variant
-    def Q_weight_decay(self):
-        return [0.001]
-
-    @variant
     def tau(self):
         return [1]
 
-   #@variant
+    #@variant
     #def dist_reward(self):
     #    return [1.]
-    
-    @variant
-    def alive_bonus(self):
-       return [0, 1.0]
-
-    @variant
-    def velocity_coeff(self):
-       return [1.0]
 
     @variant
     def network_size(self):
@@ -135,19 +113,6 @@ class VG(VariantGenerator):
     #@variant
     #def prog_threshold(self):
     #    return [1.5]
-
-    @variant
-    def critic_update(self):
-        return [
-            dict(
-                critic_subtract_value=True,
-                critic_value_sampler='uniform',
-            ),
-            dict(
-                critic_subtract_value=False,
-                critic_value_sampler='uniform',
-            )
-        ]
 
     @variant
     def train_frequency(self):
@@ -213,11 +178,7 @@ for v in variants:
         actor_train_frequency=v["train_frequency"]["actor_train_frequency"],
         critic_train_frequency=v["train_frequency"]["critic_train_frequency"],
         update_target_frequency=v["train_frequency"]["update_target_frequency"],
-        Q_weight_decay=v["Q_weight_decay"],
         debug_mode=False,
-        discount=v["discount"],
-        critic_subtract_value=v["critic_update"]['critic_subtract_value'],
-        critic_value_sampler=v["critic_update"]['critic_value_sampler'],
     )
     if "local" in mode and sys.platform == 'darwin':
         shared_alg_kwargs["plt_backend"] = "MacOSX"
@@ -229,10 +190,10 @@ for v in variants:
 
     if mode == "local_test" or mode == "local_docker_test":
         alg_kwargs = dict(
-            epoch_length = 1, #500,
+            epoch_length = 500,
             min_pool_size = 500,
             eval_samples = 10,
-            n_epochs = 1, #100,
+            n_epochs = 100,
         )
     else:
         alg_kwargs = dict(
@@ -254,11 +215,6 @@ for v in variants:
     elif env_name == "gym_hopper":
         env_kwargs = {
             "use_forward_reward": v["use_forward_reward"]
-        }
-    elif env_name == "tuomas_walker2d":
-        env_kwargs = {
-            "alive_bonus": v["alive_bonus"],
-            "velocity_coeff": v["velocity_coeff"]
         }
     else:
         env_kwargs = {}
