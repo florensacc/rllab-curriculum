@@ -124,7 +124,7 @@ class GoalEnvAngle(GoalEnv, Serializable):
 
 
 class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
-    def __init__(self, env, goal_generator, terminal_bonus=0, terminal_eps=0.1,
+    def __init__(self, env,  goal_generator, terminal_bonus=0, terminal_eps=0.1, final_goal=None,
                  distance_metric='L2', goal_reward='NegativeDistance', goal_weight=1,
                  inner_weight=0, angle_idxs=(None,)):
         """
@@ -139,6 +139,7 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
         """
 
         Serializable.quick_init(self, locals())
+        self.final_goal = final_goal
         self.update_goal_generator(goal_generator)
         self.terminal_bonus = terminal_bonus
         self.terminal_eps = terminal_eps
@@ -150,9 +151,11 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
         ProxyEnv.__init__(self, env)
         GoalEnvAngle.__init__(self, angle_idxs=angle_idxs)
 
-    def reset(self, reset_goal=True, reset_inner=True):
+    def reset(self, fix_goal=None, reset_goal=True, reset_inner=True):
         if reset_goal:
             self.update_goal()
+            if fix_goal is not None:
+                self.goal_generator._goal = fix_goal
         if reset_inner:
             return self._append_observation(ProxyEnv.reset(self))
         return self.get_current_obs()
@@ -236,6 +239,9 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
             ]
         success = [int(np.min(path['env_infos']['distance']) <= self.terminal_eps) for path in paths]
         print(success)
+
+        # compute also the distance to the ultimate goal we care about
+
 
         # Can I also log the goal_success rate??
 

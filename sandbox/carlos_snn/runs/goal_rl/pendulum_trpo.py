@@ -99,7 +99,7 @@ if __name__ == '__main__':
             assert goal_generator_class == FixedGoalGenerator, 'goal generator not recognized!'
             goal_generator = goal_generator_class(goal=v['goal'])
 
-        env = GoalExplorationEnv(env=inner_env, goal_generator=goal_generator, goal_reward=v['goal_reward'],
+        env = GoalExplorationEnv(env=inner_env, final_goal=v['goal'], goal_generator=goal_generator, goal_reward=v['goal_reward'],
                                  goal_weight=v['goal_weight'], terminal_bonus=v['terminal_bonus'], angle_idxs=v['angle_idxs'])
 
         policy = GaussianMLPPolicy(
@@ -122,8 +122,6 @@ if __name__ == '__main__':
             step_size=0.01,
             plot=False,
         )
-
-        algo.train()
 
 
     for vv in vg.variants(randomized=True):
