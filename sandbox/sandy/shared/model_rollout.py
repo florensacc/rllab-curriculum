@@ -5,6 +5,7 @@
 
 import copy, numpy as np
 from sandbox.sandy.envs.atari_env import get_base_env
+from sandbox.sandy.shared.ale_compatibility import set_gym_seed
 
 def set_seed_env(env, seed):
     from rllab.sampler import parallel_sampler
@@ -13,22 +14,23 @@ def set_seed_env(env, seed):
     #ext.set_seed(seed)
     parallel_sampler.set_seed(seed)
 
+    env.gym_seed = seed
     # Set random seed of Atari environment
     if hasattr(env, 'ale'):  # envs/atari_env_haoran.py
         env.set_seed(seed)
     elif hasattr(env, '_wrapped_env'):  # Means env is a ProxyEnv
         base_env = get_base_env(env._wrapped_env)
-        base_env._seed(seed)
+        set_gym_seed(base_env, seed)
     elif hasattr(env, 'env'):  # envs/atari_env.py
         base_env = get_base_env(env)
-        base_env._seed(seed)
+        set_gym_seed(base_env, seed)
     else:
         raise Exception("Invalid environment")
 
 def set_seed(algo, seed):
     set_seed_env(algo.env, seed)
 
-def get_average_return_trpo(algo, seed, N=10):
+def get_average_return_trpo(algo, seed, N=10, deterministic=False):
     # Note that batch size is set during load_model
 
     # Set random seed, for reproducibility
@@ -38,7 +40,7 @@ def get_average_return_trpo(algo, seed, N=10):
     #paths = algo.sampler.obtain_samples(None)
     paths = []
     while len(paths) < N:
-        new_paths = algo.sampler.obtain_samples(n_samples=1)  # Returns single path
+        new_paths = algo.sampler.obtain_samples(n_samples=1, deterministic=deterministic)  # Returns single path
         paths.append(new_paths[0])
         set_seed(algo, curr_seed)
         curr_seed += 1
@@ -47,7 +49,7 @@ def get_average_return_trpo(algo, seed, N=10):
     timesteps = sum([len(p['rewards']) for p in paths])
     return avg_return, paths, timesteps
 
-def get_average_return_a3c(algo, seed, N=10, horizon=10000):
+def get_average_return_a3c(algo, seed, N=10, horizon=10000, deterministic=False):
 
     #scores, paths = algo.evaluate_performance(N, horizon, return_paths=True)
     paths = []
@@ -60,8 +62,14 @@ def get_average_return_a3c(algo, seed, N=10, horizon=10000):
         # Set random seed, for reproducibility
         set_seed_env(algo.test_env, curr_seed)
 
-        _, new_paths = algo.evaluate_performance(1, horizon, return_paths=True)
+        _, new_paths = algo.evaluate_performance(1, horizon, return_paths=True, \
+                                                 deterministic=deterministic)
         paths.append(new_paths[0])
+
+        # If algo.env is currently recording, make sure to update the states
+        # recorded by algo.test_env
+        #if algo.env.recording:
+        #    algo.env.update_recording_from(algo.test_env)
 
         del algo.test_env
         del algo.test_agent
@@ -94,7 +102,10 @@ def sample_dqn(algo, n_paths=1):  # Based on deep_q_rl/ale_experiment.py, run_ep
             timesteps += 1
     return rewards, timesteps
 
-def get_average_return_dqn(algo, seed, N=10):
+def get_average_return_dqn(algo, seed, N=10, deterministic=False):
+    # deterministic - has no effect for DQN since (by definition) it selects
+    # the argmax action
+
     # Set random seed, for reproducibility
     set_seed(algo, seed)
     curr_seed = seed + 1
@@ -111,8 +122,10 @@ def get_average_return_dqn(algo, seed, N=10):
     avg_return = np.mean([sum(p['rewards']) for p in paths])
     return avg_return, paths, total_timesteps
     
-def get_average_return(model, seed, N=10, return_timesteps=False):
+def get_average_return(model, seed, N=10, return_timesteps=False, deterministic=False):
     # model - instantiation of TrainedModel, or just the algo
+    # deterministic - if True, then during test time model always picks argmax
+    #         action to execute, rather than sampling output distribution over actions
     if hasattr(model, 'algo'):
         algo = model.algo
     else:
@@ -128,7 +141,7 @@ def get_average_return(model, seed, N=10, return_timesteps=False):
     else:
         raise NotImplementedError
 
-    avg_return, paths, timesteps = get_average_return_f(algo, seed, N=N)
+    avg_return, paths, timesteps = get_average_return_f(algo, seed, N=N, deterministic=deterministic)
 
     if return_timesteps:
         return avg_return, paths, timesteps

@@ -62,6 +62,11 @@ def fgsm_perturbation_l1(grad_x, fgsm_eps, obs, obs_min, obs_max):
 def get_grad_x_a3c(obs, algo):
     import chainer
     from chainer import functions as F
+
+    # Doesn't work for A3CLSTM since it doesn't take into account lstm layer
+    if type(algo.model).__name__ != "A3CFF":
+        raise NotImplementedError
+
     statevar = chainer.Variable(np.expand_dims(algo.cur_agent.preprocess(obs), 0))
     logits = algo.cur_agent.model.pi.compute_logits(algo.cur_agent.model.head(statevar))
     max_logits = F.broadcast_to(F.max(logits), (1,len(logits)))
@@ -122,9 +127,9 @@ def get_action_probs_a3c(algo, obs, adv_obs):
     statevar_adv = chainer.Variable(np.expand_dims(algo.cur_agent.preprocess(adv_obs), 0))
     action_prob_adv = algo.cur_agent.model.pi.compute_logits(algo.cur_agent.model.head(statevar_adv)).data
 
-    if np.sum(action_prob_orig) != 1:
+    if np.abs(np.sum(action_prob_orig)-1) > 1e-5:
         action_prob_orig = get_softmax(action_prob_orig)
-    if np.sum(action_prob_adv) != 1:
+    if np.abs(np.sum(action_prob_adv)-1) > 1e-5:
         action_prob_adv = get_softmax(action_prob_adv)
 
     return (action_prob_orig, action_prob_adv)
@@ -156,7 +161,7 @@ def get_action_probs(algo, obs, adv_obs):
     else:
         assert False, "Algorithm type " + algo_name + " is not supported."
 
-def fgsm_perturbation(obs, algo, **kwargs):
+def fgsm_perturbation(obs, info, algo, **kwargs):
     # Apply fast gradient sign method (FGSM):
     # For l-inf norm,
     #     \eta =  \epsilon * sign(\grad_x J(\theta, x, y))
