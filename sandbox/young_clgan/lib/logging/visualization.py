@@ -4,7 +4,7 @@ import math
 import numpy as np
 import scipy.misc
 
-from sandbox.young_clgan.lib.goal.evaluator import evaluate_goals, convert_label
+from sandbox.young_clgan.lib.goal.evaluator import evaluate_goals
 from sandbox.young_clgan.lib.envs.base import FixedGoalGenerator
 
 import matplotlib
@@ -13,7 +13,7 @@ matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 
 
-def plot_policy_reward(policy, env, limit, horizon=200, max_reward=6000, fname=None, grid_size=60):
+def plot_policy_reward(policy, env, limit, horizon=200, max_reward=6000, fname=None, grid_size=60, return_rewards=False):
     """
     Complete evaluation of the policy to reach all points in a 2D grid
     :param limit: in a 2D square of this side-length
@@ -38,19 +38,26 @@ def plot_policy_reward(policy, env, limit, horizon=200, max_reward=6000, fname=N
     plt.colorbar()
     if fname is not None:
         plt.savefig(fname, format='png')
-        return scipy.misc.imread(fname)
+        if return_rewards:
+            return scipy.misc.imread(fname), z
+        else:
+            return scipy.misc.imread(fname)
     else:
         fp = tempfile.TemporaryFile()
         plt.savefig(fp, format='png')
         fp.seek(0)
         img = scipy.misc.imread(fp)
         fp.close()
-        return img
+        if return_rewards:
+            return img, z
+        else:
+            return img
 
 
-def plot_labeled_samples(samples, labels, limit,
-                         fname=None, size=1000, colors=['red', 'green', 'blue', 'yellow']):
-    sample_classes, text_labels = convert_label(labels)
+def plot_labeled_samples(samples, limit, labels=None, sample_classes=None, text_labels=None,
+        fname=None, size=1000, colors = ['red', 'green', 'blue', 'yellow']):
+    if sample_classes is None and text_labels is None:
+        sample_classes, text_labels = convert_label(labels)
     size = min(size, samples.shape[0])
     indices = np.random.choice(samples.shape[0], size, replace=False)
     samples = samples[indices, :]
@@ -100,6 +107,21 @@ def plot_gan_samples(gan, limit, fname=None, size=500):
     plt.scatter(samples[:, 0], samples[:, 1])
     plt.ylim(-limit, limit)
     plt.xlim(-limit, limit)
+    if fname is not None:
+        plt.savefig(fname, format='png')
+        return scipy.misc.imread(fname)
+    else:
+        fp = tempfile.TemporaryFile()
+        plt.savefig(fp, format='png')
+        fp.seek(0)
+        img = scipy.misc.imread(fp)
+        fp.close()
+        return img
+
+
+def plot_line_graph(fname=None, *args, **kwargs):
+    plt.clf()
+    plt.plot(*args, **kwargs)
     if fname is not None:
         plt.savefig(fname, format='png')
         return scipy.misc.imread(fname)

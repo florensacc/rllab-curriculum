@@ -58,7 +58,7 @@ def parallel_map(func, iterable_object, num_processes=-1):
     return results
 
 
-def label_goals(goals, env, policy, horizon, min_reward=-np.inf, max_reward=np.inf,
+def label_goals(goals, env, policy, horizon, min_reward, max_reward,
                 old_rewards=None, improvement_threshold=None, n_traj=1):
     mean_rewards = evaluate_goals(goals, env, policy, horizon, n_traj)
     mean_rewards = mean_rewards.reshape(-1, 1)

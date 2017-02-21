@@ -30,7 +30,7 @@ class GoalGAN(object):
         )
         labels = np.ones((size, self.evaluater_size))  # all goal same label --> uniform
         self.train(
-            goals, labels, outer_iters, generator_iters, discriminator_iters, suppress_generated_goals=True
+            goals, labels, outer_iters, generator_iters, discriminator_iters
         )
 
     def _add_noise_to_goals(self, goals):
@@ -49,10 +49,10 @@ class GoalGAN(object):
         return goals, noise
 
     def train(self, goals, labels, outer_iters, generator_iters,
-              discriminator_iters, suppress_generated_goals=False):
+              discriminator_iters):
         goals = goals / self.goal_range
         self.gan.train(
-            goals, labels, outer_iters, generator_iters, discriminator_iters, suppress_generated_goals
+            goals, labels, outer_iters, generator_iters, discriminator_iters
         )
 
     def discriminator_predict(self, goals):

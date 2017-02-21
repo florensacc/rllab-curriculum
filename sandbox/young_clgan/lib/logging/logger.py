@@ -1,12 +1,7 @@
 import os
 import datetime
 import rllab.misc.logger
-
-
-class AttrDict(dict):
-    def __init__(self, *args, **kwargs):
-        super(AttrDict, self).__init__(*args, **kwargs)
-        self.__dict__ = self
+from sandbox.young_clgan.lib.utils import AttrDict
 
 
 class ExperimentLogger(object):

@@ -222,7 +222,7 @@ if __name__ == '__main__':
                 improvement_threshold=v['improvement_threshold']
             )
             img = plot_labeled_samples(
-                goals, labels, v['goal_range'] + 5,
+                samples=goals, labels=labels, limit=v['goal_range'] + 5,
                 # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
             )
             report.add_image(img, 'goals\n itr: {}'.format(outer_iter), width=500)

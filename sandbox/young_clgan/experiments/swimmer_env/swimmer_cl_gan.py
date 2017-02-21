@@ -217,9 +217,9 @@ if __name__ == '__main__':
 
             plot_labels, classes = convert_label(labels)
             img = plot_labeled_samples(
-                goals, plot_labels,
-                classes, hyperparams.goal_range + 5,
-                '{}/sampled_goals_{}.png'.format(log_config.plot_dir, outer_iter),
+                samples=goals, text_labels=plot_labels,
+                sample_classes=classes, limit=hyperparams.goal_range + 5,
+                fname='{}/sampled_goals_{}.png'.format(log_config.plot_dir, outer_iter),
             )
             report.add_image(img, 'goals\n itr: {}'.format(outer_iter), width=500)
             report.save()
