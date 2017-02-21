@@ -57,7 +57,7 @@ if __name__ == '__main__':
         goal_range=15,
         goal_noise_level=1,
         min_reward=5,
-        max_reward=6000,
+        max_reward=3000,
         improvement_threshold=10,
         outer_iters=50,
         inner_iters=50,
