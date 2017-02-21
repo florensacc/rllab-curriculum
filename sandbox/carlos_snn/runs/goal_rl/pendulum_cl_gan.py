@@ -94,7 +94,7 @@ if __name__ == '__main__':
         center = [0, 0]
         goal_size = np.size(v['goal'])
         fixed_goal_generator = FixedGoalGenerator(goal=v['goal'])
-        uniform_goal_generator = UniformGoalGenerator(goal_size=np.size(v['goal']), bound=v['goal_range'], center=center)
+        uniform_goal_generator = UniformGoalGenerator(goal_size=np.size(v['goal']), bounds=v['goal_range'], center=center)
 
         # GAN
         logger.log("Instantiating the GAN...")

@@ -53,15 +53,21 @@ class UniformListGoalGenerator(GoalGenerator, Serializable):
 class UniformGoalGenerator(GoalGenerator, Serializable):
     """ Generating goals uniformly from a goal list. """
 
-    def __init__(self, goal_size, bound=2, center=()):
+    def __init__(self, goal_size, bounds=2, center=()):
         Serializable.quick_init(self, locals())
         self.goal_size = goal_size
-        self.bound = bound
+        self.bounds = bounds
+        if np.array(self.bounds).size == 1:
+            self.bounds = [-1 * bounds * np.ones(goal_size), bounds * np.ones(goal_size)]
+        print(self.bounds)
         self.center = center if len(center) else np.zeros(self.goal_size)
         super(UniformGoalGenerator, self).__init__()
 
     def update(self):  # This should be centered around the initial position!!
-        self._goal = self.center + np.random.uniform(low=-self.bound, high=self.bound, size=self.goal_size)
+        sample = []
+        for low, high in zip(*self.bounds):
+            sample.append(np.random.uniform(low, high))
+        self._goal = self.center + np.array(sample)
         return self.goal
 
 
@@ -76,6 +82,9 @@ class FixedGoalGenerator(GoalGenerator, Serializable):
 
 class GoalEnv(Serializable):
     """ Base class for goal based environment. Implements goal update utilities. """
+    def __init__(self, goal_bounds=None):
+        """:param goal_bounds: scalar if square bounds or array if rectangle"""
+        self.goal_bounds = goal_bounds
 
     def update_goal_generator(self, goal_generator):
         self._goal_generator = goal_generator
@@ -103,10 +112,11 @@ class GoalEnv(Serializable):
 
 class GoalEnvAngle(GoalEnv, Serializable):
 
-    def __init__(self, angle_idxs=(None,)):
+    def __init__(self, angle_idxs=(None,), **kwargs):
         """Indicates the coordinates that are angles and need to be duplicated to cos/sin"""
         Serializable.quick_init(self, locals())
         self.angle_idxs = angle_idxs
+        GoalEnv.__init__(self, **kwargs)
 
     @overrides
     @property
@@ -125,8 +135,8 @@ class GoalEnvAngle(GoalEnv, Serializable):
 
 class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
     def __init__(self, env, goal_generator, terminal_bonus=0, terminal_eps=0.1, final_goal=None,
-                 goal_bounds=None, distance_metric='L2', goal_reward='NegativeDistance', goal_weight=1,
-                 inner_weight=0, angle_idxs=(None,)):
+                 distance_metric='L2', goal_reward='NegativeDistance', goal_weight=1,
+                 inner_weight=0, angle_idxs=(None,), **kwargs):
         """
         :param env: wrapped env
         :param goal_generator: already instantiated: NEEDS GOOD DIM OF GOALS! --> TO DO: give the class a method to update dim?
@@ -140,7 +150,6 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
 
         Serializable.quick_init(self, locals())
         ProxyEnv.__init__(self, env)
-        GoalEnvAngle.__init__(self, angle_idxs=angle_idxs)
         self.update_goal_generator(goal_generator)
         self.terminal_bonus = terminal_bonus
         self.terminal_eps = terminal_eps
@@ -150,13 +159,12 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
         self.inner_weight = inner_weight
         self.fig_number = 0
         self.final_goal = final_goal
-        self.goal_bounds = goal_bounds
+        GoalEnvAngle.__init__(self, angle_idxs=angle_idxs, **kwargs)
         if self.goal_bounds is None:
-            self.goal_bounds = self.observation_space.bounds
-        elif np.array(self.goal_bounds).size <= 1:
-            self.goal_bounds = [-1 * self.goal_bounds * np.ones(self.observation_space.flat_dim), self.goal_bounds * np.ones(self.observation_space.flat_dim)]
-        print(self.goal_bounds)
-
+            self.goal_bounds = self.wrapped_env.observation_space.bounds
+        # elif np.array(self.goal_bounds).size <= 1:
+        #     self.goal_bounds = [-1 * self.goal_bounds * np.ones(self.wrapped_env.observation_space.flat_dim),
+        #                         self.goal_bounds * np.ones(self.wrapped_env.observation_space.flat_dim)]
 
     def reset(self, fix_goal=None, reset_goal=True, reset_inner=True):
         if reset_goal:

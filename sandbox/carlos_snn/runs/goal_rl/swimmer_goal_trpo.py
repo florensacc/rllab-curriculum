@@ -77,7 +77,7 @@ if __name__ == '__main__':
     for goal_reward in ['InverseDistance', 'NegativeDistance']:
         for goal_range in [2, 4]:
             inner_env = normalize(SwimmerEnv())
-            goal_generator = UniformGoalGenerator(goal_size=2, bound=goal_range)
+            goal_generator = UniformGoalGenerator(goal_size=2, bounds=goal_range)
             env = GoalIdxExplorationEnv(env=inner_env, goal_generator=goal_generator, goal_reward=goal_reward,
                                         goal_weight=1)  # this goal_generator will be updated by a uniform after
 

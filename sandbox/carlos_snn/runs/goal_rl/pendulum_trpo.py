@@ -9,6 +9,7 @@ os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
 # Symbols that need to be stubbed
 from rllab.algos.trpo import TRPO
+from sandbox.carlos_snn.algos.trpo_goal import TRPOGoal
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.misc.instrument import stub, run_experiment_lite
 import rllab.misc.logger
@@ -94,7 +95,7 @@ if __name__ == '__main__':
 
         goal_generator_class = v['goal_generator']
         if goal_generator_class == UniformGoalGenerator:
-            goal_generator = goal_generator_class(goal_size=np.size(v['goal']), bound=v['goal_range'])
+            goal_generator = goal_generator_class(goal_size=np.size(v['goal']), bounds=v['goal_range'])
         else:
             assert goal_generator_class == FixedGoalGenerator, 'goal generator not recognized!'
             goal_generator = goal_generator_class(goal=v['goal'])
@@ -113,7 +114,7 @@ if __name__ == '__main__':
 
         baseline = LinearFeatureBaseline(env_spec=env.spec)
 
-        algo = TRPO(
+        algo = TRPOGoal(
             env=env,
             policy=policy,
             baseline=baseline,

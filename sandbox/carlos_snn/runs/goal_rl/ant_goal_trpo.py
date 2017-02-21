@@ -78,7 +78,7 @@ if __name__ == '__main__':
         for inner_weight in [1, 0]:  # to get the ctrl, contact and survival cost (not the distance!)
             for goal_range in [2, 4]:
                 inner_env = normalize(AntEnv(sparse=True))
-                goal_generator = UniformGoalGenerator(goal_size=2, bound=goal_range)
+                goal_generator = UniformGoalGenerator(goal_size=2, bounds=goal_range)
                 env = GoalIdxExplorationEnv(inner_env, goal_generator, goal_weight=1, goal_reward=goal_reward,
                                             inner_weight=inner_weight)  # this goal_generator will be updated by a uniform after
 
