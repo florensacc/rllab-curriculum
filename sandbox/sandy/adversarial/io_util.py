@@ -57,7 +57,7 @@ def init_output_file(output_dir, prefix, adv_name, adv_params, fname=None, algo_
     f.close()
     return output_h5
 
-def save_rollout_step(output_h5, eta, unscaled_eta, obs, adv_obs, action_probs):
+def save_rollout_step(output_h5, eta, unscaled_eta, obs, adv_obs, action_probs, **kwargs):
     # action_probs: (action_prob_orig, action_prob_adv)
     output_f = h5py.File(output_h5, 'r+')
     idx = len(output_f['rollouts'])
@@ -68,6 +68,10 @@ def save_rollout_step(output_h5, eta, unscaled_eta, obs, adv_obs, action_probs):
     g['adv_input'] = adv_obs
     g['action_prob_orig'] = action_probs[0]
     g['action_prob_adv'] = action_probs[1]
+
+    for k,v in kwargs.items():
+        g[k] = v
+
     output_f.close()
 
 def save_performance(output_h5, avg_return, n_paths, path_lengths):

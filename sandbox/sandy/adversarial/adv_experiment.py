@@ -73,7 +73,7 @@ class AdvExperiment(object):
                     policy_adv=policy_adv.model_name,
                     policy_rollout=policy_target.model_name
             )
-            adversary_fn = lambda x: fgsm_perturbation(x, policy_adv.algo, **adv_params)
+            adversary_fn = lambda x, y: fgsm_perturbation(x, y, policy_adv.algo, **adv_params)
         else:
             raise NotImplementedError
 

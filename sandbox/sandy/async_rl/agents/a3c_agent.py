@@ -74,6 +74,7 @@ class A3CLSTM(chainer.ChainList, A3CModel):
         self.v = v_function.FCVFunction(self.head.n_output_channels)
         self.lstm = L.LSTM(self.head.n_output_channels,
                            self.head.n_output_channels)
+        self.skip_unchain = False  # Set to true when calculating gradients for sleeper adversary
         super().__init__(self.head, self.lstm, self.pi, self.v)
         init_like_torch(self)
 
@@ -91,8 +92,10 @@ class A3CLSTM(chainer.ChainList, A3CModel):
         self.lstm.reset_state()
 
     def unchain_backward(self):
-        self.lstm.h.unchain_backward()
-        self.lstm.c.unchain_backward()
+        skip_unchain = getattr(self, 'skip_unchain', False)
+        if not skip_unchain:
+            self.lstm.h.unchain_backward()
+            self.lstm.c.unchain_backward()
 
 class A3CAgent(Agent,Shareable,Picklable):
     """A3C: Asynchronous Advantage Actor-Critic.
@@ -224,7 +227,7 @@ class A3CAgent(Agent,Shareable,Picklable):
             processed_state = np.asarray(state, dtype=np.float32)
         return processed_state
 
-    def act(self, state, reward, is_state_terminal, extra_infos=dict(),global_vars=dict(),training_args=dict()):
+    def act(self, state, reward, is_state_terminal, extra_infos=dict(),global_vars=dict(),training_args=dict(), deterministic=False):
         # reward shaping
         if self.clip_reward:
             reward = np.clip(reward, -1, 1)
@@ -353,7 +356,11 @@ class A3CAgent(Agent,Shareable,Picklable):
         # store traj info and return action
         if not is_state_terminal:
             pout, vout = self.model.pi_and_v(statevar)
-            action = pout.action_indices[0]
+            if deterministic:
+                action = pout.most_probable_actions
+                assert len(action) == 1
+            else:
+                action = pout.action_indices[0]
             if self.phase == "Train":
                 self.past_states[self.t] = statevar
                 self.past_actions[self.t] = action

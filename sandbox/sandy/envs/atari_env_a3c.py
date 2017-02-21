@@ -1,10 +1,9 @@
 """Wrapper around AtariEnv, to make it work with A3C implementation.
 """
-import copy
-
 from sandbox.sandy.envs.atari_env import AtariEnv, get_base_env
 from sandbox.sandy.async_rl.shareable.base import Shareable
 from sandbox.sandy.async_rl.utils.picklable import Picklable
+from sandbox.sandy.shared.ale_compatibility import set_gym_seed
 
 class AtariEnvA3C(AtariEnv, Shareable, Picklable):
     def __init__(self, env_name, record_video=False, video_schedule=None, \
@@ -17,12 +16,10 @@ class AtariEnvA3C(AtariEnv, Shareable, Picklable):
                           video_schedule=video_schedule, log_dir=log_dir, \
                           record_log=record_log, force_reset=force_reset, **kwargs)
 
-        self.base_env = get_base_env(self.env)
         self.legal_actions = self.base_env.ale.getMinimalActionSet()
 
     def set_seed(self, seed):
-        #self.base_env.ale.setInt(b'random_seed', seed)
-        self.base_env._seed(int(seed))
+        set_gym_seed(self.base_env, int(seed))
 
     def prepare_sharing(self):
         self.share_params = dict()
@@ -31,6 +28,7 @@ class AtariEnvA3C(AtariEnv, Shareable, Picklable):
         """
         Simply create an env with the same initialization.
         """
+        import copy
         init_params_copy = copy.deepcopy(self.init_params)
         if 'kwargs' in init_params_copy:
             kwargs = init_params_copy.pop('kwargs')
@@ -40,6 +38,9 @@ class AtariEnvA3C(AtariEnv, Shareable, Picklable):
         return new_env
 
     def receive_action(self, action):
+        if self.is_terminal:  # Do not step if episode has ended
+            print("Not calling step because episode has ended")
+            return 0
         self.step(action)
         return self._reward
 
@@ -48,6 +49,14 @@ class AtariEnvA3C(AtariEnv, Shareable, Picklable):
 
     def initialize(self):
         self.reset()
+
+    def init_copy_from(self, target_env):
+        from sandbox.sandy.shared.model_rollout import set_seed_env
+        self.gym_seed = target_env.gym_seed
+        set_seed_env(self.env, self.gym_seed)
+        self.initialize()
+        self.phase = "Test"
+        assert(self.persistent_adv == target_env.persistent_adv)
 
     @property
     def extra_infos(self):
