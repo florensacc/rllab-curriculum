@@ -276,9 +276,9 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
         # fig, ax = plt.subplots()
         # ax.scatter(angle_goals, angVel_goals, c=colors, lw=0)
 
-        log_dir = logger.get_snapshot_dir()
-        plt.savefig(osp.join(log_dir, fig_prefix + 'goal_performance.png'))
-        plt.close()
+        # log_dir = logger.get_snapshot_dir()
+        # plt.savefig(osp.join(log_dir, fig_prefix + 'goal_performance.png'))
+        # plt.close()
 
 
 

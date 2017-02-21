@@ -115,18 +115,18 @@ class CLGANPointEnvLinear(RLAlgorithm):
 
         baseline = LinearFeatureBaseline(env_spec=env.spec)
 
-        img = plot_policy_reward(
-            policy, env, hyperparams.goal_range,
-            horizon=hyperparams.horizon,
-            fname='{}/policy_reward_init.png'.format(log_config.plot_dir),
-        )
-        report.add_image(img, 'policy performance initialization\n')
+        # img = plot_policy_reward(
+        #     policy, env, hyperparams.goal_range,
+        #     horizon=hyperparams.horizon,
+        #     fname='{}/policy_reward_init.png'.format(log_config.plot_dir),
+        # )
+        # report.add_image(img, 'policy performance initialization\n')
 
         # Pretrain GAN with uniform distribution on the GAN output space
         gan.pretrain_uniform()
 
-        img = plot_gan_samples(gan, hyperparams.goal_range, '{}/start.png'.format(log_config.plot_dir))
-        report.add_image(img, 'GAN pretrained uniform')
+        # img = plot_gan_samples(gan, hyperparams.goal_range, '{}/start.png'.format(log_config.plot_dir))
+        # report.add_image(img, 'GAN pretrained uniform')
 
         report.save()
         report.new_row()
@@ -213,9 +213,8 @@ class CLGANPointEnvLinear(RLAlgorithm):
 
                 plot_labels, classes = self.convert_label(labels)
                 img = plot_labeled_samples(
-                    samples=goals, text_labels=plot_labels,
-                    sample_classes=classes, limit=hyperparams.goal_range + 5,
-                    fname='{}/sampled_goals_{}.png'.format(log_config.plot_dir, outer_iter),
+                    samples=goals, sample_classes=plot_labels, text_labels=classes,
+                    limit=hyperparams.goal_range + 5, fname='{}/sampled_goals_{}.png'.format(log_config.plot_dir, outer_iter),
                 )
                 report.add_image(img, 'goals\n itr: {}'.format(outer_iter), width=500)
                 report.save()

@@ -13,7 +13,8 @@ matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 
 
-def plot_policy_reward(policy, env, limit, horizon=200, max_reward=6000, fname=None, grid_size=60, return_rewards=False):
+def plot_policy_reward(policy, env, limit, horizon=200, max_reward=6000, fname=None, grid_size=60,
+                       return_rewards=False):
     """
     Complete evaluation of the policy to reach all points in a 2D grid
     :param limit: in a 2D square of this side-length
@@ -54,8 +55,8 @@ def plot_policy_reward(policy, env, limit, horizon=200, max_reward=6000, fname=N
             return img
 
 
-def plot_labeled_samples(samples, limit, labels=None, sample_classes=None, text_labels=None,
-        fname=None, size=1000, colors = ['red', 'green', 'blue', 'yellow']):
+def plot_labeled_samples(samples, sample_classes=None, text_labels=None, fname=None, limit=None,
+                         labels=None, size=1000, colors=['red', 'green', 'blue', 'yellow']):
     if sample_classes is None and text_labels is None:
         sample_classes, text_labels = convert_label(labels)
     size = min(size, samples.shape[0])

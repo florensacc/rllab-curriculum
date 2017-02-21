@@ -25,7 +25,7 @@ from rllab.envs.box2d.pendulum_env import PendulumEnv
 from rllab.misc.instrument import VariantGenerator
 
 from sandbox.young_clgan.lib.envs.base import GoalExplorationEnv
-from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator, UniformAngleGoalGenerator, \
+from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator,\
     UniformGoalGenerator, update_env_goal_generator
 from sandbox.young_clgan.lib.goal.evaluator import *
 from sandbox.young_clgan.lib.goal.generator import *
@@ -138,12 +138,12 @@ if __name__ == '__main__':
         report.add_header("{}".format(EXPERIMENT_TYPE))
         # report.add_text(format_dict(vg.variant))
 
-        img = plot_policy_reward(
-            policy, env, v['goal_range'],
-            horizon=v['horizon'], grid_size=5,
-            fname='{}/policy_reward_init.png'.format(log_dir),
-        )
-        report.add_image(img, 'policy performance initialization\n')
+        # img = plot_policy_reward(
+        #     policy, env, v['goal_range'],
+        #     horizon=v['horizon'], grid_size=5,
+        #     fname='{}/policy_reward_init.png'.format(log_dir),
+        # )
+        # report.add_image(img, 'policy performance initialization\n')
 
         # Pretrain GAN with uniform distribution on the GAN output space and log a sample
         logger.log("pretraining the GAN with uniform...")
@@ -178,7 +178,7 @@ if __name__ == '__main__':
             rewards_before = evaluate_goals(goals, env, policy, v['horizon'])
 
             logger.log("Perform TRPO with UniformListGoalGenerator...")
-            with ExperimentLogger(log_dir, outer_iter, snapshot_mode='last'):  # set log_dir for inner TRPO to save csv
+            with ExperimentLogger(log_dir, outer_iter, snapshot_mode='last', hold_outter_log=True):
                 # set goal generator to uniformly sample from selected all_goals
                 update_env_goal_generator(
                     env,
@@ -252,8 +252,11 @@ if __name__ == '__main__':
     for vv in vg.variants():
         run_experiment_lite(
             run_task,
+            pre_commands=['pip install --upgrade pip',
+                          'pip install --upgrade :tflearn',
+                          ],
             variant=vv,
-            mode='local',
+            mode='local_docker',
             # n_parallel=n_parallel,
             # Only keep the snapshot parameters for the last iteration
             snapshot_mode="last",
