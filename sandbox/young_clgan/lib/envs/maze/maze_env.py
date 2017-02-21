@@ -14,9 +14,10 @@ from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides
 
 from rllab.misc import logger
+from sandbox.young_clgan.lib.envs.base import GoalEnv
 
 
-class MazeEnv(ProxyEnv, Serializable):
+class MazeEnv(GoalEnv, ProxyEnv, Serializable):
     MODEL_CLASS = None
     ORI_IND = None
 
@@ -35,6 +36,7 @@ class MazeEnv(ProxyEnv, Serializable):
 
     def __init__(
             self,
+            goal_generator,
             n_bins=20,
             sensor_range=10.,
             sensor_span=math.pi,
@@ -46,8 +48,8 @@ class MazeEnv(ProxyEnv, Serializable):
             goal_rew=1.,  # reward obtained when reaching the goal
             *args,
             **kwargs):
-        print(kwargs)
-        print(locals())
+        # print(kwargs)
+        # print(locals())
         Serializable.quick_init(self, locals())
 
         Serializable.quick_init(self, locals())
@@ -121,84 +123,20 @@ class MazeEnv(ProxyEnv, Serializable):
         self._goal_range = self._find_goal_range()
         self._cached_segments = None
 
-        inner_env = model_cls(*args, file_path=file_path, **kwargs)  # file to the robot specifications
+        inner_env = model_cls(goal_generator=goal_generator, *args, file_path=file_path, **kwargs)  # file to the robot specifications
         ProxyEnv.__init__(self, inner_env)  # here is where the robot env will be initialized
+        self.update_goal_generator(goal_generator)
 
-    def get_current_maze_obs(self):
-        # The observation would include both information about the robot itself as well as the sensors around its
-        # environment
-        robot_x, robot_y = self.wrapped_env.get_body_com("torso")[:2]
-        ori = self.get_ori()
-
-        structure = self.MAZE_STRUCTURE
-        size_scaling = self.MAZE_SIZE_SCALING
-
-        segments = []
-        # compute the distance of all segments
-
-        # Get all line segments of the goal and the obstacles
-        for i in range(len(structure)):
-            for j in range(len(structure[0])):
-                if structure[i][j] == 1 or structure[i][j] == 'g':
-                    cx = j * size_scaling - self._init_torso_x
-                    cy = i * size_scaling - self._init_torso_y
-                    x1 = cx - 0.5 * size_scaling
-                    x2 = cx + 0.5 * size_scaling
-                    y1 = cy - 0.5 * size_scaling
-                    y2 = cy + 0.5 * size_scaling
-                    struct_segments = [
-                        ((x1, y1), (x2, y1)),
-                        ((x2, y1), (x2, y2)),
-                        ((x2, y2), (x1, y2)),
-                        ((x1, y2), (x1, y1)),
-                    ]
-                    for seg in struct_segments:
-                        segments.append(dict(
-                            segment=seg,
-                            type=structure[i][j],
-                        ))
-
-        wall_readings = np.zeros(self._n_bins)
-        goal_readings = np.zeros(self._n_bins)
-
-        for ray_idx in range(self._n_bins):
-            ray_ori = ori - self._sensor_span * 0.5 + 1.0 * (2 * ray_idx + 1) / (2 * self._n_bins) * self._sensor_span
-            ray_segments = []
-            for seg in segments:
-                p = ray_segment_intersect(ray=((robot_x, robot_y), ray_ori), segment=seg["segment"])
-                if p is not None:
-                    ray_segments.append(dict(
-                        segment=seg["segment"],
-                        type=seg["type"],
-                        ray_ori=ray_ori,
-                        distance=point_distance(p, (robot_x, robot_y)),
-                    ))
-            if len(ray_segments) > 0:
-                first_seg = sorted(ray_segments, key=lambda x: x["distance"])[0]
-                # print first_seg
-                if first_seg["type"] == 1:
-                    # Wall -> add to wall readings
-                    if first_seg["distance"] <= self._sensor_range:
-                        wall_readings[ray_idx] = (self._sensor_range - first_seg["distance"]) / self._sensor_range
-                elif first_seg["type"] == 'g':
-                    # Goal -> add to goal readings
-                    if first_seg["distance"] <= self._sensor_range:
-                        goal_readings[ray_idx] = (self._sensor_range - first_seg["distance"]) / self._sensor_range
-                else:
-                    assert False
-
-        obs = np.concatenate([
-            wall_readings,
-            goal_readings
-        ])
-        return obs
+    @overrides
+    def update_goal_generator(self, goal_generator):
+        self.wrapped_env.update_goal_generator(goal_generator)
+        self._goal_generator = goal_generator
 
     def get_current_robot_obs(self):
         return self.wrapped_env.get_current_obs()
 
     def get_current_obs(self):
         return np.concatenate([self.wrapped_env.get_current_obs(),
-                               #self.get_current_maze_obs()
                                ])
 
     def get_ori(self):
@@ -234,11 +172,11 @@ class MazeEnv(ProxyEnv, Serializable):
         ub = BIG * np.ones(shp)
         return spaces.Box(ub * -1, ub)
 
-    @property
-    def maze_observation_space(self):
-        shp = self.get_current_maze_obs().shape
-        ub = BIG * np.ones(shp)
-        return spaces.Box(ub * -1, ub)
+    # @property
+    # def maze_observation_space(self):
+    #     shp = self.get_current_maze_obs().shape
+    #     ub = BIG * np.ones(shp)
+    #     return spaces.Box(ub * -1, ub)
 
     def _find_robot(self):
         structure = self.MAZE_STRUCTURE
@@ -276,6 +214,10 @@ class MazeEnv(ProxyEnv, Serializable):
                         return True
         return False
 
+    @overrides
+    def reset(self, *args, **kwargs):
+        return self.wrapped_env.reset(*args, **kwargs)
+
     def step(self, action):
         if self.MANUAL_COLLISION:
             old_pos = self.wrapped_env.get_xy()
@@ -287,17 +229,20 @@ class MazeEnv(ProxyEnv, Serializable):
         else:
             inner_next_obs, inner_rew, done, info = self.wrapped_env.step(action)
         next_obs = self.get_current_obs()
-        x, y = self.wrapped_env.get_body_com("torso")[:2]
+
+        reward = inner_rew
+
+        #x, y = self.wrapped_env.get_body_com("torso")[:2]
         # ref_x = x + self._init_torso_x
         # ref_y = y + self._init_torso_y
         info['outer_rew'] = 0
         info['inner_rew'] = inner_rew
-        reward = self.coef_inner_rew * inner_rew
-        minx, maxx, miny, maxy = self._goal_range
-        if minx <= x <= maxx and miny <= y <= maxy:
-            done = True
-            reward += self.goal_rew
-            info['rew_rew'] = 1  # we keep here the original one, so that the AvgReturn is directly the freq of success
+        # reward = self.coef_inner_rew * inner_rew
+        # minx, maxx, miny, maxy = self._goal_range
+        # if minx <= x <= maxx and miny <= y <= maxy:
+        #     done = True
+        #     reward += self.goal_rew
+        #     info['rew_rew'] = 1  # we keep here the original one, so that the AvgReturn is directly the freq of success
         return Step(next_obs, reward, done, **info)
 
     def action_from_key(self, key):
@@ -319,7 +264,7 @@ class MazeEnv(ProxyEnv, Serializable):
                 stripped_path['observations'][:, :self.wrapped_env.observation_space.flat_dim]
             #  this breaks if the obs of the robot are d>1 dimensional (not a vector)
             stripped_paths.append(stripped_path)
-        with logger.tabular_prefix('wrapped_'):
-            wrapped_undiscounted_return = np.mean([np.sum(path['env_infos']['inner_rew']) for path in paths])
-            logger.record_tabular('AverageReturn', wrapped_undiscounted_return)
-            self.wrapped_env.log_diagnostics(stripped_paths, *args, **kwargs)
+        # with logger.tabular_prefix('wrapped_'):
+        #     wrapped_undiscounted_return = np.mean([np.sum(path['env_infos']['inner_rew']) for path in paths])
+        #     logger.record_tabular('AverageReturn', wrapped_undiscounted_return)
+        #     self.wrapped_env.log_diagnostics(stripped_paths, *args, **kwargs)
