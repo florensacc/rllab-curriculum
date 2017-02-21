@@ -1,4 +1,8 @@
 from sandbox.tuomas.mddpg.envs.mujoco.mujoco_env import MujocoEnv
+<<<<<<< HEAD
+=======
+from sandbox.haoran.myscripts.quaternion import Quaternion
+>>>>>>> upstream/master
 from rllab.core.serializable import Serializable
 import numpy as np
 
@@ -11,8 +15,20 @@ class AntEnv(MujocoEnv, Serializable):
 
     FILE = 'ant.xml'
 
+<<<<<<< HEAD
     def __init__(self, direction=None, reward_type="velocity",
         reset_penalty=None, *args, **kwargs):
+=======
+    def __init__(self,
+            direction=None,
+            reward_type="velocity",
+            reset_penalty=None,
+            leg_zpos_thr=2.0,
+            flip_thr=0.,
+            *args,
+            **kwargs
+        ):
+>>>>>>> upstream/master
         super(AntEnv, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
         if direction is not None:
@@ -20,12 +36,22 @@ class AntEnv(MujocoEnv, Serializable):
         self.direction = direction
         self.reward_type = reward_type
         self.reset_penalty = reset_penalty
+<<<<<<< HEAD
+=======
+        self.leg_zpos_thr = leg_zpos_thr
+        self.flip_thr = flip_thr
+>>>>>>> upstream/master
 
     def get_param_values(self):
         params = dict(
             direction=self.direction,
             reward_type=self.reward_type,
             reset_penalty=self.reset_penalty,
+<<<<<<< HEAD
+=======
+            leg_zpos_thr=self.leg_zpos_thr,
+            flip_thr=self.flip_thr,
+>>>>>>> upstream/master
         )
         return params
 
@@ -51,6 +77,11 @@ class AntEnv(MujocoEnv, Serializable):
                 motion_reward = np.linalg.norm(comvel[0:2])
         elif self.reward_type == "distance_from_origin":
             motion_reward = np.linalg.norm(self.get_body_com("torso")[:2])
+<<<<<<< HEAD
+=======
+        elif self.reward_type == "forward_distance":
+            motion_reward = self.get_body_com("torso")[0]
+>>>>>>> upstream/master
         else:
             raise NotImplementedError
 
@@ -67,12 +98,38 @@ class AntEnv(MujocoEnv, Serializable):
         reward = (motion_reward - ctrl_cost - contact_cost + survive_reward
                   - action_violation_cost)
         state = self._state
+<<<<<<< HEAD
         notdone = np.isfinite(state).all() and 0.4 <= state[2] <= 1.0
         done = not notdone
+=======
+        leg_zpos = [
+            self.get_body_com("front_left_leg")[2],
+            self.get_body_com("front_right_leg")[2],
+            self.get_body_com("back_leg")[2],
+            self.get_body_com("right_back_leg")[2],
+        ]
+        # q describes the orientation of the ball
+        q = Quaternion(*tuple(self.model.data.qpos[3:7].ravel()))
+        # z is the z-pos of the bottom of the ball after applying q
+        z = q.rotate(np.array([0., 0., -1.]))[2]
+
+        notdone = all([
+            np.isfinite(state).all(),
+            state[2] <= 1.0, # prevent jumpping
+            # np.max(leg_zpos) < self.leg_zpos_thr,
+            z < self.flip_thr, # prevent flipping
+        ])
+        done = not notdone
+
+>>>>>>> upstream/master
         if self.reset_penalty:
             done = False
             reward -= self.reset_penalty
         ob = self.get_current_obs()
+<<<<<<< HEAD
+=======
+
+>>>>>>> upstream/master
         return Step(ob, float(reward), done, com=self.get_body_com("torso"))
         #return Step(ob, float(reward), done)
 

@@ -238,7 +238,7 @@ class AsyncAlgo(Picklable):
                 logger.save_itr_params(self.epoch,params)
             raise
 
-    def evaluate_performance(self,n_runs,horizon,return_paths=False):
+    def evaluate_performance(self,n_runs,horizon,return_paths=False,deterministic=False):
         #logger.log("Process %d: evaluating test performance"%(self.process_id),color="yellow")
         logger.log("Evaluating test performance:",color="yellow")
         self.test_env.phase = "Test"
@@ -255,7 +255,7 @@ class AsyncAlgo(Picklable):
             while not env.is_terminal:
                 if return_paths:
                     paths[i]['states'].append(env.state)
-                action = agent.act(env.state, env.reward, env.is_terminal, env.extra_infos)
+                action = agent.act(env.state, env.reward, env.is_terminal, env.extra_infos, deterministic=deterministic)
                 reward = env.receive_action(action)
                 if return_paths:
                     paths[i]['actions'].append(action)
@@ -273,6 +273,7 @@ class AsyncAlgo(Picklable):
                 "Process %d: finished testing #%d with score %f."%(self.process_id, i,scores[i]),
                 color="green",
             )
+
         if return_paths:
             return scores, paths
         return scores
