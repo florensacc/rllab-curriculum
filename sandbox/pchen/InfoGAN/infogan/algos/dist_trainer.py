@@ -33,6 +33,7 @@ class DistTrainer(object):
             resume_from=None,
             debug=False,
             restart_from_nan=False,
+            eval_on=False,
     ):
         self._dist = dist
         self._optimizer = optimizer
@@ -51,6 +52,7 @@ class DistTrainer(object):
         self._eval_every = eval_every
         self._save_every = save_every
         self._checkpoint_dir = checkpoint_dir or logger.get_snapshot_dir()
+        self._eval_on = eval_on
         assert self._checkpoint_dir, "checkpoint can't be none"
         self._resume_from = resume_from
         self._debug = debug
@@ -188,11 +190,28 @@ class DistTrainer(object):
 
         init_inp = self.construct_init()
         logger.log("opt_inited w/ init=True")
+
+        total_parameters = 0
+        for variable in tf.trainable_variables():
+            # shape is an array of tf.Dimension
+            shape = variable.get_shape()
+            # print(shape) print(len(shape))
+            variable_parametes = 1
+            for dim in shape:
+                # print(dim)
+                variable_parametes *= dim.value
+            # print(variable_parametes)
+            total_parameters += variable_parametes
+        logger.log("# of parameter vars %s" % len(tf.trainable_variables()))
+        logger.log("total parameters %s" % total_parameters)
+
+
         train_inp, train_logs, trainer, ema = self.construct_train()
         train_log_names, train_log_vars = zip(*train_logs.items())
         logger.log("opt_inited w/ init=False")
-        sample_imgs = self.construct_eval()
-        logger.log("opt_inited w/ eval")
+        if self._eval_on:
+            sample_imgs = self.construct_eval()
+            logger.log("opt_inited w/ eval")
 
         saver = tf.train.Saver()
 
@@ -262,13 +281,14 @@ class DistTrainer(object):
                             )
                             vali_log_vals.append(log_vals)
 
-                        samples = sess.run(sample_imgs)
-                        # convert to a form that plt likes
-                        samples = np.clip(samples+0.5, 0., 1.)
-                        img_tile = plotting.img_tile(samples, aspect_ratio=1., border_color=1., stretch=True)
-                        _ = plotting.plot_img(img_tile, title=None, )
-                        plotting.plt.savefig("%s/samples_itr_%s.png" % (self._checkpoint_dir, itr))
-                        plotting.plt.close('all')
+                        if self._eval_on:
+                            samples = sess.run(sample_imgs)
+                            # convert to a form that plt likes
+                            samples = np.clip(samples+0.5, 0., 1.)
+                            img_tile = plotting.img_tile(samples, aspect_ratio=1., border_color=1., stretch=True)
+                            _ = plotting.plot_img(img_tile, title=None, )
+                            plotting.plt.savefig("%s/samples_itr_%s.png" % (self._checkpoint_dir, itr))
+                            plotting.plt.close('all')
 
                 if (itr+1) % self._save_every == 0:
                     fn = saver.save(sess, "%s/%s.ckpt" % (self._checkpoint_dir, itr))

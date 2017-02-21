@@ -3,7 +3,7 @@ Variational DDPG (online, consevative)
 
 Continue exp-011g,g2, with
 + fix svgd_target = 'pre-action' and update_target_frequency = 1000
-+ K_critic: 100 -> 500. Reduce computation time.
++ K_critic: 100 -> 50. Reduce computation time.
 + clip entropies (only with upper bound)
 + correctly computed objective function (fixed the discounted sum issue)
 * compare soft or mean targets
@@ -42,7 +42,7 @@ exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/vddpg/" + exp_index
 mode = "ec2"
 ec2_instance = "c4.4xlarge"
-subnet = "us-west-1b"
+subnet = "us-west-1c"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 config.AWS_IMAGE_ID = "ami-85d181e5" # with docker already pulled
 
@@ -135,20 +135,20 @@ class VG(VariantGenerator):
     @variant
     def alpha_annealer(self):
         return [
-            dict(
-                init_value=0.1,
-                final_value=0.1,
-                stop_iter=1,
-            ), # equivalent to scale_reward = 10 in exp-011g, g2
+            # dict(
+            #     init_value=0.1,
+            #     final_value=0.1,
+            #     stop_iter=1,
+            # ), # equivalent to scale_reward = 10 in exp-011g, g2
             dict(
                 init_value=10,
                 final_value=0.1,
-                stop_iter=500,
+                stop_iter=499,
             ),
             dict(
                 init_value=10,
                 final_value=0.001,
-                stop_iter=500,
+                stop_iter=499,
             ), # should get to alpha = 0.1 at iteration 250
         ]
 

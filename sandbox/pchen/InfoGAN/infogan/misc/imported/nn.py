@@ -181,18 +181,28 @@ def dense(x, num_units, nonlinearity=None, init_scale=1., counters={}, init=Fals
             return x
 
 @scopes.add_arg_scope
-def conv2d(x, num_filters, filter_size=[3,3], stride=[1,1], pad='SAME', nonlinearity=None, init_scale=1., counters={}, init=False, ema=None, **kwargs):
+def conv2d(x, num_filters,
+           filter_size=[3,3], stride=[1,1], pad='SAME',
+           nonlinearity=None, init_scale=1., counters={},
+           init=False, ema=None, spatial_bias=False, **kwargs
+           ):
     name = get_name('conv2d', counters)
+    x_shp = int_shape(x)
     with tf.variable_scope(name):
         if init:
             # data based initialization of parameters
-            V = tf.get_variable('V', filter_size+[int(x.get_shape()[-1]),num_filters], tf.float32, tf.random_normal_initializer(0, 0.05), trainable=True)
+            V = tf.get_variable('V', filter_size+[int(x_shp[-1]),num_filters], tf.float32, tf.random_normal_initializer(0, 0.05), trainable=True)
             V_norm = tf.nn.l2_normalize(V.initialized_value(), [0,1,2])
             x_init = tf.nn.conv2d(x, V_norm, [1]+stride+[1], pad)
             m_init, v_init = tf.nn.moments(x_init, [0,1,2])
             scale_init = init_scale/tf.sqrt(v_init + 1e-8)
             g = tf.get_variable('g', dtype=tf.float32, initializer=scale_init, trainable=True)
             b = tf.get_variable('b', dtype=tf.float32, initializer=-m_init*scale_init, trainable=True)
+            if spatial_bias:
+                spatial_bias = tf.get_variable(
+                    'sb', [1] + int_shape(x_init)[1:], tf.float32,
+                    tf.constant_initializer(), trainable=True
+                )
             x_init = tf.reshape(scale_init,[1,1,1,num_filters])*(x_init-tf.reshape(m_init,[1,1,1,num_filters]))
             if nonlinearity is not None:
                 x_init = nonlinearity(x_init)
@@ -207,6 +217,10 @@ def conv2d(x, num_filters, filter_size=[3,3], stride=[1,1], pad='SAME', nonlinea
 
             # calculate convolutional layer output
             x = tf.nn.bias_add(tf.nn.conv2d(x, W, [1]+stride+[1], pad), b)
+
+            if spatial_bias:
+                sb = get_vars_maybe_avg(['sb'], ema)[0]
+                x = tf.add(x, sb)
 
             # apply nonlinearity
             if nonlinearity is not None:

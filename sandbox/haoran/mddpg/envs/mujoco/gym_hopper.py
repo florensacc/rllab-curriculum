@@ -9,12 +9,22 @@ class HopperEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         use_forward_reward=True,
         use_alive_bonus=True,
         use_ctrl_cost=True,
+        include_xpos=False,
+        reset_after_fall=True,
     ):
         self.use_forward_reward = use_forward_reward
         self.use_alive_bonus = use_alive_bonus
         self.use_ctrl_cost = use_ctrl_cost
+        self.include_xpos = include_xpos
+        self.reset_after_fall = reset_after_fall
         mujoco_env.MujocoEnv.__init__(self, 'hopper.xml', 4)
-        utils.EzPickle.__init__(self)
+        utils.EzPickle.__init__(self,
+            use_forward_reward=use_forward_reward,
+            use_alive_bonus=use_alive_bonus,
+            use_ctrl_cost=use_ctrl_cost,
+            include_xpos=include_xpos,
+            reset_after_fall=reset_after_fall,
+        )
         self.observation_space = convert_gym_space(self.observation_space)
         self.action_space = convert_gym_space(self.action_space)
 
@@ -31,17 +41,24 @@ class HopperEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         if self.use_ctrl_cost:
             reward -= 1e-3 * np.square(a).sum()
         s = self.state_vector()
-        done = not (np.isfinite(s).all() and (np.abs(s[2:]) < 100).all() and
-                    (height > .7) and (abs(ang) < .2))
+        done = not (np.isfinite(s).all() and (np.abs(s[2:]) < 100).all())
+        if self.reset_after_fall and ((height <= .7) or (abs(ang) >= .2)):
+            done = True
         ob = self._get_obs()
         com = self.get_body_com("torso")
         return ob, reward, done, {"com": com}
 
     def _get_obs(self):
-        return np.concatenate([
-            self.model.data.qpos.flat[1:],
-            np.clip(self.model.data.qvel.flat,-10,10)
-        ])
+        if self.include_xpos:
+            return np.concatenate([
+                self.model.data.qpos.flat,
+                np.clip(self.model.data.qvel.flat,-10,10)
+            ])
+        else:
+            return np.concatenate([
+                self.model.data.qpos.flat[1:],
+                np.clip(self.model.data.qvel.flat,-10,10)
+            ])
 
     def reset_model(self):
         qpos = self.init_qpos + np.random.uniform(low=-.005, high=.005, size=self.model.nq)
@@ -60,6 +77,8 @@ class HopperEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             self.use_forward_reward,
             self.use_alive_bonus,
             self.use_ctrl_cost,
+            self.include_xpos,
+            self.reset_after_fall,
         ])
         return params
 
@@ -67,9 +86,11 @@ class HopperEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.use_forward_reward = params[0]
         self.use_alive_bonus = params[1]
         self.use_ctrl_cost = params[2]
+        self.include_xpos = params[3]
+        self.reset_after_fall = params[4]
 
 
-    def log_stats(self, alg, epoch, paths, ax):
+    def log_stats(self, alg, epoch, paths):
         # forward distance
         progs = []
         for path in paths:
@@ -85,8 +106,6 @@ class HopperEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             'env: ForwardProgressDiff': np.max(progs) - np.min(progs),
         }
 
-        HopperEnv.plot_paths(paths, ax)
-
         return stats
 
     @staticmethod
@@ -96,9 +115,6 @@ class HopperEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             xx = com[:, 0]
             zz = com[:, 2]
             ax.plot(xx, zz, 'b')
-        xlim = np.ceil(np.max(np.abs(xx)))
-        ax.set_xlim((-xlim, xlim))
-        ax.set_ylim((0, 1))
 
     def terminate(self):
         pass

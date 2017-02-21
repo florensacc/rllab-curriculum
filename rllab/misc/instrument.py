@@ -351,6 +351,7 @@ def run_experiment_lite(
         variant=None,
         use_gpu=False,
         sync_s3_pkl=False,
+        sync_s3_html=False,
         sync_s3_png=False,
         sync_s3_log=False,
         sync_log_on_termination=True,
@@ -378,6 +379,8 @@ def run_experiment_lite(
     :param use_gpu: Whether the launched task is running on GPU. This triggers a few configuration changes including
     certain environment flags
     :param sync_s3_pkl: Whether to sync pkl files during execution of the experiment (they will always be synced at
+    the end of the experiment)
+    :param sync_s3_html: Whether to sync html files during execution of the experiment (they will always be synced at
     the end of the experiment)
     :param sync_s3_png: Whether to sync png files during execution of the experiment (they will always be synced at
     the end of the experiment)
@@ -526,6 +529,7 @@ def run_experiment_lite(
                    use_gpu=use_gpu,
                    code_full_path=s3_code_path,
                    sync_s3_pkl=sync_s3_pkl,
+                   sync_s3_html=sync_s3_html,
                    sync_s3_png=sync_s3_png,
                    sync_s3_log=sync_s3_log,
                    sync_log_on_termination=sync_log_on_termination,
@@ -732,6 +736,7 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
                aws_config=None, dry=False, terminate_machine=True, use_gpu=False, sync_s3_pkl=False,
                sync_s3_png=False,
                sync_s3_log=False,
+               sync_s3_html=False,
                sync_log_on_termination=True,
                periodic_sync=True, periodic_sync_interval=15):
     if len(params_list) == 0:
@@ -836,6 +841,7 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
             include_png = " --include '*.png' " if sync_s3_png else " "
             include_pkl = " --include '*.pkl' " if sync_s3_pkl else " "
             include_log = " --include '*.log' " if sync_s3_log else " "
+            include_html = " --include '*.html' " if sync_s3_html else " "
             # sio.write("""
             #     while /bin/true; do
             #         aws s3 sync --exclude '*' {include_png} {include_pkl} {include_log}--include '*.csv' --include '*.json' {log_dir} {remote_log_dir} --region {aws_region}
@@ -846,9 +852,10 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
             #                                          periodic_sync_interval=periodic_sync_interval))
             sio.write("""
                 while /bin/true; do
-                    aws s3 sync --exclude '*' {include_png} {include_pkl} {include_log}--include '*.csv' --include '*.json' {log_dir} {remote_log_dir}
+                    aws s3 sync --exclude '*' {include_png} {include_pkl} {include_log} {include_html}--include '*.csv' --include '*.json' {log_dir} {remote_log_dir}
                     sleep {periodic_sync_interval}
-                done & echo sync initiated""".format(include_png=include_png, include_pkl=include_pkl, include_log=include_log,
+                done & echo sync initiated""".format(include_png=include_png, include_pkl=include_pkl,
+                                                     include_log=include_log, include_html=include_html,
                                                      log_dir=log_dir, remote_log_dir=remote_log_dir,
                                                      periodic_sync_interval=periodic_sync_interval))
             if sync_log_on_termination:

@@ -84,6 +84,10 @@ class EnvChooser(object):
             from sandbox.tuomas.mddpg.envs.mujoco.ant_env import \
                 AntEnv
             env = AntEnv(**kwargs)
+        elif env_name == "tuomas_walker2d":
+            from sandbox.tuomas.mddpg.envs.mujoco.gym_walker2d_env import \
+                Walker2DEnv
+            env = Walker2DEnv(**kwargs)
         elif env_name == "gym_walker":
             from sandbox.haoran.mddpg.envs.mujoco.gym_walker2d_env import \
                 Walker2DEnv
@@ -108,6 +112,10 @@ class EnvChooser(object):
             from sandbox.haoran.mddpg.envs.mujoco.multilink_reacher_env import \
                 MultiLinkReacherEnv
             env = MultiLinkReacherEnv(**kwargs)
+        elif env_name == "ant_puddle":
+            from sandbox.haoran.mddpg.envs.mujoco.ant_puddle_env import \
+                AntPuddleEnv
+            env = AntPuddleEnv(**kwargs)
         else:
             print("Unknown environment %s"%(env_name))
             raise NotImplementedError

@@ -7,6 +7,14 @@ import sys
 import os
 import csv
 
+class MultiTasker(object):
+    def __init__(self, task_list):
+        self.task_list = task_list
+
+    def run(self):
+        for method, kwargs in self.task_list:
+            method(**kwargs)
+
 def form_rgb_img_array(imgs,n_col,row_gap=2,col_gap=2):
     """ form an array of images with the same shape """
     img_height,img_width,n_channel = imgs[0].shape
