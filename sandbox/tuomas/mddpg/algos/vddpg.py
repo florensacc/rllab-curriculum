@@ -86,6 +86,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
             alpha_annealer=None,
             critic_subtract_value=False,
             critic_value_sampler='uniform',
+            train_actor_delay=0,
+            target_action_dist_delay=0,
             **kwargs
     ):
         """
@@ -145,6 +147,11 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.q_plot_settings = q_plot_settings
         self.env_plot_settings = env_plot_settings
 
+        self.train_actor_delay = train_actor_delay
+        self.train_count = 0
+
+        self.n_critic_feed_dict_call = 0
+        self.target_action_dist_delay = target_action_dist_delay
 
 
         self.true_env = env
@@ -405,7 +412,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
             if self.actor_sparse_update:
                 grad_log_p_from_Q = tf.gradients(
-                    log_p_from_Q, 
+                    log_p_from_Q,
                     self.kernel.fixed_actions_pl  # These are pre-actions
                 )
 
@@ -413,7 +420,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
                     tf.tanh(self.kernel.fixed_actions_pl)
                 )  # N*K x Da
             else:
-                grad_log_p_from_Q = tf.gradients(log_p_from_Q, 
+                grad_log_p_from_Q = tf.gradients(log_p_from_Q,
                                                  self.policy.pre_output)
                 # N*K x Da
                 grad_log_p_from_tanh = - 2. * self.policy.output # N*K x Da
@@ -779,6 +786,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
     def _critic_feed_dict(self, rewards, terminals, obs, actions, next_obs,
                           temp, K):
+        self.n_critic_feed_dict_call += 1
         N = obs.shape[0]
         Da = self.env.action_space.flat_dim
         feed = {}
@@ -806,7 +814,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
         if self.q_target_type == 'soft':
             # We'll use the same actions for each sample (first dimension).
 
-            if self.target_action_dist == "uniform":
+            if self.target_action_dist == "uniform" or \
+                self.n_critic_feed_dict_call <= self.target_action_dist_delay:
                 scale = self.policy.output_scale
                 next_actions = np.random.uniform(
                     low=-scale, high=scale, size=(N, self.K_critic, Da))
@@ -894,8 +903,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
             # List of holding line objects created by the environment
             self._env_lines = []
-            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
-            self._ax_env.set_ylim(self.env_plot_settings['ylim'])
+            # self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+            # self._ax_env.set_ylim(self.env_plot_settings['ylim'])
 
         # Init critic + actor figure.
         if self.q_plot_settings is not None:
@@ -1185,8 +1194,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
             self._ax_env.clear()
             self._env_lines = env.plot_paths(paths, self._ax_env)
-            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
-            self._ax_env.set_ylim(self.env_plot_settings['ylim'])
+            # self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+            # self._ax_env.set_ylim(self.env_plot_settings['ylim'])
 
             plt.pause(0.001)
             plt.draw()
@@ -1253,7 +1262,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.train_actor = (np.mod(
             self.actor_train_counter,
             self.actor_train_frequency,
-        ) == 0) and self.really_train_actor
+        ) == 0) and self.really_train_actor \
+            and self.train_count > self.train_actor_delay
         self.update_target = (np.mod(
             self.update_target_counter,
             self.update_target_frequency,
@@ -1273,6 +1283,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             self.update_target_counter + 1,
             self.update_target_frequency,
         )
+        self.train_count += 1
 
     @overrides
     def update_training_settings(self, epoch):

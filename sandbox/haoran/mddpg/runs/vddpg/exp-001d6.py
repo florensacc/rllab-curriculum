@@ -1,12 +1,13 @@
 """
-Variational DDPG
+Variational DDPG (online, consevative)
 
-Repeat exp-004b but with sample target Qs from the policy
+Use the exact same setup as in tuomas/mddpg/scripts/test_vddpg_multigoal.py
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
-import numpy as np
 import joblib
+# import matplotlib
+# matplotlib.use('Agg')
 from rllab.envs.normalized_env import normalize
 from rllab.exploration_strategies.ou_strategy import OUStrategy
 from sandbox.rocky.tf.envs.base import TfEnv
@@ -15,8 +16,6 @@ from sandbox.tuomas.mddpg.kernels.gaussian_kernel import \
     SimpleAdaptiveDiagonalGaussianKernel
 from sandbox.tuomas.mddpg.critics.nn_qfunction import FeedForwardCritic
 from sandbox.tuomas.mddpg.policies.stochastic_policy import StochasticNNPolicy
-from sandbox.tuomas.mddpg.policies.stochastic_policy import \
-    DummyExplorationStrategy, StochasticPolicyMaximizer
 from sandbox.tuomas.mddpg.algos.vddpg import VDDPG
 
 """ others """
@@ -26,6 +25,7 @@ from rllab import config
 from rllab.misc.instrument import stub, run_experiment_lite
 import sys,os
 import copy
+import numpy as np
 
 stub(globals())
 
@@ -33,102 +33,31 @@ from rllab.misc.instrument import VariantGenerator, variant
 
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
-exp_prefix = "mddpg/vddpg/ant/" + exp_index
+exp_prefix = "mddpg/vddpg/" + exp_index
 mode = "ec2"
-ec2_instance = "c4.4xlarge"
-subnet = "us-west-1c"
+ec2_instance = "c4.2xlarge"
+subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 config.AWS_IMAGE_ID = "ami-85d181e5" # with docker already pulled
 
 n_task_per_instance = 1
-n_parallel = 2 # only for local exp
+n_parallel = 1 # only for local exp
 snapshot_mode = "gap"
 snapshot_gap = 10
 plot = False
+sync_s3_pkl = True
 
 # variant params ---------------------------------------------------
 class VG(VariantGenerator):
     @variant
     def zzseed(self):
-        return [0, 100, 200, 300, 400]
+        return [0,100,200,300,400]
 
     @variant
     def env_name(self):
         return [
-            "tuomas_ant"
+            "multi_goal"
         ]
-    @variant
-    def max_path_length(self):
-        return [500]
-
-    @variant
-    def K(self):
-        return [32]
-
-    @variant
-    def svgd_target(self):
-        return ["pre-action"]
-
-    @variant
-    def q_target_type(self):
-        return ["soft"]
-
-    @variant
-    def target_action_dist(self):
-        return [
-            "policy",
-        ]
-
-    @variant
-    def target_action_dist_delay(self):
-        return [100000]
-
-    @variant
-    def ou_sigma(self):
-        return [0.3]
-
-    @variant
-    def scale_reward(self):
-        return [1, 0.1, 10, 100]
-
-    @variant
-    def alpha(self):
-        return [1]
-
-    @variant
-    def qf_learning_rate(self):
-        return [1e-3]
-
-    @variant
-    def tau(self):
-        return [1]
-
-    @variant
-    def network_size(self):
-        return [200]
-
-    @variant
-    def train_frequency(self):
-        return [
-            dict(
-                actor_train_frequency=1,
-                critic_train_frequency=1,
-                update_target_frequency=1000,
-                train_repeat=1,
-            ),
-        ]
-
-    @variant
-    def random_init_state(self):
-        return [False]
-
-    @variant
-    def flip_thr(self):
-        return [0.]
-
-    @variant
-    def reward_type(self):
-        return ["velocity"]
 
 variants = VG().variants()
 batch_tasks = []
@@ -139,65 +68,48 @@ for v in variants:
     # algo
     seed=v["zzseed"]
     env_name = v["env_name"]
-    K = v["K"]
-    output_scale = 2. if v["svgd_target"] == "action" else 1.
-
-    # Plotter settings.
-    q_plot_settings = dict(
-        xlim=(-2, 2),
-        ylim=(-2, 2),
-        obs_lst=((0,)*125,),
-        action_dims=(0, 1),
-    )
-
-    env_plot_settings = dict(
-        xlim=(-10, 10),
-        ylim=(-10, 10),
-    )
 
     shared_alg_kwargs = dict(
-        max_path_length=v["max_path_length"],
-        scale_reward=v["scale_reward"],
-        qf_learning_rate=v["qf_learning_rate"],
-        soft_target_tau=v["tau"],
-        alpha=v["alpha"],
-        q_target_type=v["q_target_type"],
-        svgd_target=v["svgd_target"],
-        K_critic=50,
-        target_action_dist=v["target_action_dist"],
-        target_action_dist_delay=v["target_action_dist_delay"],
-        train_repeat=v["train_frequency"]["train_repeat"],
-        actor_train_frequency=v["train_frequency"]["actor_train_frequency"],
-        critic_train_frequency=v["train_frequency"]["critic_train_frequency"],
-        update_target_frequency=v["train_frequency"]["update_target_frequency"],
-        debug_mode=False,
+        policy_learning_rate=0.01,
+        qf_learning_rate=0.001,
+        Q_weight_decay=0.00,
+        max_path_length=100,
+        batch_size=64,  # only need recent samples, though it's slow
+        scale_reward=0.1,
+        train_actor=True,
+        train_critic=True,
+        q_target_type='soft',
+        svgd_target='pre-action',
+        #svgd_target='action',
+        K=100,
+        alpha=1.,
+        critic_train_frequency=1,
+        actor_train_frequency=1,
+        update_target_frequency=1,
+        critic_subtract_value=False,
+        alpha_annealer=None,
+        actor_sparse_update=False,
     )
     if "local" in mode and sys.platform == 'darwin':
         shared_alg_kwargs["plt_backend"] = "MacOSX"
     else:
         shared_alg_kwargs["plt_backend"] = "Agg"
-
     if mode == "local_test" or mode == "local_docker_test":
         alg_kwargs = dict(
-            epoch_length = 110,
-            min_pool_size = 100,
-            eval_samples = 100,
-            n_epochs = 2,
+            epoch_length=10,
+            min_pool_size=5,
+            n_eval_paths=1,
+            n_epochs=5,
         )
     else:
         alg_kwargs = dict(
-            epoch_length=10000,
-            n_epochs=500,
-            n_eval_paths=10,
-            eval_kl_n_sample=1,
-            eval_kl_n_sample_part=1,
+            epoch_length=1000,
+            n_epochs=100,
+            n_eval_paths=5,
+            min_pool_size=1000,
         )
     alg_kwargs.update(shared_alg_kwargs)
-    env_kwargs = {
-        "reward_type": v["reward_type"],
-        "flip_thr": v["flip_thr"],
-        "random_init_state": v["random_init_state"],
-    }
+    env_kwargs = dict(goal_reward=10.)
 
     # other exp setup --------------------------------------
     exp_name = "{exp_index}_{time}_{env_name}".format(
@@ -250,8 +162,7 @@ for v in variants:
     # construct objects ----------------------------------
     env_chooser = EnvChooser()
     env = TfEnv(normalize(
-        env_chooser.choose_env(env_name,**env_kwargs),
-        clip=(not (v["svgd_target"] == "action")),
+        env_chooser.choose_env(env_name,**env_kwargs)
     ))
 
     qf = FeedForwardCritic(
@@ -259,26 +170,26 @@ for v in variants:
         env.observation_space.flat_dim,
         env.action_space.flat_dim,
         observation_hidden_sizes=(),
-        embedded_hidden_sizes=(v["network_size"], v["network_size"]),
+        embedded_hidden_sizes=(100,100),
     )
+    q_prior = None
     es = OUStrategy(
         env_spec=env.spec,
         mu=0,
         theta=0.15,
-        sigma=v["ou_sigma"],
-        clip=(not (v["svgd_target"] == "action")),
+        sigma=0.3,
     )
     policy = StochasticNNPolicy(
         scope_name="actor",
         observation_dim=env.observation_space.flat_dim,
         action_dim=env.action_space.flat_dim,
-        sample_dim=env.action_space.flat_dim,
+        sample_dim=2,
         freeze_samples=False,
-        K=K,
+        K=100,
         output_nonlinearity=tf.nn.tanh,
-        hidden_dims=(v["network_size"], v["network_size"]),
+        hidden_dims=(100,100),
         W_initializer=None,
-        output_scale=output_scale,
+        output_scale=1.0,
     )
     kernel = SimpleAdaptiveDiagonalGaussianKernel(
         "kernel",
@@ -288,13 +199,9 @@ for v in variants:
         env=env,
         exploration_strategy=es,
         policy=policy,
-        eval_policy=None,
         kernel=kernel,
         qf=qf,
-        q_prior=None,
-        K=K,
-        q_plot_settings=q_plot_settings,
-        env_plot_settings=env_plot_settings,
+        q_prior=q_prior,
         **alg_kwargs
     )
 
@@ -322,11 +229,11 @@ for v in variants:
             sync_s3_png=True,
             sync_log_on_termination=True,
             sync_all_data_node_to_s3=True,
-            terminate_machine=("test" not in mode),
-            python_command="python3",
+            terminate_machine=True,
         )
         batch_tasks = []
         if "test" in mode:
             sys.exit(0)
+
 if ("local" not in mode) and ("test" not in mode):
     os.system("chmod 444 %s"%(__file__))

@@ -92,8 +92,8 @@ class DDPG(OnlineAlgorithm, Serializable):
         if self.env_plot_settings is not None:
             self._fig_env = plt.figure(figsize=(7, 7))
             self._ax_env = self._fig_env.add_subplot(111)
-            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
-            self._ax_env.set_ylim(self.env_plot_settings['ylim'])
+            # self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+            # self._ax_env.set_ylim(self.env_plot_settings['ylim'])
 
         # Init critic + actor figure.
         # TODO: Figure out to set the size automatically
@@ -396,8 +396,8 @@ class DDPG(OnlineAlgorithm, Serializable):
 
             self._ax_env.clear()
             env.plot_paths(paths, self._ax_env)
-            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
-            self._ax_env.set_ylim(self.env_plot_settings['ylim'])
+            # self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+            # self._ax_env.set_ylim(self.env_plot_settings['ylim'])
 
             plt.pause(0.001)
             plt.draw()

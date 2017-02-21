@@ -5,6 +5,7 @@ from rllab.misc import logger
 from rllab.envs.base import Env
 from rllab.spaces.box import Box
 from sandbox.haoran.mddpg.policies.mnn_policy import MNNPolicy
+from sandbox.haoran.mddpg.policies.nn_policy import NNPolicy
 from sandbox.tuomas.mddpg.policies.stochastic_policy import StochasticNNPolicy
 
 import os
@@ -21,7 +22,7 @@ class MultiGoalEnv(Env, Serializable):
     state: position
     action: velocity
     """
-    def __init__(self):
+    def __init__(self, goal_reward):
         Serializable.quick_init(self, locals())
 
         self.dynamics = PointDynamics(dim=2, sigma=0)
@@ -37,7 +38,7 @@ class MultiGoalEnv(Env, Serializable):
             dtype=np.float32
         )
         self.goal_threshold = 1.
-        self.goal_reward = 0
+        self.goal_reward = goal_reward
         self.action_cost_coeff = 0
         self.xlim = (-7, 7)
         self.ylim = (-7, 7)
@@ -260,6 +261,8 @@ class MultiGoalEnv(Env, Serializable):
                 all_actions = algo.policy.get_actions(all_obs)[0]
             elif isinstance(algo.policy, MNNPolicy):
                 all_actions, info = algo.policy.get_action(obs, k="all")
+            elif isinstance(algo.policy, NNPolicy):
+                all_actions, info = algo.policy.get_action(obs)
             else:
                 raise NotImplementedError
 

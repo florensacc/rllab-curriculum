@@ -15,7 +15,8 @@ class Puddle(Serializable):
     """
     A puddle is a rectangular high-cost region
     """
-    def __init__(self, x, y, width, height, angle, plot_args, cost, hard=False):
+    def __init__(self, x, y, width, height, angle, plot_args, cost, hard=False,
+        text=""):
         """
         x, y: coordinate of the lower left corner
         """
@@ -31,6 +32,7 @@ class Puddle(Serializable):
         self.plot_args = plot_args
         self.cost = cost
         self.hard = hard
+        self.text = text
 
     def plot(self, ax):
         ax.add_patch(Rectangle(
@@ -40,6 +42,11 @@ class Puddle(Serializable):
             angle=self.angle,
             **self.plot_args
         ))
+        ax.text(
+            self.x + self.width/2,
+            self.y + self.height/2,
+            self.text,
+        )
 
     def is_inside(self, pos):
         x, y = pos
@@ -65,7 +72,11 @@ class AntPuddleEnv(MujocoEnv, Serializable):
             direction=None,
             goal=(10., 0.),
             flip_thr=0.,
-            mujoco_env_args=dict()
+            init_reward=1.,
+            init_reward_slope=1.,
+            speed_coeff=1.,
+            mujoco_env_args=dict(),
+            plot_settings=None,
         ):
         if direction is not None:
             assert np.isclose(np.linalg.norm(direction), 1.)
@@ -73,7 +84,11 @@ class AntPuddleEnv(MujocoEnv, Serializable):
         self.reward_type = reward_type
         self.direction = direction
         self.goal = goal
+        self.init_reward = init_reward
+        self.init_reward_slope = init_reward_slope
+        self.speed_coeff = speed_coeff
         self.flip_thr = flip_thr
+        self.plot_settings = plot_settings
 
         # dynamically generate and load the xml file
         self.file_path = os.path.join(
@@ -83,7 +98,6 @@ class AntPuddleEnv(MujocoEnv, Serializable):
         )
         self.generate_xml_file()
         mujoco_env_args["file_path"] = self.file_path
-
         super().__init__(**mujoco_env_args)
         Serializable.quick_init(self, locals())
 
@@ -94,6 +108,7 @@ class AntPuddleEnv(MujocoEnv, Serializable):
             reward_type=self.reward_type,
             flip_thr=self.flip_thr,
             goal=self.goal,
+            speed_coeff=self.speed_coeff,
         )
         return params
 
@@ -111,21 +126,30 @@ class AntPuddleEnv(MujocoEnv, Serializable):
 
     def step(self, action):
         self.forward_dynamics(action)
-        comvel = self.get_body_comvel("torso")
+        comvel = self.get_body_comvel("torso")[:2]
+        com = self.get_body_com("torso")[:2]
         if self.reward_type == "velocity":
             if self.direction is not None:
-                motion_reward = comvel[0:2].dot(np.array(self.direction))
+                motion_reward = comvel.dot(np.array(self.direction))
             else:
-                motion_reward = np.linalg.norm(comvel[0:2])
+                motion_reward = np.linalg.norm(comvel)
         elif self.reward_type == "distance_from_origin":
-            motion_reward = np.linalg.norm(self.get_body_com("torso")[:2])
+            motion_reward = np.linalg.norm(com)
         elif self.reward_type == "goal":
-            pos = self.get_body_com("torso")[:2]
-            motion_reward = 20 - np.linalg.norm(
-                pos - np.array(self.goal)
-            )
-            # should better make the rewards positive, otherwise the agent
-            # will prefer termination
+            dist_to_goal = np.linalg.norm(com - np.array(self.goal))
+            x0 = np.linalg.norm(np.array(self.goal)) # init dist
+            y0 = self.init_reward
+            y0p = self.init_reward_slope
+            a = - y0 ** 2 / y0p
+            b = - x0 - y0 / y0p
+            motion_reward = a / (b + dist_to_goal)
+            if not (a > 0 and b > 0):
+                import pdb; pdb.set_trace()
+                # reward should decrase with dist
+                # reward at goal should be positive
+                # thus (-y0p) < y0 / x0
+            # print(dist_to_goal, motion_reward)
+            motion_reward += self.speed_coeff * np.linalg.norm(comvel)
         else:
             raise NotImplementedError
 
@@ -216,6 +240,8 @@ class AntPuddleEnv(MujocoEnv, Serializable):
                 'env: FinalDistanceFromGoalMin': np.min(dists),
                 'env: FinalDistanceFromGoalStd': np.std(dists),
             }
+        elif self.reward_type == "velocity":
+            pass
         else:
             raise NotImplementedError
 
@@ -235,12 +261,25 @@ class AntPuddleEnv(MujocoEnv, Serializable):
         x, y = self.goal
         ax.plot(x, y, 'b*', markersize=10)
 
-    @overrides
-    def plot_paths(self, paths, ax):
-        ax.grid(True)
+    def plot_env(self, ax):
         self.plot_puddles(ax)
         if self.reward_type == "goal":
             self.plot_goal(ax)
+        ax.plot(0, 0, 'go')
+
+        if self.plot_settings is not None:
+            xlim = self.plot_settings["xlim"]
+            ylim = self.plot_settings["ylim"]
+            ax.set_xlim(xlim)
+            ax.set_ylim(ylim)
+            ax.grid(True)
+            ax.set_xticks(np.arange(np.floor(xlim[0]), np.ceil(xlim[1])))
+            ax.set_yticks(np.arange(np.floor(ylim[0]), np.ceil(ylim[1])))
+
+    @overrides
+    def plot_paths(self, paths, ax):
+        ax.grid(True)
+        self.plot_env(ax)
         for path in paths:
             positions = path["env_infos"]["com"]
             xx = positions[:, 0]
@@ -328,7 +367,7 @@ class AntPuddleEnv(MujocoEnv, Serializable):
             self.viewer = MjViewer()
             self.viewer.start()
             self.viewer.set_model(self.model)
-            self.viewer.cam.trackbodyid = 0
+            self.viewer.cam.trackbodyid = 1
             self.viewer.cam.distance = 30
             self.viewer.cam.elevation = -70
         if config is not None:
@@ -336,3 +375,65 @@ class AntPuddleEnv(MujocoEnv, Serializable):
             self.viewer.set_window_size(config["width"], config["height"])
             self.viewer.set_window_title(config["title"])
         return self.viewer
+
+class AntPuddleGenerator(object):
+    # env generating shortcuts
+    def generate_u_shaped_maze(self, wall_offset, length, turn_length):
+        spacing = 2. + 2 * wall_offset
+        puddles = [
+            Puddle(x=-1, y=spacing/2, width=length-spacing+1, height=1,
+                angle=0, cost=0,
+                plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
+            Puddle(x=-1, y=-1-spacing/2, width=length+1, height=1, angle=0, cost=0,
+                plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
+            Puddle(x=-1, y=turn_length-spacing/2-1, width=length-spacing+1, height=1,
+                angle=0, cost=0,
+                plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
+            Puddle(x=-1, y=turn_length+spacing/2, width=length+1, height=1, angle=0, cost=0,
+                plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
+
+            Puddle(x=length-spacing-1, y=spacing/2, width=1, height=turn_length-spacing, angle=0, cost=0,
+                plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
+            Puddle(x=length, y=-1-spacing/2, width=1, height=turn_length+spacing+2, angle=0, cost=0,
+                plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
+            Puddle(x=-2, y=-1-spacing/2, width=1, height=spacing+2, angle=0, cost=0,
+                plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
+            Puddle(x=-2, y=turn_length-spacing/2-1, width=1, height=spacing+2, angle=0, cost=0,
+                plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
+        ]
+        return puddles
+
+
+    def generate_two_choice_maze(self, wall_offset, length, obj="puddles"):
+        spacing = 2. + 2 * wall_offset
+        puddles = [
+            Puddle(x=-spacing/2, y=-2-spacing, width=length+2*spacing, height=1,
+                angle=0, cost=0, hard=True, text="0",
+                plot_args=dict(color=(1., 0., 0., 1.0))),
+            Puddle(x=-spacing/2, y=1+spacing, width=length+2*spacing, height=1,
+                angle=0, cost=0, hard=True, text="1",
+                plot_args=dict(color=(1., 0., 0., 1.0))),
+            Puddle(x=-1-spacing/2, y=-2-spacing, width=1, height=4+2*spacing,
+                angle=0, cost=0, hard=True, text="2",
+                plot_args=dict(color=(1., 0., 0., 1.0))),
+            Puddle(x=length+1.5*spacing, y=-2-spacing, width=1, height=4+2*spacing,
+                angle=0, cost=0, hard=True, text="3",
+                plot_args=dict(color=(1., 0., 0., 1.0))),
+            Puddle(x=0.5+spacing/2, y=-0.5, width=length, height=1,
+                angle=0, cost=0, hard=True, text="4",
+                plot_args=dict(color=(1., 0., 0., 1.0))),
+            Puddle(x=spacing/2+length, y=+0.5, width=0.5+spacing, height=1,
+                angle=0, cost=0, hard=True, text="5",
+                plot_args=dict(color=(1., 0., 0., 1.0))),
+        ]
+        goal = (0.5+spacing/2+length+spacing/2, 0)
+        xmin = min([p.x for p in puddles])
+        xmax = max([p.x + p.width for p in puddles])
+        ymin = min([p.y for p in puddles])
+        ymax = max([p.y + p.height for p in puddles])
+        plot_offset = 0.5
+        plot_settings = dict(
+            xlim=(xmin - plot_offset, xmax + plot_offset),
+            ylim=(ymin - plot_offset, ymax + plot_offset),
+        )
+        return locals()[obj]
