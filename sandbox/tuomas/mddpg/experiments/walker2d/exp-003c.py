@@ -75,7 +75,7 @@ class VG(VariantGenerator):
             dict(
                 actor_train_frequency=1,
                 critic_train_frequency=1,
-                update_target_frequency=1000,
+                update_target_frequency=1, #000,
                 train_repeat=1,
             ),
         ]

@@ -69,6 +69,10 @@ class VG(VariantGenerator):
         return [10]
 
     @variant
+    def tau(self):
+        return [1]
+
+    @variant
     def train_frequency(self):
         return [
             # assuming the current is fixed, 0.999^5000 = 0.00672
@@ -113,6 +117,7 @@ for v in variants:
             actor_train_frequency=v["train_frequency"]["actor_train_frequency"],
             critic_train_frequency=v["train_frequency"]["critic_train_frequency"],
             update_target_frequency=v["train_frequency"]["update_target_frequency"],
+            soft_target_tau=v["tau"],
                 # deterministic env and policy: only need 1 traj sample
         )
     ddpg_kwargs.update(shared_ddpg_kwargs)
