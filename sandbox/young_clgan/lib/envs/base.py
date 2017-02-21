@@ -124,8 +124,8 @@ class GoalEnvAngle(GoalEnv, Serializable):
 
 
 class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
-    def __init__(self, env,  goal_generator, terminal_bonus=0, terminal_eps=0.1, final_goal=None,
-                 distance_metric='L2', goal_reward='NegativeDistance', goal_weight=1,
+    def __init__(self, env, goal_generator, terminal_bonus=0, terminal_eps=0.1, final_goal=None,
+                 goal_bounds=None, distance_metric='L2', goal_reward='NegativeDistance', goal_weight=1,
                  inner_weight=0, angle_idxs=(None,)):
         """
         :param env: wrapped env
@@ -139,7 +139,8 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
         """
 
         Serializable.quick_init(self, locals())
-        self.final_goal = final_goal
+        ProxyEnv.__init__(self, env)
+        GoalEnvAngle.__init__(self, angle_idxs=angle_idxs)
         self.update_goal_generator(goal_generator)
         self.terminal_bonus = terminal_bonus
         self.terminal_eps = terminal_eps
@@ -148,8 +149,14 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
         self.goal_weight = goal_weight
         self.inner_weight = inner_weight
         self.fig_number = 0
-        ProxyEnv.__init__(self, env)
-        GoalEnvAngle.__init__(self, angle_idxs=angle_idxs)
+        self.final_goal = final_goal
+        self.goal_bounds = goal_bounds
+        if self.goal_bounds is None:
+            self.goal_bounds = self.observation_space.bounds
+        elif np.array(self.goal_bounds).size <= 1:
+            self.goal_bounds = [-1 * self.goal_bounds * np.ones(self.observation_space.flat_dim), self.goal_bounds * np.ones(self.observation_space.flat_dim)]
+        print(self.goal_bounds)
+
 
     def reset(self, fix_goal=None, reset_goal=True, reset_inner=True):
         if reset_goal:

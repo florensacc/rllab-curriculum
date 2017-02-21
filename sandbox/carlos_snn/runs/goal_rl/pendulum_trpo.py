@@ -20,7 +20,7 @@ from rllab import config
 from rllab.misc.instrument import VariantGenerator, variant
 
 from sandbox.young_clgan.lib.envs.base import GoalExplorationEnv, GoalIdxExplorationEnv
-from sandbox.young_clgan.lib.envs.base import UniformGoalGenerator, FixedGoalGenerator, UniformAngleGoalGenerator
+from sandbox.young_clgan.lib.envs.base import UniformGoalGenerator, FixedGoalGenerator
 from sandbox.young_clgan.lib.goal import *
 from sandbox.young_clgan.lib.logging import *
 from sandbox.carlos_snn.autoclone import autoclone
@@ -66,7 +66,7 @@ if __name__ == '__main__':
         n_parallel = 4
     else:
         mode = 'local'
-        n_parallel = 4
+        n_parallel = 0
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
@@ -99,8 +99,10 @@ if __name__ == '__main__':
             assert goal_generator_class == FixedGoalGenerator, 'goal generator not recognized!'
             goal_generator = goal_generator_class(goal=v['goal'])
 
-        env = GoalExplorationEnv(env=inner_env, final_goal=v['goal'], goal_generator=goal_generator, goal_reward=v['goal_reward'],
-                                 goal_weight=v['goal_weight'], terminal_bonus=v['terminal_bonus'], angle_idxs=v['angle_idxs'])
+        env = GoalExplorationEnv(env=inner_env, final_goal=v['goal'], goal_bounds=v['goal_range'],
+                                 goal_generator=goal_generator, goal_reward=v['goal_reward'],
+                                 goal_weight=v['goal_weight'], terminal_bonus=v['terminal_bonus'],
+                                 angle_idxs=v['angle_idxs'])
 
         policy = GaussianMLPPolicy(
             env_spec=env.spec,
@@ -122,6 +124,8 @@ if __name__ == '__main__':
             step_size=0.01,
             plot=False,
         )
+
+        algo.train()
 
 
     for vv in vg.variants(randomized=True):
