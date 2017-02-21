@@ -89,7 +89,7 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
         )
 
     def _compute_dist_reward(self):
-        """Transforms dist to goal with linear_threshold_reward: gets threshold * coef at dist=0, and decreases to 0"""
+        """Transforms dist to goal with linear_threshold_reward: gets -threshold * coef at dist=0, and decreases to 0"""
         dist = np.linalg.norm(
             self.get_body_com("torso") - self.get_body_com("target")
         )
@@ -100,6 +100,17 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
         self.model.data.qpos = qpos
         self.model.data.qvel = qvel
         # self.model._compute_subtree() #pylint: disable=W0212
+        self.model.forward()
+
+    def get_xy(self):
+        qpos = self.model.data.qpos
+        return qpos[0, 0], qpos[1, 0]
+
+    def set_xy(self, xy):
+        qpos = np.copy(self.model.data.qpos)
+        qpos[0, 0] = xy[0]
+        qpos[1, 0] = xy[1]
+        self.model.data.qpos = qpos
         self.model.forward()
 
     @overrides

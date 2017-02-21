@@ -198,7 +198,7 @@ class MazeEnv(ProxyEnv, Serializable):
 
     def get_current_obs(self):
         return np.concatenate([self.wrapped_env.get_current_obs(),
-                               self.get_current_maze_obs()
+                               #self.get_current_maze_obs()
                                ])
 
     def get_ori(self):

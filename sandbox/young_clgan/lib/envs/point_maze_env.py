@@ -1,5 +1,5 @@
-from rllab.envs.mujoco.maze.maze_env import MazeEnv
-from rllab.envs.mujoco.point_env import PointEnv
+from sandbox.young_clgan.lib.envs.maze_env import MazeEnv
+from sandbox.young_clgan.lib.envs.point_env import PointEnv
 
 
 class PointMazeEnv(MazeEnv):
