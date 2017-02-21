@@ -4,7 +4,7 @@ import math
 import numpy as np
 import scipy.misc
 
-from sandbox.young_clgan.lib.goal.evaluator import evaluate_goals
+from sandbox.young_clgan.lib.goal.evaluator import evaluate_goals, convert_label
 from sandbox.young_clgan.lib.envs.base import FixedGoalGenerator
 
 import matplotlib
