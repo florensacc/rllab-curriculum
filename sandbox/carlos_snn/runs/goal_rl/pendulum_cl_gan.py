@@ -50,7 +50,7 @@ if __name__ == '__main__':
     vg.add('angle_idxs', [((0, 1),)]) # these are the idx of the obs corresponding to angles (here the first 2)
     vg.add('distance_metric', ['L2'])
     vg.add('terminal_bonus', [1e3])
-    vg.add('terminal_eps', [0.1, 0.5])
+    vg.add('terminal_eps', [0.1])
     vg.add('goal_weight', [0])
     vg.add('goal_reward', ['NegativeDistance'])
     # old hyperparams
@@ -61,7 +61,7 @@ if __name__ == '__main__':
     #############################################
     vg.add('min_reward', [0.1])  # now running it with only the terminal reward of 1!
     vg.add('max_reward', [1e3])
-    vg.add('improvement_threshold', [0.1, 1])  # is this based on the reward, now discounted success rate --> push for fast
+    vg.add('improvement_threshold', [0.1])  # is this based on the reward, now discounted success rate --> push for fast
     # gan_configs
     vg.add('goal_noise_level', [1])  # ???
     vg.add('gan_outer_iters', [5])
@@ -253,7 +253,11 @@ if __name__ == '__main__':
         run_experiment_lite(
             run_task,
             pre_commands=['pip install --upgrade pip',
-                          'pip install --upgrade :tflearn',
+                          'pip install --upgrade theano',
+                          'pip install --upgrade tensorflow',
+                          'pip install tflearn',
+                          'pip install dominate',
+                          'pip install scikit-image',
                           ],
             variant=vv,
             mode='local_docker',
