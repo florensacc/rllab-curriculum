@@ -38,9 +38,9 @@ from sandbox.young_clgan.lib.logging import *
 
 EXPERIMENT_TYPE = 'cl_gan'
 
-use_stub = False
+use_stub = True
 
-use_ec2 = True
+use_ec2 = False
 
 if use_ec2:
     use_stub = True
@@ -62,15 +62,15 @@ if __name__ == '__main__':
 
 
     hyperparams = AttrDict(
-        horizon=200,
+        horizon=400,
         goal_size=2,
-        goal_range=15,
+        goal_range=10,
         goal_noise_level=1,
         min_reward=5,
-        max_reward=1000,
+        max_reward=6000,
         improvement_threshold=10,
         outer_iters=200,
-        inner_iters=50,
+        inner_iters=5,
         pg_batch_size=20000,
         gan_outer_iters=5,
         gan_discriminator_iters=200,
@@ -78,6 +78,8 @@ if __name__ == '__main__':
         gan_noise_size=4,
         gan_generator_layers=[256, 256],
         gan_discriminator_layers=[128, 128],
+        num_new_goals=200,
+        num_old_goals=200,
         experiment_type=EXPERIMENT_TYPE,
     )
 
@@ -86,6 +88,13 @@ if __name__ == '__main__':
     if use_stub:
         run_experiment_lite(
             algo.train(),
+            pre_commands=['pip install --upgrade pip',
+                          'pip install --upgrade theano',
+                          'pip install --upgrade tensorflow',
+                          'pip install tflearn',
+                          'pip install dominate',
+                          'pip install scikit-image',
+                          ],
             n_parallel=n_parallel,
             use_cloudpickle=False,
             snapshot_mode="none",

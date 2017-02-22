@@ -54,6 +54,18 @@ def plot_policy_reward(policy, env, limit, horizon=200, max_reward=6000, fname=N
         else:
             return img
 
+def save_image(fname=None):
+    if fname is not None:
+        plt.savefig(fname, format='png')
+        return scipy.misc.imread(fname)
+    else:
+        fp = tempfile.TemporaryFile()
+        plt.savefig(fp, format='png')
+        fp.seek(0)
+        img = scipy.misc.imread(fp)
+        fp.close()
+        return img
+
 
 def plot_labeled_samples(samples, sample_classes=None, text_labels=None, fname=None, limit=None,
                          labels=None, size=1000, colors=['red', 'green', 'blue', 'yellow']):
