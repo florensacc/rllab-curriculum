@@ -2,8 +2,8 @@ import os
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES']=''
 
-from sandbox.young_clgan.lib.utils import initialize_parallel_sampler
-initialize_parallel_sampler()
+# from sandbox.young_clgan.lib.utils import initialize_parallel_sampler
+# initialize_parallel_sampler()
 
 # Symbols that need to be stubbed
 import rllab
@@ -29,34 +29,11 @@ from matplotlib import pyplot as plt
 
 from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator
 from sandbox.young_clgan.lib.envs.point_env import PointEnv
-from sandbox.young_clgan.lib.goal import *
+from sandbox.young_clgan.lib.goal.evaluator import convert_label, evaluate_goals, evaluate_goal_env, label_goals
+from sandbox.young_clgan.lib.goal.generator import GoalGAN
 from sandbox.young_clgan.lib.logging import *
 
 EXPERIMENT_TYPE = 'cl_gan'
-
-
-def convert_label(labels):
-    # Put good goals last so they will be plotted on top of other goals and be most visible.
-    classes = {
-        0: 'Other',
-        1: 'Low rewards',
-        2: 'High rewards',
-        3: 'Unlearnable',
-        4: 'Good goals',
-    }
-    new_labels = np.zeros(labels.shape[0], dtype=int)
-    new_labels[np.logical_and(labels[:, 0], labels[:, 1])] = 4
-    new_labels[labels[:, 0] == False] = 1
-    new_labels[labels[:, 1] == False] = 2
-    new_labels[
-        np.logical_and(
-            np.logical_and(labels[:, 0], labels[:, 1]),
-            labels[:, 2] == False
-        )
-    ] = 3
-
-    return new_labels, classes
-
 
 
 if __name__ == '__main__':

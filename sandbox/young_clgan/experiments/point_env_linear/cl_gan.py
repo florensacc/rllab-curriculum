@@ -68,6 +68,13 @@ if __name__ == '__main__':
 
     run_experiment_lite(
         algo.train(),
+        pre_commands=['pip install --upgrade pip',
+                      'pip install --upgrade theano',
+                      'pip install --upgrade tensorflow',
+                      'pip install tflearn',
+                      'pip install dominate',
+                      'pip install scikit-image',
+                      ],
         n_parallel=multiprocessing.cpu_count(),
         use_cloudpickle=False,
         snapshot_mode="none",
