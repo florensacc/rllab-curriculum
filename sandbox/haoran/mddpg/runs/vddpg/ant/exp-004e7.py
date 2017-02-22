@@ -2,6 +2,7 @@
 Variational DDPG (online, consevative)
 
 U-shaped maze with Guassian reward
+Continue exp-004e4, but with different maze constructions
 """
 # imports -----------------------------------------------------
 from sandbox.haoran.myscripts.retrainer import Retrainer
@@ -23,7 +24,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/vddpg/ant/" + exp_index
 mode = "ec2"
-subnet = "us-west-1b"
+subnet = "us-west-1c"
 ec2_instance = "c4.4xlarge"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 config.AWS_IMAGE_ID = "ami-85d181e5" # with docker already pulled
@@ -39,10 +40,8 @@ class VG(VariantGenerator):
     @variant
     def maze(self):
         return [
-            dict(wall_offset=0.25, u_length=5, u_turn_length=3),
-            # dict(wall_offset=0.25, u_length=7, u_turn_length=3),
-            # dict(wall_offset=0.25, u_length=5, u_turn_length=5),
-            # dict(wall_offset=0.25, u_length=7, u_turn_length=5),
+            dict(wall_offset=0.25, u_length=5, u_turn_length=7),
+            dict(wall_offset=0.25, u_length=3, u_turn_length=7),
         ]
     @variant
     def init_reward(self):

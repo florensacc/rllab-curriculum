@@ -1,7 +1,8 @@
 """
 Variational DDPG (online, consevative)
 
-U-shaped maze with Guassian reward
+Re-train policies and/or qfs learned from exp-004b. Continue exp-004e2
+* try different pretrained scale_reward
 """
 # imports -----------------------------------------------------
 from sandbox.haoran.myscripts.retrainer import Retrainer
@@ -37,24 +38,18 @@ plot = False
 # variant params ---------------------------------------------------
 class VG(VariantGenerator):
     @variant
-    def maze(self):
-        return [
-            dict(wall_offset=0.25, u_length=5, u_turn_length=3),
-            # dict(wall_offset=0.25, u_length=7, u_turn_length=3),
-            # dict(wall_offset=0.25, u_length=5, u_turn_length=5),
-            # dict(wall_offset=0.25, u_length=7, u_turn_length=5),
-        ]
-    @variant
-    def init_reward(self):
-        return [0.1]
-    @variant
-    def goal_reward(self):
-        return [10]
-    @variant
-    def speed_coeff(self):
-        return [0, 1]
+    def wall_offset(self):
+        return [0, 0.5]
 
-    # algo
+    @variant
+    def max_path_length(self):
+        return [500]
+    @variant
+    def scale_reward_annealer_final_value(self):
+        return [1000]
+    @variant
+    def scale_reward_annealer_stop_iter(self):
+        return [20]
     @variant
     def train_frequency(self):
         return [
@@ -65,15 +60,6 @@ class VG(VariantGenerator):
                 train_repeat=1,
             ),
         ]
-    @variant
-    def max_path_length(self):
-        return [500]
-    @variant
-    def scale_reward_annealer_final_value(self):
-        return [1000]
-    @variant
-    def scale_reward_annealer_stop_iter(self):
-        return [20]
 
     @variant
     def exp_info(self):
@@ -117,6 +103,126 @@ class VG(VariantGenerator):
                 env_name="tuomas_ant",
                 seed=400
             ),
+
+            dict(
+                exp_prefix="mddpg/vddpg/ant/exp-004b",
+                exp_name="exp-004b_20170218_223359_678097_tuomas_ant",
+                snapshot_file="itr_499.pkl",
+                env_name="tuomas_ant",
+                seed=0
+            ),
+
+            dict(
+                exp_prefix="mddpg/vddpg/ant/exp-004b",
+                exp_name="exp-004b_20170218_223401_362949_tuomas_ant",
+                snapshot_file="itr_499.pkl",
+                env_name="tuomas_ant",
+                seed=100
+            ),
+
+            dict(
+                exp_prefix="mddpg/vddpg/ant/exp-004b",
+                exp_name="exp-004b_20170218_223403_216892_tuomas_ant",
+                snapshot_file="itr_499.pkl",
+                env_name="tuomas_ant",
+                seed=200
+            ),
+
+            dict(
+                exp_prefix="mddpg/vddpg/ant/exp-004b",
+                exp_name="exp-004b_20170218_223404_799444_tuomas_ant",
+                snapshot_file="itr_499.pkl",
+                env_name="tuomas_ant",
+                seed=300
+            ),
+
+            dict(
+                exp_prefix="mddpg/vddpg/ant/exp-004b",
+                exp_name="exp-004b_20170218_223406_210966_tuomas_ant",
+                snapshot_file="itr_499.pkl",
+                env_name="tuomas_ant",
+                seed=400
+            ),
+
+            dict(
+                exp_prefix="mddpg/vddpg/ant/exp-004b",
+                exp_name="exp-004b_20170218_223415_559220_tuomas_ant",
+                snapshot_file="itr_499.pkl",
+                env_name="tuomas_ant",
+                seed=0
+            ),
+
+            dict(
+                exp_prefix="mddpg/vddpg/ant/exp-004b",
+                exp_name="exp-004b_20170218_223417_240335_tuomas_ant",
+                snapshot_file="itr_499.pkl",
+                env_name="tuomas_ant",
+                seed=100
+            ),
+
+            dict(
+                exp_prefix="mddpg/vddpg/ant/exp-004b",
+                exp_name="exp-004b_20170218_223418_646005_tuomas_ant",
+                snapshot_file="itr_499.pkl",
+                env_name="tuomas_ant",
+                seed=200
+            ),
+
+            dict(
+                exp_prefix="mddpg/vddpg/ant/exp-004b",
+                exp_name="exp-004b_20170218_223420_042393_tuomas_ant",
+                snapshot_file="itr_499.pkl",
+                env_name="tuomas_ant",
+                seed=300
+            ),
+
+            dict(
+                exp_prefix="mddpg/vddpg/ant/exp-004b",
+                exp_name="exp-004b_20170218_223421_311462_tuomas_ant",
+                snapshot_file="itr_499.pkl",
+                env_name="tuomas_ant",
+                seed=400
+            ),
+
+            dict(
+                exp_prefix="mddpg/vddpg/ant/exp-004b",
+                exp_name="exp-004b_20170218_223431_807420_tuomas_ant",
+                snapshot_file="itr_499.pkl",
+                env_name="tuomas_ant",
+                seed=0
+            ),
+
+            dict(
+                exp_prefix="mddpg/vddpg/ant/exp-004b",
+                exp_name="exp-004b_20170218_223433_376182_tuomas_ant",
+                snapshot_file="itr_499.pkl",
+                env_name="tuomas_ant",
+                seed=100
+            ),
+
+            dict(
+                exp_prefix="mddpg/vddpg/ant/exp-004b",
+                exp_name="exp-004b_20170218_223434_770889_tuomas_ant",
+                snapshot_file="itr_499.pkl",
+                env_name="tuomas_ant",
+                seed=200
+            ),
+
+            dict(
+                exp_prefix="mddpg/vddpg/ant/exp-004b",
+                exp_name="exp-004b_20170218_223436_441884_tuomas_ant",
+                snapshot_file="itr_499.pkl",
+                env_name="tuomas_ant",
+                seed=300
+            ),
+
+            dict(
+                exp_prefix="mddpg/vddpg/ant/exp-004b",
+                exp_name="exp-004b_20170218_223437_924890_tuomas_ant",
+                snapshot_file="itr_499.pkl",
+                env_name="tuomas_ant",
+                seed=400
+            ),
         ]
 
 variants = VG().variants()
@@ -143,12 +249,7 @@ for v in variants:
         scale_reward_annealer_final_value=v["scale_reward_annealer_final_value"],
         scale_reward_annealer_stop_iter=v["scale_reward_annealer_stop_iter"],
         debug_mode=False,
-        wall_offset=v["maze"]["wall_offset"],
-        u_length=v["maze"]["u_length"],
-        u_turn_length=v["maze"]["u_turn_length"],
-        init_reward=v["init_reward"],
-        goal_reward=v["goal_reward"],
-        speed_coeff=v["speed_coeff"],
+        wall_offset=v["wall_offset"],
     )
     # algo
     if mode == "local_test" or mode == "local_docker_test":
@@ -243,26 +344,26 @@ scale_reward_annealer = LogLinearAnnealer(
 # new env
 from sandbox.rocky.tf.envs.base import TfEnv
 from rllab.envs.normalized_env import normalize
-from sandbox.haoran.mddpg.envs.mujoco.ant_puddle_env import \
-    AntPuddleEnv, AntPuddleGenerator
-puddles, goal, plot_settings = AntPuddleGenerator().generate_u_shaped_maze(
-    wall_offset={wall_offset},
-    length={u_length},
-    turn_length={u_turn_length},
-)
+from sandbox.haoran.mddpg.envs.mujoco.ant_puddle_env import AntPuddleEnv, Puddle
+offset = {wall_offset}
+puddles = [
+    Puddle(x=-1, y=1 + offset, width=30, height=1, angle=0, cost=0,
+        plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
+    Puddle(x=-1, y=-2 - offset, width=30, height=1, angle=0, cost=0,
+        plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
+    Puddle(x=-2, y=-2 - offset, width=1, height=2 * (2 + offset),
+        angle=0, cost=0, plot_args=dict(color=(1., 0., 0., 1.0)),
+        hard=True),
+]
 env = TfEnv(normalize(
     AntPuddleEnv(
-        reward_type=\"goal\",
+        reward_type=\"velocity\",
+        direction=None,
         flip_thr=0.,
         puddles=puddles,
-        goal=goal,
-        plot_settings=plot_settings,
         mujoco_env_args=dict(
             random_init_state=False,
         ),
-        init_reward={init_reward},
-        goal_reward={goal_reward},
-        speed_coeff={speed_coeff},
     ),
     clip=True,
 ))
@@ -290,13 +391,12 @@ self.algo = vddpg.VDDPG(
     update_target_frequency={update_target_frequency},
     train_repeat={train_repeat},
     q_plot_settings=_algo.q_plot_settings,
-    env_plot_settings=_algo.env_plot_settings,
+    env_plot_settings=dict(figsize=(10, 1)),
     eval_kl_n_sample={eval_kl_n_sample},
     eval_kl_n_sample_part={eval_kl_n_sample_part},
     max_path_length={max_path_length},
     n_epochs={n_epochs},
     epoch_length={epoch_length},
-    min_pool_size={min_pool_size},
     batch_size=_algo.batch_size,
     discount=_algo.discount,
     soft_target_tau=1,

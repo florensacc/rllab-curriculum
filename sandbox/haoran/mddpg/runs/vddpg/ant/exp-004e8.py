@@ -2,6 +2,9 @@
 Variational DDPG (online, consevative)
 
 U-shaped maze with Guassian reward
+Continue exp-004e4 and 004e7
+* tune maze constructions
+* tune init_reward
 """
 # imports -----------------------------------------------------
 from sandbox.haoran.myscripts.retrainer import Retrainer
@@ -39,20 +42,18 @@ class VG(VariantGenerator):
     @variant
     def maze(self):
         return [
-            dict(wall_offset=0.25, u_length=5, u_turn_length=3),
-            # dict(wall_offset=0.25, u_length=7, u_turn_length=3),
-            # dict(wall_offset=0.25, u_length=5, u_turn_length=5),
-            # dict(wall_offset=0.25, u_length=7, u_turn_length=5),
+            dict(wall_offset=0.25, u_length=5, u_turn_length=7),
+            dict(wall_offset=0.25, u_length=4, u_turn_length=7),
         ]
     @variant
     def init_reward(self):
-        return [0.1]
+        return [1]
     @variant
     def goal_reward(self):
         return [10]
     @variant
     def speed_coeff(self):
-        return [0, 1]
+        return [0]
 
     # algo
     @variant
@@ -289,8 +290,8 @@ self.algo = vddpg.VDDPG(
     actor_train_frequency={actor_train_frequency},
     update_target_frequency={update_target_frequency},
     train_repeat={train_repeat},
-    q_plot_settings=_algo.q_plot_settings,
-    env_plot_settings=_algo.env_plot_settings,
+    q_plot_settings=None,
+    env_plot_settings=dict(),
     eval_kl_n_sample={eval_kl_n_sample},
     eval_kl_n_sample_part={eval_kl_n_sample_part},
     max_path_length={max_path_length},

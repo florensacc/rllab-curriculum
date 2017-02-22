@@ -6,6 +6,7 @@ from rllab.mujoco_py import MjViewer
 import numpy as np
 import os
 from matplotlib.patches import Rectangle
+import matplotlib.pyplot as plt
 
 from rllab.envs.base import Step
 from rllab.misc.overrides import overrides
@@ -16,7 +17,7 @@ class Puddle(Serializable):
     A puddle is a rectangular high-cost region
     """
     def __init__(self, x, y, width, height, angle, plot_args, cost, hard=False,
-        text=""):
+        text="", depth=2):
         """
         x, y: coordinate of the lower left corner
         """
@@ -33,6 +34,7 @@ class Puddle(Serializable):
         self.cost = cost
         self.hard = hard
         self.text = text
+        self.depth = depth
 
     def plot(self, ax):
         ax.add_patch(Rectangle(
@@ -259,6 +261,26 @@ class AntPuddleEnv(MujocoEnv, Serializable):
     def plot_goal(self, ax):
         x, y = self.goal
         ax.plot(x, y, 'b*', markersize=10)
+        if self.reward_type == "goal":
+            xmin, xmax = self.plot_settings["xlim"]
+            ymin, ymax = self.plot_settings["ylim"]
+            xx = np.arange(xmin, xmax, 0.1)
+            yy = np.arange(ymin, ymax, 0.1)
+            X, Y = np.meshgrid(xx, yy)
+            goal_x, goal_y = self.goal
+            D_square = (X - goal_x) ** 2 + (Y - goal_y) ** 2 # dist square
+
+            x0 = np.linalg.norm(np.array(self.goal)) # init dist
+            y0 = self.init_reward
+            y1 = self.goal_reward
+            a = y1
+            b = -1. / (x0 ** 2) * np.log(y0 / y1)
+            R = a * np.exp(-b * (D_square))
+
+            cs = ax.contour(X, Y, R, 20)
+            ax.clabel(cs, inline=1, fontsize=10, fmt='%.1f')
+        plt.axis("equal")
+
 
     def plot_env(self, ax):
         self.plot_puddles(ax)
@@ -312,13 +334,15 @@ class AntPuddleEnv(MujocoEnv, Serializable):
             if puddle.hard:
                 worldbody.append(ET('geom',
                     type="box",
-                    pos="{center_x} {center_y} 1".format(
+                    pos="{center_x} {center_y} {center_z}".format(
                         center_x=puddle.x + 0.5 * puddle.width,
                         center_y=puddle.y + 0.5 * puddle.height,
+                        center_z=0.5 * puddle.depth,
                     ),
-                    size="{half_width} {half_height} 1".format(
+                    size="{half_width} {half_height} {half_depth}".format(
                         half_width=0.5 * puddle.width,
                         half_height=0.5 * puddle.height,
+                        half_depth=0.5 * puddle.depth,
                     ),
                     conaffinity="1", # has contact with other objs
                     rgba="{r} {g} {b} {a}".format(
@@ -374,14 +398,15 @@ class AntPuddleEnv(MujocoEnv, Serializable):
             self.viewer.set_window_size(config["width"], config["height"])
             self.viewer.set_window_title(config["title"])
         else:
-            self.viewer.set_window_pose(2000,0)
+            self.viewer.set_window_pose(1000,0)
             self.viewer.set_window_size(500, 500)
             self.viewer.set_window_title("ant puddle")
         return self.viewer
 
 class AntPuddleGenerator(object):
     # env generating shortcuts
-    def generate_u_shaped_maze(self, wall_offset, length, turn_length):
+    def generate_u_shaped_maze(self, wall_offset, length, turn_length,
+        obj=""):
         spacing = 2. + 2 * wall_offset
         puddles = [
             Puddle(x=-1, y=spacing/2, width=length-spacing+1, height=1,
@@ -420,7 +445,10 @@ class AntPuddleGenerator(object):
             xlim=(xmin - plot_offset, xmax + plot_offset),
             ylim=(ymin - plot_offset, ymax + plot_offset),
         )
-        return puddles, goal, plot_settings
+        if obj == "":
+            return puddles, goal, plot_settings
+        else:
+            return locals()[obj]
 
 
     def generate_two_choice_maze(self, wall_offset, length, obj="puddles"):

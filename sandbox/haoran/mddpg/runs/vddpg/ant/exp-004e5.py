@@ -1,7 +1,8 @@
 """
 Variational DDPG (online, consevative)
 
-U-shaped maze with Guassian reward
+Re-train policies and/or qfs learned from exp-004b. Similar to 004e2
+* tune obstacles
 """
 # imports -----------------------------------------------------
 from sandbox.haoran.myscripts.retrainer import Retrainer
@@ -23,7 +24,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/vddpg/ant/" + exp_index
 mode = "ec2"
-subnet = "us-west-1b"
+subnet = "us-west-1c"
 ec2_instance = "c4.4xlarge"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 config.AWS_IMAGE_ID = "ami-85d181e5" # with docker already pulled
@@ -37,24 +38,21 @@ plot = False
 # variant params ---------------------------------------------------
 class VG(VariantGenerator):
     @variant
-    def maze(self):
-        return [
-            dict(wall_offset=0.25, u_length=5, u_turn_length=3),
-            # dict(wall_offset=0.25, u_length=7, u_turn_length=3),
-            # dict(wall_offset=0.25, u_length=5, u_turn_length=5),
-            # dict(wall_offset=0.25, u_length=7, u_turn_length=5),
-        ]
+    def wall_offset(self):
+        return [0, 0.25]
     @variant
-    def init_reward(self):
-        return [0.1]
-    @variant
-    def goal_reward(self):
-        return [10]
-    @variant
-    def speed_coeff(self):
-        return [0, 1]
+    def obstacle(self):
+        return [dict(height=0.3, width=1)]
 
-    # algo
+    @variant
+    def max_path_length(self):
+        return [500]
+    @variant
+    def scale_reward_annealer_final_value(self):
+        return [1000]
+    @variant
+    def scale_reward_annealer_stop_iter(self):
+        return [20]
     @variant
     def train_frequency(self):
         return [
@@ -65,15 +63,6 @@ class VG(VariantGenerator):
                 train_repeat=1,
             ),
         ]
-    @variant
-    def max_path_length(self):
-        return [500]
-    @variant
-    def scale_reward_annealer_final_value(self):
-        return [1000]
-    @variant
-    def scale_reward_annealer_stop_iter(self):
-        return [20]
 
     @variant
     def exp_info(self):
@@ -143,12 +132,9 @@ for v in variants:
         scale_reward_annealer_final_value=v["scale_reward_annealer_final_value"],
         scale_reward_annealer_stop_iter=v["scale_reward_annealer_stop_iter"],
         debug_mode=False,
-        wall_offset=v["maze"]["wall_offset"],
-        u_length=v["maze"]["u_length"],
-        u_turn_length=v["maze"]["u_turn_length"],
-        init_reward=v["init_reward"],
-        goal_reward=v["goal_reward"],
-        speed_coeff=v["speed_coeff"],
+        wall_offset=v["wall_offset"],
+        obstacle_height=v["obstacle"]["height"],
+        obstacle_width=v["obstacle"]["width"],
     )
     # algo
     if mode == "local_test" or mode == "local_docker_test":
@@ -243,26 +229,41 @@ scale_reward_annealer = LogLinearAnnealer(
 # new env
 from sandbox.rocky.tf.envs.base import TfEnv
 from rllab.envs.normalized_env import normalize
-from sandbox.haoran.mddpg.envs.mujoco.ant_puddle_env import \
-    AntPuddleEnv, AntPuddleGenerator
-puddles, goal, plot_settings = AntPuddleGenerator().generate_u_shaped_maze(
-    wall_offset={wall_offset},
-    length={u_length},
-    turn_length={u_turn_length},
-)
+from sandbox.haoran.mddpg.envs.mujoco.ant_puddle_env import AntPuddleEnv, Puddle
+offset = {wall_offset}
+puddles = [
+    Puddle(x=-1, y=1 + offset, width=30, height=1, angle=0, cost=0,
+        plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
+    Puddle(x=-1, y=-2 - offset, width=30, height=1, angle=0, cost=0,
+        plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
+    Puddle(x=-2, y=-2 - offset, width=1, height=2 * (2 + offset),
+        angle=0, cost=0, plot_args=dict(color=(1., 0., 0., 1.0)),
+        hard=True),
+    Puddle(x=1, y=-1 - offset, width={obstacle_width}, height=2 * (1 + offset),
+        angle=0, cost=0, plot_args=dict(color=(1., 0., 0., 1.)),
+        hard=True, depth={obstacle_height}),
+    Puddle(x=5, y=-1 - offset, width={obstacle_width}, height=2 * (1 + offset),
+        angle=0, cost=0, plot_args=dict(color=(1., 0., 0., 1.)),
+        hard=True, depth={obstacle_height}),
+    Puddle(x=7, y=-1 - offset, width={obstacle_width}, height=2 * (1 + offset),
+        angle=0, cost=0, plot_args=dict(color=(1., 0., 0., 1.)),
+        hard=True, depth={obstacle_height}),
+    Puddle(x=11, y=-1 - offset, width={obstacle_width}, height=2 * (1 + offset),
+        angle=0, cost=0, plot_args=dict(color=(1., 0., 0., 1.)),
+        hard=True, depth={obstacle_height}),
+    Puddle(x=15, y=-1 - offset, width={obstacle_width}, height=2 * (1 + offset),
+        angle=0, cost=0, plot_args=dict(color=(1., 0., 0., 1.)),
+        hard=True, depth={obstacle_height}),
+]
 env = TfEnv(normalize(
     AntPuddleEnv(
-        reward_type=\"goal\",
+        reward_type=\"velocity\",
+        direction=None,
         flip_thr=0.,
         puddles=puddles,
-        goal=goal,
-        plot_settings=plot_settings,
         mujoco_env_args=dict(
             random_init_state=False,
         ),
-        init_reward={init_reward},
-        goal_reward={goal_reward},
-        speed_coeff={speed_coeff},
     ),
     clip=True,
 ))
@@ -296,7 +297,6 @@ self.algo = vddpg.VDDPG(
     max_path_length={max_path_length},
     n_epochs={n_epochs},
     epoch_length={epoch_length},
-    min_pool_size={min_pool_size},
     batch_size=_algo.batch_size,
     discount=_algo.discount,
     soft_target_tau=1,
