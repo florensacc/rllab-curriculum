@@ -270,7 +270,7 @@ if __name__ == '__main__':
             variant=vv,
             mode='local',
             # n_parallel=n_parallel,
-            n_parallel=0,
+            n_parallel=32,
             # Only keep the snapshot parameters for the last iteration
             snapshot_mode="last",
             seed=vv['seed'],

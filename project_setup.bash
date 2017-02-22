@@ -20,4 +20,6 @@ function sim_policy {
     )
 }
 
+export MPLBACKEND='Agg'
+
 source activate rllab_goal_rl
