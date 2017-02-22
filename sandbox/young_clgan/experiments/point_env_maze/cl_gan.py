@@ -49,6 +49,12 @@ if use_ec2:
 else:
     mode = "local"
     n_parallel = multiprocessing.cpu_count()
+    #n_parallel = 1
+
+if use_ec2:
+    seeds = [1, 11, 21, 31, 41]
+else:
+    seeds = [1]
 
 #from sandbox.young_clgan.experiments.point_env_linear.cl_gan_algo import CLGANPointEnvLinear
 
@@ -86,20 +92,24 @@ if __name__ == '__main__':
     algo = CLGANPointEnvMaze(hyperparams)
 
     if use_stub:
-        run_experiment_lite(
-            algo.train(),
-            pre_commands=['pip install --upgrade pip',
-                          'pip install --upgrade theano',
-                          'pip install --upgrade tensorflow',
-                          'pip install tflearn',
-                          'pip install dominate',
-                          'pip install scikit-image',
-                          ],
-            n_parallel=n_parallel,
-            use_cloudpickle=False,
-            snapshot_mode="none",
-            use_gpu=False,
-            mode=mode,
-        )
+        for seed in seeds:
+            run_experiment_lite(
+                algo.train(),
+                pre_commands=['pip install --upgrade pip',
+                              'pip install --upgrade theano',
+                              'pip install --upgrade tensorflow',
+                              'pip install tflearn',
+                              'pip install dominate',
+                              'pip install scikit-image',
+                              ],
+                n_parallel=n_parallel,
+                use_cloudpickle=False,
+                snapshot_mode="none",
+                use_gpu=False,
+                mode=mode,
+                exp_prefix='goalGAN-maze1',
+                #seed=seed
+            )
     else:
         algo.train()
+

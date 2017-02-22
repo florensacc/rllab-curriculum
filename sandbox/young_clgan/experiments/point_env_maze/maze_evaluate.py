@@ -147,7 +147,7 @@ def test_and_plot_policy(policy, env, visualize=False):
 def main():
     #pkl_file = "sandbox/young_clgan/experiments/point_env_maze/experiment_data/cl_gan_maze/2017-02-20_22-43-48_dav2/log/itr_129/itr_9.pkl"
 #    pkl_file = "sandbox/young_clgan/experiments/point_env_maze/experiment_data/cl_gan_maze/2017-02-21_15-30-36_dav2/log/itr_69/itr_4.pkl"
-    pkl_file = "sandbox/young_clgan/experiments/point_env_maze/experiment_data/cl_gan_maze/2017-02-21_22-49-03_dav2/log/itr_81/itr_4.pkl"
+    pkl_file = "sandbox/young_clgan/experiments/point_env_maze/experiment_data/cl_gan_maze/2017-02-21_22-49-03_dav2/log/itr_172/itr_4.pkl"
 
     # parser = argparse.ArgumentParser()
     # # parser.add_argument('--file', type=str, default=pkl_file,
@@ -166,7 +166,7 @@ def main():
 
     policy, train_env = get_policy(pkl_file)
 
-    paths, spacing = test_policy(policy, train_env, sampling_res=1)
+    paths, spacing = test_policy(policy, train_env, sampling_res=0)
 
     plot_heatmap(paths, spacing=spacing)
 
