@@ -56,6 +56,7 @@ class AtariEnv(GymEnv):
         self.n_frames = kwargs.get("n_frames", DEFAULT_N_FRAMES)
         self.persistent_adv = kwargs.get("persistent", DEFAULT_PERSISTENT)
         self.scale_neg1_1 = kwargs.get("scale_neg1_1", DEFAULT_SCALE_NEG1_1)
+        self.frame_dropout = kwargs.get("frame_dropout", 0)
 
         frameskip = kwargs.get('frame_skip', DEFAULT_FRAMESKIP)
         self.env.env.env.frameskip = frameskip
@@ -187,12 +188,18 @@ class AtariEnv(GymEnv):
         # next_obs should be Numpy array of shape (210,160,3)
         self.actions_taken.append(action)
         next_obs, reward, done, info = self.env.step(action)
-        if done:
-            print("DONE at time", self.t)
         if self.use_updated_ale:
             next_obs = next_obs[:,:,[2,1,0]]
         self._is_terminal = done
         self._reward = reward
+
+        if self.frame_dropout > 0:
+            if np.random.rand(1)[0] < self.frame_dropout:
+                # zero-out observation
+                next_obs = np.zeros(next_obs.shape).astype(np.uint8)
+               
+        #if done:
+        #    print("DONE at time", self.t)
         #if reward > 0:
         #    print("Reward:", self._reward, "; Time:", self.t)
         self.update_last_frames(next_obs)
@@ -239,27 +246,20 @@ class AtariEnv(GymEnv):
     def equiv_to(self, other_env):
         for k in ['_is_terminal', '_reward']:
             if getattr(self, k) != getattr(other_env, k):
-                import IPython as ipy
-                ipy.embed()
+                print("Different at key", k)
                 return False
         for k_arr in ['last_frames', 'last_adv_frames', 'actions_taken', 'prev_actions_taken']:
             if not np.array_equal(getattr(self, k_arr), getattr(other_env, k_arr)):
-                import IPython as ipy
-                ipy.embed()
+                print("Different at key", k_arr)
                 return False
         if self.base_env.ale.getFrameNumber() != other_env.base_env.ale.getFrameNumber():
             print("Frame numbers not equal")
-            import IPython as ipy
-            ipy.embed()
             return False
         if self.base_env.ale.getInt(b'random_seed') != other_env.base_env.ale.getInt(b'random_seed'):
             print("Different random seed")
-            import IPython as ipy
-            ipy.embed()
             return False
         if self.base_env.ale.getFloat(b'repeat_action_probability') != other_env.base_env.ale.getFloat(b'repeat_action_probability'):
             print("Different repeat action prob")
-            import IPython as ipy
-            ipy.embed()
             return False
+
         return True

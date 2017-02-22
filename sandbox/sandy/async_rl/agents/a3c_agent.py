@@ -75,18 +75,28 @@ class A3CLSTM(chainer.ChainList, A3CModel):
         self.lstm = L.LSTM(self.head.n_output_channels,
                            self.head.n_output_channels)
         self.skip_unchain = False  # Set to true when calculating gradients for sleeper adversary
+        self.callback_fn = None
         super().__init__(self.head, self.lstm, self.pi, self.v)
         init_like_torch(self)
 
     def pi_and_v(self, state, keep_same_state=False):
         out = self.head(state)
+        self.lstm_prev_h = self.lstm.h
+        self.lstm_prev_c = self.lstm.c
         if keep_same_state:
             prev_h, prev_c = self.lstm.h, self.lstm.c
             out = self.lstm(out)
             self.lstm.h, self.lstm.c = prev_h, prev_c
         else:
             out = self.lstm(out)
+
+        if hasattr(self, "callback_fn") and self.callback_fn is not None:
+            self.callback_fn(self, out, state)
+
         return self.pi(out), self.v(out)
+
+    def set_callback_fn(self, fn_handle):
+        self.callback_fn = fn_handle
 
     def reset_state(self):
         self.lstm.reset_state()

@@ -238,7 +238,10 @@ class AsyncAlgo(Picklable):
                 logger.save_itr_params(self.epoch,params)
             raise
 
-    def evaluate_performance(self,n_runs,horizon,return_paths=False,deterministic=False):
+    def evaluate_performance(self,n_runs,horizon,return_paths=False,deterministic=False,check_equiv=False):
+        # check_equiv - if true, checks that LSTM cell and hidden states are equivalent
+        # between this (target) policy and adversarial policy, if there is one
+
         #logger.log("Process %d: evaluating test performance"%(self.process_id),color="yellow")
         logger.log("Evaluating test performance:",color="yellow")
         self.test_env.phase = "Test"
@@ -255,8 +258,17 @@ class AsyncAlgo(Picklable):
             while not env.is_terminal:
                 if return_paths:
                     paths[i]['states'].append(env.state)
+                if check_equiv and env.adversary_fn is not None:
+                    adv_lstm_c, adv_lstm_h = env.adversary_fn(None, None)
+                
                 action = agent.act(env.state, env.reward, env.is_terminal, env.extra_infos, deterministic=deterministic)
                 reward = env.receive_action(action)
+
+                if check_equiv and env.adversary_fn is not None:
+                    assert np.array_equal(agent.model.lstm.h.data, adv_lstm_h), \
+                            "LSTM hidden states not equal"
+                    assert np.array_equal(agent.model.lstm.c.data, adv_lstm_c), \
+                            "LSTM cell states not equal"
                 if return_paths:
                     paths[i]['actions'].append(action)
                     paths[i]['rewards'].append(reward)
@@ -288,7 +300,6 @@ class AsyncAlgo(Picklable):
                 'profile-{}.out'.format(os.getpid())
             ),
         )
-
     def set_process_params(self,process_id,env,agent,training_args):
         """
         To be implemented by subclass.
