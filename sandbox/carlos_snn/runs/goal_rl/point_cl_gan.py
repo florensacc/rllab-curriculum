@@ -27,7 +27,7 @@ from rllab.misc.instrument import VariantGenerator
 
 from sandbox.young_clgan.lib.envs.base import GoalExplorationEnv, GoalIdxExplorationEnv
 from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator,\
-    UniformGoalGenerator, update_env_goal_generator
+    UniformGoalGenerator, update_env_goal_generator, generate_initial_goals
 from sandbox.young_clgan.lib.goal.evaluator import *
 from sandbox.young_clgan.lib.goal.generator import *
 # from sandbox.young_clgan.lib.goal.utils import *
@@ -152,7 +152,10 @@ if __name__ == '__main__':
 
         # Pretrain GAN with uniform distribution on the GAN output space and log a sample
         logger.log("pretraining the GAN with uniform...")
-        gan.pretrain_uniform()
+        # gan.pretrain_uniform()
+        gan.pretrain(
+            generate_initial_goals(env, policy, v['goal_range'])
+        )
         img = plot_gan_samples(gan, v['goal_range'], '{}/start.png'.format(log_dir))
         report.add_image(img, 'GAN pretrained uniform')
 
