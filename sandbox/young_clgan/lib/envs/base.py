@@ -355,12 +355,29 @@ def update_env_goal_generator(env, goal_generator):
     else:
         raise NotImplementedError('Unsupported environment')
 
+def get_goal_observation(env):
+    if hasattr(env, 'goal_observation'):
+        return env.goal_observation() # should be unnecessary
+    elif hasattr(env, 'wrapped_env'):
+        return env.wrapped_env.goal_observation()
+    else:
+        raise NotImplementedError('Unsupported environment')
+
+def get_current_goal(env):
+    if hasattr(env, 'current_goal'):
+        return env.current_goal
+    elif hasattr(env, 'wrapped_env'):
+        return env.wrapped_env.current_goal
+    else:
+        raise NotImplementedError('Unsupported environment')
 
 def generate_initial_goals(env, policy, goal_range, size=1000):
-    goal_dim = np.zeros_like(env.current_goal).shape
+    current_goal = get_current_goal(env)
+
+    goal_dim = np.array(current_goal).shape
     done = False
     obs = env.reset()
-    goals = [env.goal_observation]
+    goals = [get_goal_observation(env)]
     # import pdb; pdb.set_trace()
     while len(goals) < size:
         if done:
@@ -371,11 +388,11 @@ def generate_initial_goals(env, policy, goal_range, size=1000):
                 )
             )
             obs = env.reset()
-            goals.append(env.goal_observation)
+            goals.append(get_goal_observation(env))
         else:
             action, _ = policy.get_action(obs)
             obs, _, done, _ = env.step(action)
-            goals.append(env.goal_observation)
+            goals.append(get_goal_observation(env))
             
     return np.array(goals)
             

@@ -26,7 +26,7 @@ import tflearn
 import matplotlib
 matplotlib.use('Agg')
 
-from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator
+from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator, generate_initial_goals
 from sandbox.young_clgan.lib.goal import *
 #from sandbox.young_clgan.lib.logging import *
 #from sandbox.young_clgan.lib.logging.logger import ExperimentLogger
@@ -138,12 +138,17 @@ class CLGANPointEnvMaze(RLAlgorithm):
         # report.add_image(img, 'policy performance initialization\n')
 
         # Pretrain GAN with uniform distribution on the GAN output space
-        print("Pretraining the gan for uniform sampling")
-        gan.pretrain_uniform()
+        #print("Pretraining the gan for uniform sampling")
+        #gan.pretrain_uniform()
+
+        print("Pretraining the gan with initial goals")
+        gan.pretrain(
+            generate_initial_goals(env, policy, hyperparams.goal_range)
+        )
 
         print("Plotting GAN samples")
         img = plot_gan_samples(gan, hyperparams.goal_range, '{}/start.png'.format(log_config.plot_dir))
-        report.add_image(img, 'GAN pretrained uniform')
+        report.add_image(img, 'GAN initialization')
 
         report.save()
         report.new_row()
