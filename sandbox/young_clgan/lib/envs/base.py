@@ -110,8 +110,14 @@ class GoalEnv(Serializable):
         super(GoalEnv, self).__setstate__(d)
         self.update_goal_generator(d['__goal_generator'])
 
+    @property
+    def goal_observation(self):
+        """Return the observation corresponding to goal"""
+        raise NotImplementedError
+
 
 class GoalEnvAngle(GoalEnv, Serializable):
+    """ Turn specific elements in the goal into sin and cosine values. """
 
     def __init__(self, angle_idxs=(None,), **kwargs):
         """Indicates the coordinates that are angles and need to be duplicated to cos/sin"""
@@ -119,19 +125,21 @@ class GoalEnvAngle(GoalEnv, Serializable):
         self.angle_idxs = angle_idxs
         GoalEnv.__init__(self, **kwargs)
 
-    @overrides
-    @property
-    def current_goal(self):
-        # print("the goal generator is:", self.goal_generator)
-        angle_goal = self.goal_generator.goal
+    def process_angle_goal(self, goal):
         full_goal = []
-        for i, coord in enumerate(angle_goal):
+        for i, coord in enumerate(goal):
             if i in self.angle_idxs:
                 full_goal.extend([np.sin(coord), np.cos(coord)])
             else:
                 full_goal.append(coord)
             # print("the angle goal is: {}, the full goal is: {}".format(angle_goal, full_goal))
-        return full_goal
+        return np.array(full_goal)
+
+    @overrides
+    @property
+    def current_goal(self):
+        # print("the goal generator is:", self.goal_generator)
+        return process_angle_goal(self.current_goal)
 
 
 class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
@@ -226,6 +234,14 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
         while hasattr(obj, "wrapped_env"):  # try to go through "Normalize and Proxy and whatever wrapper"
             obj = obj.wrapped_env
         return self._append_observation(obj.get_current_obs())
+
+    @overrides
+    @property
+    def goal_observation(self):
+        obj = self
+        while hasattr(obj, "wrapped_env"):  # try to go through "Normalize and Proxy and whatever wrapper"
+            obj = obj.wrapped_env
+        return self.process_angle_goal(obj.get_current_obs())
 
     def _append_observation(self, obs):
         return np.concatenate([obs, np.array(self.current_goal)])
