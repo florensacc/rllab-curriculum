@@ -17,6 +17,7 @@ from rllab.envs.base import Step
 from rllab.misc import autoargs
 from rllab.misc import logger
 from rllab.misc.overrides import overrides
+from sandbox.young_clgan.lib.envs.rewards import linear_threshold_reward
 
 
 class GoalGenerator(object):
@@ -134,7 +135,7 @@ class GoalEnvAngle(GoalEnv, Serializable):
 
 
 class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
-    def __init__(self, env, goal_generator, terminal_bonus=0, terminal_eps=0.1, final_goal=None,
+    def __init__(self, env, goal_generator, terminal_bonus=0, terminal_eps=0.1, reward_dist_threshold=None, final_goal=None,
                  distance_metric='L2', goal_reward='NegativeDistance', goal_weight=1,
                  inner_weight=0, angle_idxs=(None,), **kwargs):
         """
@@ -153,6 +154,7 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
         self.update_goal_generator(goal_generator)
         self.terminal_bonus = terminal_bonus
         self.terminal_eps = terminal_eps
+        self.reward_dist_threshold = reward_dist_threshold
         self._distance_metric = distance_metric
         self._goal_reward = goal_reward
         self.goal_weight = goal_weight
@@ -171,6 +173,7 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
             self.update_goal()
             if fix_goal is not None:
                 self.goal_generator._goal = fix_goal
+        print("RESET goal to:", self.goal_generator.goal)
         if reset_inner:
             return self._append_observation(ProxyEnv.reset(self))
         return self.get_current_obs()
@@ -181,7 +184,7 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
         info['distance'] = dist = self._compute_dist(observation)
         info['reward_dist'] = reward_dist = self._compute_dist_reward(observation)
         if self.terminal_bonus and dist <= self.terminal_eps:
-            # print("*****done!!*******")
+            print("*****done!!*******")
             done = True
             reward_dist += self.terminal_bonus
         return (
@@ -193,7 +196,10 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
 
     def _compute_dist_reward(self, obs):
         goal_distance = self._compute_dist(obs)
-        if self._goal_reward == 'NegativeDistance':
+        if self.reward_dist_threshold is not None:
+            intrinsic_reward = linear_threshold_reward(goal_distance, threshold=self.reward_dist_threshold,
+                                                       coefficient=-1000)  # this should also be a hyper!!
+        elif self._goal_reward == 'NegativeDistance':
             intrinsic_reward = - goal_distance
         elif self._goal_reward == 'InverseDistance':
             intrinsic_reward = 1. / (goal_distance + 0.1)
@@ -284,7 +290,7 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
 
 class GoalIdxExplorationEnv(GoalExplorationEnv, Serializable):
     """
-    Instead of using the full state-space as goal, this class uses the observation[-3,-1] CoM in MuJoCo
+    Instead of using the full state-space as goal, this class uses only some idx of observation ([-3,-1] CoM in MuJoCo)
     """
 
     def __init__(self, idx=(-3, -2), **kwargs):
@@ -293,19 +299,23 @@ class GoalIdxExplorationEnv(GoalExplorationEnv, Serializable):
         super(GoalIdxExplorationEnv, self).__init__(**kwargs)
 
     def step(self, action):
+        # print("action: ", action)
         observation, reward, done, info = ProxyEnv.step(self, action)
         info['reward_inner'] = reward_inner = self.inner_weight * reward
         body_com = observation[self.idx,]  # assumes the COM is last 3 coord, z being last
-        info['distance'] = np.linalg.norm(body_com - self.current_goal)
+        info['distance'] = dist = np.linalg.norm(body_com - self.current_goal)
         reward_dist = self._compute_dist_reward(body_com)
         info['reward_dist'] = reward_dist
+        if self.terminal_bonus and dist <= self.terminal_eps:
+            print("*****done!!*******")
+            done = True
+            reward_dist += self.terminal_bonus
         return (
             self._append_observation(observation),
             reward_dist + reward_inner,
             done,
             info
         )
-
 
 def update_env_goal_generator(env, goal_generator):
     """ Update the goal generator for normalized environment. """

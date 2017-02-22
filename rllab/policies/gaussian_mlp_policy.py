@@ -1,5 +1,6 @@
 import lasagne
 import lasagne.layers as L
+import lasagne.init as LI
 import lasagne.nonlinearities as NL
 import numpy as np
 
@@ -34,6 +35,7 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             mean_network=None,
             std_network=None,
             dist_cls=DiagonalGaussian,
+            output_gain=1,
     ):
         """
         :param env_spec:
@@ -65,6 +67,7 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 hidden_sizes=hidden_sizes,
                 hidden_nonlinearity=hidden_nonlinearity,
                 output_nonlinearity=output_nonlinearity,
+                output_W_init=LI.GlorotUniform(gain=output_gain)
             )
         self._mean_network = mean_network
 
