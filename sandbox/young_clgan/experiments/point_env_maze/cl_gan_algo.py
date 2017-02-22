@@ -2,7 +2,10 @@ import os
 
 from sandbox.young_clgan.experiments.point_env_maze.maze_evaluate import test_and_plot_policy
 from sandbox.young_clgan.lib.envs.maze.point_maze_env import PointMazeEnv
-from sandbox.young_clgan.lib.logging.visualization import save_image
+from sandbox.young_clgan.lib.logging import HTMLReport
+from sandbox.young_clgan.lib.logging import format_dict
+from sandbox.young_clgan.lib.logging.visualization import save_image, plot_gan_samples, plot_labeled_samples, \
+    plot_line_graph
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES']=''
@@ -23,9 +26,14 @@ import tflearn
 import matplotlib
 matplotlib.use('Agg')
 
-from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator
+from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator, generate_initial_goals
 from sandbox.young_clgan.lib.goal import *
-from sandbox.young_clgan.lib.logging import *
+#from sandbox.young_clgan.lib.logging import *
+#from sandbox.young_clgan.lib.logging.logger import ExperimentLogger
+
+from sandbox.young_clgan.lib.logging.logger import ExperimentLogger, AttrDict, format_experiment_log_path, make_log_dirs
+from rllab.misc import logger
+
 
 
 EXPERIMENT_TYPE = 'cl_gan_maze'
@@ -81,7 +89,9 @@ class CLGANPointEnvMaze(RLAlgorithm):
         np.random.seed(int(time.time()))
 
         report = HTMLReport(log_config.report_file)
-
+        # logger.set_snapshot_dir(log_config["log_dir"])
+        # logger.set_tf_summary_dir(log_config["log_dir"])
+        # print("Logger snapshot dir: ", logger.get_snapshot_dir())
 
         report.add_header("{}, {}".format(EXPERIMENT_TYPE, log_config.experiment_date_host))
         report.add_text(format_dict(hyperparams))
@@ -128,12 +138,17 @@ class CLGANPointEnvMaze(RLAlgorithm):
         # report.add_image(img, 'policy performance initialization\n')
 
         # Pretrain GAN with uniform distribution on the GAN output space
-        print("Pretraining the gan for uniform sampling")
-        gan.pretrain_uniform()
+        #print("Pretraining the gan for uniform sampling")
+        #gan.pretrain_uniform()
+
+        print("Pretraining the gan with initial goals")
+        gan.pretrain(
+            generate_initial_goals(env, policy, hyperparams.goal_range)
+        )
 
         print("Plotting GAN samples")
         img = plot_gan_samples(gan, hyperparams.goal_range, '{}/start.png'.format(log_config.plot_dir))
-        report.add_image(img, 'GAN pretrained uniform')
+        report.add_image(img, 'GAN initialization')
 
         report.save()
         report.new_row()
@@ -162,8 +177,7 @@ class CLGANPointEnvMaze(RLAlgorithm):
             print("Evaluating goals before training")
             rewards_before = evaluate_goals(goals, env, policy, hyperparams.horizon)
 
-
-            with ExperimentLogger(log_config.log_dir, outer_iter):
+            with ExperimentLogger(log_config.log_dir, outer_iter, hold_outter_log=True):
                 print("Updating the environment goal generator")
                 update_env_goal_generator(
                     env,
@@ -187,64 +201,75 @@ class CLGANPointEnvMaze(RLAlgorithm):
 
                 algo.train()
 
-                rewards = test_and_plot_policy(policy, env)
-                reward_img = save_image(fname='{}/policy_reward_{}.png'.format(log_config.plot_dir, outer_iter))
+            rewards = test_and_plot_policy(policy, env)
+            reward_img = save_image(fname='{}/policy_reward_{}.png'.format(log_config.plot_dir, outer_iter))
 
-                all_mean_rewards.append(np.mean(rewards))
-                all_coverage.append(np.mean(rewards >= hyperparams.max_reward))
+            mean_rewards = np.mean(rewards)
+            coverage = np.mean(rewards >= hyperparams.max_reward)
 
-                report.add_image(
-                    reward_img,
-                    'policy performance\n itr: {} \nmean_rewards: {} \ncoverage: {}'.format(
-                        outer_iter, all_mean_rewards[-1],
-                        all_coverage[-1]
-                    )
+            all_mean_rewards.append(mean_rewards)
+            all_coverage.append(coverage)
+
+            # logger.set_snapshot_dir(log_config["log_dir"])
+            # logger.set_tf_summary_dir(log_config["log_dir"])
+            print("Logger snapshot dir: ", logger.get_snapshot_dir())
+            with logger.tabular_prefix('Outer_'):
+                logger.record_tabular('MeanRewards', mean_rewards)
+                logger.record_tabular('Coverage', coverage)
+            logger.dump_tabular(with_prefix=False)
+
+            report.add_image(
+                reward_img,
+                'policy performance\n itr: {} \nmean_rewards: {} \ncoverage: {}'.format(
+                    outer_iter, all_mean_rewards[-1],
+                    all_coverage[-1]
                 )
+            )
 
-                # img, rewards = plot_policy_reward(
-                #     policy, env, hyperparams.goal_range,
-                #     horizon=hyperparams.horizon,
-                #     fname='{}/policy_reward_{}.png'.format(log_config.plot_dir, outer_iter),
-                #     return_rewards=True
-                # )
+            # img, rewards = plot_policy_reward(
+            #     policy, env, hyperparams.goal_range,
+            #     horizon=hyperparams.horizon,
+            #     fname='{}/policy_reward_{}.png'.format(log_config.plot_dir, outer_iter),
+            #     return_rewards=True
+            # )
 
-                report.save()
+            report.save()
 
-                print("Labeling the goals")
-                labels = label_goals(
-                    goals, env, policy, hyperparams.horizon,
-                    min_reward=hyperparams.min_reward,
-                    max_reward=hyperparams.max_reward,
-                    old_rewards=rewards_before,
-                    improvement_threshold=hyperparams.improvement_threshold
-                )
+            print("Labeling the goals")
+            labels = label_goals(
+                goals, env, policy, hyperparams.horizon,
+                min_reward=hyperparams.min_reward,
+                max_reward=hyperparams.max_reward,
+                old_rewards=rewards_before,
+                improvement_threshold=hyperparams.improvement_threshold
+            )
 
-                print("Training the GAN")
-                gan.train(
-                    goals, labels,
-                    hyperparams.gan_outer_iters,
-                    hyperparams.gan_generator_iters,
-                    hyperparams.gan_discriminator_iters
-                )
+            print("Training the GAN")
+            gan.train(
+                goals, labels,
+                hyperparams.gan_outer_iters,
+                hyperparams.gan_generator_iters,
+                hyperparams.gan_discriminator_iters
+            )
 
-                print("Converting the labels")
-                plot_labels, classes = self.convert_label(labels)
+            print("Converting the labels")
+            plot_labels, classes = self.convert_label(labels)
 
-                print("Plotting the labeled samples")
-                img = plot_labeled_samples(
-                    samples=goals, sample_classes=plot_labels,
-                    text_labels=classes, limit=hyperparams.goal_range + 5,
-                    fname='{}/sampled_goals_{}.png'.format(log_config.plot_dir, outer_iter),
-                )
+            print("Plotting the labeled samples")
+            img = plot_labeled_samples(
+                samples=goals, sample_classes=plot_labels,
+                text_labels=classes, limit=hyperparams.goal_range + 5,
+                fname='{}/sampled_goals_{}.png'.format(log_config.plot_dir, outer_iter),
+            )
 
-                print("Adding image to the report")
-                report.add_image(img, 'goals\n itr: {}'.format(outer_iter), width=500)
+            print("Adding image to the report")
+            report.add_image(img, 'goals\n itr: {}'.format(outer_iter), width=500)
 
-                print("Saving the report")
-                report.save()
+            print("Saving the report")
+            report.save()
 
-                print("Adding a new row to the report")
-                report.new_row()
+            print("Adding a new row to the report")
+            report.new_row()
                 
         img = plot_line_graph(
             '{}/mean_rewards.png'.format(log_config.plot_dir),

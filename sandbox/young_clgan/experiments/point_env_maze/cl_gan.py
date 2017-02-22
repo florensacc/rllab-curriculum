@@ -48,7 +48,13 @@ if use_ec2:
     n_parallel = 4
 else:
     mode = "local"
-    n_parallel = multiprocessing.cpu_count()
+    #n_parallel = multiprocessing.cpu_count()
+    n_parallel = 1
+
+if use_ec2:
+    seeds = [1, 11, 21, 31, 41]
+else:
+    seeds = [None]
 
 #from sandbox.young_clgan.experiments.point_env_linear.cl_gan_algo import CLGANPointEnvLinear
 
@@ -64,7 +70,7 @@ if __name__ == '__main__':
     hyperparams = AttrDict(
         horizon=400,
         goal_size=2,
-        goal_range=10,
+        goal_range=15,
         goal_noise_level=1,
         min_reward=5,
         max_reward=6000,
@@ -86,20 +92,25 @@ if __name__ == '__main__':
     algo = CLGANPointEnvMaze(hyperparams)
 
     if use_stub:
-        run_experiment_lite(
-            algo.train(),
-            pre_commands=['pip install --upgrade pip',
-                          'pip install --upgrade theano',
-                          'pip install --upgrade tensorflow',
-                          'pip install tflearn',
-                          'pip install dominate',
-                          'pip install scikit-image',
-                          ],
-            n_parallel=n_parallel,
-            use_cloudpickle=False,
-            snapshot_mode="none",
-            use_gpu=False,
-            mode=mode,
-        )
+        for seed in seeds:
+            run_experiment_lite(
+                algo.train(),
+                pre_commands=['export MPLBACKEND=Agg',
+                              'pip install --upgrade pip',
+                              'pip install --upgrade -I tensorflow',
+                              'pip install git+https://github.com/tflearn/tflearn.git',
+                              'pip install dominate',
+                              'pip install scikit-image',
+                              'conda install numpy -n rllab3 -y',
+                              ],
+                n_parallel=n_parallel,
+                use_cloudpickle=False,
+                snapshot_mode="none",
+                use_gpu=False,
+                mode=mode,
+                exp_prefix='goalGAN-maze1',
+                #seed=seed
+            )
     else:
         algo.train()
+
