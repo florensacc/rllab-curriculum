@@ -73,10 +73,10 @@ class AntPuddleEnv(MujocoEnv, Serializable):
             goal=(10., 0.),
             flip_thr=0.,
             init_reward=1.,
-            init_reward_slope=1.,
             speed_coeff=1.,
             mujoco_env_args=dict(),
             plot_settings=None,
+            goal_reward=1000,
         ):
         if direction is not None:
             assert np.isclose(np.linalg.norm(direction), 1.)
@@ -85,10 +85,10 @@ class AntPuddleEnv(MujocoEnv, Serializable):
         self.direction = direction
         self.goal = goal
         self.init_reward = init_reward
-        self.init_reward_slope = init_reward_slope
         self.speed_coeff = speed_coeff
         self.flip_thr = flip_thr
         self.plot_settings = plot_settings
+        self.goal_reward = goal_reward
 
         # dynamically generate and load the xml file
         self.file_path = os.path.join(
@@ -136,19 +136,18 @@ class AntPuddleEnv(MujocoEnv, Serializable):
         elif self.reward_type == "distance_from_origin":
             motion_reward = np.linalg.norm(com)
         elif self.reward_type == "goal":
-            dist_to_goal = np.linalg.norm(com - np.array(self.goal))
+            # reward y = a * exp(-b * x^2), x is distance
             x0 = np.linalg.norm(np.array(self.goal)) # init dist
             y0 = self.init_reward
-            y0p = self.init_reward_slope
-            a = - y0 ** 2 / y0p
-            b = - x0 - y0 / y0p
-            motion_reward = a / (b + dist_to_goal)
-            if not (a > 0 and b > 0):
-                import pdb; pdb.set_trace()
-                # reward should decrase with dist
-                # reward at goal should be positive
-                # thus (-y0p) < y0 / x0
-            # print(dist_to_goal, motion_reward)
+            y1 = self.goal_reward
+
+            a = y1
+            b = -1. / (x0 ** 2) * np.log(y0 / y1)
+            x = np.linalg.norm(com - np.array(self.goal)) # dist to goal
+            motion_reward = a * np.exp(-b * (x ** 2))
+
+            # print(a, b)
+            # print(x, motion_reward)
             motion_reward += self.speed_coeff * np.linalg.norm(comvel)
         else:
             raise NotImplementedError
@@ -374,6 +373,10 @@ class AntPuddleEnv(MujocoEnv, Serializable):
             self.viewer.set_window_pose(config["xpos"], config["ypos"])
             self.viewer.set_window_size(config["width"], config["height"])
             self.viewer.set_window_title(config["title"])
+        else:
+            self.viewer.set_window_pose(2000,0)
+            self.viewer.set_window_size(500, 500)
+            self.viewer.set_window_title("ant puddle")
         return self.viewer
 
 class AntPuddleGenerator(object):
@@ -382,26 +385,42 @@ class AntPuddleGenerator(object):
         spacing = 2. + 2 * wall_offset
         puddles = [
             Puddle(x=-1, y=spacing/2, width=length-spacing+1, height=1,
-                angle=0, cost=0,
+                angle=0, cost=0, text="0",
                 plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
-            Puddle(x=-1, y=-1-spacing/2, width=length+1, height=1, angle=0, cost=0,
+            Puddle(x=-1, y=-1-spacing/2, width=length+1, height=1,
+                angle=0, cost=0, text="1",
                 plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
             Puddle(x=-1, y=turn_length-spacing/2-1, width=length-spacing+1, height=1,
-                angle=0, cost=0,
+                angle=0, cost=0, text="2",
                 plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
-            Puddle(x=-1, y=turn_length+spacing/2, width=length+1, height=1, angle=0, cost=0,
+            Puddle(x=-1, y=turn_length+spacing/2, width=length+1, height=1,
+                angle=0, cost=0, text="3",
                 plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
 
-            Puddle(x=length-spacing-1, y=spacing/2, width=1, height=turn_length-spacing, angle=0, cost=0,
+            Puddle(x=length-spacing-1, y=spacing/2, width=1, height=turn_length-spacing,
+                angle=0, cost=0, text="4",
                 plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
-            Puddle(x=length, y=-1-spacing/2, width=1, height=turn_length+spacing+2, angle=0, cost=0,
+            Puddle(x=length, y=-1-spacing/2, width=1, height=turn_length+spacing+2,
+                angle=0, cost=0, text="5",
                 plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
-            Puddle(x=-2, y=-1-spacing/2, width=1, height=spacing+2, angle=0, cost=0,
+            Puddle(x=-2, y=-1-spacing/2, width=1, height=spacing+2,
+                angle=0, cost=0, text="6",
                 plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
-            Puddle(x=-2, y=turn_length-spacing/2-1, width=1, height=spacing+2, angle=0, cost=0,
+            Puddle(x=-2, y=turn_length-spacing/2-1, width=1, height=spacing+2,
+                angle=0, cost=0, text="7",
                 plot_args=dict(color=(1., 0., 0., 1.0)), hard=True),
         ]
-        return puddles
+        goal = (0, turn_length)
+        xmin = min([p.x for p in puddles])
+        xmax = max([p.x + p.width for p in puddles])
+        ymin = min([p.y for p in puddles])
+        ymax = max([p.y + p.height for p in puddles])
+        plot_offset = 0.5
+        plot_settings = dict(
+            xlim=(xmin - plot_offset, xmax + plot_offset),
+            ylim=(ymin - plot_offset, ymax + plot_offset),
+        )
+        return puddles, goal, plot_settings
 
 
     def generate_two_choice_maze(self, wall_offset, length, obj="puddles"):
