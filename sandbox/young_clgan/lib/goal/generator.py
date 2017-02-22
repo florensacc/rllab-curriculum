@@ -28,7 +28,16 @@ class GoalGAN(object):
         goals = np.random.uniform(
             -self.goal_range, self.goal_range, size=(size, self.goal_size)
         )
-        labels = np.ones((size, self.evaluater_size))  # all goal same label --> uniform
+        self.pretrain(goals, outer_iters, generator_iters, discriminator_iters)
+        
+    def pretrain(self, goals, outer_iters=10, generator_iters=5,
+                 discriminator_iters=200):
+        """
+        Pretrain the goal GAN to match the distribution of given goals.
+        :param goals: the goal distribution to match
+        :param outer_iters: of the GAN
+        """
+        labels = np.ones((goals.shape[0], self.evaluater_size))  # all goal same label --> uniform
         self.train(
             goals, labels, outer_iters, generator_iters, discriminator_iters
         )
@@ -57,3 +66,4 @@ class GoalGAN(object):
 
     def discriminator_predict(self, goals):
         return self.gan.discriminator_predict(goals)
+    

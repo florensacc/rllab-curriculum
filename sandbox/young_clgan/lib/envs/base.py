@@ -110,8 +110,14 @@ class GoalEnv(Serializable):
         super(GoalEnv, self).__setstate__(d)
         self.update_goal_generator(d['__goal_generator'])
 
+    @property
+    def goal_observation(self):
+        """Return the observation corresponding to goal"""
+        raise NotImplementedError
+
 
 class GoalEnvAngle(GoalEnv, Serializable):
+    """ Turn specific elements in the goal into sin and cosine values. """
 
     def __init__(self, angle_idxs=(None,), **kwargs):
         """Indicates the coordinates that are angles and need to be duplicated to cos/sin"""
@@ -119,19 +125,21 @@ class GoalEnvAngle(GoalEnv, Serializable):
         self.angle_idxs = angle_idxs
         GoalEnv.__init__(self, **kwargs)
 
-    @overrides
-    @property
-    def current_goal(self):
-        # print("the goal generator is:", self.goal_generator)
-        angle_goal = self.goal_generator.goal
+    def process_angle_goal(self, goal):
         full_goal = []
-        for i, coord in enumerate(angle_goal):
+        for i, coord in enumerate(goal):
             if i in self.angle_idxs:
                 full_goal.extend([np.sin(coord), np.cos(coord)])
             else:
                 full_goal.append(coord)
             # print("the angle goal is: {}, the full goal is: {}".format(angle_goal, full_goal))
-        return full_goal
+        return np.array(full_goal)
+
+    @overrides
+    @property
+    def current_goal(self):
+        # print("the goal generator is:", self.goal_generator)
+        return self.process_angle_goal(super(GoalEnvAngle, self).current_goal)
 
 
 class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
@@ -227,6 +235,16 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
             obj = obj.wrapped_env
         return self._append_observation(obj.get_current_obs())
 
+    @overrides
+    @property
+    def goal_observation(self):
+        obj = self
+        while hasattr(obj, "wrapped_env"):  # try to go through "Normalize and Proxy and whatever wrapper"
+            obj = obj.wrapped_env
+            
+        # FIXME: technically we need to invert the angle
+        return obj.get_current_obs()
+
     def _append_observation(self, obs):
         return np.concatenate([obs, np.array(self.current_goal)])
 
@@ -297,12 +315,17 @@ class GoalIdxExplorationEnv(GoalExplorationEnv, Serializable):
         Serializable.quick_init(self, locals())
         self.idx = idx
         super(GoalIdxExplorationEnv, self).__init__(**kwargs)
+        
+    @overrides
+    def reset(self):
+        self.current_obs = super(GoalIdxExplorationEnv, self).reset()
+        return self.current_obs
 
     def step(self, action):
         # print("action: ", action)
-        observation, reward, done, info = ProxyEnv.step(self, action)
+        self.current_obs, reward, done, info = ProxyEnv.step(self, action)
         info['reward_inner'] = reward_inner = self.inner_weight * reward
-        body_com = observation[self.idx,]  # assumes the COM is last 3 coord, z being last
+        body_com = self.current_obs[self.idx,]  # assumes the COM is last 3 coord, z being last
         info['distance'] = dist = np.linalg.norm(body_com - self.current_goal)
         reward_dist = self._compute_dist_reward(body_com)
         info['reward_dist'] = reward_dist
@@ -311,11 +334,17 @@ class GoalIdxExplorationEnv(GoalExplorationEnv, Serializable):
             done = True
             reward_dist += self.terminal_bonus
         return (
-            self._append_observation(observation),
+            self._append_observation(self.current_obs),
             reward_dist + reward_inner,
             done,
             info
         )
+        
+    @overrides
+    @property
+    def goal_observation(self):
+        return self.current_obs[self.idx,]
+
 
 def update_env_goal_generator(env, goal_generator):
     """ Update the goal generator for normalized environment. """
@@ -325,3 +354,28 @@ def update_env_goal_generator(env, goal_generator):
         return env.wrapped_env.update_goal_generator(goal_generator)
     else:
         raise NotImplementedError('Unsupported environment')
+
+
+def generate_initial_goals(env, policy, goal_range, size=1000):
+    goal_dim = np.zeros_like(env.current_goal).shape
+    done = False
+    obs = env.reset()
+    goals = [env.goal_observation]
+    # import pdb; pdb.set_trace()
+    while len(goals) < size:
+        if done:
+            update_env_goal_generator(
+                env,
+                FixedGoalGenerator(
+                    np.random.uniform(-goal_range, goal_range, goal_dim)
+                )
+            )
+            obs = env.reset()
+            goals.append(env.goal_observation)
+        else:
+            action, _ = policy.get_action(obs)
+            obs, _, done, _ = env.step(action)
+            goals.append(env.goal_observation)
+            
+    return np.array(goals)
+            

@@ -8,7 +8,6 @@ from sandbox.young_clgan.lib.goal.evaluator import evaluate_goals, convert_label
 from sandbox.young_clgan.lib.envs.base import FixedGoalGenerator
 
 import matplotlib
-
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 
@@ -78,6 +77,7 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, fname=N
     sample_classes = sample_classes[indices]
 
     # point_class = labels[:, 0] * 2 + labels[:, 1]
+    plt.figure()
     plt.clf()
     # text_labels = ['', 'Reward not sensible', 'Goal already accomplished', 'Desired goals']
 
@@ -117,7 +117,8 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, fname=N
 def plot_gan_samples(gan, limit, fname=None, size=500):
     """Scatter size samples of the gan: no evaluation"""
     samples, _ = gan.sample_goals(size)
-    plt.clf()
+    fig = plt.figure()
+    # plt.clf()
     plt.scatter(samples[:, 0], samples[:, 1])
     plt.ylim(-limit, limit)
     plt.xlim(-limit, limit)
@@ -134,6 +135,7 @@ def plot_gan_samples(gan, limit, fname=None, size=500):
 
 
 def plot_line_graph(fname=None, *args, **kwargs):
+    plt.figure()
     plt.clf()
     plt.plot(*args, **kwargs)
     if fname is not None:
