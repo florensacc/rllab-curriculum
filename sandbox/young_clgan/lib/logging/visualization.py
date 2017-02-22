@@ -34,6 +34,7 @@ def plot_policy_reward(policy, env, limit, horizon=200, max_reward=6000, fname=N
     print("Min return: {}\nMax return: {}\nMean return: {}".format(np.min(z), np.max(z), np.mean(z)))
 
     z = z.reshape(grid_shape)
+    plt.figure()
     plt.clf()
     plt.pcolormesh(x, y, z, vmin=0, vmax=max_reward)
     plt.colorbar()
