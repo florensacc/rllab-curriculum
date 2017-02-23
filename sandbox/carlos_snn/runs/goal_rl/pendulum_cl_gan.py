@@ -41,7 +41,7 @@ EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
 if __name__ == '__main__':
 
-    exp_prefix = 'goalGAN-pendulum-new'
+    exp_prefix = 'goalGAN-pendulum-debug'
     vg = VariantGenerator()
     vg.add('seed', range(30, 40, 10))
     # # GeneratorEnv params
@@ -55,7 +55,7 @@ if __name__ == '__main__':
     vg.add('goal_reward', ['NegativeDistance'])
     # old hyperparams
     vg.add('outer_iters', [50])
-    vg.add('inner_iters', [50])
+    vg.add('inner_iters', [5])
     vg.add('horizon', [200])
     vg.add('pg_batch_size', [20000])
     #############################################
@@ -252,18 +252,22 @@ if __name__ == '__main__':
     for vv in vg.variants():
         run_experiment_lite(
             run_task,
-            pre_commands=['pip install --upgrade pip',
-                          'pip install --upgrade theano',
-                          'pip install --upgrade tensorflow',
-                          'pip install tflearn',
+            pre_commands=[
+                          'export MPLBACKEND=Agg',
+                          'pip install --upgrade pip',
+                          'pip install --upgrade -I tensorflow',
+                          'pip install git+https://github.com/tflearn/tflearn.git',
                           'pip install dominate',
                           'pip install scikit-image',
+                          'conda install numpy -n rllab3 -y',
                           ],
             variant=vv,
-            mode='local_docker',
+            mode='ec2',
+            sync_s3_html=True,
             # n_parallel=n_parallel,
             # Only keep the snapshot parameters for the last iteration
             snapshot_mode="last",
             seed=vv['seed'],
             exp_prefix=exp_prefix,
+
         )
