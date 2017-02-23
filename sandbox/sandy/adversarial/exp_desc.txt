@@ -28,3 +28,4 @@ exp016.py: Same as exp015, except no dual-descent on weights (i.e., purely
            timesteps). Just to compare to results of exp015.
 exp017.py: Evaluate impact of sleeper perturbations on performance of A3C LSTM
            policies trained on each of the four games.
+exp017b.py: Same as exp017, except with bug fixed.

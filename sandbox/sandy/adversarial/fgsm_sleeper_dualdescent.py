@@ -346,7 +346,7 @@ def fgsm_sleeper_perturbation(obs, info, algo, **kwargs):
                                       obs_min, obs_max, dual_descent_stepsizes=dual_descent_stepsizes, \
                                       init_lambda=init_lambda)
             if adv_results is not None:
-                (eta, unscaled_eta, adb_obs, action_probs, lambdas, cost), all_lambdas = adv_results
+                (eta, unscaled_eta, adv_obs, action_probs, lambdas, cost), all_lambdas = adv_results
                 if output_h5 is not None:
                     to_save = dict(t=t, k=k, lambdas=lambdas, cost=cost, all_lambdas=all_lambdas)
                     save_rollout_step(output_h5, eta, unscaled_eta, obs[-1,:,:], \
@@ -362,7 +362,7 @@ def fgsm_sleeper_perturbation(obs, info, algo, **kwargs):
                                     obs_min, obs_max, dual_descent_stepsizes=dual_descent_stepsizes, \
                                     init_lambda=init_lambda)
             if adv_results is not None:
-                (eta, unscaled_eta, adb_obs, action_probs, lambdas, cost), all_lambdas = adv_results
+                (eta, unscaled_eta, adv_obs, action_probs, lambdas, cost), all_lambdas = adv_results
                 # Only apply adversarial perturbation if it is valid
                 if cost == 0:
                     #print("Applying valid sleeper perturbation! at time", target_t)
