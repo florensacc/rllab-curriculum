@@ -1,6 +1,6 @@
 import os
 
-from sandbox.young_clgan.experiments.point_env_maze.cl_gan_algo import CLGANPointEnvMaze
+from sandbox.young_clgan.experiments.point_env_maze.trpo_baseline_algo import TRPOPointEnvMaze
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES']=''
@@ -36,7 +36,7 @@ from sandbox.young_clgan.lib.goal import *
 from sandbox.young_clgan.lib.logging import *
 
 
-EXPERIMENT_TYPE = 'cl_gan'
+EXPERIMENT_TYPE = 'trpo'
 
 use_stub = True
 
@@ -48,8 +48,8 @@ if use_ec2:
     n_parallel = 4
 else:
     mode = "local"
-    #n_parallel = multiprocessing.cpu_count()
-    n_parallel = 1
+    n_parallel = multiprocessing.cpu_count()
+    #n_parallel = 1
 
 if use_ec2:
     seeds = [1, 11, 21, 31, 41]
@@ -66,6 +66,7 @@ from sandbox.young_clgan.lib.utils import AttrDict
 if __name__ == '__main__':
 
 
+
     hyperparams = AttrDict(
         horizon=400,
         goal_size=2,
@@ -79,18 +80,19 @@ if __name__ == '__main__':
         pg_batch_size=20000,
         discount=0.998,
         gae_lambda=0.995,
+        num_new_goals=200,
+        num_old_goals=200,
+        experiment_type=EXPERIMENT_TYPE,
+        # Unused - kept just so that viskit will not have issues with the comparison
         gan_outer_iters=5,
         gan_discriminator_iters=200,
         gan_generator_iters=5,
         gan_noise_size=4,
         gan_generator_layers=[256, 256],
         gan_discriminator_layers=[128, 128],
-        num_new_goals=200,
-        num_old_goals=200,
-        experiment_type=EXPERIMENT_TYPE,
     )
 
-    algo = CLGANPointEnvMaze(hyperparams)
+    algo = TRPOPointEnvMaze(hyperparams)
 
     if use_stub:
         for seed in seeds:
@@ -110,7 +112,7 @@ if __name__ == '__main__':
                 use_gpu=False,
                 mode=mode,
                 sync_s3_html=True,
-                exp_prefix='goalGAN-maze14',
+                exp_prefix='trpo-maze5',
                 seed=seed
             )
     else:
