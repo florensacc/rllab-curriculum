@@ -23,7 +23,6 @@ class PointEnv(Env, Serializable):
         :param control_mode:
         """
         Serializable.quick_init(self, locals())
-        super(PointEnv, self).__init__(*args, **kwargs)
         self.dim = dim
         self.control_mode = control_mode
         self.dt = 0.02
