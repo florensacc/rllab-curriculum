@@ -2,7 +2,7 @@
 
 """ Get average return from rollouts of trained model
 """
-
+from rllab.misc import logger
 import copy, numpy as np
 from sandbox.sandy.envs.atari_env import get_base_env
 from sandbox.sandy.shared.ale_compatibility import set_gym_seed
@@ -67,6 +67,7 @@ def get_average_return_a3c(algo, seed, N=10, horizon=10000, deterministic=False,
                                                  deterministic=deterministic, \
                                                  check_equiv=check_equiv)
         paths.append(new_paths[0])
+        logger.record_tabular("Return", sum(new_paths[0]['rewards']))
 
         # If algo.env is currently recording, make sure to update the states
         # recorded by algo.test_env

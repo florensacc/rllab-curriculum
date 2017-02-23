@@ -172,8 +172,15 @@ class AdvSleeperExperiment(AdvExperiment):
                  save_rollouts, test_transfer, adversary_algo, \
                  adversary_algo_param_names, seed, **kwargs)
         self.num_ts = kwargs.get("num_ts", 100)
+        # across_rollout - if True, sleeper adversary introduces perturbations
+        #     across the whole rollout, rather than specifically (and separately)
+        #     at each of the pre-computed timesteps. When this is True, num_ts
+        #     is ignored
+        self.across_rollout = kwargs.get("across_rollout", False)
         self.k_init_lambda = to_iterable(kwargs.get("k_init_lambda", [(1,None)]))
-        self.dual_descent_stepsizes = to_iterable(kwargs.get("dual_descent_stepsizes", [0.5]))
+        self.dual_descent_stepsizes = kwargs.get("dual_descent_stepsizes", None)
+        if self.dual_descent_stepsizes is not None:
+            self.dual_descent_stepsizes = to_iterable(self.dual_descent_stepsizes)
         self.deterministic = True
         self.save_rollouts = True  # Overrides input parameter
 
@@ -184,8 +191,11 @@ class AdvSleeperExperiment(AdvExperiment):
         return list(itertools.product(self.norms, self.fgsm_eps, self.k_init_lambda))
 
     def variant_to_dict(self, variant):
+        init_lambda = variant[2][1]
+        if init_lambda is not None:
+            init_lambda = np.array(init_lambda)
         return dict(norm=variant[0], fgsm_eps=variant[1], k=variant[2][0], \
-                    init_lambda=np.array(variant[2][1]))
+                    init_lambda=init_lambda)
 
     def run_for_adv_target(self, policy_adv, policy_target, variant, all_output_h5):
         # k - number of time steps of delay for adversarial perturbation; i.e.,
@@ -209,35 +219,51 @@ class AdvSleeperExperiment(AdvExperiment):
                                    return_timesteps=True, \
                                    deterministic=self.deterministic, \
                                    check_equiv=True)
+        logger.record_tabular("AvgReturnNoAdv", avg_return_noadv)
+        logger.record_tabular("TimestepsNoAdv", timesteps)
 
         # Precompute time step t's to try sleeper perturbations at
-        ts = timesteps * np.linspace(0,1,self.num_ts,endpoint=False)
-        ts = np.round(ts).astype(int)
-        # Get rid of duplicates
-        ts = sorted(list(set(ts)))
+        if not self.across_rollout:
+            ts = timesteps * np.linspace(0,1,self.num_ts,endpoint=False)
+            ts = np.round(ts).astype(int)
+            # Get rid of duplicates
+            ts = sorted(list(set(ts)))
+        else:
+            ts = [-1]
 
         output_h5 = None
         if self.save_rollouts:
             algo_params = {'eps': variant["fgsm_eps"], 'norm': variant["norm"], \
-                           'ts': ts, 'k': variant["k"]}
+                           'k': variant["k"]}
+            if not self.across_rollout:
+                algo_params['ts'] = ts
             output_h5 = self.get_output_h5(policy_adv, policy_target, variant, algo_params)
 
+        # If self.across_rollouts is True:
         # For each t, run policy rollout (without any adversarial perturbations)
         # until that time step, then perturb at time t and branch into 
         # two rollouts (for current and next k timesteps, i.e., time steps t through
         # t+k) after perturbing at time t vs. rollout without perturbing
         # at time t; save the two sequences of output action distributions
         # (to output_h5) to see if indeed only the last one (at time step t+k) is changed
+        # 
+        # If self.across_rollouts is False:
+        # Starting at time t = 0, try to find a valid adversarial sleeper
+        # perturbation at that time step (i.e., changes the agent's actions
+        # at time step t+k but not at time steps t through t+k-1). If no valid
+        # perturbation is found, don't perturb and move on to the next time step.
+        # Also don't perturb if a sleeper perturbation was already introduced
+        # within the last k timesteps.
         assert type(policy_adv.algo).__name__ == "A3CALE"
         policy_adv.algo.cur_agent.model.skip_unchain = True
-        
+        logger.record_tabular("ts", ts)
+
         for t in ts:
             policy_target.algo.cur_agent.model.lstm.reset_state()
             policy_adv.algo.cur_agent.model.lstm.reset_state()
 
             if self.adversary_algo == 'fgsm':
                 adv_params = dict(
-                        t=t,
                         k=variant["k"],
                         fgsm_eps=variant["fgsm_eps"],
                         norm=variant["norm"],
@@ -247,8 +273,11 @@ class AdvSleeperExperiment(AdvExperiment):
                         policy_adv=policy_adv.model_name,
                         policy_rollout=policy_target.model_name,
                         dual_descent_stepsizes=self.dual_descent_stepsizes,
-                        init_lambda = variant["init_lambda"]
+                        init_lambda = variant["init_lambda"],
+                        across_rollout=self.across_rollout
                 )
+                if not self.across_rollout:
+                    adv_params['t'] = t
                 adversary_fn = lambda x,y: fgsm_sleeper_perturbation(x, y, policy_adv.algo, **adv_params)
             else:
                 raise NotImplementedError
@@ -261,5 +290,5 @@ class AdvSleeperExperiment(AdvExperiment):
                                        check_equiv=True)
             logger.record_tabular('Timesteps', timesteps)
             logger.record_tabular("AverageReturn:", avg_return_adv)
-            save_performance_to_all(all_output_h5, avg_return_adv, adv_params, len(paths))
+            save_performance_to_all(all_output_h5, avg_return_adv, adv_params, len(paths), timesteps=timesteps)
             logger.dump_tabular(with_prefix=False)

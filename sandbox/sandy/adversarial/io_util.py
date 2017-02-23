@@ -28,7 +28,7 @@ def get_param_names(output_h5):
     f.close()
     return param_names
 
-def save_performance_to_all(output_h5, avg_return, adv_params, n_paths):
+def save_performance_to_all(output_h5, avg_return, adv_params, n_paths, timesteps=None):
     f = h5py.File(output_h5, 'r+')
     algo_param_names = f['algo_param_names'][()].split(';')
     g = f['results']
@@ -38,6 +38,8 @@ def save_performance_to_all(output_h5, avg_return, adv_params, n_paths):
         g = g[str(adv_params[p])]
     g['avg_return'] = avg_return
     g['n_paths'] = n_paths
+    if timesteps is not None:
+        g['timesteps'] = timesteps
     f.close()
 
 def init_output_file(output_dir, prefix, adv_name, adv_params, fname=None, algo_name=None):

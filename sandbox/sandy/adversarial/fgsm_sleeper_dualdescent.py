@@ -39,6 +39,8 @@ def get_action_probs_k_a3c(algo, obs, k, target_env, printout=True):
             print("Action:", action)
         algo.cur_env.receive_action(action)
         statevar = chainer.Variable(np.expand_dims(algo.cur_agent.preprocess(algo.cur_env.observation), 0))
+        if algo.cur_env.is_terminal:
+            break
 
     # Restore hidden state of lstm
     algo.cur_agent.model.lstm.h, algo.cur_agent.model.lstm.c = prev_h, prev_c
@@ -81,11 +83,18 @@ def get_grad_x_k_a3c(obs, algo, k, target_env, lambdas=None):
     if lambdas is not None:
         assert len(lambdas) == k+1
     else:
-        lambdas = [1]*k + [k]
+        lambdas = [1.0]*k + [float(k)]
+        if k == 0:
+            lambdas = [1.0]
 
     algo.cur_env.save_state()
     assert algo.cur_env.equiv_to(target_env)
 
+    # Saves computational time when calling backward() later on
+    # (these links aren't used when calculating gradient of ce_loss w.r.t. statevar)
+    if target_env.t > 0:
+        algo.cur_agent.model.lstm.h.unchain_backward()
+        algo.cur_agent.model.lstm.c.unchain_backward()
     # Deterministically rolls out model to calculate J(\theta,x,y)
     prev_h, prev_c = algo.cur_agent.model.lstm.h, algo.cur_agent.model.lstm.c
 
@@ -94,6 +103,7 @@ def get_grad_x_k_a3c(obs, algo, k, target_env, lambdas=None):
     logits = [None]*(k+1)
     max_logits = [None]*(k+1)
     ce_loss = 0
+    feasible = True
     
     for i in range(k+1):  # +1 since we're including the current time step
         out = algo.cur_agent.model.lstm(algo.cur_agent.model.head(statevars[i]))
@@ -112,20 +122,27 @@ def get_grad_x_k_a3c(obs, algo, k, target_env, lambdas=None):
         if i == k:
             ce_loss_step *= -1  # Want the argmax action to be *different* k steps in future
         ce_loss += ce_loss_step
+        if algo.cur_env.is_terminal and i < k:
+            feasible = False
+            break
 
-    # The next three lines that clear gradients are probably not necessary (since
-    # the Variables' gradients get initialized to None), but there just in case
-    for x in [ce_loss] + statevars + logits +  max_logits:
-        x.cleargrad()
-    algo.cur_agent.model.cleargrads()
+    if feasible:
+        # The next three lines that clear gradients are probably not necessary (since
+        # the Variables' gradients get initialized to None), but there just in case
+        for x in [ce_loss] + statevars + logits +  max_logits:
+            x.cleargrad()
+        algo.cur_agent.model.cleargrads()
 
-    ce_loss.backward(retain_grad=True)
-    grad_x = np.array(statevars[0].grad[0])  # statevars[0].grad is 4D (first dim = # batches)
+        ce_loss.backward(retain_grad=True)
+        grad_x = np.array(statevars[0].grad[0])  # statevars[0].grad is 4D (first dim = # batches)
 
     # Restore hidden state of lstm
     algo.cur_agent.model.lstm.h, algo.cur_agent.model.lstm.c = prev_h, prev_c
     algo.cur_env.restore_state()
     assert algo.cur_env.equiv_to(target_env)
+
+    if not feasible:
+        return None
 
     # For debugging:
     #print("A3C:", abs(grad_x).max(), abs(grad_x).sum() / grad_x.size, ce_loss.data)
@@ -167,6 +184,11 @@ def compute_adv_obs(obs, algo, k, target_env, norm, fgsm_eps, obs_min, obs_max, 
         init_lambda = np.array([1.0]*k + [float(k)])
     else:
         assert len(init_lambda) == k+1
+
+    if k == 0:
+        init_lambda = np.array([1.0])  # Weight doesn't matter, as long as it's not zero
+        dual_descent_stepsizes = None
+
     all_lambdas = [init_lambda]
     best_cost = float("inf")
     best_vals = None
@@ -174,6 +196,9 @@ def compute_adv_obs(obs, algo, k, target_env, norm, fgsm_eps, obs_min, obs_max, 
         # Calculate \grad_x J(\theta, x, y)
         #print("Trying lambdas:", all_lambdas[-1])
         grad_x = get_grad_x_k(obs, algo, k, target_env, lambdas=all_lambdas[-1])
+        if grad_x is None:  # This means rollout ended in less than k steps
+             return None
+
         grad_x_current = grad_x[-1,:,:]
 
         if norm == 'l-inf':
@@ -196,17 +221,13 @@ def compute_adv_obs(obs, algo, k, target_env, norm, fgsm_eps, obs_min, obs_max, 
         # Calculate action probabilities before and after perturbation
         action_probs = get_action_probs_k(algo, obs, adv_obs, k, target_env, printout=False)
 
-        if dual_descent_stepsizes is None:
-            break
-
-        # Update lambdas
         action_probs_orig, action_probs_adv = action_probs
         action_probs_orig = np.argmax(action_probs_orig, axis=1)
         action_probs_adv = np.argmax(action_probs_adv, axis=1)
         assert len(action_probs_orig) == k+1 and len(action_probs_adv) == k+1
         cost = compute_sleeper_cost(action_probs_orig, action_probs_adv)
         if cost == 0:
-            print("success")
+            #print("success")
             best_cost = cost
             best_vals = (np.array(eta), np.array(unscaled_eta), np.array(adv_obs), \
                         (np.array(action_probs[0]),np.array(action_probs[1])), np.array(all_lambdas[-1]), cost)
@@ -216,6 +237,11 @@ def compute_adv_obs(obs, algo, k, target_env, norm, fgsm_eps, obs_min, obs_max, 
             best_vals = (np.array(eta), np.array(unscaled_eta), np.array(adv_obs), \
                         (np.array(action_probs[0]),np.array(action_probs[1])), np.array(all_lambdas[-1]), cost)
 
+        if dual_descent_stepsizes is None:
+            #print("LAMBDAS:", all_lambdas[-1])
+            break
+
+        # Update lambdas
         new_lambdas = np.array(all_lambdas[-1])
         alpha = get_stepsize(dual_descent_stepsizes, len(all_lambdas)-1)
         for i in range(k+1):
@@ -231,10 +257,11 @@ def compute_adv_obs(obs, algo, k, target_env, norm, fgsm_eps, obs_min, obs_max, 
     logger.record_tabular("ActionsChosen", np.argmax(best_vals[3][0],axis=1))
     logger.record_tabular("ActionsChosenAdv", np.argmax(best_vals[3][1],axis=1))
     logger.record_tabular("Lambdas", best_vals[4])
+    logger.dump_tabular(with_prefix=False)
     #return eta, unscaled_eta, adv_obs, action_probs, all_lambdas[-1]
-    print("action probs:", np.argmax(best_vals[3][0],axis=1), np.argmax(best_vals[3][1],axis=1))
-    print("lambdas:", best_vals[4])
-    print("all lambdas:", all_lambdas)
+    #print("action probs:", np.argmax(best_vals[3][0],axis=1), np.argmax(best_vals[3][1],axis=1))
+    #print("lambdas:", best_vals[4])
+    #print("all lambdas:", all_lambdas)
     return best_vals, all_lambdas
 
 def fgsm_sleeper_perturbation(obs, info, algo, **kwargs):
@@ -256,7 +283,6 @@ def fgsm_sleeper_perturbation(obs, info, algo, **kwargs):
     import chainer
 
     try:
-        t = kwargs['t']
         k = kwargs['k']
         fgsm_eps = kwargs['fgsm_eps']
         norm = kwargs['norm']
@@ -266,6 +292,10 @@ def fgsm_sleeper_perturbation(obs, info, algo, **kwargs):
         results = kwargs.get('results', None)
         dual_descent_stepsizes = kwargs.get("dual_descent_stepsizes", None)
         init_lambda = kwargs.get("init_lambda", None)
+        across_rollout = kwargs.get("across_rollout", False)
+        # If across_rollout is True, ignore t
+        if not across_rollout:
+            t = kwargs['t']
     except KeyError:
         print("FGSM Sleeper requires the following inputs: t, k, fgsm_eps, norm, obs_min, obs_max")
         raise
@@ -278,7 +308,7 @@ def fgsm_sleeper_perturbation(obs, info, algo, **kwargs):
         raise NotImplementedError
 
     if obs is None and info is None:  # Hacky way to get access to LSTM states
-        adversary_done = (len(env.actions_taken) > t + k + BUFFER)
+        adversary_done = (not across_rollout) and (len(env.actions_taken) > t + k + BUFFER)
         if hasattr(algo.cur_agent.model, 'lstm'):
             return algo.cur_agent.model.lstm.c.data, algo.cur_agent.model.lstm.h.data, adversary_done
         else:
@@ -288,7 +318,7 @@ def fgsm_sleeper_perturbation(obs, info, algo, **kwargs):
         target_env = info['env']
         target_t = target_env.t
     except KeyError:
-        print("FGSM Sleeper requires the following inputs in info: t, env")
+        print("FGSM Sleeper requires the following inputs in info: env")
         raise
 
     if target_t == 0:
@@ -297,25 +327,52 @@ def fgsm_sleeper_perturbation(obs, info, algo, **kwargs):
         #print("Copying from target env to adv env")
         env.init_copy_from(target_env)
         assert len(target_env.actions_taken) == 0
+        algo.time_to_wait_adv = 0
+        if hasattr(algo.cur_agent.model, 'lstm'):
+            algo.cur_agent.model.lstm.reset_state()
     else:
         # Take the last action taken by target_env
         env.step(target_env.actions_taken[-1])
 
     assert env.equiv_to(target_env)
 
-    # Only perturb input at time t
-    if target_t != t:
-        adv_obs = np.array(obs)
+    adv_obs = np.array(obs)
+    if not across_rollout:
+        # Only perturb input at time t
+        if target_t == t:
+            logger.record_tabular("Time", target_t)
+            #print("TIME:", t)
+            adv_results = compute_adv_obs(obs, algo, k, target_env, norm, fgsm_eps, \
+                                      obs_min, obs_max, dual_descent_stepsizes=dual_descent_stepsizes, \
+                                      init_lambda=init_lambda)
+            if adv_results is not None:
+                (eta, unscaled_eta, adb_obs, action_probs, lambdas, cost), all_lambdas = adv_results
+                if output_h5 is not None:
+                    to_save = dict(t=t, k=k, lambdas=lambdas, cost=cost, all_lambdas=all_lambdas)
+                    save_rollout_step(output_h5, eta, unscaled_eta, obs[-1,:,:], \
+                                      adv_obs[-1,:,:], action_probs, **to_save)
     else:
-        print("TIME:", t)
-        (eta, unscaled_eta, adv_obs, action_probs, lambdas, cost), all_lambdas = \
-                compute_adv_obs(obs, algo, k, target_env, norm, fgsm_eps, \
-                                obs_min, obs_max, dual_descent_stepsizes=dual_descent_stepsizes, \
-                                init_lambda=init_lambda)
-        if output_h5 is not None:
-            to_save = dict(t=t, k=k, lambdas=lambdas, cost=cost, all_lambdas=all_lambdas)
-            save_rollout_step(output_h5, eta, unscaled_eta, obs[-1,:,:], \
-                              adv_obs[-1,:,:], action_probs, **to_save)
+        if algo.time_to_wait_adv > 0:  # Already perturbed within the last k timesteps
+            algo.time_to_wait_adv -= 1
+            #print("Waiting at time", target_t)
+        else:
+            logger.record_tabular("Time", target_t)
+            # Try to find valid sleeper adversarial perturbation
+            adv_results = compute_adv_obs(obs, algo, k, target_env, norm, fgsm_eps, \
+                                    obs_min, obs_max, dual_descent_stepsizes=dual_descent_stepsizes, \
+                                    init_lambda=init_lambda)
+            if adv_results is not None:
+                (eta, unscaled_eta, adb_obs, action_probs, lambdas, cost), all_lambdas = adv_results
+                # Only apply adversarial perturbation if it is valid
+                if cost == 0:
+                    #print("Applying valid sleeper perturbation! at time", target_t)
+                    if output_h5 is not None:
+                        to_save = dict(t=target_t, k=k, lambdas=lambdas, cost=cost, \
+                                       all_lambdas=all_lambdas)
+                        save_rollout_step(output_h5, eta, unscaled_eta, obs[-1,:,:], \
+                                          adv_obs[-1,:,:], action_probs, **to_save)
+
+                    algo.time_to_wait_adv = k
 
     # Update hidden state of algo, if it's an LSTM
     if type(algo).__name__ == "A3CALE":
