@@ -139,6 +139,9 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
         return np.concatenate([self.wrapped_env.get_current_obs(),
                                ])
 
+    def goal_observation(self):
+        return self.wrapped_env.goal_observation()
+
     def get_ori(self):
         """
         First it tries to use a get_ori from the wrapped env. If not successfull, falls
@@ -214,6 +217,17 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
                         return True
         return False
 
+    def find_empty_space(self):
+        structure = self.MAZE_STRUCTURE
+        size_scaling = self.MAZE_SIZE_SCALING
+        empty_space = []
+        for i in range(len(structure)):
+            for j in range(len(structure[0])):
+                if structure[i][j] == 'r' or structure[i][j] == 'g' or structure[i][j] == 0:
+                    empty_space.append((j * size_scaling - self._init_torso_x, i * size_scaling - self._init_torso_y))
+                    #return j * size_scaling, i * size_scaling
+        return empty_space
+
     @overrides
     def reset(self, *args, **kwargs):
         return self.wrapped_env.reset(*args, **kwargs)
@@ -235,8 +249,14 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
         #x, y = self.wrapped_env.get_body_com("torso")[:2]
         # ref_x = x + self._init_torso_x
         # ref_y = y + self._init_torso_y
-        info['outer_rew'] = 0
+        #info['outer_rew'] = 0
+
         info['inner_rew'] = inner_rew
+
+        goal = self.wrapped_env.current_goal
+        info['x_goal']= goal[0]
+        info['y_goal']= goal[1]
+
         # reward = self.coef_inner_rew * inner_rew
         # minx, maxx, miny, maxy = self._goal_range
         # if minx <= x <= maxx and miny <= y <= maxy:
@@ -252,9 +272,9 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
     def log_diagnostics(self, paths, *args, **kwargs):
         # we call here any logging related to the maze, strip the maze obs and call log_diag with the stripped paths
         # we need to log the purely gather reward!!
-        with logger.tabular_prefix('Maze_'):
-            gather_undiscounted_returns = [sum(path['env_infos']['outer_rew']) for path in paths]
-            logger.record_tabular_misc_stat('Return', gather_undiscounted_returns, placement='front')
+        # with logger.tabular_prefix('Maze_'):
+        #     gather_undiscounted_returns = [sum(path['env_infos']['outer_rew']) for path in paths]
+        #     logger.record_tabular_misc_stat('Return', gather_undiscounted_returns, placement='front')
         stripped_paths = []
         for path in paths:
             stripped_path = {}
@@ -264,7 +284,7 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
                 stripped_path['observations'][:, :self.wrapped_env.observation_space.flat_dim]
             #  this breaks if the obs of the robot are d>1 dimensional (not a vector)
             stripped_paths.append(stripped_path)
-        # with logger.tabular_prefix('wrapped_'):
-        #     wrapped_undiscounted_return = np.mean([np.sum(path['env_infos']['inner_rew']) for path in paths])
-        #     logger.record_tabular('AverageReturn', wrapped_undiscounted_return)
-        #     self.wrapped_env.log_diagnostics(stripped_paths, *args, **kwargs)
+        with logger.tabular_prefix('wrapped_'):
+            wrapped_undiscounted_return = np.mean([np.sum(path['env_infos']['inner_rew']) for path in paths])
+            logger.record_tabular('AverageReturn', wrapped_undiscounted_return)
+            self.wrapped_env.log_diagnostics(stripped_paths, *args, **kwargs)

@@ -38,9 +38,9 @@ from sandbox.young_clgan.lib.logging import *
 
 EXPERIMENT_TYPE = 'cl_gan'
 
-use_stub = False
+use_stub = True
 
-use_ec2 = True
+use_ec2 = False
 
 if use_ec2:
     use_stub = True
@@ -48,7 +48,13 @@ if use_ec2:
     n_parallel = 4
 else:
     mode = "local"
-    n_parallel = multiprocessing.cpu_count()
+    #n_parallel = multiprocessing.cpu_count()
+    n_parallel = 1
+
+if use_ec2:
+    seeds = [1, 11, 21, 31, 41]
+else:
+    seeds = [None]
 
 #from sandbox.young_clgan.experiments.point_env_linear.cl_gan_algo import CLGANPointEnvLinear
 
@@ -62,15 +68,15 @@ if __name__ == '__main__':
 
 
     hyperparams = AttrDict(
-        horizon=200,
+        horizon=400,
         goal_size=2,
         goal_range=15,
         goal_noise_level=1,
         min_reward=5,
-        max_reward=1000,
+        max_reward=6000,
         improvement_threshold=10,
         outer_iters=200,
-        inner_iters=50,
+        inner_iters=5,
         pg_batch_size=20000,
         gan_outer_iters=5,
         gan_discriminator_iters=200,
@@ -78,19 +84,33 @@ if __name__ == '__main__':
         gan_noise_size=4,
         gan_generator_layers=[256, 256],
         gan_discriminator_layers=[128, 128],
+        num_new_goals=200,
+        num_old_goals=200,
         experiment_type=EXPERIMENT_TYPE,
     )
 
     algo = CLGANPointEnvMaze(hyperparams)
 
     if use_stub:
-        run_experiment_lite(
-            algo.train(),
-            n_parallel=n_parallel,
-            use_cloudpickle=False,
-            snapshot_mode="none",
-            use_gpu=False,
-            mode=mode,
-        )
+        for seed in seeds:
+            run_experiment_lite(
+                algo.train(),
+                pre_commands=['export MPLBACKEND=Agg',
+                              'pip install --upgrade pip',
+                              'pip install --upgrade -I tensorflow',
+                              'pip install git+https://github.com/tflearn/tflearn.git',
+                              'pip install dominate',
+                              'pip install scikit-image',
+                              'conda install numpy -n rllab3 -y',
+                              ],
+                n_parallel=n_parallel,
+                use_cloudpickle=False,
+                snapshot_mode="none",
+                use_gpu=False,
+                mode=mode,
+                exp_prefix='goalGAN-maze1',
+                #seed=seed
+            )
     else:
         algo.train()
+

@@ -3,6 +3,7 @@ from rllab import spaces
 import sys
 import os.path as osp
 import matplotlib as mpl
+
 mpl.use('Agg')
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
@@ -28,7 +29,6 @@ class GoalGenerator(object):
 
     def __init__(self):
         self._goal = None
-        # self.goal_dim = 0
         self.update()
 
     def update(self):
@@ -85,6 +85,8 @@ class FixedGoalGenerator(GoalGenerator, Serializable):
 
 class GoalEnv(Serializable):
     """ Base class for goal based environment. Implements goal update utilities. """
+    def __init__(self, **kwargs):
+        Serializable.quick_init(self, locals())
 
     def update_goal_generator(self, goal_generator):
         self._goal_generator = goal_generator
@@ -113,6 +115,11 @@ class GoalEnv(Serializable):
         super(GoalEnv, self).__setstate__(d)
         self.update_goal_generator(d['__goal_generator'])
 
+    @property
+    def goal_observation(self):
+        """Return the goal corresponding to current observation"""
+        raise NotImplementedError
+
 
 class GoalEnvAngle(GoalEnv, Serializable):
     def __init__(self, angle_idxs=(None,), **kwargs):
@@ -132,6 +139,12 @@ class GoalEnvAngle(GoalEnv, Serializable):
             else:
                 full_goal.append(coord)
         return full_goal
+
+    # @overrides
+    # @property
+    # def current_goal(self):
+    #     # print("the goal generator is:", self.goal_generator)
+    #     return self.process_angle_goal(super(GoalEnvAngle, self).current_goal)
 
 
 class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
@@ -237,6 +250,16 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
             obj = obj.wrapped_env
         return self._append_observation(obj.get_current_obs())
 
+    @overrides
+    @property
+    def goal_observation(self):
+        obj = self
+        while hasattr(obj, "wrapped_env"):  # try to go through "Normalize and Proxy and whatever wrapper"
+            obj = obj.wrapped_env
+
+        # FIXME: technically we need to invert the angle
+        return obj.get_current_obs()
+
     def _append_observation(self, obs):
         return np.concatenate([obs, np.array(self.current_goal)])
 
@@ -285,9 +308,11 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
         full_goal_dim = np.size(self.current_goal)
         if idx is not None:
             goals = np.array(
-                [path['observations'][0][-full_goal_dim:][idx,] for path in paths])  # supposes static goal over whole paths
+                [path['observations'][0][-full_goal_dim:][idx,] for path in
+                 paths])  # supposes static goal over whole paths
         else:
-            goals = np.array([path['observations'][0][-full_goal_dim:] for path in paths])  # supposes static goal over whole paths
+            goals = np.array(
+                [path['observations'][0][-full_goal_dim:] for path in paths])  # supposes static goal over whole paths
         colors = ['g' * succ + 'r' * (1 - succ) for succ in success]
         fig, ax = plt.subplots()
         if self.angle_idxs != (None,):  # for the pendulum only!
@@ -339,18 +364,20 @@ class GoalIdxExplorationEnv(GoalExplorationEnv, Serializable):
     """
 
     def __init__(self, idx=(-3, -2), **kwargs):
+        print("in GoalIdx ,locals are: ", locals(), '\nand the kwargs are: ', kwargs)
         Serializable.quick_init(self, locals())
+        print("after the serializable, the kwargs are: ", kwargs)
         self.idx = idx
         super(GoalIdxExplorationEnv, self).__init__(**kwargs)
         if self.feasible_goal_space.flat_dim > len(idx):
             print("shrinking the feasible_goal_space to match idx")
             self.goal_bounds = self.goal_bounds[idx]
-            self._feasible_goal_space = Box(low=-1*self.goal_bounds, high=self.goal_bounds)
+            self._feasible_goal_space = Box(low=-1 * self.goal_bounds, high=self.goal_bounds)
 
     def step(self, action):
         observation, reward, done, info = ProxyEnv.step(self, action)
         info['reward_inner'] = reward_inner = self.inner_weight * reward
-        body_com = observation[self.idx, ]  # assumes the COM is last 3 coord, z being last
+        body_com = observation[self.idx,]  # assumes the COM is last 3 coord, z being last
         info['distance'] = dist = np.linalg.norm(body_com - self.current_goal)
         reward_dist = self._compute_dist_reward(body_com)
         info['reward_dist'] = reward_dist
@@ -366,6 +393,11 @@ class GoalIdxExplorationEnv(GoalExplorationEnv, Serializable):
         )
 
     @overrides
+    @property
+    def goal_observation(self):
+        return super(GoalIdxExplorationEnv, self).goal_observation[self.idx, ]
+
+    @overrides
     def log_diagnostics(self, paths, fig_prefix='', *args, **kwargs):
         GoalExplorationEnv.log_diagnostics(self, paths=paths, fig_prefix=fig_prefix, idx=self.idx, *args, **kwargs)
 
@@ -378,3 +410,48 @@ def update_env_goal_generator(env, goal_generator):
         return env.wrapped_env.update_goal_generator(goal_generator)
     else:
         raise NotImplementedError('Unsupported environment')
+
+
+def get_goal_observation(env):
+    if hasattr(env, 'goal_observation'):
+        return env.goal_observation  # should be unnecessary
+    elif hasattr(env, 'wrapped_env'):
+        return env.wrapped_env.goal_observation
+    else:
+        raise NotImplementedError('Unsupported environment')
+
+
+def get_current_goal(env):
+    if hasattr(env, 'current_goal'):
+        return env.current_goal
+    elif hasattr(env, 'wrapped_env'):
+        return env.wrapped_env.current_goal
+    else:
+        raise NotImplementedError('Unsupported environment')
+
+
+def generate_initial_goals(env, policy, goal_range, horizon=500, size=1000):
+    current_goal = get_current_goal(env)
+
+    goal_dim = np.array(current_goal).shape
+    done = False
+    obs = env.reset()
+    goals = [get_goal_observation(env)]
+    steps = 0
+    while len(goals) < size:
+        if done or steps >= horizon:
+            steps = 0
+            update_env_goal_generator(
+                env,
+                FixedGoalGenerator(
+                    np.random.uniform(-goal_range, goal_range, goal_dim)
+                )
+            )
+            obs = env.reset()
+            goals.append(get_goal_observation(env))
+        else:
+            action, _ = policy.get_action(obs)
+            obs, _, done, _ = env.step(action)
+            goals.append(get_goal_observation(env))
+
+    return np.array(goals)

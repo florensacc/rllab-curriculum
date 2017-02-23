@@ -88,6 +88,9 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
             distance=dist,
         )
 
+    def goal_observation(self):
+        return self.get_body_com("torso")[:2]
+
     def _compute_dist_reward(self):
         """Transforms dist to goal with linear_threshold_reward: gets -threshold * coef at dist=0, and decreases to 0"""
         dist = np.linalg.norm(

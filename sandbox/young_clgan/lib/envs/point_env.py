@@ -37,6 +37,11 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
             pos,
             vel
         ])
+        
+    @overrides
+    @property
+    def goal_observation(self):
+        return np.array(self.model.data.qpos.flat[:2]).flatten()
 
     @overrides
     def reset(self, *args, **kwargs):
@@ -53,6 +58,7 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
         return self.get_current_obs()
 
     def step(self, action):
+        import pdb; pdb.set_trace()
         if self.control_mode == 'linear':  # action is directly the acceleration
             self.forward_dynamics(action)
         elif self.control_mode == 'angular':  # action[0] is accel in forward (vel) direction, action[1] in orthogonal.

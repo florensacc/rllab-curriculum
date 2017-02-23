@@ -27,8 +27,9 @@ from rllab.envs.box2d.pendulum_env import PendulumEnv
 from rllab.misc.instrument import VariantGenerator
 
 from sandbox.young_clgan.lib.envs.base import GoalExplorationEnv, GoalIdxExplorationEnv
-from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator, \
-    UniformGoalGenerator, update_env_goal_generator
+from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator, UniformGoalGenerator, \
+     update_env_goal_generator, generate_initial_goals
+
 from sandbox.young_clgan.lib.goal.evaluator import *
 from sandbox.young_clgan.lib.goal.generator import *
 # from sandbox.young_clgan.lib.goal.utils import *
@@ -36,9 +37,9 @@ from sandbox.young_clgan.lib.logging.html_report import format_dict, HTMLReport
 from sandbox.young_clgan.lib.logging.visualization import *
 from sandbox.young_clgan.lib.logging.logger import ExperimentLogger
 
-from sandbox.young_clgan.lib.utils import initialize_parallel_sampler
-
-initialize_parallel_sampler()
+# from sandbox.young_clgan.lib.utils import initialize_parallel_sampler
+#
+# initialize_parallel_sampler()
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -158,11 +159,13 @@ if __name__ == '__main__':
         # )
         # report.add_image(img, 'policy performance initialization\n')
 
-        # Pretrain GAN with uniform distribution on the GAN output space and log a sample
-        logger.log("pretraining the GAN with uniform...")
-        gan.pretrain_uniform()
-        img = plot_gan_samples(gan, v['goal_range'], '{}/start.png'.format(log_dir))
-        report.add_image(img, 'GAN pretrained uniform')
+        # logger.log("pretraining the GAN...")
+        # # gan.pretrain_uniform()
+        # gan.pretrain(
+        #     generate_initial_goals(env, policy, v['goal_range'], horizon=v['horizon'])
+        # )
+        # img = plot_gan_samples(gan, v['goal_range'], '{}/start.png'.format(log_dir))
+        # report.add_image(img, 'GAN pretrained uniform')
 
         report.save()
         report.new_row()
@@ -302,7 +305,7 @@ if __name__ == '__main__':
             variant=vv,
             mode='local',
             # n_parallel=n_parallel,
-            n_parallel=0,
+            n_parallel=2,
             # Only keep the snapshot parameters for the last iteration
             snapshot_mode="last",
             seed=vv['seed'],

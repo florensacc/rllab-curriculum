@@ -8,7 +8,6 @@ from sandbox.young_clgan.lib.goal.evaluator import evaluate_goals, convert_label
 from sandbox.young_clgan.lib.envs.base import FixedGoalGenerator
 
 import matplotlib
-
 matplotlib.use('Agg')
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import pyplot as plt
@@ -55,6 +54,18 @@ def plot_policy_reward(policy, env, limit, horizon=200, max_reward=6000, fname=N
             return img, z
         else:
             return img
+
+def save_image(fname=None):
+    if fname is not None:
+        plt.savefig(fname, format='png')
+        return scipy.misc.imread(fname)
+    else:
+        fp = tempfile.TemporaryFile()
+        plt.savefig(fp, format='png')
+        fp.seek(0)
+        img = scipy.misc.imread(fp)
+        fp.close()
+        return img
 
 
 def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers=None, fname=None, limit=None,
@@ -139,10 +150,13 @@ def plot_gan_samples(gan, limit, fname=None, size=500):
     if np.size(samples[0]) >= 3:
         ax = fig.add_subplot(111, projection='3d')
         ax.scatter(samples[:, 0], samples[:, 1], samples[:, 2])
+        ax.set_ylim3d(-limit, limit)
+        ax.set_xlim3d(-limit, limit)
+        ax.set_zlim3d(-limit, limit)
     else:
         plt.scatter(samples[:, 0], samples[:, 1])
-    plt.ylim(-limit, limit)
-    plt.xlim(-limit, limit)
+        plt.ylim(-limit, limit)
+        plt.xlim(-limit, limit)
     if fname is not None:
         plt.savefig(fname, format='png')
         return scipy.misc.imread(fname)
@@ -156,6 +170,7 @@ def plot_gan_samples(gan, limit, fname=None, size=500):
 
 
 def plot_line_graph(fname=None, *args, **kwargs):
+    plt.figure()
     plt.clf()
     plt.plot(*args, **kwargs)
     if fname is not None:
