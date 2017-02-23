@@ -58,10 +58,10 @@ class GoalGAN(object):
         return goals, noise
 
     def train(self, goals, labels, outer_iters, generator_iters,
-              discriminator_iters):
+              discriminator_iters, suppress_generated_goals=True):
         goals = goals / self.goal_range
         self.gan.train(
-            goals, labels, outer_iters, generator_iters, discriminator_iters
+            goals, labels, outer_iters, generator_iters, discriminator_iters, suppress_generated_goals
         )
 
     def discriminator_predict(self, goals):

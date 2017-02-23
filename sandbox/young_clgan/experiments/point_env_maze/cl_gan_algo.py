@@ -1,7 +1,10 @@
 import os
+import os.path as osp
+import datetime
 
 from sandbox.young_clgan.experiments.point_env_maze.maze_evaluate import test_and_plot_policy
 from sandbox.young_clgan.lib.envs.maze.point_maze_env import PointMazeEnv
+from sandbox.young_clgan.lib.goal.utils import GoalCollection
 from sandbox.young_clgan.lib.logging import HTMLReport
 from sandbox.young_clgan.lib.logging import format_dict
 from sandbox.young_clgan.lib.logging.visualization import save_image, plot_gan_samples, plot_labeled_samples, \
@@ -80,20 +83,24 @@ class CLGANPointEnvMaze(RLAlgorithm):
 
 
         hyperparams = self.hyperparams
-        log_config = format_experiment_log_path(
-            __file__, EXPERIMENT_TYPE
+        experiment_date_host = datetime.datetime.today().strftime(
+            "%Y-%m-%d_%H-%M-%S_{}".format(os.uname()[1])
         )
-        make_log_dirs(log_config)
+
+        # log_config = format_experiment_log_path(
+        #     __file__, EXPERIMENT_TYPE
+        # )
+        # make_log_dirs(log_config)
 
         random.seed(int(time.time()))
         np.random.seed(int(time.time()))
 
-        report = HTMLReport(log_config.report_file)
-        # logger.set_snapshot_dir(log_config["log_dir"])
-        # logger.set_tf_summary_dir(log_config["log_dir"])
-        # print("Logger snapshot dir: ", logger.get_snapshot_dir())
+        # Log performance of randomly initialized policy with FIXED goal [0.1, 0.1]
+        logger.log("Initializing report and plot_policy_reward...")
+        log_dir = logger.get_snapshot_dir()  # problem with logger module here!!
+        report = HTMLReport(osp.join(log_dir, 'report.html'))
 
-        report.add_header("{}, {}".format(EXPERIMENT_TYPE, log_config.experiment_date_host))
+        report.add_header("{}, {}".format(EXPERIMENT_TYPE, experiment_date_host))
         report.add_text(format_dict(hyperparams))
 
         tf_session = tf.Session()
@@ -110,8 +117,11 @@ class CLGANPointEnvMaze(RLAlgorithm):
             configs=gan_configs
         )
 
+        reward_dist_threshold = 0.3
+
         env = normalize(PointMazeEnv(
-            goal_generator=FixedGoalGenerator([0.1, 0.1])
+            goal_generator=FixedGoalGenerator([0.1, 0.1]),
+            reward_dist_threshold=reward_dist_threshold
         ))
 
         policy = GaussianMLPPolicy(
@@ -124,36 +134,29 @@ class CLGANPointEnvMaze(RLAlgorithm):
         baseline = LinearFeatureBaseline(env_spec=env.spec)
 
         test_and_plot_policy(policy, env)
-        reward_img = save_image(fname='{}/policy_reward_init.png'.format(log_config.plot_dir))
+        reward_img = save_image(fname=osp.join(log_dir, 'policy_reward_init.png'))
         report.add_image(
             reward_img,
             'policy performance initialization\n'
         )
 
-        # img = plot_policy_reward(
-        #     policy, env, hyperparams.goal_range,
-        #     horizon=hyperparams.horizon,
-        #     fname='{}/policy_reward_init.png'.format(log_config.plot_dir),
-        # )
-        # report.add_image(img, 'policy performance initialization\n')
+        # logger.log("Pretraining the gan for uniform sampling")
+        # gan.pretrain_uniform()
 
-        # Pretrain GAN with uniform distribution on the GAN output space
-        #print("Pretraining the gan for uniform sampling")
-        #gan.pretrain_uniform()
-
-        print("Pretraining the gan with initial goals")
+        logger.log("Pretraining the gan with initial goals")
         gan.pretrain(
             generate_initial_goals(env, policy, hyperparams.goal_range)
         )
 
-        print("Plotting GAN samples")
-        img = plot_gan_samples(gan, hyperparams.goal_range, '{}/start.png'.format(log_config.plot_dir))
+        logger.log("Plotting GAN samples")
+        img = plot_gan_samples(gan, hyperparams.goal_range, osp.join(log_dir, 'start.png'))
         report.add_image(img, 'GAN initialization')
 
         report.save()
         report.new_row()
 
-        all_goals = GoalCollection(0.5)
+        all_goals = GoalCollection(distance_threshold=reward_dist_threshold)
+        #all_goals = GoalCollection(distance_threshold=0)
         
         all_mean_rewards = []
         all_coverage = []
@@ -162,22 +165,22 @@ class CLGANPointEnvMaze(RLAlgorithm):
         for outer_iter in range(hyperparams.outer_iters):
 
             # Train GAN
-            print("Sampling goals from the GAN")
+            logger.log("Sampling goals from the GAN")
             raw_goals, _ = gan.sample_goals_with_noise(hyperparams.num_new_goals)
 
             if outer_iter > 0:
-                old_goals = all_goals.sample(num_old_goals)
+                old_goals = all_goals.sample(hyperparams.num_old_goals)
                 goals = np.vstack([raw_goals, old_goals])
             else:
                 goals = raw_goals
 
             all_goals.append(raw_goals)
 
-            print("Evaluating goals before training")
+            logger.log("Evaluating goals before training")
             rewards_before = evaluate_goals(goals, env, policy, hyperparams.horizon)
 
-            with ExperimentLogger(log_config.log_dir, outer_iter, hold_outter_log=True):
-                print("Updating the environment goal generator")
+            with ExperimentLogger(log_dir, outer_iter, hold_outter_log=True):
+                logger.log("Updating the environment goal generator")
                 update_env_goal_generator(
                     env,
                     UniformListGoalGenerator(
@@ -185,7 +188,7 @@ class CLGANPointEnvMaze(RLAlgorithm):
                     )
                 )
 
-                print("Training the algorithm")
+                logger.log("Training the algorithm")
                 algo = TRPO(
                     env=env,
                     policy=policy,
@@ -193,15 +196,16 @@ class CLGANPointEnvMaze(RLAlgorithm):
                     batch_size=hyperparams.pg_batch_size,
                     max_path_length=hyperparams.horizon,
                     n_itr=hyperparams.inner_iters,
-                    discount=0.9975,
+                    discount=hyperparams.discount,
                     step_size=0.01,
                     plot=False,
+                    gae_lambda=hyperparams.gae_lambda
                 )
 
                 algo.train()
 
             rewards = test_and_plot_policy(policy, env)
-            reward_img = save_image(fname='{}/policy_reward_{}.png'.format(log_config.plot_dir, outer_iter))
+            reward_img = save_image(fname=osp.join(log_dir,'policy_reward_{}.png'.format(outer_iter)))
 
             mean_rewards = np.mean(rewards)
             coverage = np.mean(rewards >= hyperparams.max_reward)
@@ -209,9 +213,7 @@ class CLGANPointEnvMaze(RLAlgorithm):
             all_mean_rewards.append(mean_rewards)
             all_coverage.append(coverage)
 
-            # logger.set_snapshot_dir(log_config["log_dir"])
-            # logger.set_tf_summary_dir(log_config["log_dir"])
-            print("Logger snapshot dir: ", logger.get_snapshot_dir())
+            logger.log("Logger snapshot dir: ", logger.get_snapshot_dir())
             with logger.tabular_prefix('Outer_'):
                 logger.record_tabular('MeanRewards', mean_rewards)
                 logger.record_tabular('Coverage', coverage)
@@ -225,16 +227,9 @@ class CLGANPointEnvMaze(RLAlgorithm):
                 )
             )
 
-            # img, rewards = plot_policy_reward(
-            #     policy, env, hyperparams.goal_range,
-            #     horizon=hyperparams.horizon,
-            #     fname='{}/policy_reward_{}.png'.format(log_config.plot_dir, outer_iter),
-            #     return_rewards=True
-            # )
-
             report.save()
 
-            print("Labeling the goals")
+            logger.log("Labeling the goals")
             labels = label_goals(
                 goals, env, policy, hyperparams.horizon,
                 min_reward=hyperparams.min_reward,
@@ -243,41 +238,42 @@ class CLGANPointEnvMaze(RLAlgorithm):
                 improvement_threshold=hyperparams.improvement_threshold
             )
 
-            print("Training the GAN")
+            logger.log("Training the GAN")
             gan.train(
                 goals, labels,
                 hyperparams.gan_outer_iters,
                 hyperparams.gan_generator_iters,
-                hyperparams.gan_discriminator_iters
+                hyperparams.gan_discriminator_iters,
+                suppress_generated_goals=True
             )
 
-            print("Converting the labels")
+            logger.log("Converting the labels")
             plot_labels, classes = self.convert_label(labels)
 
-            print("Plotting the labeled samples")
+            logger.log("Plotting the labeled samples")
             img = plot_labeled_samples(
                 samples=goals, sample_classes=plot_labels,
                 text_labels=classes, limit=hyperparams.goal_range + 5,
-                fname='{}/sampled_goals_{}.png'.format(log_config.plot_dir, outer_iter),
+                fname=osp.join(log_dir, 'sampled_goals_{}.png'.format(outer_iter)),
             )
 
-            print("Adding image to the report")
+            logger.log("Adding image to the report")
             report.add_image(img, 'goals\n itr: {}'.format(outer_iter), width=500)
 
-            print("Saving the report")
+            logger.log("Saving the report")
             report.save()
 
-            print("Adding a new row to the report")
+            logger.log("Adding a new row to the report")
             report.new_row()
                 
         img = plot_line_graph(
-            '{}/mean_rewards.png'.format(log_config.plot_dir),
+            osp.join(log_dir, 'mean_rewards.png'),
             range(hyperparams.outer_iters), all_mean_rewards
         )
         report.add_image(img, 'Mean rewards', width=500)
         
         img = plot_line_graph(
-            '{}/coverages.png'.format(log_config.plot_dir),
+            osp.join(log_dir, 'coverages.png'),
             range(hyperparams.outer_iters), all_coverage
         )
         report.add_image(img, 'Coverages', width=500)
