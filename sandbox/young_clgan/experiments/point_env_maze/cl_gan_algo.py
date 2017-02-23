@@ -153,7 +153,7 @@ class CLGANPointEnvMaze(RLAlgorithm):
         report.save()
         report.new_row()
 
-        all_goals = np.zeros((0, 2))
+        all_goals = GoalCollection(0.5)
         
         all_mean_rewards = []
         all_coverage = []
@@ -166,13 +166,12 @@ class CLGANPointEnvMaze(RLAlgorithm):
             raw_goals, _ = gan.sample_goals_with_noise(hyperparams.num_new_goals)
 
             if outer_iter > 0:
-                old_goal_indices = np.random.randint(0, all_goals.shape[0], hyperparams.num_old_goals)
-                old_goals = all_goals[old_goal_indices, :]
+                old_goals = all_goals.sample(num_old_goals)
                 goals = np.vstack([raw_goals, old_goals])
             else:
                 goals = raw_goals
 
-            all_goals = np.vstack([all_goals, raw_goals])
+            all_goals.append(raw_goals)
 
             print("Evaluating goals before training")
             rewards_before = evaluate_goals(goals, env, policy, hyperparams.horizon)

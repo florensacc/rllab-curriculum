@@ -35,7 +35,7 @@ class GoalCollection(object):
         
     @property
     def goals(self):
-        return self.goal_list
+        return np.array(self.goal_list)
             
 
 def sample_matrix_row(M, size, replace=False):
