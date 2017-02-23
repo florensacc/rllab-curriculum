@@ -255,16 +255,19 @@ class AsyncAlgo(Picklable):
         for i in range(n_runs):
             env.initialize()
             t = 0
+            check_equiv_to_adv = check_equiv and env.adversary_fn is not None and \
+                                 hasattr(agent.model, "lstm")
             while not env.is_terminal:
                 if return_paths:
                     paths[i]['states'].append(env.state)
-                if check_equiv and env.adversary_fn is not None:
-                    adv_lstm_c, adv_lstm_h = env.adversary_fn(None, None)
+                if check_equiv_to_adv:
+                    # NOTE: This assumes adversary_fn is fgsm_sleeper_perturbation
+                    adv_lstm_c, adv_lstm_h, adversary_done = env.adversary_fn(None, None)
                 
                 action = agent.act(env.state, env.reward, env.is_terminal, env.extra_infos, deterministic=deterministic)
                 reward = env.receive_action(action)
 
-                if check_equiv and env.adversary_fn is not None:
+                if check_equiv_to_adv and adv_lstm_c is not None:
                     assert np.array_equal(agent.model.lstm.h.data, adv_lstm_h), \
                             "LSTM hidden states not equal"
                     assert np.array_equal(agent.model.lstm.c.data, adv_lstm_c), \
@@ -280,6 +283,8 @@ class AsyncAlgo(Picklable):
                         "Process %d: WARNING: test horizon %d exceeded."%(self.process_id, horizon),
                         color="yellow",
                     )
+                    break
+                if check_equiv_to_adv and adversary_done:
                     break
             logger.log(
                 "Process %d: finished testing #%d with score %f."%(self.process_id, i,scores[i]),

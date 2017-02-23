@@ -64,7 +64,7 @@ def get_grad_x_a3c(obs, algo):
     from chainer import functions as F
 
     # Doesn't work for A3CLSTM since it doesn't take into account lstm layer
-    if type(algo.model).__name__ != "A3CFF":
+    if type(algo.cur_agent.model).__name__ != "A3CFF":
         raise NotImplementedError
 
     statevar = chainer.Variable(np.expand_dims(algo.cur_agent.preprocess(obs), 0))
@@ -182,6 +182,9 @@ def fgsm_perturbation(obs, info, algo, **kwargs):
     except KeyError:
         print("FGSM requires the following inputs: fgsm_eps, norm, obs_min, obs_max")
         raise
+
+    if obs is None and info is None:
+        return None, None, None
 
     # Calculate \grad_x J(\theta, x, y)
     grad_x = get_grad_x(obs, algo)

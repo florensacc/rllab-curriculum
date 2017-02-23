@@ -21,3 +21,5 @@ exp013.py: Visualize interesting *black-box* rollouts for arXiv paper. And redo
            the white-box rollouts, with correct epsilons.
 exp014.py: EC2 run, applying FGSM to A3C LSTM policies, for all four games.
            With transferability.
+exp015.py: Apply time-delayed FGSM to A3C LSTM policies, for all four games.
+           Using FGSM combined with dual-descent on weights.

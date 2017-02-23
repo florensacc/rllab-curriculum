@@ -30,7 +30,7 @@ def set_seed_env(env, seed):
 def set_seed(algo, seed):
     set_seed_env(algo.env, seed)
 
-def get_average_return_trpo(algo, seed, N=10, deterministic=False):
+def get_average_return_trpo(algo, seed, N=10, deterministic=False, check_equiv=False):
     # Note that batch size is set during load_model
 
     # Set random seed, for reproducibility
@@ -49,7 +49,8 @@ def get_average_return_trpo(algo, seed, N=10, deterministic=False):
     timesteps = sum([len(p['rewards']) for p in paths])
     return avg_return, paths, timesteps
 
-def get_average_return_a3c(algo, seed, N=10, horizon=10000, deterministic=False):
+def get_average_return_a3c(algo, seed, N=10, horizon=10000, deterministic=False, \
+        check_equiv=False):
 
     #scores, paths = algo.evaluate_performance(N, horizon, return_paths=True)
     paths = []
@@ -63,7 +64,8 @@ def get_average_return_a3c(algo, seed, N=10, horizon=10000, deterministic=False)
         set_seed_env(algo.test_env, curr_seed)
 
         _, new_paths = algo.evaluate_performance(1, horizon, return_paths=True, \
-                                                 deterministic=deterministic)
+                                                 deterministic=deterministic, \
+                                                 check_equiv=check_equiv)
         paths.append(new_paths[0])
 
         # If algo.env is currently recording, make sure to update the states
@@ -102,7 +104,7 @@ def sample_dqn(algo, n_paths=1):  # Based on deep_q_rl/ale_experiment.py, run_ep
             timesteps += 1
     return rewards, timesteps
 
-def get_average_return_dqn(algo, seed, N=10, deterministic=False):
+def get_average_return_dqn(algo, seed, N=10, deterministic=False, check_equiv=False):
     # deterministic - has no effect for DQN since (by definition) it selects
     # the argmax action
 
@@ -122,7 +124,8 @@ def get_average_return_dqn(algo, seed, N=10, deterministic=False):
     avg_return = np.mean([sum(p['rewards']) for p in paths])
     return avg_return, paths, total_timesteps
     
-def get_average_return(model, seed, N=10, return_timesteps=False, deterministic=False):
+def get_average_return(model, seed, N=10, return_timesteps=False, \
+                       deterministic=False, check_equiv=False):
     # model - instantiation of TrainedModel, or just the algo
     # deterministic - if True, then during test time model always picks argmax
     #         action to execute, rather than sampling output distribution over actions
@@ -141,7 +144,7 @@ def get_average_return(model, seed, N=10, return_timesteps=False, deterministic=
     else:
         raise NotImplementedError
 
-    avg_return, paths, timesteps = get_average_return_f(algo, seed, N=N, deterministic=deterministic)
+    avg_return, paths, timesteps = get_average_return_f(algo, seed, N=N, deterministic=deterministic, check_equiv=check_equiv)
 
     if return_timesteps:
         return avg_return, paths, timesteps
