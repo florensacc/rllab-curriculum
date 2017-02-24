@@ -38,7 +38,7 @@ from sandbox.young_clgan.lib.logging import *
 
 EXPERIMENT_TYPE = 'cl_gan'
 
-use_stub = True
+use_stub = False
 
 use_ec2 = False
 
@@ -106,7 +106,7 @@ if __name__ == '__main__':
                               ],
                 n_parallel=n_parallel,
                 use_cloudpickle=False,
-                snapshot_mode="none",
+                snapshot_mode="last",
                 use_gpu=False,
                 mode=mode,
                 sync_s3_html=True,
