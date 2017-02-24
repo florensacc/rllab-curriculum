@@ -139,8 +139,10 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
         return np.concatenate([self.wrapped_env.get_current_obs(),
                                ])
 
+    @overrides
+    @property
     def goal_observation(self):
-        return self.wrapped_env.goal_observation()
+        return self.wrapped_env.goal_observation
 
     def get_ori(self):
         """
