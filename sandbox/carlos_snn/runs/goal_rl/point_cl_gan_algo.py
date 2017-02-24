@@ -142,8 +142,6 @@ def run_task(v):
         else:
             goals = raw_goals
 
-        # append new goals to list of all goals (replay buffer)
-        all_goals.append(raw_goals)
 
         logger.log("Evaluating goals before inner training...")
         rewards_before = evaluate_goals(goals, env, policy, v['horizon'])
@@ -244,3 +242,6 @@ def run_task(v):
         report.save()
         report.new_row()
 
+        # append new goals to list of all goals (replay buffer): Not the low reward ones!!
+        filtered_raw_goals = [goal for goal, label in zip(goals, labels) if labels[0]==1]
+        all_goals.append(filtered_raw_goals)
