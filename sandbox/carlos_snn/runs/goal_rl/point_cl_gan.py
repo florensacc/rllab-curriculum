@@ -56,19 +56,20 @@ if __name__ == '__main__':
     vg = VariantGenerator()
     vg.add('seed', range(10, 30, 10))
     # # GeneratorEnv params
-    vg.add('goal_size', [2, 3, 4])  # this is the ultimate goal we care about: getting the pendulum upright
-    vg.add('goal_range', [5, 10])  # this will be used also as bound of the state_space
-    vg.add('state_bounds', lambda goal_range, goal_size: [(1, ) + (goal_range,) * (goal_size * 2 - 1)])
-    # vg.add('angle_idxs', [((0, 1),)]) # these are the idx of the obs corresponding to angles (here the first 2)
+    vg.add('goal_size', [5, 4, 3, 2])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('reward_dist_threshold', [0.5, 1])
+    vg.add('goal_range', [5, 10])  # this will be used also as bound of the state_space
+    vg.add('state_bounds', lambda reward_dist_threshold, goal_range, goal_size:
+    [(1, goal_range) + (reward_dist_threshold,) * (goal_size * 2 - 2)])
     vg.add('distance_metric', ['L2'])
     vg.add('terminal_bonus', [0])
-    vg.add('terminal_eps', [0.5])  # if hte terminal bonus is 0 it doesn't kill it! Just count how many reached center
+    vg.add('terminal_eps', lambda reward_dist_threshold: [reward_dist_threshold])  # if hte terminal bonus is 0 it doesn't kill it! Just count how many reached center
     #############################################
     vg.add('min_reward', [1])  # now running it with only the terminal reward of 1!
     vg.add('max_reward', [1e3])
     vg.add('improvement_threshold', [10])  # is this based on the reward, now discounted success rate --> push for fast
-    vg.add('smart_init', [ False])
+    vg.add('smart_init', [True, False])
+    vg.add('coll_eps', lambda reward_dist_threshold: [0, reward_dist_threshold])
     # old hyperparams
     vg.add('num_new_goals', [200])
     vg.add('num_old_goals', [100])
@@ -96,7 +97,6 @@ if __name__ == '__main__':
     vg.add('GAN_discriminator_weight_initializer', [tflearn.initializations.truncated_normal])
     vg.add('GAN_discriminator_weight_initializer_stddev', [0.02])
     vg.add('GAN_discriminator_batch_noise_stddev', [1e-2])
-
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
             # # choose subnet

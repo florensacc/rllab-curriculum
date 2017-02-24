@@ -33,9 +33,10 @@ from sandbox.young_clgan.lib.goal.generator import *
 from sandbox.young_clgan.lib.logging.html_report import format_dict, HTMLReport
 from sandbox.young_clgan.lib.logging.visualization import *
 from sandbox.young_clgan.lib.logging.logger import ExperimentLogger
-# from sandbox.young_clgan.lib.utils import initialize_parallel_sampler
-#
-# initialize_parallel_sampler()
+from sandbox.young_clgan.lib.goal.utils import GoalCollection
+
+from sandbox.young_clgan.lib.utils import initialize_parallel_sampler
+initialize_parallel_sampler()
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -114,7 +115,8 @@ def run_task(v):
     logger.log("pretraining the GAN...")
     if v['smart_init']:
         gan.pretrain(
-            generate_initial_goals(env, policy, v['goal_range'], horizon=v['horizon'])
+            generate_initial_goals(env, policy, v['goal_range'], horizon=v['horizon']),
+            outer_iters=30, generator_iters=10, discriminator_iters=200,
         )
     else:
         gan.pretrain_uniform()
@@ -124,7 +126,7 @@ def run_task(v):
     report.save()
     report.new_row()
 
-    all_goals = np.zeros((0, v['goal_size']))
+    all_goals = GoalCollection(v['coll_eps'])
 
     logger.log("Starting the outer iterations")
     for outer_iter in range(v['outer_iters']):
@@ -135,14 +137,13 @@ def run_task(v):
 
         if outer_iter > 0:
             # sampler uniformly 2000 old goals and add them to the training pool (50/50)
-            old_goal_indices = np.random.randint(0, all_goals.shape[0], v['num_old_goals'])
-            old_goals = all_goals[old_goal_indices, :]
+            old_goals = all_goals.sample(v['num_old_goals'])
             goals = np.vstack([raw_goals, old_goals])
         else:
             goals = raw_goals
 
         # append new goals to list of all goals (replay buffer)
-        all_goals = np.vstack([all_goals, raw_goals])
+        all_goals.append(raw_goals)
 
         logger.log("Evaluating goals before inner training...")
         rewards_before = evaluate_goals(goals, env, policy, v['horizon'])
