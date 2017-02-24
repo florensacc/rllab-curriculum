@@ -85,6 +85,7 @@ class FixedGoalGenerator(GoalGenerator, Serializable):
 
 class GoalEnv(Serializable):
     """ Base class for goal based environment. Implements goal update utilities. """
+
     def __init__(self, **kwargs):
         Serializable.quick_init(self, locals())
 
@@ -140,11 +141,11 @@ class GoalEnvAngle(GoalEnv, Serializable):
                 full_goal.append(coord)
         return full_goal
 
-    # @overrides
-    # @property
-    # def current_goal(self):
-    #     # print("the goal generator is:", self.goal_generator)
-    #     return self.process_angle_goal(super(GoalEnvAngle, self).current_goal)
+        # @overrides
+        # @property
+        # def current_goal(self):
+        #     # print("the goal generator is:", self.goal_generator)
+        #     return self.process_angle_goal(super(GoalEnvAngle, self).current_goal)
 
 
 class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
@@ -284,26 +285,30 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
             path['env_infos']['distance'][0] for path in paths
             ]
         reward_dist = [
-            np.mean(path['env_infos']['reward_dist'])
+            np.sum(path['env_infos']['reward_dist'])
             for path in paths
             ]
         reward_inner = [
-            np.mean(path['env_infos']['reward_inner'])
+            np.sum(path['env_infos']['reward_inner'])
             for path in paths
             ]
+        goals = [path['observations'][0, -self.feasible_goal_space.flat_dim:] for path in paths]  # assumes const goal
         success = [int(np.min(path['env_infos']['distance']) <= self.terminal_eps) for path in paths]
-        print(success)
+        feasible = [int(self.feasible_goal_space.contains(goal)) for goal in goals]
+        print('the succes is: ', success)
+        print('the feasible is: ', feasible)
 
         # Process by trajectories
         logger.record_tabular('InitGoalDistance', np.mean(initial_goal_distances))
-        logger.record_tabular('MeanDistance', np.mean(distances))
-        logger.record_tabular('MeanRewardDist', np.mean(reward_dist))
-        logger.record_tabular('MeanRewardInner', np.mean(reward_inner))
+        logger.record_tabular('MeanPathDistance', np.mean(distances))
+        logger.record_tabular('AvgTotalRewardDist', np.mean(reward_dist))
+        logger.record_tabular('AvgTotalRewardInner', np.mean(reward_inner))
         logger.record_tabular('SuccessRate', np.mean(success))
-        self.plot_success(paths, success=success, fig_prefix=fig_prefix, **kwargs)
+        logger.record_tabular('FeasibilityRate', np.mean(feasible))
+        self.plot_success(paths, fig_prefix=fig_prefix, **kwargs)
 
-    def plot_success(self, paths, success, fig_prefix='', idx=None,
-                     report=None):  # assume first 2 coord of state to plot
+    def plot_success(self, paths, fig_prefix='', idx=None,
+                     report=None, plot_paths=4):  # assume first 2 coord of state to plot
         # The goal itself is prepended to the observation, so we can retrieve the collection of goals:
         full_goal_dim = np.size(self.current_goal)
         if idx is not None:
@@ -313,6 +318,9 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
         else:
             goals = np.array(
                 [path['observations'][0][-full_goal_dim:] for path in paths])  # supposes static goal over whole paths
+
+        success = [int(np.min(path['env_infos']['distance']) <= self.terminal_eps) for path in paths]
+        feasible = [int(self.feasible_goal_space.contains(goal)) for goal in goals]
         colors = ['g' * succ + 'r' * (1 - succ) for succ in success]
         fig, ax = plt.subplots()
         if self.angle_idxs != (None,):  # for the pendulum only!
@@ -321,11 +329,18 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
             ax.scatter(angle_goals, angVel_goals, c=colors, lw=0)
         elif len(goals[0]) == 2:
             ax.scatter(goals[:, 0], goals[:, 1], c=colors, lw=0)
+            for p in range(plot_paths):
+                colors = ['m', 'k', 'c', 'y']
+                # positions = np.array([obs[:full_goal_dim] for obs in paths[0]['observations']])
+                pos = paths[p]['observations'][:, :full_goal_dim]
+                ax.plot(pos[:, 0], pos[:, 1], c=colors[p], marker='x', markersize=2)
+                ax.plot([goals[p][0]], [goals[p][1]], c=colors[p], marker='x', markersize=12)
         elif len(goals[0]) == 3:
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
             ax.scatter(goals[:, 0], goals[:, 1], goals[:, 2], c=colors, lw=0)
             high, low = self.wrapped_env.observation_space.bounds
+            print("inside plot_success high/low bounds are:", high, low)
             for i in range(3):
                 j = (i + 1) % 3
                 k = (i + 2) % 3
@@ -340,6 +355,12 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
                 ax.plot(*zip(low[idx], b), color="b")
                 ax.plot(*zip(a, b), color='b')
                 ax.plot(*zip(a, c), color='b')
+            for p in range(plot_paths):
+                colors = ['m', 'k', 'c', 'y']
+                # positions = np.array([obs[:full_goal_dim] for obs in paths[0]['observations']])
+                pos = paths[p]['observations'][:, :full_goal_dim]
+                ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], c=colors[p], marker='x', markersize=2)
+                ax.plot([goals[p][0]], [goals[p][1]], [goals[p][2]], c=colors[p], marker='x', markersize=12)
         else:
             return
         plt.axis('equal')
@@ -351,8 +372,10 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
             fp.seek(0)
             img = scipy.misc.imread(fp)
             fp.close()
-            report.add_image(img, fig_prefix + 'goal_performance')
+            report.add_image(img, fig_prefix + 'goal_performance. \nMean success: {}\nMean feasibility: {}'.format(
+                str(np.mean(success)), str(np.mean(feasible))))
         else:
+            return
             log_dir = logger.get_snapshot_dir()
             plt.savefig(osp.join(log_dir, fig_prefix + 'goal_performance.png'))
             plt.close()
@@ -393,7 +416,7 @@ class GoalIdxExplorationEnv(GoalExplorationEnv, Serializable):
     @overrides
     @property
     def goal_observation(self):
-        return super(GoalIdxExplorationEnv, self).goal_observation[self.idx, ]
+        return super(GoalIdxExplorationEnv, self).goal_observation[self.idx,]
 
     @overrides
     def log_diagnostics(self, paths, fig_prefix='', *args, **kwargs):
@@ -428,7 +451,7 @@ def get_current_goal(env):
         raise NotImplementedError('Unsupported environment')
 
 
-def generate_initial_goals(env, policy, goal_range, horizon=500, size=1000):
+def generate_initial_goals(env, policy, goal_range, horizon=500, size=10000):
     current_goal = get_current_goal(env)
 
     goal_dim = np.array(current_goal).shape
