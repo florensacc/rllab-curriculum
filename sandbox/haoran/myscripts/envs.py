@@ -77,9 +77,13 @@ class EnvChooser(object):
                 HopperEnv
             env = HopperEnv(**kwargs)
         elif env_name == "tuomas_hopper":
-            from sandbox.tuomas.mddpg.envs.hopper_env import \
+            from sandbox.tuomas.mddpg.envs.mujoco.hopper_env import \
                 HopperEnv
             env = HopperEnv(**kwargs)
+        elif env_name == "tuomas_swimmer_forward":
+            from sandbox.tuomas.mddpg.envs.mujoco.swimmer_forward_env import \
+                SwimmerForwardEnv
+            env = SwimmerForwardEnv(**kwargs)
         elif env_name == "tuomas_ant":
             from sandbox.tuomas.mddpg.envs.mujoco.ant_env import \
                 AntEnv

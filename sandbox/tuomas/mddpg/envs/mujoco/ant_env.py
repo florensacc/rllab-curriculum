@@ -7,6 +7,15 @@ from rllab.envs.base import Step
 from rllab.misc.overrides import overrides
 from rllab.misc import logger
 
+import os.path as osp
+
+MODEL_ROUGH = osp.abspath(
+    osp.join(
+        osp.dirname(__file__),
+        '../../../assets/ant_rough.xml'
+    )
+)
+
 
 class AntEnv(MujocoEnv, Serializable):
 
@@ -18,10 +27,16 @@ class AntEnv(MujocoEnv, Serializable):
             reset_penalty=None,
             leg_zpos_thr=2.0,
             flip_thr=0.,
+            rough_terrain=False,
             *args,
             **kwargs
         ):
-        super(AntEnv, self).__init__(*args, **kwargs)
+        if rough_terrain:
+            super(AntEnv, self).__init__(*args,
+                                         file_path=MODEL_ROUGH, **kwargs)
+        else:
+            super(AntEnv, self).__init__(*args, **kwargs)
+
         Serializable.quick_init(self, locals())
         if direction is not None:
             assert np.isclose(np.linalg.norm(direction), 1.)
