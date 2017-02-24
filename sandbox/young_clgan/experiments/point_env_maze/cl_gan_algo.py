@@ -126,7 +126,7 @@ class CLGANPointEnvMaze(RLAlgorithm):
 
         policy = GaussianMLPPolicy(
             env_spec=env.spec,
-            hidden_sizes=(32, 32),
+            hidden_sizes=(64, 64),
             # Fix the variance since different goals will require different variances, making this parameter hard to learn.
             learn_std=False
         )
@@ -278,4 +278,4 @@ class CLGANPointEnvMaze(RLAlgorithm):
         )
         report.add_image(img, 'Coverages', width=500)
         report.save()
-        
+

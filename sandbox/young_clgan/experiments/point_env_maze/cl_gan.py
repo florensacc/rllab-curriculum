@@ -40,7 +40,7 @@ EXPERIMENT_TYPE = 'cl_gan'
 
 use_stub = True
 
-use_ec2 = True
+use_ec2 = False
 
 if use_ec2:
     use_stub = True
@@ -110,7 +110,7 @@ if __name__ == '__main__':
                 use_gpu=False,
                 mode=mode,
                 sync_s3_html=True,
-                exp_prefix='goalGAN-maze26',
+                exp_prefix='goalGAN-maze30',
                 seed=seed
             )
     else:
