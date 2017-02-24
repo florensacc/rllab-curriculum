@@ -7,7 +7,9 @@ from rllab.misc.overrides import overrides
 from rllab.misc import logger
 
 import time
-from matplotlib import pyplot as plt
+# import matplotlib as mpl
+# mpl.use('Agg')
+# from matplotlib import pyplot as plt
 
 class RegularAntEnv(MujocoEnv, Serializable):
 

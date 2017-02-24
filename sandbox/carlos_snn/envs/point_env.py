@@ -23,7 +23,6 @@ class PointEnv(Env, Serializable):
         :param control_mode:
         """
         Serializable.quick_init(self, locals())
-        super(PointEnv, self).__init__(*args, **kwargs)
         self.dim = dim
         self.control_mode = control_mode
         self.dt = 0.02
@@ -40,7 +39,7 @@ class PointEnv(Env, Serializable):
         if self.control_mode == 'linear':  # action is directly the acceleration
             dv = action * self.dt
             self.vel = np.clip(self.vel + dv, -self.state_ub[-self.dim:], self.state_ub[-self.dim:])
-            self.pos = np.clip(self.vel * self.dt, -self.state_ub[:self.dim], self.state_ub[:self.dim])
+            self.pos = np.clip(self.pos + self.vel * self.dt, -self.state_ub[:self.dim], self.state_ub[:self.dim])
         else:
             raise NotImplementedError("Control mode not supported!")
 

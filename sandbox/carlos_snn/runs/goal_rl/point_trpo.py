@@ -1,19 +1,41 @@
-import argparse
-import tensorflow as tf
-import tflearn
 import sys
 import os
+import os.path as osp
+import argparse
+import random
+import numpy as np
+
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
-from rllab.misc.instrument import run_experiment_lite
-from rllab.misc.instrument import VariantGenerator
-from sandbox.carlos_snn.autoclone import autoclone
+# Symbols that need to be stubbed
+from rllab.algos.trpo import TRPO
+from sandbox.carlos_snn.algos.trpo_goal import TRPOGoal
+from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+from rllab.misc.instrument import stub, run_experiment_lite
+import rllab.misc.logger
+from rllab.envs.normalized_env import normalize
+from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
+from rllab.sampler.stateful_pool import singleton_pool
+from rllab.envs.box2d.pendulum_env import PendulumEnv
+from sandbox.carlos_snn.envs.point_env import PointEnv
 from rllab import config
+from rllab.misc.instrument import VariantGenerator, variant
 
-from sandbox.carlos_snn.runs.goal_rl.point_cl_gan_algo import run_task
+from sandbox.young_clgan.lib.envs.base import GoalExplorationEnv, GoalIdxExplorationEnv
+from sandbox.young_clgan.lib.envs.base import UniformGoalGenerator, FixedGoalGenerator
+from sandbox.young_clgan.lib.goal import *
+from sandbox.young_clgan.lib.logging import *
+from sandbox.carlos_snn.autoclone import autoclone
 
+# from sandbox.young_clgan.lib.utils import initialize_parallel_sampler
+# initialize_parallel_sampler()
+
+from sandbox.carlos_snn.runs.goal_rl.point_trpo2 import run_task
+
+EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
 if __name__ == '__main__':
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
     parser.add_argument('--clone', '-c', action='store_true', default=False,
@@ -33,7 +55,8 @@ if __name__ == '__main__':
     subnets = [
         'us-east-2b', 'us-east-1a', 'us-east-1d', 'us-east-1b', 'us-east-1e', 'ap-south-1b', 'ap-south-1a', 'us-west-1a'
     ]
-    ec2_instance = args.type if args.type else 'm4.xlarge'
+    ec2_instance = args.type if args.type else 'c4.2xlarge'
+
     # configure instance
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -51,53 +74,74 @@ if __name__ == '__main__':
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
 
-    exp_prefix = 'goalGAN-point'
-
+    exp_prefix = 'goal-point-trpo2'
     vg = VariantGenerator()
+
     vg.add('seed', range(10, 30, 10))
     # # GeneratorEnv params
-    vg.add('goal_size', [5, 4, 3, 2])  # this is the ultimate goal we care about: getting the pendulum upright
-    vg.add('reward_dist_threshold', [0.5, 1])
+    vg.add('goal_size', [4, 2, 3])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('goal_range', [5, 10])  # this will be used also as bound of the state_space
-    vg.add('state_bounds', lambda reward_dist_threshold, goal_range, goal_size:
-    [(1, goal_range) + (reward_dist_threshold,) * (goal_size * 2 - 2)])
+    vg.add('state_bounds', lambda goal_range, reward_dist_threshold, goal_size:
+                            # [(1, goal_range) + (reward_dist_threshold,) * (goal_size - 2) + (0.5, ) * goal_size])
+                            [(1, goal_range) + (reward_dist_threshold,) * (goal_size - 2) + (goal_range, ) * goal_size])
+    # vg.add('angle_idxs', [((0, 1),)]) # these are the idx of the obs corresponding to angles (here the first 2)
+    vg.add('reward_dist_threshold', [0.5, 1])
     vg.add('distance_metric', ['L2'])
     vg.add('terminal_bonus', [0])
-    vg.add('terminal_eps', lambda reward_dist_threshold: [reward_dist_threshold])  # if hte terminal bonus is 0 it doesn't kill it! Just count how many reached center
+    vg.add('terminal_eps', [0.5])  # if hte terminal bonus is 0 it doesn't kill it! Just count how many reached center
     #############################################
     vg.add('min_reward', [1])  # now running it with only the terminal reward of 1!
     vg.add('max_reward', [1e3])
-    vg.add('improvement_threshold', [10])  # is this based on the reward, now discounted success rate --> push for fast
-    vg.add('smart_init', [True, False])
-    vg.add('coll_eps', lambda reward_dist_threshold: [0, reward_dist_threshold])
-    # old hyperparams
-    vg.add('num_new_goals', [200])
-    vg.add('num_old_goals', [100])
+    vg.add('horizon', [200])
     vg.add('outer_iters', [500])
     vg.add('inner_iters', [5])
-    vg.add('horizon', [200])
     vg.add('pg_batch_size', [20000])
     # policy initialization
-    vg.add('output_gain', [0.1])
-    vg.add('policy_init_std', [0.1])
-    # gan_configs
-    vg.add('goal_noise_level', [0.1])  # ???
-    vg.add('gan_outer_iters', [5])
-    vg.add('gan_discriminator_iters', [200])
-    vg.add('gan_generator_iters', [5])
-    vg.add('GAN_batch_size', [128])  # proble with repeated name!!
-    vg.add('GAN_generator_activation', ['relu'])
-    vg.add('GAN_discriminator_activation', ['relu'])
-    vg.add('GAN_generator_optimizer', [tf.train.AdamOptimizer])
-    vg.add('GAN_generator_optimizer_stepSize', [0.001])
-    vg.add('GAN_discriminator_optimizer', [tf.train.AdamOptimizer])
-    vg.add('GAN_discriminator_optimizer_stepSize', [0.001])
-    vg.add('GAN_generator_weight_initializer', [tflearn.initializations.truncated_normal])
-    vg.add('GAN_generator_weight_initializer_stddev', [0.05])
-    vg.add('GAN_discriminator_weight_initializer', [tflearn.initializations.truncated_normal])
-    vg.add('GAN_discriminator_weight_initializer_stddev', [0.02])
-    vg.add('GAN_discriminator_batch_noise_stddev', [1e-2])
+    vg.add('output_gain', [1, 0.1])
+    vg.add('policy_init_std', [1, 0.1])
+
+    # def run_task(v):
+    #     # random.seed(v['seed'])
+    #     # np.random.seed(v['seed'])
+    #
+    #     inner_env = normalize(PointEnv(dim=v['goal_size'], state_bounds=v['state_bounds']))
+    #     goal_generator = UniformGoalGenerator(goal_size=v['goal_size'], bounds=[-1 * v['goal_range'] * np.ones(v['goal_size']),
+    #                                                                             v['goal_range'] * np.ones(v['goal_size'])])
+    #
+    #     env = GoalIdxExplorationEnv(env=inner_env, goal_generator=goal_generator,
+    #                                 idx=np.arange(v['goal_size']),
+    #                                 reward_dist_threshold=v['reward_dist_threshold'],
+    #                                 distance_metric=v['distance_metric'],
+    #                                 terminal_eps=v['terminal_eps'], terminal_bonus=v['terminal_bonus'],
+    #                                 )  # this goal_generator will be updated by a uniform after
+    #
+    #     policy = GaussianMLPPolicy(
+    #         env_spec=env.spec,
+    #         hidden_sizes=(32, 32),
+    #         # Fix the variance since different goals will require different variances, making this parameter hard to learn.
+    #         learn_std=False,
+    #         init_std=0.1,
+    #     )
+    #
+    #     baseline = LinearFeatureBaseline(env_spec=env.spec)
+    #
+    #     algo = TRPOGoal(
+    #         env=env,
+    #         policy=policy,
+    #         baseline=baseline,
+    #         batch_size=v['pg_batch_size'],
+    #         max_path_length=v['horizon'],
+    #         n_itr=v['n_itr'],
+    #         discount=0.99,
+    #         step_size=0.01,
+    #         plot=False,
+    #     )
+    #
+    #     algo.train()
+
+
     for vv in vg.variants():
+
         if mode in ['ec2', 'local_docker']:
             # # choose subnet
             # subnet = random.choice(subnets)
@@ -131,9 +175,9 @@ if __name__ == '__main__':
                 # plot=True,
                 exp_prefix=exp_prefix,
                 # exp_name=exp_name,
-                # for sync the pkl file also during the training
                 sync_s3_pkl=True,
-                # sync_s3_png=True,
+                # for sync the pkl file also during the training
+                sync_s3_png=True,
                 sync_s3_html=True,
                 # # use this ONLY with ec2 or local_docker!!!
                 pre_commands=[
@@ -161,4 +205,3 @@ if __name__ == '__main__':
                 exp_prefix=exp_prefix,
                 # exp_name=exp_name,
             )
-

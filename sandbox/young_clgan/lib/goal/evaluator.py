@@ -2,6 +2,7 @@ import multiprocessing
 import os
 import tempfile
 import numpy as np
+from collections import OrderedDict
 
 from rllab.sampler.utils import rollout
 from rllab.misc import logger
@@ -86,17 +87,17 @@ def label_goals(goals, env, policy, horizon, min_reward, max_reward,
 def convert_label(labels):
     """
     :param labels: 3-dim evaluation of the goal
-    :return: convert to single integer label and gives associated texts (for plotting)
+    :return: convert to single integer label and gives associated texts (for plotting). Better if OrderedDict for log!
     """
     # label[0] --> LowRew, label[1] --> HighRew, label[2] --> Learnable ??
     # Put good goals last so they will be plotted on top of other goals and be most visible.
-    classes = {
+    classes = OrderedDict({
         0: 'Other',
         1: 'Low rewards',
         2: 'High rewards',
         3: 'Unlearnable',
         4: 'Good goals',
-    }
+    })
     new_labels = np.zeros(labels.shape[0], dtype=int)
     new_labels[np.logical_and(labels[:, 0], labels[:, 1])] = 4
     new_labels[labels[:, 0] == False] = 1
@@ -111,7 +112,7 @@ def convert_label(labels):
     return new_labels, classes
 
 
-def evaluate_goals(goals, env, policy, horizon, n_traj=1, n_processes=-1):
+def evaluate_goals(goals, env, policy, horizon, n_traj=1, n_processes=1):
     evaluate_goal_wrapper = FunctionWrapper(
         evaluate_goal,
         env=env,
@@ -138,6 +139,6 @@ def evaluate_goal(goal, env, policy, horizon, n_traj=1):
     return np.mean(mean_rewards)
 
 
-def evaluate_goal_env(env, policy, horizon, n_goals=10):
+def evaluate_goal_env(env, policy, horizon, n_goals=10, **kwargs):
     paths = [rollout(env=env, agent=policy, max_path_length=horizon) for _ in range(n_goals)]
-    env.log_diagnostics(paths)
+    env.log_diagnostics(paths, **kwargs)
