@@ -30,6 +30,7 @@ from sandbox.carlos_snn.autoclone import autoclone
 # from sandbox.young_clgan.lib.utils import initialize_parallel_sampler
 # initialize_parallel_sampler()
 
+from sandbox.carlos_snn.runs.goal_rl.point_trpo2 import run_task
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -54,7 +55,7 @@ if __name__ == '__main__':
     subnets = [
         'us-east-2b', 'us-east-1a', 'us-east-1d', 'us-east-1b', 'us-east-1e', 'ap-south-1b', 'ap-south-1a', 'us-west-1a'
     ]
-    ec2_instance = args.type if args.type else 'c4.4xlarge'
+    ec2_instance = args.type if args.type else 'c4.2xlarge'
 
     # configure instance
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
@@ -73,63 +74,68 @@ if __name__ == '__main__':
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
 
-    exp_prefix = 'goal-point-trpo'
+    exp_prefix = 'goal-point-trpo2'
     vg = VariantGenerator()
-    # algorithm params
-    vg.add('seed', range(30, 60, 10))
-    vg.add('n_itr', [500])
-    vg.add('batch_size', [20000])
-    vg.add('max_path_length', [200])
-    # environemnt params
-    vg.add('goal_size', [3])
-    vg.add('state_bounds', [(2,2,2, 2,2,2), (4, 4, 1), (4, 4, 0.1)])
-    vg.add('goal_generator', [UniformGoalGenerator])
-    vg.add('goal_range', lambda goal_generator: [2] if goal_generator == UniformGoalGenerator else [None])
-    vg.add('goal_reward', ['NegativeDistance'])
-    vg.add('goal_weight', [1])
+
+    vg.add('seed', range(10, 30, 10))
+    # # GeneratorEnv params
+    vg.add('goal_size', [2, 3, 4])  # this is the ultimate goal we care about: getting the pendulum upright
+    vg.add('goal_range', [5, 10])  # this will be used also as bound of the state_space
+    vg.add('state_bounds', lambda goal_range, goal_size: [(1, ) + (goal_range,) * (goal_size * 2 - 1)])
+    # vg.add('angle_idxs', [((0, 1),)]) # these are the idx of the obs corresponding to angles (here the first 2)
+    vg.add('reward_dist_threshold', [0.5, 1])
     vg.add('distance_metric', ['L2'])
-    vg.add('terminal_eps', [0.1])
     vg.add('terminal_bonus', [0])
+    vg.add('terminal_eps', [0.5])  # if hte terminal bonus is 0 it doesn't kill it! Just count how many reached center
+    #############################################
+    vg.add('min_reward', [1])  # now running it with only the terminal reward of 1!
+    vg.add('max_reward', [1e3])
+    vg.add('horizon', [200])
+    vg.add('outer_iters', [500])
+    vg.add('inner_iters', [5])
+    vg.add('pg_batch_size', [20000])
+    # policy initialization
+    vg.add('output_gain', [1, 0.1])
+    vg.add('policy_init_std', [1, 0.1])
 
-
-    def run_task(v):
-
-        inner_env = normalize(PointEnv(dim=v['goal_size'], state_bounds=v['state_bounds']))
-
-        goal_generator_class = v['goal_generator']
-        if goal_generator_class == UniformGoalGenerator:
-            goal_generator = goal_generator_class(goal_size=v['goal_size'], bounds=v['goal_range'])
-        else:
-            assert goal_generator_class == FixedGoalGenerator, 'goal generator not recognized!'
-            goal_generator = goal_generator_class(goal=v['goal'])
-
-        env = GoalIdxExplorationEnv(env=inner_env, goal_bounds=v['goal_range'], idx=(0,1,2), final_goal=np.ones(v['goal_size']),
-                                 reward_dist_threshold=0.8, goal_generator=goal_generator, goal_reward=v['goal_reward'],
-                                 goal_weight=v['goal_weight'], terminal_bonus=v['terminal_bonus'], terminal_eps=v['terminal_eps'])
-
-        policy = GaussianMLPPolicy(
-            env_spec=env.spec,
-            hidden_sizes=(32, 32),
-            # Fix the variance since different goals will require different variances, making this parameter hard to learn.
-            learn_std=False,
-            init_std=0.1,
-        )
-
-        baseline = LinearFeatureBaseline(env_spec=env.spec)
-
-        algo = TRPOGoal(
-            env=env,
-            policy=policy,
-            baseline=baseline,
-            batch_size=v['batch_size'],
-            max_path_length=v['max_path_length'],
-            n_itr=v['n_itr'],
-            discount=0.99,
-            step_size=0.01,
-            plot=False,
-        )
-
-        algo.train()
+    # def run_task(v):
+    #     # random.seed(v['seed'])
+    #     # np.random.seed(v['seed'])
+    #
+    #     inner_env = normalize(PointEnv(dim=v['goal_size'], state_bounds=v['state_bounds']))
+    #     goal_generator = UniformGoalGenerator(goal_size=v['goal_size'], bounds=[-1 * v['goal_range'] * np.ones(v['goal_size']),
+    #                                                                             v['goal_range'] * np.ones(v['goal_size'])])
+    #
+    #     env = GoalIdxExplorationEnv(env=inner_env, goal_generator=goal_generator,
+    #                                 idx=np.arange(v['goal_size']),
+    #                                 reward_dist_threshold=v['reward_dist_threshold'],
+    #                                 distance_metric=v['distance_metric'],
+    #                                 terminal_eps=v['terminal_eps'], terminal_bonus=v['terminal_bonus'],
+    #                                 )  # this goal_generator will be updated by a uniform after
+    #
+    #     policy = GaussianMLPPolicy(
+    #         env_spec=env.spec,
+    #         hidden_sizes=(32, 32),
+    #         # Fix the variance since different goals will require different variances, making this parameter hard to learn.
+    #         learn_std=False,
+    #         init_std=0.1,
+    #     )
+    #
+    #     baseline = LinearFeatureBaseline(env_spec=env.spec)
+    #
+    #     algo = TRPOGoal(
+    #         env=env,
+    #         policy=policy,
+    #         baseline=baseline,
+    #         batch_size=v['pg_batch_size'],
+    #         max_path_length=v['horizon'],
+    #         n_itr=v['n_itr'],
+    #         discount=0.99,
+    #         step_size=0.01,
+    #         plot=False,
+    #     )
+    #
+    #     algo.train()
 
 
     for vv in vg.variants(randomized=True):
