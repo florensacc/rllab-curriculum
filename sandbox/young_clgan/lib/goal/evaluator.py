@@ -70,9 +70,12 @@ def label_goals(goals, env, policy, horizon, min_reward, max_reward,
     if old_rewards is not None:
         old_rewards = old_rewards.reshape(-1, 1)
         labels = np.hstack(
-            [mean_rewards > min_reward,
-             mean_rewards < max_reward,
-             mean_rewards - old_rewards >= improvement_threshold]
+            [mean_rewards > min_reward, #np.zeros_like(mean_rewards > min_reward, dtype=float), #
+             mean_rewards < max_reward,  #np.zeros_like(mean_rewards < max_reward, dtype=float),  #
+             mean_rewards - old_rewards >= improvement_threshold
+             #np.zeros_like(mean_rewards - old_rewards >= improvement_threshold, dtype=float),
+             #
+             ]
         ).astype(np.float32)
     else:
         labels = np.hstack(
