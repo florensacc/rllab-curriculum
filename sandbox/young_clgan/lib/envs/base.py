@@ -364,9 +364,7 @@ class GoalIdxExplorationEnv(GoalExplorationEnv, Serializable):
     """
 
     def __init__(self, idx=(-3, -2), **kwargs):
-        print("in GoalIdx ,locals are: ", locals(), '\nand the kwargs are: ', kwargs)
         Serializable.quick_init(self, locals())
-        print("after the serializable, the kwargs are: ", kwargs)
         self.idx = idx
         super(GoalIdxExplorationEnv, self).__init__(**kwargs)
         if self.feasible_goal_space.flat_dim > len(idx):
