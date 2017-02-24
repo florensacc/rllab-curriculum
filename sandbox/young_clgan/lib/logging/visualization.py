@@ -122,6 +122,7 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
                 # Choose a fixed color for each class.
                 c=colors[i],
                 alpha=0.8,
+                marker=markers[i],
                 label=text_labels[i]
             )
 
