@@ -145,6 +145,7 @@ def make_plot(plot_list, use_median=False, use_five_numbers=False, plot_width=No
         title=title,
         xaxis=go.XAxis(range=xlim),
         yaxis=go.YAxis(range=ylim),
+        #font=dict(size=22)
     )
     fig = go.Figure(data=data, layout=layout)
     fig_div = po.plot(fig, output_type='div', include_plotlyjs=False)
