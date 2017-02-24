@@ -10,7 +10,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.carlos_snn.runs.goal_rl.point_cl_gan_algo import run_task
+from sandbox.carlos_snn.runs.goal_rl.point_cl_gan_coll_algo import run_task
 
 
 if __name__ == '__main__':

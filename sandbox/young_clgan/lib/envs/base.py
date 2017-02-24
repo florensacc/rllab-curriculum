@@ -460,6 +460,7 @@ def generate_initial_goals(env, policy, goal_range, horizon=500, size=10000):
     goals = [get_goal_observation(env)]
     steps = 0
     while len(goals) < size:
+        steps += 1
         if done or steps >= horizon:
             steps = 0
             update_env_goal_generator(
