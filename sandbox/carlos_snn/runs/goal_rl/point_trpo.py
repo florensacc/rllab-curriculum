@@ -79,9 +79,11 @@ if __name__ == '__main__':
 
     vg.add('seed', range(10, 30, 10))
     # # GeneratorEnv params
-    vg.add('goal_size', [2, 3, 4])  # this is the ultimate goal we care about: getting the pendulum upright
+    vg.add('goal_size', [4, 2, 3])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('goal_range', [5, 10])  # this will be used also as bound of the state_space
-    vg.add('state_bounds', lambda goal_range, goal_size: [(1, ) + (goal_range,) * (goal_size * 2 - 1)])
+    vg.add('state_bounds', lambda goal_range, reward_dist_threshold, goal_size:
+                            # [(1, goal_range) + (reward_dist_threshold,) * (goal_size - 2) + (0.5, ) * goal_size])
+                            [(1, goal_range) + (reward_dist_threshold,) * (goal_size - 2) + (goal_range, ) * goal_size])
     # vg.add('angle_idxs', [((0, 1),)]) # these are the idx of the obs corresponding to angles (here the first 2)
     vg.add('reward_dist_threshold', [0.5, 1])
     vg.add('distance_metric', ['L2'])
@@ -138,7 +140,7 @@ if __name__ == '__main__':
     #     algo.train()
 
 
-    for vv in vg.variants(randomized=True):
+    for vv in vg.variants():
 
         if mode in ['ec2', 'local_docker']:
             # # choose subnet

@@ -50,6 +50,7 @@ def run_task(v):
     # goal generators
     logger.log("Initializing the goal generators and the inner env...")
     inner_env = normalize(PointEnv(dim=v['goal_size'], state_bounds=v['state_bounds']))
+    print("the state_bounds are: ", v['state_bounds'])
     # inner_env = normalize(PendulumEnv())
 
     center = np.zeros(v['goal_size'])
@@ -98,6 +99,13 @@ def run_task(v):
     )
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
+
+    # feasible_goals = generate_initial_goals(env, policy, v['goal_range'], horizon=v['horizon'], size=10000) #v['horizon'])
+    # print(feasible_goals)
+    # uniform_list_goal_generator = UniformListGoalGenerator(goal_list=feasible_goals.tolist())
+    # env.update_goal_generator(uniform_list_goal_generator)
+
+    # env.update_goal_generator(fixed_goal_generator)
 
     logger.log("Initializing report and plot_policy_reward...")
     log_dir = logger.get_snapshot_dir()
@@ -230,14 +238,15 @@ def run_task(v):
         # )
 
         # log some more on how the pendulum performs the upright and general task
+        old_goal_generator = env.goal_generator
         logger.log("Evaluating performance on Unif and Fix Goal Gen...")
         with logger.tabular_prefix('UnifFeasGoalGen_'):
             update_env_goal_generator(env, goal_generator=uniform_feasible_goal_generator)
             evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=50, fig_prefix='UnifFeasGoalGen_',
                               report=report)
-        # back to uniform goal generator
+        # back to old goal generator
         with logger.tabular_prefix("UnifGoalGen_"):
-            update_env_goal_generator(env, goal_generator=uniform_goal_generator)
+            update_env_goal_generator(env, goal_generator=old_goal_generator)
             evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=50, fig_prefix='UnifGoalGen_',
                               report=report)
         # with logger.tabular_prefix('FixGoalGen_'):
