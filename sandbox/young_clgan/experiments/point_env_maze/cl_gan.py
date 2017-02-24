@@ -48,8 +48,8 @@ if use_ec2:
     n_parallel = 4
 else:
     mode = "local"
-    #n_parallel = multiprocessing.cpu_count()
-    n_parallel = 1
+    n_parallel = multiprocessing.cpu_count()
+    #n_parallel = 1
 
 if use_ec2:
     seeds = [1, 11, 21, 31, 41]
@@ -74,7 +74,7 @@ if __name__ == '__main__':
         min_reward=5,
         max_reward=6000,
         improvement_threshold=10,
-        outer_iters=200,
+        outer_iters=400,
         inner_iters=5,
         pg_batch_size=20000,
         discount=0.998,
@@ -110,7 +110,7 @@ if __name__ == '__main__':
                 use_gpu=False,
                 mode=mode,
                 sync_s3_html=True,
-                exp_prefix='goalGAN-maze14',
+                exp_prefix='goalGAN-maze26',
                 seed=seed
             )
     else:
