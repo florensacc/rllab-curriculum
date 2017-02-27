@@ -1,9 +1,8 @@
 """
 Variational DDPG (online, consevative)
 
-Continue exp-011f, with
-* very slow target update, but directly copy current params to targets
-* try different scale_reward near 10, which seems reasonable in exp-011f
+Try Tuomas' Hopper. Compare VDDPG and DDPG in terms of speed.
+Continue exp-005, with the log(0) problem in pre-action fixed.
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
@@ -27,6 +26,7 @@ from rllab import config
 from rllab.misc.instrument import stub, run_experiment_lite
 import sys,os
 import copy
+import numpy as np
 
 stub(globals())
 
@@ -34,120 +34,67 @@ from rllab.misc.instrument import VariantGenerator, variant
 
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
-exp_prefix = "tuomas-walker2d"
-#mode = "local_test"  #""ec2"
+exp_prefix = "tuomas/hopper/" + exp_index
 mode = "ec2"
-ec2_instance = "c4.4xlarge"
+#mode = "local_test"
 subnet = "us-west-1b"
+ec2_instance = "c4.2xlarge"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 config.AWS_IMAGE_ID = "ami-85d181e5" # with docker already pulled
 
-
 n_task_per_instance = 1
-n_parallel = 1 # only for local exp
+n_parallel = 2 # only for local exp
 snapshot_mode = "gap"
 snapshot_gap = 10
 plot = False
-
-if 'test' in mode:
-    exp_prefix = 'test-' + exp_prefix
-
 
 # variant params ---------------------------------------------------
 class VG(VariantGenerator):
     @variant
     def zzseed(self):
-        return [0]
+        return [0, 100, 200, 300, 400]
 
     @variant
     def env_name(self):
         return [
-            #"swimmer_undirected"
-            "tuomas_walker2d"
+            "tuomas_hopper"
         ]
-    @variant
-    def max_path_length(self):
-        return [500]
-
     @variant
     def K(self):
-        return [16, 32]
-
-    @variant
-    def svgd_target(self):
-        return ["pre-action"]
-
-    @variant
-    def q_target_type(self):
-        return ["soft"]
-
-    @variant
-    def target_action_dist(self):
-        return [
-            "uniform",
-        ]
-
-    @variant
-    def ou_sigma(self):
-        return [0.3]
-
-    @variant
-    def scale_reward(self):
-        #return [10]  # This was set for the first run.
-        return [0.1, 1, 10]
-
-    @variant
-    def discount(self):
-        return [0.99, 0.999]
-
-    @variant
-    def qf_learning_rate(self):
-        return [1e-3]
-
-    @variant
-    def Q_weight_decay(self):
-        return [0.001]
-
-    @variant
-    def tau(self):
-        return [1]
-
-   #@variant
-    #def dist_reward(self):
-    #    return [1.]
-    
-    @variant
-    def alive_bonus(self):
-       return [0, 1.0]
-
-    @variant
-    def velocity_coeff(self):
-       return [1.0]
-
-    @variant
-    def network_size(self):
-        return [200]
+        return [32]
 
     @variant
     def alpha(self):
         return [1]
 
-    #@variant
-    #def prog_threshold(self):
-    #    return [1.5]
+    @variant
+    def scale_reward(self):
+        return [1., 10.]
 
     @variant
-    def critic_update(self):
+    def max_path_length(self):
+        return [500]
+
+    @variant
+    def q_target_type(self):
         return [
-            dict(
-                critic_subtract_value=True,
-                critic_value_sampler='uniform',
-            ),
-            dict(
-                critic_subtract_value=False,
-                critic_value_sampler='uniform',
-            )
+            "soft"
         ]
+    @variant
+    def ou_sigma(self):
+        return [0, 0.3]
+
+    @variant
+    def freeze_samples(self):
+        return [False]
+
+    @variant
+    def svgd_type(self):
+        return ["pre-action"]
+
+    @variant
+    def tau(self):
+        return [1.]
 
     @variant
     def train_frequency(self):
@@ -159,18 +106,6 @@ class VG(VariantGenerator):
                 update_target_frequency=1000,
                 train_repeat=1,
             ),
-            #dict(
-            #    actor_train_frequency=1,
-            #    critic_train_frequency=1,
-            #    update_target_frequency=5000,
-            #    train_repeat=1,
-            #),
-            #dict(
-            #    actor_train_frequency=1,
-            #    critic_train_frequency=1,
-            #    update_target_frequency=10000,
-            #    train_repeat=1,
-            #),
         ]
 
 variants = VG().variants()
@@ -183,61 +118,40 @@ for v in variants:
     seed=v["zzseed"]
     env_name = v["env_name"]
     K = v["K"]
-    output_scale = 2. if v["svgd_target"] == "scaled-tanh" else 1.
-
-    # Plotter settings.
-    if env_name == 'tuomas_walker2d':
-        q_plot_settings = dict(
-            xlim=(-2, 2),
-            ylim=(-2, 2),
-            obs_lst=((1.25,) + (0,)*16,),  # This is the initial state.
-            action_dims=(0, 1),  # Just pick first two dims.
-        )
-
-        env_plot_settings = dict(
-            xlim=(-5, 5),
-            ylim=(-5, 5),
-        )
 
     shared_alg_kwargs = dict(
-        max_path_length=v["max_path_length"],
-        scale_reward=v["scale_reward"],
-        qf_learning_rate=v["qf_learning_rate"],
-        soft_target_tau=v["tau"],
         alpha=v["alpha"],
-        q_target_type=v["q_target_type"],
-        svgd_target=v["svgd_target"],
-        K_critic=100,
-        target_action_dist=v["target_action_dist"],
-        train_repeat=v["train_frequency"]["train_repeat"],
+        max_path_length=v["max_path_length"],
+        q_target_type = v["q_target_type"],
+        scale_reward=v["scale_reward"],
+        qf_learning_rate=1e-3,
+        policy_learning_rate=1e-4,
+        plt_backend="Agg",
         actor_train_frequency=v["train_frequency"]["actor_train_frequency"],
         critic_train_frequency=v["train_frequency"]["critic_train_frequency"],
         update_target_frequency=v["train_frequency"]["update_target_frequency"],
-        Q_weight_decay=v["Q_weight_decay"],
-        debug_mode=False,
-        discount=v["discount"],
-        critic_subtract_value=v["critic_update"]['critic_subtract_value'],
-        critic_value_sampler=v["critic_update"]['critic_value_sampler'],
+        soft_target_tau=v["tau"],
     )
-    if "local" in mode and sys.platform == 'darwin':
-        shared_alg_kwargs["plt_backend"] = "MacOSX"
+    if v["svgd_type"] != "scaled-tanh":
+        shared_alg_kwargs["svgd_target"] = v["svgd_type"]
+        output_scale = 1.0
     else:
-        shared_alg_kwargs["plt_backend"] = "Agg"
-
-    if mode == "local_test":
-        shared_alg_kwargs["plt_backend"] = "TkAgg"
-
+        shared_alg_kwargs["svgd_target"] = "action"
+        output_scale = 2.0
     if mode == "local_test" or mode == "local_docker_test":
         alg_kwargs = dict(
-            epoch_length = 1, #500,
-            min_pool_size = 500,
-            eval_samples = 10,
-            n_epochs = 1, #100,
+            max_path_length=2,
+            epoch_length=2,
+            min_pool_size=2,
+                # beware that the algo doesn't finish an epoch
+                # until it finishes one path
+            n_eval_paths=1,
+            n_epochs=1,
         )
     else:
         alg_kwargs = dict(
-            epoch_length=10000,
-            n_epochs=500,
+            epoch_length=1000,
+            n_epochs=1000,
             n_eval_paths=10,
         )
     alg_kwargs.update(shared_alg_kwargs)
@@ -245,20 +159,9 @@ for v in variants:
         env_kwargs = {
             "alive_coeff": 0.5
         }
-    elif env_name in ["swimmer_undirected", "tuomas_hopper"]:
+    elif env_name in ["swimmer_undirected", "gym_hopper", "tuomas_hopper"]:
         env_kwargs = {
-            "random_init_state": False,
-            "dist_reward": v["dist_reward"],
-            "prog_threshold": v["prog_threshold"],
-        }
-    elif env_name == "gym_hopper":
-        env_kwargs = {
-            "use_forward_reward": v["use_forward_reward"]
-        }
-    elif env_name == "tuomas_walker2d":
-        env_kwargs = {
-            "alive_bonus": v["alive_bonus"],
-            "velocity_coeff": v["velocity_coeff"]
+            "random_init_state": False
         }
     else:
         env_kwargs = {}
@@ -315,33 +218,40 @@ for v in variants:
     env_chooser = EnvChooser()
     env = TfEnv(normalize(
         env_chooser.choose_env(env_name,**env_kwargs),
-        clip=(not (v["svgd_target"] == "scaled-tanh")),
+        clip=(not (v["svgd_type"] == "scaled-tanh")),
     ))
+
     qf = FeedForwardCritic(
         "critic",
         env.observation_space.flat_dim,
         env.action_space.flat_dim,
         observation_hidden_sizes=(),
-        embedded_hidden_sizes=(v["network_size"], v["network_size"]),
+        embedded_hidden_sizes=(100, 100),
     )
+    q_prior = None
     es = OUStrategy(
         env_spec=env.spec,
         mu=0,
         theta=0.15,
         sigma=v["ou_sigma"],
-        clip=(not (v["svgd_target"] == "scaled-tanh")),
+        clip=(not (v["svgd_type"] == "scaled-tanh")),
     )
     policy = StochasticNNPolicy(
         scope_name="actor",
         observation_dim=env.observation_space.flat_dim,
         action_dim=env.action_space.flat_dim,
         sample_dim=env.action_space.flat_dim,
-        freeze_samples=False,
+        freeze_samples=v["freeze_samples"],
         K=K,
         output_nonlinearity=tf.nn.tanh,
-        hidden_dims=(v["network_size"], v["network_size"]),
+        hidden_dims=(100, 100),
         W_initializer=None,
         output_scale=output_scale,
+    )
+    eval_policy = StochasticPolicyMaximizer(
+        N=100,
+        actor=policy,
+        critic=qf,
     )
     kernel = SimpleAdaptiveDiagonalGaussianKernel(
         "kernel",
@@ -351,13 +261,11 @@ for v in variants:
         env=env,
         exploration_strategy=es,
         policy=policy,
-        eval_policy=None,
+        eval_policy=eval_policy,
         kernel=kernel,
         qf=qf,
-        q_prior=None,
+        q_prior=q_prior,
         K=K,
-        q_plot_settings=q_plot_settings,
-        env_plot_settings=env_plot_settings,
         **alg_kwargs
     )
 
@@ -391,5 +299,6 @@ for v in variants:
         batch_tasks = []
         if "test" in mode:
             sys.exit(0)
+
 if ("local" not in mode) and ("test" not in mode):
     os.system("chmod 444 %s"%(__file__))

@@ -1,9 +1,13 @@
 """
 Variational DDPG (online, consevative)
 
-Continue exp-011f, with
-* very slow target update, but directly copy current params to targets
-* try different scale_reward near 10, which seems reasonable in exp-011f
+Continue exp-011g,g2 (repeat exp-011g3 but replacing alpha w/ scale_reward),
++ fix svgd_target = 'pre-action' and update_target_frequency = 1000
++ K_critic: 100 -> 50. Reduce computation time.
++ clip entropies (only with upper bound)
++ correctly computed objective function (fixed the discounted sum issue)
+* compare soft or mean targets
+* try different alpha annealing
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
@@ -12,6 +16,7 @@ from rllab.envs.normalized_env import normalize
 from rllab.exploration_strategies.ou_strategy import OUStrategy
 from sandbox.rocky.tf.envs.base import TfEnv
 from sandbox.haoran.myscripts.envs import EnvChooser
+from sandbox.haoran.mddpg.misc.annealer import LogLinearAnnealer
 from sandbox.tuomas.mddpg.kernels.gaussian_kernel import \
     SimpleAdaptiveDiagonalGaussianKernel
 from sandbox.tuomas.mddpg.critics.nn_qfunction import FeedForwardCritic
@@ -34,36 +39,30 @@ from rllab.misc.instrument import VariantGenerator, variant
 
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
-exp_prefix = "tuomas-walker2d"
-#mode = "local_test"  #""ec2"
+exp_prefix = "tuomas/swimmer/" + exp_index
 mode = "ec2"
+#mode = "local_test"
 ec2_instance = "c4.4xlarge"
 subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 config.AWS_IMAGE_ID = "ami-85d181e5" # with docker already pulled
 
-
 n_task_per_instance = 1
-n_parallel = 1 # only for local exp
+n_parallel = 2 # only for local exp
 snapshot_mode = "gap"
 snapshot_gap = 10
 plot = False
-
-if 'test' in mode:
-    exp_prefix = 'test-' + exp_prefix
-
 
 # variant params ---------------------------------------------------
 class VG(VariantGenerator):
     @variant
     def zzseed(self):
-        return [0]
+        return [0, 100, 200, 300, 400, 500, 600, 700, 800, 900]
 
     @variant
     def env_name(self):
         return [
-            #"swimmer_undirected"
-            "tuomas_walker2d"
+            "tuomas_swimmer_forward"
         ]
     @variant
     def max_path_length(self):
@@ -71,7 +70,7 @@ class VG(VariantGenerator):
 
     @variant
     def K(self):
-        return [16, 32]
+        return [16]
 
     @variant
     def svgd_target(self):
@@ -79,6 +78,7 @@ class VG(VariantGenerator):
 
     @variant
     def q_target_type(self):
+        #return ["mean", "soft"]
         return ["soft"]
 
     @variant
@@ -93,36 +93,19 @@ class VG(VariantGenerator):
 
     @variant
     def scale_reward(self):
-        #return [10]  # This was set for the first run.
-        return [0.1, 1, 10]
-
-    @variant
-    def discount(self):
-        return [0.99, 0.999]
+        return [1, 10]
 
     @variant
     def qf_learning_rate(self):
         return [1e-3]
 
     @variant
-    def Q_weight_decay(self):
-        return [0.001]
-
-    @variant
     def tau(self):
         return [1]
 
-   #@variant
-    #def dist_reward(self):
-    #    return [1.]
-    
     @variant
-    def alive_bonus(self):
-       return [0, 1.0]
-
-    @variant
-    def velocity_coeff(self):
-       return [1.0]
+    def motion_reward(self):
+        return [1.]
 
     @variant
     def network_size(self):
@@ -132,46 +115,40 @@ class VG(VariantGenerator):
     def alpha(self):
         return [1]
 
-    #@variant
-    #def prog_threshold(self):
-    #    return [1.5]
-
     @variant
-    def critic_update(self):
-        return [
-            dict(
-                critic_subtract_value=True,
-                critic_value_sampler='uniform',
-            ),
-            dict(
-                critic_subtract_value=False,
-                critic_value_sampler='uniform',
-            )
-        ]
+    def prog_threshold(self):
+        return [1.5]
 
     @variant
     def train_frequency(self):
         return [
-            # assuming the current is fixed, 0.999^5000 = 0.00672
             dict(
                 actor_train_frequency=1,
                 critic_train_frequency=1,
                 update_target_frequency=1000,
                 train_repeat=1,
             ),
-            #dict(
-            #    actor_train_frequency=1,
-            #    critic_train_frequency=1,
-            #    update_target_frequency=5000,
-            #    train_repeat=1,
-            #),
-            #dict(
-            #    actor_train_frequency=1,
-            #    critic_train_frequency=1,
-            #    update_target_frequency=10000,
-            #    train_repeat=1,
-            #),
         ]
+
+    #@variant
+    #def scale_reward_annealer(self):
+    #    return [
+    #        dict(
+    #            init_value=10,
+    #            final_value=10,
+    #            stop_iter=1,
+    #        ), # equivalent to scale_reward = 10 in exp-011g, g2
+    #        dict(
+    #            init_value=0.1,
+    #            final_value=10,
+    #            stop_iter=499,
+    #        ),
+    #        dict(
+    #            init_value=0.1,
+    #            final_value=1000,
+    #            stop_iter=499,
+    #        ), # should get to scale_reward = 10 at iteration 250
+    #    ]
 
 variants = VG().variants()
 batch_tasks = []
@@ -184,21 +161,6 @@ for v in variants:
     env_name = v["env_name"]
     K = v["K"]
     output_scale = 2. if v["svgd_target"] == "scaled-tanh" else 1.
-
-    # Plotter settings.
-    if env_name == 'tuomas_walker2d':
-        q_plot_settings = dict(
-            xlim=(-2, 2),
-            ylim=(-2, 2),
-            obs_lst=((1.25,) + (0,)*16,),  # This is the initial state.
-            action_dims=(0, 1),  # Just pick first two dims.
-        )
-
-        env_plot_settings = dict(
-            xlim=(-5, 5),
-            ylim=(-5, 5),
-        )
-
     shared_alg_kwargs = dict(
         max_path_length=v["max_path_length"],
         scale_reward=v["scale_reward"],
@@ -206,59 +168,49 @@ for v in variants:
         soft_target_tau=v["tau"],
         alpha=v["alpha"],
         q_target_type=v["q_target_type"],
-        svgd_target=v["svgd_target"],
-        K_critic=100,
+        svgd_target="pre-action" if v["svgd_target"] == "pre-action" else "action",
+        K_critic=50,
         target_action_dist=v["target_action_dist"],
         train_repeat=v["train_frequency"]["train_repeat"],
         actor_train_frequency=v["train_frequency"]["actor_train_frequency"],
         critic_train_frequency=v["train_frequency"]["critic_train_frequency"],
         update_target_frequency=v["train_frequency"]["update_target_frequency"],
-        Q_weight_decay=v["Q_weight_decay"],
         debug_mode=False,
-        discount=v["discount"],
-        critic_subtract_value=v["critic_update"]['critic_subtract_value'],
-        critic_value_sampler=v["critic_update"]['critic_value_sampler'],
+        #env_plot_settings=dict(xlim=-1, ylim=1),
     )
     if "local" in mode and sys.platform == 'darwin':
         shared_alg_kwargs["plt_backend"] = "MacOSX"
     else:
         shared_alg_kwargs["plt_backend"] = "Agg"
 
-    if mode == "local_test":
-        shared_alg_kwargs["plt_backend"] = "TkAgg"
-
     if mode == "local_test" or mode == "local_docker_test":
         alg_kwargs = dict(
-            epoch_length = 1, #500,
-            min_pool_size = 500,
-            eval_samples = 10,
-            n_epochs = 1, #100,
+            epoch_length = 110,
+            min_pool_size = 100,
+            eval_samples = 100,
+            n_epochs = 500,
         )
     else:
         alg_kwargs = dict(
             epoch_length=10000,
             n_epochs=500,
             n_eval_paths=10,
+            eval_kl_n_sample=1000,
+            eval_kl_n_sample_part=1000,
         )
     alg_kwargs.update(shared_alg_kwargs)
     if env_name == "hopper":
         env_kwargs = {
             "alive_coeff": 0.5
         }
-    elif env_name in ["swimmer_undirected", "tuomas_hopper"]:
+    elif env_name in ["swimmer_forward"]:
         env_kwargs = {
             "random_init_state": False,
-            "dist_reward": v["dist_reward"],
-            "prog_threshold": v["prog_threshold"],
+            "motion_reward": v["motion_reward"],
         }
     elif env_name == "gym_hopper":
         env_kwargs = {
             "use_forward_reward": v["use_forward_reward"]
-        }
-    elif env_name == "tuomas_walker2d":
-        env_kwargs = {
-            "alive_bonus": v["alive_bonus"],
-            "velocity_coeff": v["velocity_coeff"]
         }
     else:
         env_kwargs = {}
@@ -347,6 +299,12 @@ for v in variants:
         "kernel",
         dim=env.action_space.flat_dim,
     )
+    #scale_reward_annealer = LogLinearAnnealer(
+    #    init_value=v["scale_reward_annealer"]["init_value"],
+    #    final_value=v["scale_reward_annealer"]["final_value"],
+    #    n_iter=alg_kwargs["n_epochs"],
+    #    stop_iter=v["scale_reward_annealer"]["stop_iter"],
+    #)
     algorithm = VDDPG(
         env=env,
         exploration_strategy=es,
@@ -356,8 +314,7 @@ for v in variants:
         qf=qf,
         q_prior=None,
         K=K,
-        q_plot_settings=q_plot_settings,
-        env_plot_settings=env_plot_settings,
+        scale_reward_annealer=None,
         **alg_kwargs
     )
 

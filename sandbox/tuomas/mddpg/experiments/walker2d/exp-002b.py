@@ -34,7 +34,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
-exp_prefix = "tuomas-walker2d"
+exp_prefix = "tuomas-" + exp_index + "-walker2d"
 #mode = "local_test"  #""ec2"
 mode = "ec2"
 ec2_instance = "c4.4xlarge"
@@ -57,7 +57,7 @@ if 'test' in mode:
 class VG(VariantGenerator):
     @variant
     def zzseed(self):
-        return [0]
+        return [0, 1, 2, 4]
 
     @variant
     def env_name(self):
@@ -94,11 +94,11 @@ class VG(VariantGenerator):
     @variant
     def scale_reward(self):
         #return [10]  # This was set for the first run.
-        return [0.1, 1, 10]
+        return [1]
 
     @variant
     def discount(self):
-        return [0.99, 0.999]
+        return [0.99]
 
     @variant
     def qf_learning_rate(self):
@@ -118,7 +118,7 @@ class VG(VariantGenerator):
     
     @variant
     def alive_bonus(self):
-       return [0, 1.0]
+       return [1.0]
 
     @variant
     def velocity_coeff(self):
@@ -132,10 +132,6 @@ class VG(VariantGenerator):
     def alpha(self):
         return [1]
 
-    #@variant
-    #def prog_threshold(self):
-    #    return [1.5]
-
     @variant
     def critic_update(self):
         return [
@@ -147,6 +143,19 @@ class VG(VariantGenerator):
                 critic_subtract_value=False,
                 critic_value_sampler='uniform',
             )
+        ]
+
+    @variant
+    def sparse_update(self):
+        return [
+            dict(
+                actor_sparse_update=True,
+                K_fixed=16
+            ),
+            dict(
+                actor_sparse_update=False,
+                K_fixed=16
+            ),
         ]
 
     @variant
@@ -187,17 +196,19 @@ for v in variants:
 
     # Plotter settings.
     if env_name == 'tuomas_walker2d':
-        q_plot_settings = dict(
-            xlim=(-2, 2),
-            ylim=(-2, 2),
-            obs_lst=((1.25,) + (0,)*16,),  # This is the initial state.
-            action_dims=(0, 1),  # Just pick first two dims.
-        )
+        q_plot_settings = None
+        #q_plot_settings = dict(
+        #    xlim=(-2, 2),
+        #    ylim=(-2, 2),
+        #    obs_lst=((1.25,) + (0,)*16,),  # This is the initial state.
+        #    action_dims=(0, 1),  # Just pick first two dims.
+        #)
 
-        env_plot_settings = dict(
-            xlim=(-5, 5),
-            ylim=(-5, 5),
-        )
+        env_plot_settings = None
+        #env_plot_settings = dict(
+        #    xlim=(-5, 5),
+        #    ylim=(-5, 5),
+        #)
 
     shared_alg_kwargs = dict(
         max_path_length=v["max_path_length"],
@@ -218,6 +229,8 @@ for v in variants:
         discount=v["discount"],
         critic_subtract_value=v["critic_update"]['critic_subtract_value'],
         critic_value_sampler=v["critic_update"]['critic_value_sampler'],
+        actor_sparse_update=v["sparse_update"]["actor_sparse_update"],
+        K_fixed=v["sparse_update"]["K_fixed"],
     )
     if "local" in mode and sys.platform == 'darwin':
         shared_alg_kwargs["plt_backend"] = "MacOSX"
@@ -346,6 +359,7 @@ for v in variants:
     kernel = SimpleAdaptiveDiagonalGaussianKernel(
         "kernel",
         dim=env.action_space.flat_dim,
+        sparse_update=v["sparse_update"]["actor_sparse_update"],
     )
     algorithm = VDDPG(
         env=env,

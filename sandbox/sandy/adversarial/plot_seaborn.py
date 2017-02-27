@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import copy
 import h5py
 import os.path as osp
 import seaborn as sns
@@ -9,12 +10,12 @@ from pandas import DataFrame
 from sandbox.sandy.adversarial.io_util import get_param_names, get_all_result_paths
 
 # Options: ['no-transfer', 'transfer-policy', 'transfer-algorithm']
-PLOT_TYPES = ['no-transfer', 'transfer-policy', 'transfer-algorithm']
-#PLOT_TYPES = ['no-transfer']
+#PLOT_TYPES = ['no-transfer', 'transfer-policy', 'transfer-algorithm']
+PLOT_TYPES = ['no-transfer']
 #PLOT_TARGET = ['exp027', 'exp035c', 'exp036']
 #PLOT_ADV = ['exp027', 'exp035c', 'exp036']
-PLOT_TARGET = ['exp037']
-PLOT_ADV = ['exp037']
+PLOT_TARGET = ['exp037', 'exp038']
+PLOT_ADV = ['exp037', 'exp038']
 SAVE_AS_PDF = True
 SHOW_PLOT = False
 NORMS = {'l1': r'$\ell 1$',
@@ -23,6 +24,9 @@ NORMS = {'l1': r'$\ell 1$',
 ORDER = {'Algorithm': 1,
          'Policy': 2,
          'None': 3}
+COND_K = True  # If True, condition for plots is k (delay horizon for sleeper), instead of norm
+INCLUDE_LEGEND = True
+RESTRICT_K = [0,1,4] # Or, can be None
 
 def plot_returns(h5_file, cond_key, x_key, y_key, exp_to_algo, screen_print=False):
     # cond_key, x_key, y_key are 2-tuples (key_in_h5_file, key_for_plot)
@@ -74,6 +78,14 @@ def plot_returns(h5_file, cond_key, x_key, y_key, exp_to_algo, screen_print=Fals
 
             data = [path.split('/')[2:] + [y, path_type] \
                     for path, y, path_type in paths_by_game_exp[game][exp_idx]]
+            cond_idx = param_names.index(cond_key[0])
+            if COND_K and RESTRICT_K is not None:
+                new_data = []
+                for d in data:
+                    if int(d[cond_idx]) in RESTRICT_K:
+                        new_data.append(d)
+                data = new_data
+
             sns.set(style="darkgrid")
 
             df_dict = {}
@@ -93,7 +105,6 @@ def plot_returns(h5_file, cond_key, x_key, y_key, exp_to_algo, screen_print=Fals
 
             df_dict[y_key[1]] = [x[-2] for x in data]
             cond_x_count = {}
-            cond_idx = param_names.index(cond_key[0])
             x_idx = param_names.index(x_key[0])
             df_dict['subject'] = []
             df_dict['Norm and Transfer Type'] = []
@@ -112,7 +123,7 @@ def plot_returns(h5_file, cond_key, x_key, y_key, exp_to_algo, screen_print=Fals
                 df_dict['Transfer Type'].append(d[-1].capitalize())
                 df_dict['Transfer Type Order'].append(ORDER[d[-1]])
                 cond_x_count[cond_x] += 1
-                
+
             # Create DataFrame
             df = DataFrame(df_dict)
             df.sort(['Transfer Type Order'], ascending=[1])
@@ -123,10 +134,15 @@ def plot_returns(h5_file, cond_key, x_key, y_key, exp_to_algo, screen_print=Fals
                 sns.plt.figure(figsize=(8, 6))
                 ax = sns.tsplot(data=df, time=x_key[1], unit="subject", \
                                condition=cond_key[1], value=y_key[1], ci=68, \
-                               interpolate=True, legend=False,
+                               interpolate=True, legend=INCLUDE_LEGEND,
                                color={NORMS['l-inf']: '#8172b2',
                                       NORMS['l2']: '#ccb974',
-                                      NORMS['l1']: '#64b5cd'})
+                                      NORMS['l1']: '#64b5cd',
+                                      '0': '#8172b2',
+                                      '1': '#ccb974',
+                                      '2': '#64b5cd',
+                                      '3': '#55a868',
+                                      '4': '#c44e52'})
                 game_cap = ' '.join([word.capitalize() for word in game.split('-')])
                 fig_title = game_cap + ", " + exp_to_algo[exp_idx]
                 sns.plt.title(fig_title)
@@ -136,7 +152,7 @@ def plot_returns(h5_file, cond_key, x_key, y_key, exp_to_algo, screen_print=Fals
                     extension = '.pdf'
                 else:
                     extension = '.png'
-                ax.get_figure().savefig(osp.join(osp.dirname(h5_file), game + '_' + exp_to_algo[exp_idx] + extension), bbox_inches='tight', pad_inches=0.0)
+                ax.get_figure().savefig(osp.join(osp.dirname(h5_file), game + '_' + '-'.join(exp_to_algo[exp_idx].split(' ')) + "_icml" + extension), bbox_inches='tight', pad_inches=0.0)
 
                 sns.plt.clf()
 
@@ -149,7 +165,7 @@ def plot_returns(h5_file, cond_key, x_key, y_key, exp_to_algo, screen_print=Fals
                     ax = sns.tsplot(data=df.loc[df['FGSM Norm'] == norm], \
                                     time=x_key[1], unit="subject", \
                                     condition="Transfer Type", value=y_key[1], ci=68, \
-                                    interpolate=True, legend=False,
+                                    interpolate=True, legend=INCLUDE_LEGEND,
                                     color={"Algorithm": '#c44e52', "None": '#55a868', "Policy": '#4c72b0'}) #err_style="ci_bars")
                     # Algorithm = red, Policy = blue, None = green
                     #ax.legend(['Algorithm', 'Policy', 'None'], title="Transfer Type")
@@ -172,8 +188,12 @@ def main():
     parser.add_argument('returns_h5', type=str)
     args = parser.parse_args()
 
-    plot_returns(args.returns_h5, ('norm', 'FGSM Norm'), ('fgsm_eps', r'$\epsilon$'), ('avg_return', 'Average Return'), \
-            {'exp027':"TRPO", 'exp035c':'DQN', 'exp036':'A3C', 'exp037':'A3C LSTM'}, screen_print=True)
+    cond_key = ('norm', 'FGSM Norm')
+    if COND_K:
+        cond_key = ('k', 'k')
+
+    plot_returns(args.returns_h5, cond_key, ('fgsm_eps', r'$\epsilon$'), ('avg_return', 'Average Return'), \
+            {'exp027':"TRPO", 'exp035c':'DQN', 'exp036':'A3C', 'exp037':'A3C LSTM (4 frames)', 'exp038': 'A3C LSTM'}, screen_print=True)
 
 if __name__ == "__main__":
     main()

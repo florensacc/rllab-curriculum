@@ -4,8 +4,7 @@ import copy
 
 from rllab.misc import special, tensor_utils
 from rllab.algos import util
-from rllab.sampler.utils import rollout
-
+from sandbox.sandy.parallel_trpo.sample_utils import rollout
 
 class WorkerBatchSampler(object):
 
@@ -17,14 +16,15 @@ class WorkerBatchSampler(object):
         self.worker_batch_size = algo.worker_batch_size
         self.avoid_duplicate_paths = algo.avoid_duplicate_paths
 
-    def obtain_samples(self, n_samples=None):
+    def obtain_samples(self, n_samples=None, deterministic=False):
         if n_samples is None:
             n_samples = self.worker_batch_size
         n_steps_collected = 0
         paths = []
         # TODO: progbar for rank 0?
         while n_steps_collected < n_samples:
-            paths.append(rollout(self.algo.env, self.algo.policy, self.algo.max_path_length))
+            paths.append(rollout(self.algo.env, self.algo.policy, \
+                                 self.algo.max_path_length, deterministic=deterministic))
             n_steps_collected += len(paths[-1]["rewards"])
         if self.algo.whole_paths:
             self.algo.n_steps_collected = n_steps_collected

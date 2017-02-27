@@ -1,36 +1,58 @@
 import numpy as np
-from gym import utils
-from gym.envs.mujoco import mujoco_env
-from sandbox.haoran.mddpg.misc.mujoco_utils import convert_gym_space
 
-class Walker2DEnv(mujoco_env.MujocoEnv, utils.EzPickle):
+from rllab.core.serializable import Serializable
+from rllab.envs.mujoco.mujoco_env import MujocoEnv
+from rllab.misc.overrides import overrides
 
-    def __init__(self, alive_bonus=1, velocity_coeff=1):
+#from sandbox.haoran.mddpg.misc.mujoco_utils import convert_gym_space
+
+class Walker2DEnv(MujocoEnv, Serializable):
+
+    def __init__(self, alive_bonus=1, velocity_coeff=1, v2=True):
         self.alive_bonus = alive_bonus
         self.velocity_coeff = velocity_coeff
+        self.v2 = v2
 
-        mujoco_env.MujocoEnv.__init__(self, "walker2d.xml", 4)
-        utils.EzPickle.__init__(self)
-        self.observation_space = convert_gym_space(self.observation_space)
-        self.action_space = convert_gym_space(self.action_space)
+        if v2:
+            Walker2DEnv.FILE = 'walker2d-v2.xml'
+        else:
+            Walker2DEnv.FILE = 'walker2d.xml'
+
+        super(Walker2DEnv, self).__init__()
+        Serializable.quick_init(self, locals())
+
+        #self.observation_space = convert_gym_space(self.observation_space)
+        #self.action_space = convert_gym_space(self.action_space)
 
 
+    @overrides
+    def step(self, a):
+        posbefore = self.model.data.qpos[0, 0]
+        self.forward_dynamics(a)
+        #self.do_simulation(a, self.frame_skip)
+        posafter, height, ang = self.model.data.qpos[0:3, 0]
 
-    def _step(self, a):
-        posbefore = self.model.data.qpos[0,0]
-        self.do_simulation(a, self.frame_skip)
-        posafter,height,ang = self.model.data.qpos[0:3,0]
+        left_thigh_ang, right_thigh_ang = self.model.data.qpos[[3, 6]]
+
         # alive_bonus = 1.0
-        reward = self.velocity_coeff * ((posafter - posbefore) / self.dt )
+        dt = self.model.opt.timestep
+        reward = self.velocity_coeff * ((posafter - posbefore) / dt)
         reward += self.alive_bonus
         reward -= 1e-3 * np.square(a).sum()
-        done = not (height > 0.8 and height < 2.0
-                    and ang > -1.0 and ang < 1.0)
-        ob = self._get_obs()
+        if self.v2:
+            done = not (0.5 < height < 2.0
+                        and -2 < left_thigh_ang < 2
+                        and -2 < right_thigh_ang < 2)
+        else:
+            done = not (height > 0.8 and height < 2.0
+                        and ang > -1.0 and ang < 1.0)
+
+        ob = self.get_current_obs()
         com = self.get_body_com("torso")
         return ob, reward, done, {"com": com}
 
-    def _get_obs(self):
+    @overrides
+    def get_current_obs(self):
         qpos = self.model.data.qpos
         qvel = self.model.data.qvel
         return np.concatenate([qpos[1:], np.clip(qvel,-10,10)]).ravel()

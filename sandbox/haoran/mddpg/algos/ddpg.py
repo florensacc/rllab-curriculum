@@ -390,7 +390,7 @@ class DDPG(OnlineAlgorithm, Serializable):
             env_stats = env.log_stats(self, epoch, paths)
             self.last_statistics.update(env_stats)
 
-        if hasattr(env, 'plot_paths'):
+        if hasattr(env, 'plot_paths') and self.env_plot_settings is not None:
             img_file = os.path.join(snapshot_dir,
                                     'env_itr_%05d.png' % epoch)
 

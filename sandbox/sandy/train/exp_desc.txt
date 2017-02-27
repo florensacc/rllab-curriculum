@@ -75,3 +75,8 @@ exp036.py: Run A3C on all 4 games (not running on Skiing anymore) with 84x84 inp
 <Trying out training recurrent neural nets>
 exp037.py: First shot at training A3C LSTM policies for Chopper Command, Pong,
            Seaquest, and Space Invaders.
+exp038.py: Train A3C LSTM policies for the four games, with n_frames = 1
+           (instead of 4), to force policy to store useful info in cell state
+exp039.py: Same as exp038, except dropping out (i.e., blacking-out) frames
+           randomly. To hopefully force policy to propagate more information
+           in the LSTM state.
