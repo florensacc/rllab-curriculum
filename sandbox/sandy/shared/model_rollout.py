@@ -57,8 +57,9 @@ def get_average_return_a3c(algo, seed, N=10, horizon=10000, deterministic=False,
     curr_seed = seed
     while len(paths) < N:
         algo.test_env = copy.deepcopy(algo.cur_env)
-        # copy.deepcopy doesn't copy lambda function
+        # copy.deepcopy doesn't copy lambda function or frame_dropout rate
         algo.test_env.adversary_fn = algo.cur_env.adversary_fn
+        algo.test_env.frame_dropout = algo.cur_env.frame_dropout
         algo.test_agent = copy.deepcopy(algo.cur_agent)
         # Set random seed, for reproducibility
         set_seed_env(algo.test_env, curr_seed)

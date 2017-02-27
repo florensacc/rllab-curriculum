@@ -197,7 +197,8 @@ class AdvSleeperExperiment(AdvExperiment):
         return dict(norm=variant[0], fgsm_eps=variant[1], k=variant[2][0], \
                     init_lambda=init_lambda)
 
-    def run_for_adv_target(self, policy_adv, policy_target, variant, all_output_h5):
+    def run_for_adv_target(self, policy_adv, policy_target, variant, all_output_h5, \
+                           set_frame_dropout_zero = True):
         # k - number of time steps of delay for adversarial perturbation; i.e.,
         #     perturbation happens at time t, target policy acts normally for times
         #     t through t+k-1, does different action at time t+k
@@ -208,8 +209,14 @@ class AdvSleeperExperiment(AdvExperiment):
         # deterministic - if True, target policy always picks argmax action to
         #     execute> If False, policy sampled from output distribution over actions.
 
+        if set_frame_dropout_zero:
+            policy_adv.env.frame_dropout = 0
+            policy_target.env.frame_dropout = 0
+
         variant = self.variant_to_dict(variant)
         self.log_run_info(policy_adv, policy_target, variant)
+
+
 
         # Do complete rollout to figure out its length
         policy_target.env.set_adversary_fn(None)

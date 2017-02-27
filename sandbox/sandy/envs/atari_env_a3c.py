@@ -35,6 +35,7 @@ class AtariEnvA3C(AtariEnv, Shareable, Picklable):
             new_env = AtariEnvA3C(**init_params_copy, **kwargs)
         else:
             new_env = AtariEnvA3C(**init_params_copy)
+        new_env.frame_dropout = self.frame_dropout  # In case this was changed
         return new_env
 
     def receive_action(self, action):
