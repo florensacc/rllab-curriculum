@@ -23,13 +23,14 @@ def rollout(sess, env, agent, max_path_length=np.inf, animated=False, speedup=1,
     path_length = 0
 
     true_env = env
-    while isinstance(env, ProxyEnv):
-        env = env._wrapped_env
+    while isinstance(true_env, ProxyEnv):
+        true_env = true_env._wrapped_env
 
     if animated:
         env.render()
     while path_length < max_path_length:
         a, agent_info = agent.get_action(o)
+        #a, agent_info = agent._actor.get_action(o)
         #a = 0 * a
 
         #pos = env.model.data.qpos.copy().squeeze()
@@ -39,6 +40,7 @@ def rollout(sess, env, agent, max_path_length=np.inf, animated=False, speedup=1,
         #import pdb; pdb.set_trace()
 
         #env.set_state(pos, vel)
+        #print(a)
 
         next_o, r, d, env_info = env.step(a)
         observations.append(env.observation_space.flatten(o))
@@ -55,6 +57,8 @@ def rollout(sess, env, agent, max_path_length=np.inf, animated=False, speedup=1,
                 }
                 qvalue = sess.run(qf.output, feed).ravel()
                 print("terminate value:", qvalue - r)
+
+            print("Distance travelled: " + str(true_env.get_body_com("torso")[0]))
             break
         o = next_o
         if animated:
