@@ -8,6 +8,7 @@ from sandbox.tuomas.mddpg.misc.sampler import ParallelSampler
 # for debugging
 from sandbox.tuomas.mddpg.misc.sim_policy import rollout, rollout_alg
 
+from rllab.misc.console import colorize
 from rllab.misc.overrides import overrides
 from rllab.misc import logger
 from sandbox.tuomas.mddpg.misc import special
@@ -88,6 +89,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
             critic_value_sampler='uniform',
             train_actor_delay=0,
             target_action_dist_delay=0,
+            K_annealer=None,
+            K_actor_annealer=None,
+            K_critic_annealer=None,
             **kwargs
     ):
         """
@@ -167,7 +171,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
                                                       name='prior_coeff')
         self.K_pl = tf.placeholder(tf.int32, shape=(), name='K')
         # # Number of particles for computing critic target.
-        # self.K_critic_pl = tf.placeholder(tf.int32, shape=(), name='K')
+        self.K_critic_pl = tf.placeholder(tf.int32, shape=(), name='K_critic')
 
         if q_target_type == 'soft':
             self.importance_weights_pl = tf.placeholder(
@@ -200,6 +204,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.eval_kl_n_sample_part = eval_kl_n_sample_part
 
         self.alpha_annealer = alpha_annealer
+        self.K_annealer = K_annealer
+        self.K_actor_annealer = K_actor_annealer
+        self.K_critic_annealer = K_critic_annealer
 
         self._init_figures()
 
@@ -503,7 +510,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             q_curr = self.qf.output
 
         # N x K x M
-        q_next = tf.reshape(q_next, tf_shape((-1, self.K_critic, M)))
+        q_next = tf.reshape(q_next, tf_shape((-1, self.K_critic_pl, M)))
         q_curr = tf.reshape(q_curr, (-1, M))  # N x M
 
         # average across reward dims of max Q - min Q, where max and min are
@@ -591,7 +598,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 )  # N*K
 
                 q = tf.reshape(self.critic_contrastive.output,
-                               tf_shape((-1, self.K_critic)))  # N x K
+                               tf_shape((-1, self.K_critic_pl)))  # N x K
 
                 # N x 1
                 contrastive_max = tf.reduce_max(q, axis=1, keep_dims=True)
@@ -762,6 +769,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         feeds[self.K_pl] = K
 
+        # for debugging
+        # norms = [np.linalg.norm(sample) for sample in feeds[self.target_policy._sample_pl]]
+
         return feeds
 
     def _actor_feed_dict_for(self, critic, obs, temp, K):
@@ -869,6 +879,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
         feed.update({
             self.rewards_placeholder: rewards,
             self.terminals_placeholder: np.expand_dims(terminals, axis=1),
+            self.K_critic_pl: K,
         })
 
         return feed
@@ -1291,6 +1302,49 @@ class VDDPG(OnlineAlgorithm, Serializable):
             self.scale_reward = self.scale_reward_annealer.get_new_value(epoch)
         if self.alpha_annealer is not None:
             self.alpha = self.alpha_annealer.get_new_value(epoch)
+
+        if self.K_annealer is not None:
+            self.K = np.max([1, int(np.ceil(self.K_annealer.get_new_value(epoch)))])
+            logger.log(colorize(
+                "Annealled K to %g"%(self.K),
+                "yellow",
+            ))
+        if self.K_actor_annealer is not None:
+            K_actor = np.max([1, int(np.ceil(self.K_actor_annealer.get_new_value(epoch)))])
+            self.policy._samples = self.policy._samples[:K_actor]
+            self.policy._K = K_actor
+            self.target_policy._K = K_actor
+
+            if self.policy._freeze:
+                self.policy._samples = self.policy._samples[:K_actor]
+            if self.target_policy._freeze:
+                self.target_policy._samples = self.target_policy._samples[:K_actor]
+            logger.log(colorize(
+                "Annealled K_actor to %g"%(self.K),
+                "yellow",
+            ))
+
+            if self.q_target_type != "soft":
+                self.K_critic = K_actor
+                logger.log(colorize(
+                    "Annealled K_critic to %g"%(self.K),
+                    "yellow",
+                ))
+
+            # for debugging
+            # print((
+            #     self.policy._freeze,
+            #     [np.linalg.norm(sample) for sample in self.policy._samples],
+            # ))
+            # print((
+            #     self.target_policy._freeze,
+            #     [np.linalg.norm(sample) for sample in self.target_policy._samples],
+            # ))
+
+        if self.K_critic_annealer is not None:
+            # cannot support dynamically changing K_critic for "soft"
+            raise NotImplementedError
+
 
 ## Use the following code to test whether the exp(Q-Qmax) code works
 # import tensorflow as tf

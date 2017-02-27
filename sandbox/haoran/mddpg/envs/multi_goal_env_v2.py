@@ -14,15 +14,17 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 
-class MultiGoalEnv(Env, Serializable):
+class MultiGoalEnvV2(Env, Serializable):
     """
     Moving a 2D point mass to one of the goal positions.
     Cost is the distance to the shortest goal.
 
     state: position
     action: velocity
+
+    Reward is a mixture of Guassians, with means equal to goal positions
     """
-    def __init__(self, goal_reward=0):
+    def __init__(self):
         Serializable.quick_init(self, locals())
 
         self.dynamics = PointDynamics(dim=2, sigma=0)
@@ -37,14 +39,14 @@ class MultiGoalEnv(Env, Serializable):
             ],
             dtype=np.float32
         )
-        self.goal_threshold = 1.
-        self.goal_reward = goal_reward
+        self.init_reward = 0.1
+        self.goal_reward = 10
+        self.goal_threshold = 1
         self.action_cost_coeff = 0
         self.xlim = (-7, 7)
         self.ylim = (-7, 7)
         self.vel_bound = 1
         self.reset()
-        self.dynamic_plots = []
 
     def reset(self):
         unclipped_observation = self.init_mu + self.init_sigma * \
@@ -72,32 +74,6 @@ class MultiGoalEnv(Env, Serializable):
     def get_current_obs(self):
         return np.copy(self.observation)
 
-    def plot_paths(self, paths, ax):
-        self.plot_position_cost(ax)
-
-        for path in paths:
-            xx = path["observations"][:,0]
-            yy = path["observations"][:,1]
-            ax.plot(xx, yy, 'b-')
-
-    def compute_log_barrier_cost(self, positions, barrier_position,
-        radius, cutoff_dist=0.05, threshold=1e-5):
-        """
-        A bit different from Thomas' implementation. There is no
-            cone-like cost inside the barrier to give gradient for
-            traj-opt.
-        :param positions: an N x 2 array
-        """
-        barrier = np.expand_dims(barrier_position,axis=0)
-        dists = np.sqrt(np.sum(
-            (positions - barrier)**2,
-            axis=1
-        ))
-        dists_to_barrier = dists-radius
-        induce_cost = (dists_to_barrier < cutoff_dist).astype(int)
-        costs = - induce_cost * self.lam_barrier * \
-            np.log(np.maximum(dists_to_barrier / cutoff_dist, threshold))
-        return costs
 
     def step(self, action):
         a_lb, a_ub = self.action_space.bounds
@@ -115,9 +91,7 @@ class MultiGoalEnv(Env, Serializable):
             np.linalg.norm(cur_position - goal_position)
             for goal_position in self.goal_positions
         ])
-        done =  dist_to_goal < self.goal_threshold
-        if done:
-            reward += self.goal_reward
+        done = False
 
         self.observation = np.copy(next_obs)
         return next_obs, reward, done, {}
@@ -126,16 +100,20 @@ class MultiGoalEnv(Env, Serializable):
         # penalize the L2 norm of acceleration
         action_cost = np.sum(action ** 2) * self.action_cost_coeff
 
-        # penalize squared dist to goal
+        # Gaussian reward at each goal
+        x0 = np.linalg.norm(self.goal_positions[0]) # assuming all goals are equal
+        y0 = self.init_reward
+        y1 = self.goal_reward
+        a = y1
+        b = -1. / (x0 ** 2) * np.log(y0 / y1)
         cur_position = observation
-        goal_cost = np.amin([
-            np.sum((cur_position - goal_position) ** 2)
+        goal_reward = np.mean([
+            a * np.exp(-b * np.sum((cur_position - goal_position) ** 2))
             for goal_position in self.goal_positions
         ])
 
         # penalize staying with the log barriers
-        costs = [action_cost, goal_cost]
-        reward = -np.sum(costs)
+        reward = goal_reward - action_cost
         return reward
 
     def render(self,close=False):
@@ -144,7 +122,7 @@ class MultiGoalEnv(Env, Serializable):
             plt.axis('equal')
             self.ax = self.fig.add_subplot(111)
         if not hasattr(self,'fixed_plots') or self.fixed_plots is None:
-            self.fixed_plots = self.plot_position_cost(self.ax)
+            self.fixed_plots = self.plot_position_reward(self.ax)
         for obj in self.dynamic_plots:
             obj.remove()
         x,y = self.observation
@@ -158,7 +136,7 @@ class MultiGoalEnv(Env, Serializable):
             self.fig = None
 
 
-    def plot_position_cost(self,ax):
+    def plot_position_reward(self, ax):
         delta = 0.01
         xmin, xmax = tuple(1.1 * np.array(self.xlim))
         ymin, ymax = tuple(1.1 * np.array(self.ylim))
@@ -166,15 +144,19 @@ class MultiGoalEnv(Env, Serializable):
             np.arange(xmin,xmax,delta),
             np.arange(ymin,ymax,delta)
         )
-        goal_costs = np.amin([
-            (X - goal_x) ** 2 + (Y - goal_y) ** 2
+        x0 = np.linalg.norm(self.goal_positions[0]) # assuming all goals are equal
+        y0 = self.init_reward
+        y1 = self.goal_reward
+        a = y1
+        b = -1. / (x0 ** 2) * np.log(y0 / y1)
+        goal_rewards = np.mean([
+            a * np.exp(- b * ((X - goal_x) ** 2 + (Y - goal_y) ** 2))
             for goal_x, goal_y in self.goal_positions
         ], axis=0)
         positions = np.vstack([X.ravel(), Y.ravel()]).transpose()
-        costs = goal_costs
 
-        contours = ax.contour(X,Y,costs,20)
-        ax.clabel(contours,inline=1,fontsize=10,fmt='%.0f')
+        contours = ax.contour(X,Y,goal_rewards,20)
+        ax.clabel(contours,inline=1,fontsize=10,fmt='%.1f')
         ax.set_xlim([xmin,xmax])
         ax.set_ylim([ymin,ymax])
         goal = ax.plot(self.goal_positions[:,0],self.goal_positions[:,1],'ro')
@@ -189,6 +171,14 @@ class MultiGoalEnv(Env, Serializable):
 
     def set_param_values(self, params):
         pass
+
+    def plot_paths(self, paths, ax):
+        self.plot_position_reward(ax)
+
+        for path in paths:
+            xx = path["observations"][:,0]
+            yy = path["observations"][:,1]
+            ax.plot(xx, yy, 'b-')
 
     def log_stats(self, algo, epoch, paths):
         # compute number of goals reached

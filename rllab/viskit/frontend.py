@@ -177,15 +177,8 @@ def make_plot_eps(plot_list, use_median=False, counter=0):
             y_lower = list(plt.means - plt.stds)
         axes = _plt.gca()
         axes.set_xlim([0, 500])
-        if counter == 3:
-            axes.set_ylim([100, 1000])
-        if counter == 2:
-            axes.set_ylim([-1000, 10000])
-        if counter == 4:
-            axes.set_ylim([-50, 500])
-        if counter == 6:
-            axes.set_ylim([-1000, 7000])
 
+        axes.set_xlim([0, 200])
         ax.fill_between(
             x, y_lower, y_upper, interpolate=True, facecolor=color, linewidth=0.0, alpha=0.3)
         # if idx == 2:
@@ -272,6 +265,8 @@ def get_plot_instruction(
         squeeze_nan=False,
         xlim=None, ylim=None,
         show_exp_count=False,
+        show_lowest_sofar=False,
+        show_highest_sofar=False,
 ):
     print(plot_key, split_key, group_key, filters)
     if filter_nan:
@@ -487,6 +482,23 @@ def get_plot_instruction(
                         np.concatenate([ps, np.ones(max_size - len(ps)) * np.nan]) for ps in progresses]
                     window_size = np.maximum(int(np.round(max_size / float(1000))), 1)
 
+                    if show_lowest_sofar:
+                        progresses = [
+                            np.array([
+                                np.min(ps[:i+1])
+                                for i in range(len(ps))
+                            ])
+                            for ps in progresses
+                        ]
+                    if show_highest_sofar:
+                        progresses = [
+                            np.array([
+                                np.max(ps[:i+1])
+                                for i in range(len(ps))
+                            ])
+                            for ps in progresses
+                        ]
+
                     if use_median:
                         percentile25 = np.nanpercentile(
                             progresses, q=25, axis=0)
@@ -647,6 +659,9 @@ def plot_div():
     yub = parse_float_arg(args, "yub")
     ylb = parse_float_arg(args, "ylb")
 
+    show_lowest_sofar = args.get("show_lowest_sofar", "") == 'True'
+    show_highest_sofar = args.get("show_highest_sofar", "") == 'True'
+
     plot_div = get_plot_instruction(
         plot_key=plot_key,
         split_key=split_key,
@@ -669,6 +684,8 @@ def plot_div():
         custom_series_splitter=custom_series_splitter,
         xlim=[xlb, xub], ylim=[ylb, yub],
         show_exp_count=show_exp_count,
+        show_lowest_sofar=show_lowest_sofar,
+        show_highest_sofar=show_highest_sofar,
     )
     # print plot_div
     return plot_div

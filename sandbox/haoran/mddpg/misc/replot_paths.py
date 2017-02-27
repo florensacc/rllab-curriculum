@@ -13,8 +13,9 @@ import json
 
 
 exp_prefix="mddpg/vddpg/ant/exp-004b"
-epoch = 89
-n_paths = 10
+epoch = 499
+n_paths = 50
+no_skip = True
 configure_script = ""
 def is_good_variant(v):
     return True
@@ -35,7 +36,7 @@ for path in paths:
             path,
             'env_itr_%05d_replot.png'%(epoch)
         )
-        if os.path.exists(img_file):
+        if os.path.exists(img_file) and not no_skip:
             print(colorize(
                 "%s alredy exists. Skip."%(img_file),
                 "green",
@@ -79,6 +80,8 @@ for path in paths:
         while isinstance(env, ProxyEnv):
             env = env._wrapped_env
         env.plot_paths(paths, algo._ax_env)
+        algo._ax_env.set_xlim((-10,10))
+        algo._ax_env.set_ylim((-10,10))
 
         # output
         algo._fig_env.savefig(img_file, dpi=100)
