@@ -38,9 +38,9 @@ from sandbox.young_clgan.lib.logging import *
 
 EXPERIMENT_TYPE = 'cl_gan'
 
-use_stub = False
+use_stub = True
 
-use_ec2 = False
+use_ec2 = True
 
 if use_ec2:
     use_stub = True
@@ -70,7 +70,7 @@ if __name__ == '__main__':
         horizon=400,
         goal_size=2,
         goal_range=10,
-        goal_noise_level=1,
+        goal_noise_level=0.5,
         min_reward=5,
         max_reward=6000,
         improvement_threshold=10,
@@ -81,7 +81,7 @@ if __name__ == '__main__':
         gae_lambda=0.995,
         gan_outer_iters=5,
         gan_discriminator_iters=200,
-        gan_generator_iters=5,
+        gan_generator_iters=10,
         gan_noise_size=4,
         gan_generator_layers=[256, 256],
         gan_discriminator_layers=[128, 128],
@@ -110,7 +110,7 @@ if __name__ == '__main__':
                 use_gpu=False,
                 mode=mode,
                 sync_s3_html=True,
-                exp_prefix='goalGAN-maze30',
+                exp_prefix='goalGAN-maze34',
                 seed=seed
             )
     else:

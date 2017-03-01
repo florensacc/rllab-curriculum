@@ -174,10 +174,10 @@ class CLGANPointEnvMaze(RLAlgorithm):
             else:
                 goals = raw_goals
 
-            all_goals.append(raw_goals)
+            #all_goals.append(raw_goals)
 
             logger.log("Evaluating goals before training")
-            rewards_before = evaluate_goals(goals, env, policy, hyperparams.horizon)
+            rewards_before = evaluate_goals(goals, env, policy, hyperparams.horizon, n_processes=12)
 
             with ExperimentLogger(log_dir, outer_iter, hold_outter_log=True):
                 logger.log("Updating the environment goal generator")
@@ -265,6 +265,10 @@ class CLGANPointEnvMaze(RLAlgorithm):
 
             logger.log("Adding a new row to the report")
             report.new_row()
+
+            # append new goals to list of all goals (replay buffer): Not the low reward ones!!
+            filtered_raw_goals = [goal for goal, label in zip(goals, labels) if label[0] == 1]
+            all_goals.append(filtered_raw_goals)
                 
         img = plot_line_graph(
             osp.join(log_dir, 'mean_rewards.png'),
