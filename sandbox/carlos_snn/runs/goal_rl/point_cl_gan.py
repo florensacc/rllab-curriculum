@@ -3,6 +3,9 @@ import tensorflow as tf
 import tflearn
 import sys
 import os
+import math
+import random
+
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
 from rllab.misc.instrument import run_experiment_lite
@@ -11,7 +14,6 @@ from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
 from sandbox.carlos_snn.runs.goal_rl.point_cl_gan_algo import run_task
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -31,9 +33,11 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        'us-east-2b', 'us-east-1a', 'us-east-1d', 'us-east-1b', 'us-east-1e', 'ap-south-1b', 'ap-south-1a', 'us-west-1a'
+        'us-east-2b', 'us-east-2a', 'ap-northeast-2c', 'ap-south-1a', 'ap-south-1b', 'ap-northeast-2a', 'us-east-2c',
+        'us-east-1c', 'us-east-1b', 'us-east-1d', 'us-east-1a', 'us-east-1e', 'sa-east-1c', 'us-west-1a', 'eu-west-1b',
+        'us-west-1b', 'eu-west-1c', 'sa-east-1a', 'eu-west-1a',
     ]
-    ec2_instance = args.type if args.type else 'm4.xlarge'
+    ec2_instance = args.type if args.type else 'c4.4xlarge'
     # configure instance
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -51,19 +55,21 @@ if __name__ == '__main__':
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
 
-    exp_prefix = 'goalGAN-point'
+    exp_prefix = 'goalGAN-point4'
 
     vg = VariantGenerator()
-    vg.add('seed', range(10, 30, 10))
+    vg.add('seed', range(10, 40, 10))
     # # GeneratorEnv params
-    vg.add('goal_size', [5, 4, 3, 2])  # this is the ultimate goal we care about: getting the pendulum upright
-    vg.add('reward_dist_threshold', [0.5, 1])
-    vg.add('goal_range', [5, 10])  # this will be used also as bound of the state_space
+    vg.add('goal_size', [3, 2, 3, 2, 6, 5, 4])  # this is the ultimate goal we care about: getting the pendulum upright
+    vg.add('reward_dist_threshold', lambda goal_size: [math.sqrt(goal_size) / math.sqrt(2) * 0.5])
+    # vg.add('reward_dist_threshold', [0.5, 1])
+    vg.add('goal_range', [5])  # this will be used also as bound of the state_space
     vg.add('state_bounds', lambda reward_dist_threshold, goal_range, goal_size:
-    [(1, goal_range) + (reward_dist_threshold,) * (goal_size * 2 - 2)])
+    [(1, goal_range) + (reward_dist_threshold,) * (goal_size - 2) + (goal_range, ) * goal_size])
     vg.add('distance_metric', ['L2'])
     vg.add('terminal_bonus', [0])
-    vg.add('terminal_eps', lambda reward_dist_threshold: [reward_dist_threshold])  # if hte terminal bonus is 0 it doesn't kill it! Just count how many reached center
+    vg.add('terminal_eps', lambda reward_dist_threshold: [
+        reward_dist_threshold])  # if hte terminal bonus is 0 it doesn't kill it! Just count how many reached center
     #############################################
     vg.add('min_reward', [1])  # now running it with only the terminal reward of 1!
     vg.add('max_reward', [1e3])
@@ -81,10 +87,10 @@ if __name__ == '__main__':
     vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [0.1])
     # gan_configs
-    vg.add('goal_noise_level', [0.1])  # ???
+    vg.add('goal_noise_level', [0.5])  # ???
     vg.add('gan_outer_iters', [5])
     vg.add('gan_discriminator_iters', [200])
-    vg.add('gan_generator_iters', [5])
+    vg.add('gan_generator_iters', [10])
     vg.add('GAN_batch_size', [128])  # proble with repeated name!!
     vg.add('GAN_generator_activation', ['relu'])
     vg.add('GAN_discriminator_activation', ['relu'])
@@ -161,4 +167,3 @@ if __name__ == '__main__':
                 exp_prefix=exp_prefix,
                 # exp_name=exp_name,
             )
-

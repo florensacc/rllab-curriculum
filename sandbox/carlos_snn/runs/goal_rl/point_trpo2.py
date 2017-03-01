@@ -258,3 +258,11 @@ def run_task(v):
         report.save()
         report.new_row()
 
+    with logger.tabular_prefix('FINALUnifFeasGoalGen_'):
+        update_env_goal_generator(env, goal_generator=uniform_feasible_goal_generator)
+        evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=5e3, fig_prefix='FINAL1UnifFeasGoalGen_',
+                          report=report)
+        evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=5e3, fig_prefix='FINAL2UnifFeasGoalGen_',
+                          report=report)
+    logger.dump_tabular(with_prefix=False)
+
