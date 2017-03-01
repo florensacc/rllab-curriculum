@@ -2,8 +2,8 @@ import random
 from rllab import spaces
 import sys
 import os.path as osp
-import matplotlib as mpl
 
+import matplotlib as mpl
 mpl.use('Agg')
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
@@ -335,6 +335,16 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
                 pos = paths[p]['observations'][:, :full_goal_dim]
                 ax.plot(pos[:, 0], pos[:, 1], c=colors[p], marker='x', markersize=2)
                 ax.plot([goals[p][0]], [goals[p][1]], c=colors[p], marker='x', markersize=12)
+                high, low = self.wrapped_env.observation_space.bounds
+                i = 0
+                a = high[idx]
+                a[i] = low[idx[i]]
+                b = low[idx]
+                b[i] = high[idx[i]]
+                ax.plot(*zip(high[idx], a), color="b", label='state bounds')
+                ax.plot(*zip(high[idx], b), color="b")
+                ax.plot(*zip(low[idx], a), color="b")
+                ax.plot(*zip(low[idx], b), color="b")
         elif len(goals[0]) == 3:
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
@@ -350,7 +360,6 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
                 b[j] = high[idx[j]]
                 c = low[idx]
                 c[k] = high[idx[k]]
-                # import pdb; pdb.set_trace()
                 ax.plot(*zip(high[idx], a), color="b", label='state bounds')
                 ax.plot(*zip(low[idx], b), color="b")
                 ax.plot(*zip(a, b), color='b')

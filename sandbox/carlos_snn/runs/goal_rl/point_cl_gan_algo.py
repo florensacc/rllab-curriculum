@@ -213,7 +213,7 @@ def run_task(v):
         logger.record_tabular('GenGoalFeasibilityRate', feasibility_rate)
         img = plot_labeled_samples(
             samples=goals, sample_classes=feasible, text_labels={0: 'Infeasible', 1: "Feasible"},
-            markers={0: 'v', 1: 'o'}, limit=v['goal_range'] + 1,
+            markers={0: 'v', 1: 'o'}, limit=v['goal_range'] + 1, bounds=env.feasible_goal_space.bounds,
             # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
         )
         report.add_image(img, 'feasibility of generated goals: {}\n itr: {}'.format(feasibility_rate, outer_iter),
@@ -243,5 +243,13 @@ def run_task(v):
         report.new_row()
 
         # append new goals to list of all goals (replay buffer): Not the low reward ones!!
-        filtered_raw_goals = [goal for goal, label in zip(goals, labels) if labels[0]==1]
+        filtered_raw_goals = [goal for goal, label in zip(goals, labels) if label[0]==1]
         all_goals.append(filtered_raw_goals)
+
+    with logger.tabular_prefix('FINALUnifFeasGoalGen_'):
+        update_env_goal_generator(env, goal_generator=uniform_feasible_goal_generator)
+        evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=5e3, fig_prefix='FINAL1UnifFeasGoalGen_',
+                          report=report)
+        evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=5e3, fig_prefix='FINAL2UnifFeasGoalGen_',
+                          report=report)
+    logger.dump_tabular(with_prefix=False)
