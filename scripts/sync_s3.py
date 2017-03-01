@@ -11,6 +11,7 @@ if __name__ == "__main__":
     parser.add_argument('--dry', action='store_true', default=False)
     parser.add_argument('--bare', action='store_true', default=False)
     parser.add_argument('--noitr', action='store_true', default=False)
+    parser.add_argument('--nohtml', action='store_true', default=False)
     parser.add_argument('--all', action='store_true', default=False)
     args = parser.parse_args()
     remote_dir = config.AWS_S3_PATH
@@ -21,6 +22,8 @@ if __name__ == "__main__":
     command = """aws s3 sync {remote_dir} {local_dir} --content-type "UTF-8" """.format(local_dir=local_dir, remote_dir=remote_dir)
     if args.noitr:
         command += """ --exclude '*itr*' """
+    if args.nohtml:
+        command += """ --exclude '*.html' """
     if args.bare:
         command += """ --exclude '*' --include '*.csv' --include '*.json' """
     elif not args.all:
