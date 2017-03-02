@@ -12,8 +12,8 @@ Choose good random seeds to illustrate the effect
 
 """
 Recommended changes to vendor/mujoco_models/ant.xml:
-    <material name='MatPlane' texture="texplane" shininess="1" texrepeat="20 20" specular="1"  reflectance="0.5" />
     <texture name="texplane" type="2d" builtin="checker" rgb1="0 0 0" rgb2="0 0 0" width="100" height="100" />
+    <material name='MatPlane' texture="texplane" shininess="1" texrepeat="20 20" specular="1"  reflectance="0.5" />
 """
 from sandbox.haoran.mddpg.misc.parallel_video_recorder import \
     ParallelVideoRecorder, generate_window_configs
@@ -44,8 +44,8 @@ from sandbox.haoran.myscripts.myutilities import get_true_env
 true_env = get_true_env(env)
 viewer = true_env.get_viewer()
 viewer.cam.trackbodyid = -1 # fix camera at the origin
-viewer.cam.elevation = -50 # overhead
-viewer.cam.distance = 20
+viewer.cam.elevation = -70 # overhead
+viewer.cam.distance = 15
     """.format(sigma=sigma)
 
     if recorded:
@@ -54,7 +54,7 @@ viewer.cam.distance = 20
             window_args=window_args,
             fps=50,
             figsize=(window_args["n_col"] * 5, window_args["n_row"] * 5),
-            dpi=200,
+            dpi=50,
         )
     else:
         video_config = None
@@ -75,11 +75,10 @@ if __name__ == "__main__":
     bad_seeds = [
         # seeds with which the ant flips over
     ]
-    exp_prefix = "mddpg/vddpg/ant/exp-004"
-    # exp_name = "exp-004_20170218_144921_250140_tuomas_ant" # up
-    # exp_name = "exp-004_20170218_144947_821459_tuomas_ant" # down
-    exp_name = "exp-004_20170218_145005_393104_tuomas_ant" # right
-    itr = 499
+    exp_prefix = "mddpg/vddpg/ant/exp-006f8"
+    exp_name = "exp-006f8_20170222_104435_479556_ant_puddle" # down
+    # exp_name = "exp-006f8_20170222_104438_298298_ant_puddle" # up
+    itr = 489
     sigma = 0.1
 
     path = os.path.join(
@@ -88,11 +87,11 @@ if __name__ == "__main__":
         exp_name
     )
     pkl_file = os.path.join(path, "itr_%d.pkl"%(itr))
-    output_path = "/Users/haoran/Google Drive/2016-17 2nd/vddpg/figure/pretraining/pretrained/ddpg/%s_itr_%d_sigma_%g"%(
+    output_path = "/Users/haoran/Google Drive/2016-17 2nd/vddpg/figure/exploration/maze/ddpg/%s_itr_%d_sigma_%g"%(
         exp_name, itr, sigma
     )
     os.system("mkdir -p \"%s\""%(output_path))
-    for i in range(25):
+    for i in range(100):
         if i in bad_seeds:
             continue
         tf.reset_default_graph()

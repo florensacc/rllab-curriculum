@@ -1,7 +1,5 @@
 """
-This script visualizes ant policies pretrained in ant/exp-004b.
-The goal is to visualize the behavior across different rollouts using the same
-    policy, thus understanding how much entropy the policy has.
+Goal: visualize the policy across seeds and training epochs.
 
 For debugging, tune the following to reduce computation time:
     max_path_length, n_parallel, dpi, fps
@@ -21,7 +19,7 @@ import os
 import numpy as np
 import tensorflow as tf
 
-def run(pkl_file, output, recorded, seeds, sigma):
+def run(pkl_file, output, recorded, seeds):
     max_path_length = 500
     n_parallel = 1
     pkl_files = [pkl_file for i in range(n_parallel)]
@@ -39,14 +37,14 @@ def run(pkl_file, output, recorded, seeds, sigma):
         config["sleep_time"] = 0.00001
 
     setup_script = """
-es.sigma = {sigma}
 from sandbox.haoran.myscripts.myutilities import get_true_env
 true_env = get_true_env(env)
 viewer = true_env.get_viewer()
 viewer.cam.trackbodyid = -1 # fix camera at the origin
 viewer.cam.elevation = -50 # overhead
+viewer.cam.azimuth = 190
 viewer.cam.distance = 20
-    """.format(sigma=sigma)
+    """
 
     if recorded:
         video_config = dict(
@@ -54,7 +52,7 @@ viewer.cam.distance = 20
             window_args=window_args,
             fps=50,
             figsize=(window_args["n_col"] * 5, window_args["n_row"] * 5),
-            dpi=200,
+            dpi=400,
         )
     else:
         video_config = None
@@ -65,22 +63,22 @@ viewer.cam.distance = 20
         render_configs=render_configs,
         seeds=seeds,
         max_path_length=max_path_length,
-        animated=False,
+        animated=True,
         video_config=video_config,
         setup_script=setup_script,
     )
     vr.run()
 
 if __name__ == "__main__":
-    bad_seeds = [
-        # seeds with which the ant flips over
-    ]
-    exp_prefix = "mddpg/vddpg/ant/exp-004"
-    # exp_name = "exp-004_20170218_144921_250140_tuomas_ant" # up
-    # exp_name = "exp-004_20170218_144947_821459_tuomas_ant" # down
-    exp_name = "exp-004_20170218_145005_393104_tuomas_ant" # right
-    itr = 499
-    sigma = 0.1
+    good_seeds = np.arange(10)
+    exp_prefix = "mddpg/vddpg/ant/exp-004h"
+    exp_name = "exp-004h_20170223_114408_101601_tuomas_ant"
+    # itr = 499
+    # itr = 249
+    # itr = 0
+    # itr = 99
+    itr = 199
+    # has it converged yet?
 
     path = os.path.join(
         "data/s3",
@@ -88,13 +86,11 @@ if __name__ == "__main__":
         exp_name
     )
     pkl_file = os.path.join(path, "itr_%d.pkl"%(itr))
-    output_path = "/Users/haoran/Google Drive/2016-17 2nd/vddpg/figure/pretraining/pretrained/ddpg/%s_itr_%d_sigma_%g"%(
-        exp_name, itr, sigma
+    output_path = "/Users/haoran/Google Drive/2016-17 2nd/vddpg/figure/pretraining/narrow_hallway/%s_itr_%d"%(
+        exp_name, itr
     )
     os.system("mkdir -p \"%s\""%(output_path))
-    for i in range(25):
-        if i in bad_seeds:
-            continue
+    for i in good_seeds:
         tf.reset_default_graph()
         sess = tf.get_default_session()
         if sess is not None:
@@ -103,10 +99,10 @@ if __name__ == "__main__":
             output_path,
             "%03d.mp4"%(i),
         )
+        print(output)
         run(
             pkl_file=pkl_file,
             output=output,
             recorded=True,
             seeds=[i],
-            sigma=sigma,
         )

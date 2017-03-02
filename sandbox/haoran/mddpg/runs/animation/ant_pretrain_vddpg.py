@@ -53,7 +53,7 @@ viewer.cam.distance = 20
             window_args=window_args,
             fps=50,
             figsize=(window_args["n_col"] * 5, window_args["n_row"] * 5),
-            dpi=50,
+            dpi=200,
         )
     else:
         video_config = None
@@ -71,10 +71,14 @@ viewer.cam.distance = 20
     vr.run()
 
 if __name__ == "__main__":
-    bad_seeds = [
-        0, 1, 5, 12, 13, 15, 17
-        # seeds with which the ant flips over
-    ]
+    # good_seeds = [
+    #     2, 3, 4, 10,
+    #     11, 14, 18, 20,
+    #     21, 35, 38, 40,
+    #     43, 44, 47, 48,
+    #     # seeds with which the ant doesn't flips over
+    # ]
+    good_seeds = np.arange(61,75)
     exp_prefix = "mddpg/vddpg/ant/exp-004b"
     exp_name = "exp-004b_20170218_223420_042393_tuomas_ant"
     itr = 499
@@ -89,9 +93,7 @@ if __name__ == "__main__":
         exp_name, itr
     )
     os.system("mkdir -p \"%s\""%(output_path))
-    for i in range(100):
-        if i in bad_seeds:
-            continue
+    for i in good_seeds:
         tf.reset_default_graph()
         sess = tf.get_default_session()
         if sess is not None:

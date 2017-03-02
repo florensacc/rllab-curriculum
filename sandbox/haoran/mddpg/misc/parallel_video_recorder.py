@@ -58,6 +58,8 @@ class ParallelVideoRecorder(object):
         # hack
         if self._snapshot["algo"].__class__.__name__ == "DDPG":
             use_es = True
+        else:
+            use_es = False
         exec(self.setup_script)
         if not use_es:
             print(self._rank)
