@@ -11,6 +11,10 @@ class GoalCollection(object):
         self.distance_threshold = distance_threshold
         self.goal_list = []
 
+    @property
+    def size(self):
+        return len(self.goal_list)
+
     def sample(self, size, replace=False):
         return sample_matrix_row(np.array(self.goal_list), size, replace)
 
