@@ -75,21 +75,21 @@ if __name__ == '__main__':
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
 
-    exp_prefix = 'goal-point-trpo5'
+    exp_prefix = 'goal-point-trpo-nonSparse3'
     vg = VariantGenerator()
 
     vg.add('seed', range(10, 40, 10))
     # # GeneratorEnv params
-    vg.add('goal_size', [6, 5, 4, 3, 2, 1])  # this is the ultimate goal we care about: getting the pendulum upright
+    vg.add('goal_size', [6, 5, 4, 3, 2])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('goal_range', [5])  # this will be used also as bound of the state_space
-    vg.add('reward_dist_threshold', lambda goal_size: [math.sqrt(goal_size) / math.sqrt(2) * 0.5])
-    vg.add('state_bounds', lambda reward_dist_threshold, goal_range, goal_size:
-    [(1, goal_range) + (reward_dist_threshold,) * (goal_size - 2) + (goal_range, ) * goal_size])
+    vg.add('reward_dist_threshold', lambda goal_size: [math.sqrt(goal_size) / math.sqrt(2) * 10])
     # vg.add('angle_idxs', [((0, 1),)]) # these are the idx of the obs corresponding to angles (here the first 2)
     vg.add('distance_metric', ['L2'])
     vg.add('terminal_bonus', [0])
     vg.add('terminal_eps', lambda reward_dist_threshold: [
-        reward_dist_threshold])  # if hte terminal bonus is 0 it doesn't kill it! Just count how many reached center
+        reward_dist_threshold / 10. * 0.5])  # if hte terminal bonus is 0 it doesn't kill it! Just count how many reached center
+    vg.add('state_bounds', lambda goal_range, goal_size:
+    [(1, goal_range) + (0.5,) * (goal_size - 2) + (goal_range, ) * goal_size])
     #############################################
     vg.add('min_reward', [1])  # now running it with only the terminal reward of 1!
     vg.add('max_reward', [1e3])

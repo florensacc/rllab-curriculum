@@ -33,11 +33,10 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        'us-east-2b', 'us-east-2a', 'ap-northeast-2c', 'ap-south-1a', 'ap-south-1b', 'ap-northeast-2a', 'us-east-2c',
-        'us-east-1c', 'us-east-1b', 'us-east-1d', 'us-east-1a', 'us-east-1e', 'sa-east-1c', 'us-west-1a', 'eu-west-1b',
-        'us-west-1b', 'eu-west-1c', 'sa-east-1a', 'eu-west-1a',
+        'ap-south-1b', 'us-west-1b', 'us-west-1a', 'us-east-2c', 'us-east-1a', 'us-east-1b', 'us-east-1c', 'us-east-1e',
+        'eu-west-1b', 'eu-west-1c', 'eu-west-1a', 'us-east-1d'
     ]
-    ec2_instance = args.type if args.type else 'c4.4xlarge'
+    ec2_instance = args.type if args.type else 'c4.8xlarge'
     # configure instance
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -55,12 +54,12 @@ if __name__ == '__main__':
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
 
-    exp_prefix = 'goalGAN-point4'
+    exp_prefix = 'goalGAN-point5'
 
     vg = VariantGenerator()
-    vg.add('seed', range(10, 40, 10))
+    vg.add('seed', range(40, 100, 20))
     # # GeneratorEnv params
-    vg.add('goal_size', [3, 2, 3, 2, 6, 5, 4])  # this is the ultimate goal we care about: getting the pendulum upright
+    vg.add('goal_size', [2, 3, 4, 5, 6])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('reward_dist_threshold', lambda goal_size: [math.sqrt(goal_size) / math.sqrt(2) * 0.5])
     # vg.add('reward_dist_threshold', [0.5, 1])
     vg.add('goal_range', [5])  # this will be used also as bound of the state_space
@@ -105,24 +104,24 @@ if __name__ == '__main__':
     vg.add('GAN_discriminator_batch_noise_stddev', [1e-2])
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
-            # # choose subnet
-            # subnet = random.choice(subnets)
-            # config.AWS_REGION_NAME = subnet[:-1]
-            # config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_SECURITY_GROUP_IDS = \
-            #     config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
-            #         config.AWS_REGION_NAME]
-            # config.AWS_NETWORK_INTERFACES = [
-            #     dict(
-            #         SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
-            #         Groups=config.AWS_SECURITY_GROUP_IDS,
-            #         DeviceIndex=0,
-            #         AssociatePublicIpAddress=True,
-            #     )
-            # ]
+            # choose subnet
+            subnet = random.choice(subnets)
+            config.AWS_REGION_NAME = subnet[:-1]
+            config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
+                config.AWS_REGION_NAME]
+            config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
+                config.AWS_REGION_NAME]
+            config.AWS_SECURITY_GROUP_IDS = \
+                config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
+                    config.AWS_REGION_NAME]
+            config.AWS_NETWORK_INTERFACES = [
+                dict(
+                    SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
+                    Groups=config.AWS_SECURITY_GROUP_IDS,
+                    DeviceIndex=0,
+                    AssociatePublicIpAddress=True,
+                )
+            ]
 
             run_experiment_lite(
                 # use_cloudpickle=False,

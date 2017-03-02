@@ -135,11 +135,13 @@ def run_task(v):
         logger.log("Sampling goals...")
         raw_goals, _ = gan.sample_goals_with_noise(v['num_new_goals'])
 
-        if outer_iter > 0:
+        if outer_iter > 0 and all_goals.size > 0:
             # sampler uniformly 2000 old goals and add them to the training pool (50/50)
             old_goals = all_goals.sample(v['num_old_goals'])
+            print("old_goals: {}, raw_goals: {}".format(old_goals, raw_goals))
             goals = np.vstack([raw_goals, old_goals])
         else:
+            print("no goals in all_goals: sample fresh ones")
             goals = raw_goals
 
 

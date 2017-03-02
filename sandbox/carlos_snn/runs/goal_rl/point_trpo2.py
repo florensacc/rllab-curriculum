@@ -242,12 +242,14 @@ def run_task(v):
         logger.log("Evaluating performance on Unif and Fix Goal Gen...")
         with logger.tabular_prefix('UnifFeasGoalGen_'):
             update_env_goal_generator(env, goal_generator=uniform_feasible_goal_generator)
-            evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=50, fig_prefix='UnifFeasGoalGen_',
+            evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=50,
+                              fig_prefix='UnifFeasGoalGen_itr%d' % outer_iter,
                               report=report)
         # back to old goal generator
         with logger.tabular_prefix("UnifGoalGen_"):
             update_env_goal_generator(env, goal_generator=old_goal_generator)
-            evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=50, fig_prefix='UnifGoalGen_',
+            evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=50,
+                              fig_prefix='UnifGoalGen_itr%d' % outer_iter,
                               report=report)
         # with logger.tabular_prefix('FixGoalGen_'):
         #     update_env_goal_generator(env, goal_generator=fixed_goal_generator)
