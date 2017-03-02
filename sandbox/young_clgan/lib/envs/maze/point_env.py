@@ -88,6 +88,7 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
             distance=dist,
         )
 
+    @overrides
     @property
     def goal_observation(self):
         return self.get_body_com("torso")[:2]

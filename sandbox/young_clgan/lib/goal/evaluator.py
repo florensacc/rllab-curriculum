@@ -112,7 +112,7 @@ def convert_label(labels):
     return new_labels, classes
 
 
-def evaluate_goals(goals, env, policy, horizon, n_traj=1, n_processes=1):
+def evaluate_goals(goals, env, policy, horizon, n_traj=1, n_processes=-1):
     evaluate_goal_wrapper = FunctionWrapper(
         evaluate_goal,
         env=env,

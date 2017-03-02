@@ -25,7 +25,7 @@ if __name__ == "__main__":
     if args.nohtml:
         command += """ --exclude '*.html' """
     if args.bare:
-        command += """ --exclude '*' --include '*.csv' --include '*.json' -- include '*.html' """
+        command += """ --exclude '*' --include '*.csv' --include '*.json' --include '*.html' """
     elif not args.all:
         command += """ --exclude '*stdout.log' --exclude '*stdouterr.log'  """
     if args.dry:

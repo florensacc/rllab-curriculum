@@ -149,7 +149,8 @@ def main():
 #    pkl_file = "sandbox/young_clgan/experiments/point_env_maze/experiment_data/cl_gan_maze/2017-02-21_15-30-36_dav2/log/itr_69/itr_4.pkl"
 #    pkl_file = "sandbox/young_clgan/experiments/point_env_maze/experiment_data/cl_gan_maze/2017-02-21_22-49-03_dav2/log/itr_199/itr_4.pkl"
     #pkl_file = "sandbox/young_clgan/experiments/point_env_maze/experiment_data/cl_gan_maze/2017-02-22_13-06-53_dav2/log/itr_119/itr_4.pkl"
-    pkl_file = "data/local/goalGAN-maze30/goalGAN-maze30_2017_02_24_01_44_03_0001/itr_27/itr_4.pkl"
+    #pkl_file = "data/local/goalGAN-maze30/goalGAN-maze30_2017_02_24_01_44_03_0001/itr_27/itr_4.pkl"
+    pkl_file = "/home/davheld/repos/goalgen/rllab_goal_rl/data/s3/goalGAN-maze11/goalGAN-maze11_2017_02_23_01_06_12_0005/itr_199/itr_4.pkl"
 
     # parser = argparse.ArgumentParser()
     # # parser.add_argument('--file', type=str, default=pkl_file,
