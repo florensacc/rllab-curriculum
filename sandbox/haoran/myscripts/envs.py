@@ -72,18 +72,30 @@ class EnvChooser(object):
             from sandbox.haoran.mddpg.envs.multi_goal_env import \
                 MultiGoalEnv
             env = MultiGoalEnv(**kwargs)
+        elif env_name == "multi_goal_v2":
+            from sandbox.haoran.mddpg.envs.multi_goal_env_v2 import \
+                MultiGoalEnvV2
+            env = MultiGoalEnvV2(**kwargs)
         elif env_name == "gym_hopper":
             from sandbox.haoran.mddpg.envs.mujoco.gym_hopper import \
                 HopperEnv
             env = HopperEnv(**kwargs)
         elif env_name == "tuomas_hopper":
-            from sandbox.tuomas.mddpg.envs.hopper_env import \
+            from sandbox.tuomas.mddpg.envs.mujoco.hopper_env import \
                 HopperEnv
             env = HopperEnv(**kwargs)
+        elif env_name == "tuomas_swimmer_forward":
+            from sandbox.tuomas.mddpg.envs.mujoco.swimmer_forward_env import \
+                SwimmerForwardEnv
+            env = SwimmerForwardEnv(**kwargs)
         elif env_name == "tuomas_ant":
             from sandbox.tuomas.mddpg.envs.mujoco.ant_env import \
                 AntEnv
             env = AntEnv(**kwargs)
+        elif env_name == "tuomas_walker2d":
+            from sandbox.tuomas.mddpg.envs.mujoco.gym_walker2d_env import \
+                Walker2DEnv
+            env = Walker2DEnv(**kwargs)
         elif env_name == "gym_walker":
             from sandbox.haoran.mddpg.envs.mujoco.gym_walker2d_env import \
                 Walker2DEnv
@@ -108,6 +120,10 @@ class EnvChooser(object):
             from sandbox.haoran.mddpg.envs.mujoco.multilink_reacher_env import \
                 MultiLinkReacherEnv
             env = MultiLinkReacherEnv(**kwargs)
+        elif env_name == "ant_puddle":
+            from sandbox.haoran.mddpg.envs.mujoco.ant_puddle_env import \
+                AntPuddleEnv
+            env = AntPuddleEnv(**kwargs)
         else:
             print("Unknown environment %s"%(env_name))
             raise NotImplementedError

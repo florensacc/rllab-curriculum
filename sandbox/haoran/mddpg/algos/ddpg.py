@@ -92,8 +92,8 @@ class DDPG(OnlineAlgorithm, Serializable):
         if self.env_plot_settings is not None:
             self._fig_env = plt.figure(figsize=(7, 7))
             self._ax_env = self._fig_env.add_subplot(111)
-            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
-            self._ax_env.set_ylim(self.env_plot_settings['ylim'])
+            # self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+            # self._ax_env.set_ylim(self.env_plot_settings['ylim'])
 
         # Init critic + actor figure.
         # TODO: Figure out to set the size automatically
@@ -372,6 +372,15 @@ class DDPG(OnlineAlgorithm, Serializable):
             self.last_statistics.update(create_stats_ordered_dict(
                 'TrainingReturns', train_returns))
 
+        es_path_lengths = train_info["es_path_lengths"]
+        if len(es_path_lengths) == 0 and epoch == 0:
+            es_path_lengths = [0]
+        if len(es_path_lengths) > 0:
+            # if eval is too often, training may not even have collected a full
+            # path
+            self.last_statistics.update(create_stats_ordered_dict(
+                'TrainingPathLengths', es_path_lengths))
+
         snapshot_dir = logger.get_snapshot_dir()
         env = self.env
         while isinstance(env, ProxyEnv):
@@ -381,14 +390,14 @@ class DDPG(OnlineAlgorithm, Serializable):
             env_stats = env.log_stats(self, epoch, paths)
             self.last_statistics.update(env_stats)
 
-        if hasattr(env, 'plot_paths'):
+        if hasattr(env, 'plot_paths') and self.env_plot_settings is not None:
             img_file = os.path.join(snapshot_dir,
                                     'env_itr_%05d.png' % epoch)
 
             self._ax_env.clear()
             env.plot_paths(paths, self._ax_env)
-            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
-            self._ax_env.set_ylim(self.env_plot_settings['ylim'])
+            # self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+            # self._ax_env.set_ylim(self.env_plot_settings['ylim'])
 
             plt.pause(0.001)
             plt.draw()

@@ -3,6 +3,7 @@
 import copy
 
 from sandbox.sandy.envs.atari_env import AtariEnv, get_base_env
+from sandbox.sandy.shared.ale_compatibility import set_gym_seed
 
 class AtariEnvDQN(AtariEnv):
     def __init__(self, env_name, record_video=False, video_schedule=None, \
@@ -37,8 +38,7 @@ class AtariEnvDQN(AtariEnv):
         return self.observation[-1,:,:]
 
     def set_seed(self, seed):
-        #self.base_env.ale.setInt(b'random_seed', seed)
-        self.base_env._seed(int(seed))
+        set_gym_seed(self.base_env, int(seed))
 
     def get_ram(self):
         return self.base_env.ale.getRAM()

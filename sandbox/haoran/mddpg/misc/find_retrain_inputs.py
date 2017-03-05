@@ -3,17 +3,21 @@ import os
 import json
 
 
-exp_prefix="tuomas/vddpg/exp-001"
+exp_prefix="mddpg/vddpg/ant/exp-004b"
 snapshot_file = "itr_499.pkl"
+def is_good_variant(v):
+    return all([
+        v["scale_reward"] == 1,
+        v["train_frequency"]["update_target_frequency"] == 1000,
+        v["reward_type"] == "velocity",
+    ])
+
 paths = []
 dirname = "data/s3/%s"%(exp_prefix)
 for subdirname in os.listdir(dirname):
     path = os.path.join(dirname,subdirname)
     if os.path.isdir(path):
         paths.append(path)
-
-def is_good_variant(v):
-    return v["scale_reward"] == 10
 
 inputs = []
 for path in paths:
@@ -22,7 +26,7 @@ for path in paths:
         with open(variant_file) as vf:
             v = json.load(vf)
         snapshot_file_full = os.path.join(path, snapshot_file)
-        if is_good_variant(v) and os.path.exists(snapshot_file_full):
+        if is_good_variant(v):
             input = """
                 dict(
                     exp_prefix=\"{exp_prefix}\",
@@ -44,4 +48,4 @@ output_file = "data/s3/%s/transfer_inputs.py"%(exp_prefix)
 with open(output_file,"w") as f:
     for input in inputs:
         f.write(input)
-print("Output to:", output_file)
+print("Output %d exps to:"%(len(inputs)), output_file)

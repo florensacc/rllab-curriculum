@@ -16,7 +16,7 @@ class MultiGoalEnv(Env, Serializable):
     state: position
     action: velocity
     """
-    def __init__(self):
+    def __init__(self, goal_reward=10):
         Serializable.quick_init(self, locals())
 
         self.dynamics = PointDynamics(dim=2, sigma=0)
@@ -32,7 +32,7 @@ class MultiGoalEnv(Env, Serializable):
             dtype=np.float32
         )
         self.goal_threshold = 1.
-        self.goal_reward = 10.
+        self.goal_reward = goal_reward
         self.action_cost_coeff = 10.
         self.xlim = (-7, 7)
         self.ylim = (-7, 7)
@@ -87,16 +87,23 @@ class MultiGoalEnv(Env, Serializable):
 
     def step(self, action):
         action = action.ravel()
-        action_norm_sq = np.sum(action**2)
-        if action_norm_sq > self.vel_bound**2:
-            action_cost = self.action_cost_coeff
-        else:
-            action_cost = 0.0
 
         a_lb, a_ub = self.action_space.bounds
+
+        scaling = (a_ub - a_lb) * 0.5
+        action_violations = np.maximum(
+            np.maximum(a_lb - action, action - a_ub), 0
+        )
+        action_cost = 10 * np.sum((action_violations / scaling)**2)
+
         action = np.clip(action, a_lb, a_ub).ravel()
-            # need to ravel because sometimes the input action has
-            # shape (1,2) with tensorflow
+
+        #action_norm_sq = np.sum(action**2)
+        #if action_norm_sq > self.vel_bound**2:
+        #    action_cost = self.action_cost_coeff
+        #else:
+        #    action_cost = 0.0
+
 
         next_obs = self.dynamics.forward(self.observation, action)
         o_lb, o_ub = self.observation_space.bounds
@@ -131,6 +138,16 @@ class MultiGoalEnv(Env, Serializable):
         yy = path[:, 1]
         line, = ax.plot(xx, yy, style)
         return line
+
+    @staticmethod
+    def plot_paths(paths, ax):
+        line_lst = []
+        for path in paths:
+            positions = path["env_infos"]["pos"]
+            xx = positions[:, 0]
+            yy = positions[:, 1]
+            line_lst += ax.plot(xx, yy, 'b')
+        return line_lst
 
     def compute_reward(self, observation, action):
         # penalize the L2 norm of acceleration
@@ -196,7 +213,7 @@ class MultiGoalEnv(Env, Serializable):
     def set_param_values(self, params):
         pass
 
-    def log_stats(self, epoch, paths):
+    def log_stats(self, alg, epoch, paths):
         n_goal = len(self.goal_positions)
         goal_reached = [False] * n_goal
 

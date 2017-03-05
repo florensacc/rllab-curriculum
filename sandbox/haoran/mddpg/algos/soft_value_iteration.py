@@ -35,9 +35,10 @@ class VI(object):
                     targets,
                     axis=1,
                 )
+            Q = self.get_Q(V)
         return V
 
-    def pi_iter(self, n_itr, V=None):
+    def pi_iter(self, n_itr, V=None, beta=1):
         if V is None:
             V = np.zeros(self.ns)
         for i in range(n_itr):
@@ -49,16 +50,18 @@ class VI(object):
 
             targets = self.r + self.gamma * next_V
             Q = self.get_Q(V)
-            pi = self.get_pi_from_Q(Q)
+            pi = self.get_pi_from_Q(Q, beta)
             new_V = np.sum(pi * targets, axis=1)
             abs_error = np.mean((new_V - V) ** 2)
-            rel_error = abs_error / np.mean(V ** 2)
+            TINY = 1e-15
+            rel_error = abs_error / np.mean(V ** 2 + TINY)
             V = new_V
         print("relative error: ", rel_error)
         return V, Q, pi
 
-    def get_pi_from_Q(self, Q):
-        un_probs = np.exp(Q)
+    def get_pi_from_Q(self, Q, beta):
+        Q = Q - np.amax(Q, axis=1, keepdims=True)
+        un_probs = np.exp(Q * beta)
         pi = un_probs / np.sum(un_probs, axis=1, keepdims=True)
         return pi
 

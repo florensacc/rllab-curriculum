@@ -1,4 +1,5 @@
 from sandbox.tuomas.mddpg.envs.mujoco.mujoco_env import MujocoEnv
+from sandbox.haoran.myscripts.quaternion import Quaternion
 from rllab.core.serializable import Serializable
 import numpy as np
 
@@ -6,23 +7,51 @@ from rllab.envs.base import Step
 from rllab.misc.overrides import overrides
 from rllab.misc import logger
 
+import os.path as osp
+
+MODEL_ROUGH = osp.abspath(
+    osp.join(
+        osp.dirname(__file__),
+        '../../../assets/ant_rough.xml'
+    )
+)
+
 
 class AntEnv(MujocoEnv, Serializable):
 
     FILE = 'ant.xml'
 
-    def __init__(self, direction=None, reward_type="velocity", *args, **kwargs):
-        super(AntEnv, self).__init__(*args, **kwargs)
-        Serializable.__init__(self, *args, **kwargs)
+    def __init__(self,
+            direction=None,
+            reward_type="velocity",
+            reset_penalty=None,
+            leg_zpos_thr=2.0,
+            flip_thr=0.,
+            rough_terrain=False,
+            *args,
+            **kwargs
+        ):
+        if rough_terrain:
+            super(AntEnv, self).__init__(*args,
+                                         file_path=MODEL_ROUGH, **kwargs)
+        else:
+            super(AntEnv, self).__init__(*args, **kwargs)
+
+        Serializable.quick_init(self, locals())
         if direction is not None:
             assert np.isclose(np.linalg.norm(direction), 1.)
         self.direction = direction
         self.reward_type = reward_type
+        self.reset_penalty = reset_penalty
+        self.leg_zpos_thr = leg_zpos_thr
+        self.flip_thr = flip_thr
 
     def get_param_values(self):
         params = dict(
             direction=self.direction,
             reward_type=self.reward_type,
+            reset_penalty=self.reset_penalty,
+            flip_thr=self.flip_thr,
         )
         return params
 
@@ -48,6 +77,8 @@ class AntEnv(MujocoEnv, Serializable):
                 motion_reward = np.linalg.norm(comvel[0:2])
         elif self.reward_type == "distance_from_origin":
             motion_reward = np.linalg.norm(self.get_body_com("torso")[:2])
+        elif self.reward_type == "forward_distance":
+            motion_reward = self.get_body_com("torso")[0]
         else:
             raise NotImplementedError
 
@@ -64,9 +95,31 @@ class AntEnv(MujocoEnv, Serializable):
         reward = (motion_reward - ctrl_cost - contact_cost + survive_reward
                   - action_violation_cost)
         state = self._state
-        notdone = np.isfinite(state).all() and 0.2 <= state[2] <= 1.0
+
+        # q describes the orientation of the ball
+        q = Quaternion(*tuple(self.model.data.qpos[3:7].ravel()))
+        # z is the z-pos of the bottom of the ball after applying q
+        z = q.rotate(np.array([0., 0., -1.]))[2]
+
+        notdone = all([
+            np.isfinite(state).all(),
+            state[2] <= 1.0, # prevent jumpping
+            z < self.flip_thr, # prevent flipping
+        ])
+
+        # old reset condition
+        # notdone = all([
+        #     np.isfinite(state).all(),
+        #     state[2] <= 1.0,
+        #     state[2] >= 0.2,
+        # ])
         done = not notdone
+
+        if self.reset_penalty:
+            done = False
+            reward -= self.reset_penalty
         ob = self.get_current_obs()
+
         return Step(ob, float(reward), done, com=self.get_body_com("torso"))
         #return Step(ob, float(reward), done)
 
@@ -76,10 +129,14 @@ class AntEnv(MujocoEnv, Serializable):
             path["observations"][-1][-3] - path["observations"][0][-3]
             for path in paths
         ]
-        logger.record_tabular('AverageForwardProgress', np.mean(progs))
-        logger.record_tabular('MaxForwardProgress', np.max(progs))
-        logger.record_tabular('MinForwardProgress', np.min(progs))
-        logger.record_tabular('StdForwardProgress', np.std(progs))
+        logger.record_tabular(
+            'env: ForwardProgressAverage', np.mean(progs))
+        logger.record_tabular(
+            'env: ForwardProgressMax', np.max(progs))
+        logger.record_tabular(
+            'env: ForwardProgressMin', np.min(progs))
+        logger.record_tabular(
+            'env: ForwardProgressStd', np.std(progs))
 
     def log_stats(self, algo, epoch, paths):
         # forward distance

@@ -22,7 +22,7 @@ flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_float('actor_lr', 0.001, 'Base learning rate for actor.')
 flags.DEFINE_float('critic_lr', 0.001, 'Base learning rate for critic.')
-flags.DEFINE_integer('path_length', 100, 'Maximum path length.')
+flags.DEFINE_integer('path_length', 50, 'Maximum path length.')
 flags.DEFINE_integer('n_particles', 64, 'Number of particles.')
 flags.DEFINE_string('alg', 'vddpg', 'Algorithm.')
 flags.DEFINE_string('policy', 'stochastic',
@@ -192,7 +192,7 @@ class AlgTest(Alg):
         # TODO: hacky way to check if this is VDDPG instance without loading
         # VDDPG class.
         if hasattr(self, 'alpha'):
-            if epoch % 50 == 0:
+            if epoch % 10 == 0:
                 self.alpha /= 3.
 
 
@@ -207,7 +207,7 @@ def test():
 
 
     alg_kwargs = dict(
-        epoch_length=100,  # evaluate / plot per SVGD step
+        epoch_length=500,  # evaluate / plot per SVGD step
         min_pool_size=1000,#1000,  # must be at least 2
         #replay_pool_size=2,  # should only sample from recent experiences,
                         # note that the sample drawn can be one iteration older
@@ -251,7 +251,7 @@ def test():
         ))
 
     # ----------------------------------------------------------------------
-    env = TfEnv(MultiGoalEnv())
+    env = TfEnv(MultiGoalEnv(goal_reward=100))
 
     #es = DummyExplorationStrategy()
     es = OUStrategy(env_spec=env.spec, mu=0, theta=0.15, sigma=0.3)

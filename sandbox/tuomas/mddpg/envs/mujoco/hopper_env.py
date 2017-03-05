@@ -15,6 +15,15 @@ from rllab.misc.overrides import overrides
 # 6: z-vel (up = +),
 # 7: xvel (forward = +)
 
+import os.path as osp
+
+MODEL_ROUGH = osp.abspath(
+    osp.join(
+        osp.dirname(__file__),
+        '../../../assets/hopper_rough.xml'
+    )
+)
+
 
 class HopperEnv(MujocoEnv, Serializable):
 
@@ -28,10 +37,16 @@ class HopperEnv(MujocoEnv, Serializable):
             self,
             alive_coeff=0.5,
             ctrl_cost_coeff=0.01,
+            rough_terrain=False,
             *args, **kwargs):
+
         self.alive_coeff = alive_coeff
         self.ctrl_cost_coeff = ctrl_cost_coeff
-        super(HopperEnv, self).__init__(*args, **kwargs)
+        if rough_terrain:
+            super(HopperEnv, self).__init__(*args,
+                                            file_path=MODEL_ROUGH, **kwargs)
+        else:
+            super(HopperEnv, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
 
     @overrides
@@ -54,11 +69,14 @@ class HopperEnv(MujocoEnv, Serializable):
         reward = vel + self.alive_coeff - \
             0.5 * self.ctrl_cost_coeff * np.sum(np.square(action / scaling))
         state = self._state
+        #notdone = np.isfinite(state).all() and \
+        #    (np.abs(state[3:]) < 100).all() and (state[0] > .7) and \
+        #    (abs(state[2]) < .2)
         notdone = np.isfinite(state).all() and \
-            (np.abs(state[3:]) < 100).all() and (state[0] > .7) and \
-            (abs(state[2]) < .2)
+                  (np.abs(state[3:]) < 100).all() and (state[0] > .7)
         done = not notdone
 
+        #done = False
         com = np.concatenate([self.get_body_com("torso").flat]).reshape(-1)
         return Step(next_obs, reward, done, com=com)
 
@@ -73,7 +91,7 @@ class HopperEnv(MujocoEnv, Serializable):
         logger.record_tabular('MinForwardProgress', np.min(progs))
         logger.record_tabular('StdForwardProgress', np.std(progs))
 
-    def log_stats(self, alg, epoch, paths, ax):
+    def log_stats(self, alg, epoch, paths):
         # forward distance
         progs = []
         for path in paths:
@@ -89,7 +107,7 @@ class HopperEnv(MujocoEnv, Serializable):
             'env: ForwardProgressDiff': np.max(progs) - np.min(progs),
         }
 
-        HopperEnv.plot_paths(paths, ax)
+        # HopperEnv.plot_paths(paths, ax)
 
         return stats
 

@@ -8,6 +8,7 @@ from sandbox.tuomas.mddpg.misc.sampler import ParallelSampler
 # for debugging
 from sandbox.tuomas.mddpg.misc.sim_policy import rollout, rollout_alg
 
+from rllab.misc.console import colorize
 from rllab.misc.overrides import overrides
 from rllab.misc import logger
 from sandbox.tuomas.mddpg.misc import special
@@ -84,6 +85,13 @@ class VDDPG(OnlineAlgorithm, Serializable):
             eval_kl_n_sample=10,
             eval_kl_n_sample_part=10,
             alpha_annealer=None,
+            critic_subtract_value=False,
+            critic_value_sampler='uniform',
+            train_actor_delay=0,
+            target_action_dist_delay=0,
+            K_annealer=None,
+            K_actor_annealer=None,
+            K_critic_annealer=None,
             **kwargs
     ):
         """
@@ -121,25 +129,38 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.actor_learning_rate = policy_learning_rate
         self.alpha = alpha
         self.qf_extra_training = qf_extra_training
-        self.train_critic = train_critic
-        self.train_actor = train_actor
+        self.really_train_critic = train_critic
+        self.really_train_actor = train_actor
         self.actor_sparse_update = actor_sparse_update
+        self.critic_subtract_value = critic_subtract_value
+        self.critic_value_sampler = critic_value_sampler
         self.resume = resume
         self.temperatures = temperatures
         self.target_action_dist = target_action_dist
         self.critic_train_frequency = critic_train_frequency
         self.critic_train_counter = 0
-        self.train_critic = True # shall be modified later
+        self.train_critic = self.really_train_critic # shall be modified later
         self.actor_train_frequency = actor_train_frequency
         self.actor_train_counter = 0
-        self.train_actor = True # shall be modified later
+        self.train_actor = self.really_train_critic # shall be modified later
         self.update_target_frequency = update_target_frequency
         self.update_target_counter = 0
-        self.update_target = True
+        self.update_target = self.train_critic
         self.debug_mode = debug_mode
         self.axis3d = axis3d
         self.q_plot_settings = q_plot_settings
         self.env_plot_settings = env_plot_settings
+
+        self.train_actor_delay = train_actor_delay
+        self.train_count = 0
+
+        self.n_critic_feed_dict_call = 0
+        self.target_action_dist_delay = target_action_dist_delay
+
+
+        self.true_env = env
+        while isinstance(self.true_env, ProxyEnv):
+            self.true_env = self.true_env._wrapped_env
 
         self.alpha_placeholder = tf.placeholder(tf.float32,
                                                 shape=(),
@@ -150,7 +171,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
                                                       name='prior_coeff')
         self.K_pl = tf.placeholder(tf.int32, shape=(), name='K')
         # # Number of particles for computing critic target.
-        # self.K_critic_pl = tf.placeholder(tf.int32, shape=(), name='K')
+        self.K_critic_pl = tf.placeholder(tf.int32, shape=(), name='K_critic')
 
         if q_target_type == 'soft':
             self.importance_weights_pl = tf.placeholder(
@@ -183,6 +204,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.eval_kl_n_sample_part = eval_kl_n_sample_part
 
         self.alpha_annealer = alpha_annealer
+        self.K_annealer = K_annealer
+        self.K_actor_annealer = K_actor_annealer
+        self.K_critic_annealer = K_critic_annealer
 
         self._init_figures()
 
@@ -233,14 +257,23 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 self.kernel.kappa = self.kernel.get_kappa(actions_reshaped)
                 self.kernel.kappa_grads = self.kernel.get_kappa_grads(
                     actions_reshaped)
+
         elif self.svgd_target == "pre-action":
             if self.actor_sparse_update:
-                raise NotImplementedError
-
-            pre_actions_reshaped = tf.reshape(self.policy.pre_output, shape)
-            self.kernel.kappa = self.kernel.get_kappa(pre_actions_reshaped)
-            self.kernel.kappa_grads = self.kernel.get_kappa_grads(
-                pre_actions_reshaped)
+                updated_pre_actions_reshaped = tf.reshape(
+                    self.policy.pre_output, shape
+                )
+                self.kernel.kappa = self.kernel.get_asymmetric_kappa(
+                    updated_pre_actions_reshaped
+                )
+                self.kernel.kappa_grads =self.kernel.get_asymmetric_kappa_grads(
+                    updated_pre_actions_reshaped
+                )
+            else:
+                pre_actions_reshaped = tf.reshape(self.policy.pre_output, shape)
+                self.kernel.kappa = self.kernel.get_kappa(pre_actions_reshaped)
+                self.kernel.kappa_grads = self.kernel.get_kappa_grads(
+                    pre_actions_reshaped)
         else:
             raise NotImplementedError
 
@@ -289,10 +322,25 @@ class VDDPG(OnlineAlgorithm, Serializable):
             observation_input=self.policy.observations_placeholder,
         )
         if self.actor_sparse_update:
-            self.critic_with_static_actions = self.qf.get_weight_tied_copy(
-            action_input=self.kernel.fixed_actions_pl,
-            observation_input=self.policy.observations_placeholder,
-        )
+            if self.svgd_target == 'action':
+                actions = tf.reshape(self.kernel.fixed_actions_pl,
+                                     (-1, Da))
+                self.critic_with_static_actions = self.qf.get_weight_tied_copy(
+                    action_input=actions,
+                    observation_input=None,
+                    #observation_input=self.policy.observations_placeholder,
+                )
+            elif self.svgd_target == 'pre-action':
+                #import pdb; pdb.set_trace()
+                actions = tf.tanh(tf.reshape(self.kernel.fixed_actions_pl,
+                                             (-1, Da)))
+                self.critic_with_static_actions = self.qf.get_weight_tied_copy(
+                    action_input=actions,
+                    #observation_input=self.policy.observations_placeholder,
+                    observation_input=None,
+                )
+            else:
+                raise NotImplementedError
 
         if self.svgd_target == "action":
             if self.q_prior is not None and self.actor_sparse_update:
@@ -350,6 +398,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 grad_ys=action_grads,
             )
         elif self.svgd_target == "pre-action":
+            if self.q_prior is not None and self.actor_sparse_update:
+                raise NotImplementedError
+
             if self.q_prior is not None:
                 self.prior_with_policy_input = self.q_prior.get_weight_tied_copy(
                     action_input=self.policy.output,
@@ -358,20 +409,41 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 p = self.prior_coeff_placeholder
                 log_p_from_Q = ((1.0 - p) * self.critic_with_policy_input.output
                     + p * self.prior_with_policy_input.output)
+            elif self.actor_sparse_update:
+                log_p_from_Q = self.critic_with_static_actions.output  # N*K x 1
             else:
                 log_p_from_Q = self.critic_with_policy_input.output # N*K x 1
+
+
             log_p_from_Q = tf.squeeze(log_p_from_Q) # N*K
 
-            grad_log_p_from_Q = tf.gradients(log_p_from_Q, self.policy.pre_output)
+            if self.actor_sparse_update:
+                grad_log_p_from_Q = tf.gradients(
+                    log_p_from_Q,
+                    self.kernel.fixed_actions_pl  # These are pre-actions
+                )
+
+                grad_log_p_from_tanh = - 2. * (
+                    tf.tanh(self.kernel.fixed_actions_pl)
+                )  # N*K x Da
+            else:
+                grad_log_p_from_Q = tf.gradients(log_p_from_Q,
+                                                 self.policy.pre_output)
                 # N*K x Da
-            grad_log_p_from_tanh = - 2. * self.policy.output # N*K x Da
+                grad_log_p_from_tanh = - 2. * self.policy.output # N*K x Da
                 # d/dx(log(1-tanh^2(x))) = -2tanh(x)
+
             grad_log_p = (
                 grad_log_p_from_Q +
                 self.alpha_placeholder * grad_log_p_from_tanh
             )
-            grad_log_p = tf.reshape(grad_log_p,
-                                    tf_shape((-1, self.K_pl, 1, Da)))
+
+            if self.actor_sparse_update:
+                grad_log_p = tf.reshape(grad_log_p,
+                                        tf_shape((-1, self.K_static, 1, Da)))
+            else:
+                grad_log_p = tf.reshape(grad_log_p,
+                                        tf_shape((-1, self.K_pl, 1, Da)))
             # N x K x 1 x Da
 
             kappa = tf.expand_dims(
@@ -425,7 +497,10 @@ class VDDPG(OnlineAlgorithm, Serializable):
     def _init_critic_ops(self):
         if not self.train_critic:
             return
+
         M = self.qf.dim if hasattr(self.qf, 'dim') else 1
+        Da = self.env.action_space.flat_dim
+        Do = self.env.observation_space.flat_dim
 
         if hasattr(self.target_qf, 'outputs'):
             q_next = self.target_qf.outputs
@@ -435,7 +510,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             q_curr = self.qf.output
 
         # N x K x M
-        q_next = tf.reshape(q_next, tf_shape((-1, self.K_critic, M)))
+        q_next = tf.reshape(q_next, tf_shape((-1, self.K_critic_pl, M)))
         q_curr = tf.reshape(q_curr, (-1, M))  # N x M
 
         # average across reward dims of max Q - min Q, where max and min are
@@ -487,9 +562,68 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 self.discount * q_next
             )  # N x M
 
-        self.critic_loss = tf.reduce_mean(tf.reduce_mean(
-            tf.square(self.ys - q_curr)
-        ))
+        if self.critic_subtract_value:
+            # makes sure ADAM knows how to find the right gradient
+            assert M == 1  # Don't know what happens if M is not 1
+
+            if self.critic_value_sampler == 'policy':  # Use current policy for sampling.
+                q_contrastive = tf.reshape(
+                    self.critic_with_policy_input.output,
+                    tf_shape((-1, self.K_pl, 1))
+                )  # N x K x 1
+                v = tf.reduce_mean(q_contrastive, axis=1)  # N x 1
+
+                bellman_error = self.ys - q_curr  # N x 1
+                advantage = q_curr - v  # N x 1
+                self.critic_loss = tf.reduce_mean(tf.reduce_mean(
+                    - advantage * tf.stop_gradient(bellman_error)
+                ))
+            elif self.critic_value_sampler == 'uniform':
+
+                # TODO: hacky
+                actions_pl = tf.placeholder(
+                    tf.float32,
+                    shape=[None, Da],
+                    name='contrastive_actions',
+                )
+                observations_pl = tf.placeholder(
+                    tf.float32,
+                    shape=[None, Do],
+                    name='contrastive_observations',
+                )
+
+                self.critic_contrastive = self.qf.get_weight_tied_copy(
+                    action_input=actions_pl,
+                    observation_input=observations_pl
+                )  # N*K
+
+                q = tf.reshape(self.critic_contrastive.output,
+                               tf_shape((-1, self.K_critic_pl)))  # N x K
+
+                # N x 1
+                contrastive_max = tf.reduce_max(q, axis=1, keep_dims=True)
+                exp_q = tf.exp(q - contrastive_max)  # N x K
+
+                scale = self.policy.output_scale
+
+                w = 1. / np.power(2. * scale, Da)
+
+                # N x 1
+                mean_exp_q = w * tf.reduce_mean(exp_q, axis=1, keep_dims=True)
+                v = tf.log(mean_exp_q)  # N x 1
+
+                bellman_error = self.ys - q_curr  # N x 1
+                advantage = q_curr - v  # N x 1
+                self.critic_loss = tf.reduce_mean(tf.reduce_mean(
+                    - advantage * tf.stop_gradient(bellman_error)
+                ))
+            else:
+                raise NotImplementedError
+
+        else:
+            self.critic_loss = tf.reduce_mean(tf.reduce_mean(
+                tf.square(self.ys - q_curr)
+            ))
 
         self.critic_reg = tf.reduce_sum(
             tf.pack(
@@ -499,6 +633,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             ),
             name='weights_norm'
         )
+
         self.critic_total_loss = (
             self.critic_loss + self.critic_weight_decay * self.critic_reg)
 
@@ -634,6 +769,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         feeds[self.K_pl] = K
 
+        # for debugging
+        # norms = [np.linalg.norm(sample) for sample in feeds[self.target_policy._sample_pl]]
+
         return feeds
 
     def _actor_feed_dict_for(self, critic, obs, temp, K):
@@ -658,11 +796,23 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
     def _critic_feed_dict(self, rewards, terminals, obs, actions, next_obs,
                           temp, K):
+        self.n_critic_feed_dict_call += 1
         N = obs.shape[0]
         Da = self.env.action_space.flat_dim
         feed = {}
         # Again, we'll need to replicate next_obs.
         next_obs = self._replicate_rows(next_obs, K)
+
+        if (self.critic_subtract_value and
+                self.critic_value_sampler == 'uniform'):
+            scale = self.policy.output_scale
+            uniform_actions = np.random.uniform(
+                low=-scale, high=scale, size=(N * self.K_critic, Da))
+
+            feed.update(self.critic_contrastive.get_feed_dict(
+                action=uniform_actions,
+                obs=self._replicate_rows(obs, self.K_critic),
+            ))
 
         # TODO: we should make the next temp really low (actually high since
         # it is inverse temperature)
@@ -674,26 +824,27 @@ class VDDPG(OnlineAlgorithm, Serializable):
         if self.q_target_type == 'soft':
             # We'll use the same actions for each sample (first dimension).
 
-            if self.target_action_dist == "uniform":
+            if self.target_action_dist == "uniform" or \
+                self.n_critic_feed_dict_call <= self.target_action_dist_delay:
                 scale = self.policy.output_scale
-                actions = np.random.uniform(
+                next_actions = np.random.uniform(
                     low=-scale, high=scale, size=(N, self.K_critic, Da))
                 weights = np.power(2. * scale, -Da) * np.ones((N, self.K_critic))
                     # 1/p = volume of the action space
             elif self.target_action_dist == "gaussian":
                 ## old Gaussian sampling: may accidentally get low prob samples
-                actions = (np.random.randn(N, self.K_critic, Da)
+                next_actions = (np.random.randn(N, self.K_critic, Da)
                            * self.critic_proposal_sigma + self.critic_proposal_mu)
                 weights = scipy.stats.multivariate_normal(
                     mean=self.critic_proposal_mu,
                     cov=self.critic_proposal_sigma**2,
-                ).pdf(actions) #N*K_critic x Da
+                ).pdf(next_actions) #N*K_critic x Da
             # Be careful in using the "policy" option, as in the early stage of
             # training, the weights tend to be huge, because the actions are
             # concentrated on a "low-dimensional" manifold in the high-dim
             # aciton space
             elif self.target_action_dist == "policy":
-                actions, info = self.policy.get_actions(
+                next_actions, info = self.policy.get_actions(
                     next_obs,
                     with_prob=True,
                 )
@@ -701,10 +852,10 @@ class VDDPG(OnlineAlgorithm, Serializable):
             else:
                 raise NotImplementedError
 
-            actions = np.reshape(actions, (N*self.K_critic, Da))
+            next_actions = np.reshape(next_actions, (N*self.K_critic, Da))
 
             feed[self.importance_weights_pl] = weights[:, :, None]
-            target_critic_input = [next_obs, actions]
+            target_critic_input = [next_obs, next_actions]
         else:
             target_critic_input = [next_obs, None]
 
@@ -728,6 +879,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
         feed.update({
             self.rewards_placeholder: rewards,
             self.terminals_placeholder: np.expand_dims(terminals, axis=1),
+            self.K_critic_pl: K,
         })
 
         return feed
@@ -757,21 +909,28 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 figsize=figsize,
             )
             self._ax_env = self._fig_env.add_subplot(111)
-            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
-            self._ax_env.set_ylim(self.env_plot_settings['ylim'])
+            if hasattr(self.true_env, 'set_axis'):
+                self.true_env.set_axis(self._ax_env)
+
+            # List of holding line objects created by the environment
+            self._env_lines = []
+            # self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+            # self._ax_env.set_ylim(self.env_plot_settings['ylim'])
 
         # Init critic + actor figure.
-        # TODO: Figure out to set the size automatically
         if self.q_plot_settings is not None:
             # Make sure the observations are given as np array.
             self.q_plot_settings['obs_lst'] = (
                 np.array(self.q_plot_settings['obs_lst'])
             )
+            n_states = len(self.q_plot_settings['obs_lst'])
 
-            self._fig_q = plt.figure(figsize=(7, 7))
+            xsize = 5 * n_states
+            ysize = 5
+
+            self._fig_q = plt.figure(figsize=(xsize, ysize))
 
             self._ax_q_lst = []
-            n_states = len(self.q_plot_settings['obs_lst'])
             for i in range(n_states):
                 ax = self._fig_q.add_subplot(100 + n_states * 10 + i + 1)
                 self._ax_q_lst.append(ax)
@@ -957,34 +1116,45 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.last_statistics.update(create_stats_ordered_dict(
             'KL', all_kls))
 
+        # alternatively, we can consider the regularized reward =
+        # reward - kl(pi | pi_{uniform})
 
-        # log kl(pi | exp(Q))
+        # lbs, ubs = self.env.action_space.bounds
+        # log_p_uniform = -np.sum([
+        #     np.log(ub - lb)
+        #     for lb, ub in zip(lbs, ubs)
+        # ])
+        # discounted_regularized_returns = []
+        # kl_cost_reward_ratios = []
+        # all_kls = []
+        # for path in paths:
+        #     kls, entropies = self.compute_kl_entropy(
+        #             path["observations"],
+        #             K=self.eval_kl_n_sample,
+        #             K_part=self.eval_kl_n_sample_part,
+        #         )
+        #     all_kls = np.concatenate([all_kls, kls])
+        #     entropy_bonuses = np.concatenate([[0], entropies[1:]])
+        #     kl_costs = -log_p_uniform - entropy_bonuses
+        #     discounted_rewards = special.discount_return(
+        #         path["rewards"], self.discount
+        #     )
+        #     discounted_kl_costs = special.discount_return(
+        #         kl_costs,  self.discount
+        #     )
+        #     discounted_regularized_returns.append(
+        #         discounted_rewards - self.alpha / self.scale_reward * discounted_kl_costs
+        #     )
+        #     kl_cost_reward_ratios.append(
+        #         self.alpha / self.scale_reward * discounted_kl_costs / discounted_rewards
+        #     )
+        # self.last_statistics.update(create_stats_ordered_dict(
+        #     'DiscRegReturn', discounted_regularized_returns))
+        # self.last_statistics.update(create_stats_ordered_dict(
+        #     'KLCostRewardRatio', kl_cost_reward_ratios))
+        # self.last_statistics.update(create_stats_ordered_dict(
+        #     'KL', all_kls))
 
-        ## Create figure for plotting the environment.
-        #fig = plt.figure(figsize=(12, 7))
-        #if self.axis3d:
-        #    from mpl_toolkits.mplot3d import Axes3D
-        #    ax = fig.add_subplot(111, projection='3d')
-        #else:
-        #    ax = fig.add_subplot(111)
-
-        #true_env = self.env
-        #while isinstance(true_env, ProxyEnv):
-        #    true_env = true_env._wrapped_env
-        #if hasattr(true_env, "log_stats"):
-        #    env_stats = true_env.log_stats(self, epoch, paths, ax)
-        #    self.last_statistics.update(env_stats)
-
-        ## Close and save figs.
-        #snapshot_dir = logger.get_snapshot_dir()
-        #img_file = os.path.join(snapshot_dir, 'itr_%d_test_paths.png' % epoch)
-
-        #plt.draw()
-        #plt.pause(0.001)
-
-        #plt.savefig(img_file, dpi=100)
-        #plt.cla()
-        #plt.close('all')
 
         # Collect environment info.
         snapshot_dir = logger.get_snapshot_dir()
@@ -994,16 +1164,21 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         if hasattr(env, "log_stats"):
             env_stats = env.log_stats(self, epoch, paths)
+            #env_stats = env.log_stats(epoch, paths)
             self.last_statistics.update(env_stats)
 
-        if hasattr(env, 'plot_paths'):
+        if hasattr(env, 'plot_paths') and self.env_plot_settings is not None:
             img_file = os.path.join(snapshot_dir,
                                     'env_itr_%05d.png' % epoch)
 
+            # Delete previous paths
+            if self._env_lines is not None:
+                [path.remove() for path in self._env_lines]
+
             self._ax_env.clear()
-            env.plot_paths(paths, self._ax_env)
-            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
-            self._ax_env.set_ylim(self.env_plot_settings['ylim'])
+            self._env_lines = env.plot_paths(paths, self._ax_env)
+            # self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+            # self._ax_env.set_ylim(self.env_plot_settings['ylim'])
 
             plt.pause(0.001)
             plt.draw()
@@ -1066,15 +1241,16 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.train_critic = (np.mod(
             self.critic_train_counter,
             self.critic_train_frequency,
-        ) == 0)
+        ) == 0) and self.really_train_critic
         self.train_actor = (np.mod(
             self.actor_train_counter,
             self.actor_train_frequency,
-        ) == 0)
+        ) == 0) and self.really_train_actor \
+            and self.train_count > self.train_actor_delay
         self.update_target = (np.mod(
             self.update_target_counter,
             self.update_target_frequency,
-        ) == 0)
+        ) == 0) and self.really_train_critic
 
         super()._do_training()
 
@@ -1090,6 +1266,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             self.update_target_counter + 1,
             self.update_target_frequency,
         )
+        self.train_count += 1
 
     @overrides
     def update_training_settings(self, epoch):
@@ -1097,6 +1274,49 @@ class VDDPG(OnlineAlgorithm, Serializable):
             self.scale_reward = self.scale_reward_annealer.get_new_value(epoch)
         if self.alpha_annealer is not None:
             self.alpha = self.alpha_annealer.get_new_value(epoch)
+
+        if self.K_annealer is not None:
+            self.K = np.max([1, int(np.ceil(self.K_annealer.get_new_value(epoch)))])
+            logger.log(colorize(
+                "Annealled K to %g"%(self.K),
+                "yellow",
+            ))
+        if self.K_actor_annealer is not None:
+            K_actor = np.max([1, int(np.ceil(self.K_actor_annealer.get_new_value(epoch)))])
+            self.policy._samples = self.policy._samples[:K_actor]
+            self.policy._K = K_actor
+            self.target_policy._K = K_actor
+
+            if self.policy._freeze:
+                self.policy._samples = self.policy._samples[:K_actor]
+            if self.target_policy._freeze:
+                self.target_policy._samples = self.target_policy._samples[:K_actor]
+            logger.log(colorize(
+                "Annealled K_actor to %g"%(self.K),
+                "yellow",
+            ))
+
+            if self.q_target_type != "soft":
+                self.K_critic = K_actor
+                logger.log(colorize(
+                    "Annealled K_critic to %g"%(self.K),
+                    "yellow",
+                ))
+
+            # for debugging
+            # print((
+            #     self.policy._freeze,
+            #     [np.linalg.norm(sample) for sample in self.policy._samples],
+            # ))
+            # print((
+            #     self.target_policy._freeze,
+            #     [np.linalg.norm(sample) for sample in self.target_policy._samples],
+            # ))
+
+        if self.K_critic_annealer is not None:
+            # cannot support dynamically changing K_critic for "soft"
+            raise NotImplementedError
+
 
 ## Use the following code to test whether the exp(Q-Qmax) code works
 # import tensorflow as tf

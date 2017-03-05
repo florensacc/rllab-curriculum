@@ -21,3 +21,16 @@ exp013.py: Visualize interesting *black-box* rollouts for arXiv paper. And redo
            the white-box rollouts, with correct epsilons.
 exp014.py: EC2 run, applying FGSM to A3C LSTM policies, for all four games.
            With transferability.
+exp015.py: Apply time-delayed FGSM to A3C LSTM policies, for all four games.
+           Using FGSM combined with dual-descent on weights.
+exp015c.py: Same as exp015, but run on exp039 (LSTM, 1 frame, frame dropout 0.5)
+            and exp039b (LSTM, 1 frame, frame dropout 0.25)
+exp016.py: Same as exp015, except no dual-descent on weights (i.e., purely
+           FGSM with weight of k on cost at time t+k, and weight of 1 for other
+           timesteps). Just to compare to results of exp015.
+exp017.py: Evaluate impact of sleeper perturbations on performance of A3C LSTM
+           policies trained on each of the four games.
+exp017b.py: Same as exp017, except with bug fixed. Ran on trained policies from
+            train/exp037 (LSTM, 4 frames) and exp038 (LSTM, 1 frame).
+exp017c.py: Same as exp017b, but run on exp039 (LSTM, 1 frame, frame dropout 0.5)
+            and exp039b (LSTM, 1 frame, frame dropout 0.25)

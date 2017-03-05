@@ -34,7 +34,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "tuomas/vddpg/" + exp_index
 mode = "ec2_test"
-ec2_instance = "c4.2xlarge"
+ec2_instance = "c4.4xlarge"
 subnet = "us-west-1b"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
 config.AWS_IMAGE_ID = "ami-85d181e5" # with docker already pulled

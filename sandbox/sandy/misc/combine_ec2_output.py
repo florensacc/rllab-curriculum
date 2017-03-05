@@ -22,8 +22,9 @@ if USE_GPU:
 from sandbox.sandy.misc.util import get_time_stamp, to_iterable
 from sandbox.sandy.shared.model import load_models
 
-BASE_DIR = "/home/shhuang/src/rllab-private/data/s3/adv-rollouts"
-EXP_IDX = "exp014"
+BASE_DIR = "/home/shhuang/src/rllab-private/data/s3/adv-sleeper-rollouts"
+EXP_IDX = "exp017b"
+SLEEPER = True
 H5_FNAME = 'fgsm_allvariants.h5'
 PARAMS_FNAME = "params.json"
 
@@ -33,7 +34,7 @@ H5_BASE_PATH = 'results'
 CHOSEN_NORM_EPS_FNAME = ""
 #CHOSEN_NORM_EPS_FNAME = "/home/shhuang/src/rllab-private/data/s3/adv-rollouts/exp010/transfer_exp_to_run_20170126_144940_538112.p"
 
-TEST_TRANSFER = True
+TEST_TRANSFER = False
 
 def copy_over(from_g, to_g):
     for k in from_g:
@@ -52,9 +53,11 @@ def copy_over(from_g, to_g):
             else:
                 to_g[k] = from_g[k][()]
 
-def get_params_from_experiment(base_dir, exp_idx, params_fname):
+def get_params_from_experiment(base_dir, exp_idx, params_fname, sleeper=False):
     games = []
     norms = []
+    if sleeper:
+        k = []
     eps = []
     exp_names = []
     threshold_perf = -1
@@ -73,6 +76,8 @@ def get_params_from_experiment(base_dir, exp_idx, params_fname):
         params = json.loads(params_f)
         params = params['json_args']['algo']
         games += to_iterable(params['games'])
+        if sleeper:
+            k += [x[0] for x in params['k_init_lambda']]
         norms += to_iterable(params['norms'])
         eps += to_iterable(params['fgsm_eps'])
         exp_names += to_iterable(params['exp_names'])
@@ -83,18 +88,29 @@ def get_params_from_experiment(base_dir, exp_idx, params_fname):
     norms = list(set(norms))
     eps = list(set(eps))
     exp_names = list(set(exp_names))
+    if sleeper:
+        k = list(set(k))
+        return games, norms, eps, exp_names, threshold_perf, threshold_n, k
     return games, norms, eps, exp_names, threshold_perf, threshold_n
 
 def check_missing(cumul_h5, base_dir, exp_idx, params_fname=PARAMS_FNAME):
     # Make sure all norms, exp_names, games, and eps are tested on (i.e., that
     # none of the EC2 runs crashed midway)
-    games, norms, eps, exp_names, threshold_perf, threshold_n = \
-            get_params_from_experiment(base_dir, exp_idx, params_fname)
+    if SLEEPER:
+        games, norms, eps, exp_names, threshold_perf, threshold_n, k = \
+                get_params_from_experiment(base_dir, exp_idx, params_fname, sleeper=SLEEPER)
+    else:
+        games, norms, eps, exp_names, threshold_perf, threshold_n = \
+                get_params_from_experiment(base_dir, exp_idx, params_fname)
 
     print("Games:", games)
     print("Norms:", norms)
     print("Eps:", eps)
     print("Experiments:", exp_names)
+    print("Threshold Perf:", threshold_perf)
+    print("Threshold n:", threshold_n)
+    if SLEEPER:
+        print("k:", k)
 
     chosen_norm_eps = None
     if CHOSEN_NORM_EPS_FNAME != "":
@@ -120,9 +136,15 @@ def check_missing(cumul_h5, base_dir, exp_idx, params_fname=PARAMS_FNAME):
                     for policy_target in game_policies:
                         if not TEST_TRANSFER and policy_adv != policy_target:
                             continue
-                        path = osp.join(H5_BASE_PATH, norm, str(e), policy_adv.model_name, policy_target.model_name, AVG_RETURN_KEY)
-                        if path not in cumul_f:
-                            print("WARNING: path", path, "not in file")
+                        if SLEEPER:
+                            for k_val in k:
+                                path = osp.join(H5_BASE_PATH, norm, str(e), policy_adv.model_name, policy_target.model_name, str(k_val), AVG_RETURN_KEY)
+                                if path not in cumul_f:
+                                    print("WARNING: path", path, "not in file")
+                        else:
+                            path = osp.join(H5_BASE_PATH, norm, str(e), policy_adv.model_name, policy_target.model_name, AVG_RETURN_KEY)
+                            if path not in cumul_f:
+                                print("WARNING: path", path, "not in file")
     cumul_f.close()
 
 def combine_ec2_output(h5_fname, base_dir, exp_idx):
