@@ -59,13 +59,10 @@ def my_square_scatter(axes, x_array, y_array, z_array, min_z=None, max_z=None, s
     return True
 
 
-def plot_heatmap(paths, prefix='', max_reward=6000, spacing=spacing, show_heatmap=True):
+def plot_heatmap(rewards, goals, prefix='', max_reward=6000, spacing=spacing, show_heatmap=True):
     fig, ax = plt.subplots()
 
-    x_goal = [path["env_infos"]["x_goal"][0] for path in paths]
-    y_goal = [path["env_infos"]["y_goal"][0] for path in paths]
-
-    rewards = np.sum([path["rewards"] for path in paths], axis=1)
+    x_goal, y_goal = np.array(goals).T
 
     my_square_scatter(axes=ax, x_array=x_goal, y_array=y_goal, z_array=rewards, min_z=0, max_z=max_reward, size=spacing)
 
@@ -88,10 +85,10 @@ def plot_heatmap(paths, prefix='', max_reward=6000, spacing=spacing, show_heatma
     #plt.colorbar()
     if show_heatmap:
         plt.show()
-    pass
+    return fig
 
 
-def test_policy(policy, train_env, visualize=True, sampling_res=1):
+def test_policy(policy, train_env, visualize=True, sampling_res=1, n_traj=1):
 
     empty_spaces = train_env.wrapped_env.find_empty_space()
 
@@ -105,9 +102,10 @@ def test_policy(policy, train_env, visualize=True, sampling_res=1):
     size_scaling = train_env.wrapped_env.MAZE_SIZE_SCALING
     num_samples = 2 ** sampling_res
     spacing = size_scaling / num_samples
-    starting_offset =  spacing / 2
+    starting_offset = spacing / 2
 
-    paths = []
+    avg_totRewards = []
+    goals = []
 
     distances = []
     for empty_space in empty_spaces:
@@ -126,23 +124,28 @@ def test_policy(policy, train_env, visualize=True, sampling_res=1):
         starting_y = empty_space[1] - size_scaling / 2 + starting_offset
         for i in range(num_samples):
             for j in range(num_samples):
+                paths = []
                 x = starting_x + i * spacing
                 y = starting_y + j * spacing
                 goal = (x,y)
-                #print(goal)
+                goals.append(goal)
                 update_env_goal_generator(train_env, FixedGoalGenerator(goal))
-                path = rollout(train_env, policy, animated=visualize, max_path_length=max_path_length, speedup=100)
-                paths.append(path)
-    return paths, spacing
+                for n in range(n_traj):
+                    path = rollout(train_env, policy, animated=visualize, max_path_length=max_path_length, speedup=100)
+                    paths.append(path)
+                # print('goal: ', goal, ', the one in env_infos is: ', paths[-1]['env_infos']['x_goal'], paths[-1]['env_infos']['y_goal'])
+                avg_totRewards.append(np.mean([np.sum(path['rewards']) for path in paths]))
 
-def test_and_plot_policy(policy, env, visualize=False):
-    paths, spacing = test_policy(policy, env, visualize)
+    return avg_totRewards, goals, spacing
 
-    plot_heatmap(paths, spacing=spacing, show_heatmap=False)
 
-    rewards = np.sum([path["rewards"] for path in paths], axis=1)
+def test_and_plot_policy(policy, env, max_reward=6000, visualize=False, n_traj=1):
+    avg_totRewards, goals, spacing = test_policy(policy, env, visualize, n_traj=n_traj)
 
-    return rewards
+    heatmap = plot_heatmap(avg_totRewards, goals, max_reward=max_reward, spacing=spacing, show_heatmap=False)
+
+    return avg_totRewards, heatmap
+
 
 def main():
     #pkl_file = "sandbox/young_clgan/experiments/point_env_maze/experiment_data/cl_gan_maze/2017-02-20_22-43-48_dav2/log/itr_129/itr_9.pkl"
@@ -169,9 +172,9 @@ def main():
 
     policy, train_env = get_policy(pkl_file)
 
-    paths, spacing = test_policy(policy, train_env, sampling_res=1)
+    avg_totRewards, goals, spacing = test_policy(policy, train_env, sampling_res=1)
 
-    plot_heatmap(paths, spacing=spacing)
+    plot_heatmap(avg_totRewards, goals, spacing=spacing)
 
 
 if __name__ == "__main__":
