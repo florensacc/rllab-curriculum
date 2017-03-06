@@ -11,8 +11,8 @@ class ProxyEnv(Env, Serializable):
     def wrapped_env(self):
         return self._wrapped_env
 
-    def reset(self):
-        return self._wrapped_env.reset()
+    def reset(self, **kwargs):
+        return self._wrapped_env.reset(**kwargs)
 
     @property
     def action_space(self):

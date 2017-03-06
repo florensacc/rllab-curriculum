@@ -72,14 +72,22 @@ class EnvChooser(object):
             from sandbox.haoran.mddpg.envs.multi_goal_env import \
                 MultiGoalEnv
             env = MultiGoalEnv(**kwargs)
+        elif env_name == "multi_goal_v2":
+            from sandbox.haoran.mddpg.envs.multi_goal_env_v2 import \
+                MultiGoalEnvV2
+            env = MultiGoalEnvV2(**kwargs)
         elif env_name == "gym_hopper":
             from sandbox.haoran.mddpg.envs.mujoco.gym_hopper import \
                 HopperEnv
             env = HopperEnv(**kwargs)
         elif env_name == "tuomas_hopper":
-            from sandbox.tuomas.mddpg.envs.hopper_env import \
+            from sandbox.tuomas.mddpg.envs.mujoco.hopper_env import \
                 HopperEnv
             env = HopperEnv(**kwargs)
+        elif env_name == "tuomas_swimmer_forward":
+            from sandbox.tuomas.mddpg.envs.mujoco.swimmer_forward_env import \
+                SwimmerForwardEnv
+            env = SwimmerForwardEnv(**kwargs)
         elif env_name == "tuomas_ant":
             from sandbox.tuomas.mddpg.envs.mujoco.ant_env import \
                 AntEnv

@@ -8,6 +8,7 @@ from sandbox.tuomas.mddpg.misc.sampler import ParallelSampler
 # for debugging
 from sandbox.tuomas.mddpg.misc.sim_policy import rollout, rollout_alg
 
+from rllab.misc.console import colorize
 from rllab.misc.overrides import overrides
 from rllab.misc import logger
 from sandbox.tuomas.mddpg.misc import special
@@ -86,6 +87,11 @@ class VDDPG(OnlineAlgorithm, Serializable):
             alpha_annealer=None,
             critic_subtract_value=False,
             critic_value_sampler='uniform',
+            train_actor_delay=0,
+            target_action_dist_delay=0,
+            K_annealer=None,
+            K_actor_annealer=None,
+            K_critic_annealer=None,
             **kwargs
     ):
         """
@@ -145,6 +151,11 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.q_plot_settings = q_plot_settings
         self.env_plot_settings = env_plot_settings
 
+        self.train_actor_delay = train_actor_delay
+        self.train_count = 0
+
+        self.n_critic_feed_dict_call = 0
+        self.target_action_dist_delay = target_action_dist_delay
 
 
         self.true_env = env
@@ -160,7 +171,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
                                                       name='prior_coeff')
         self.K_pl = tf.placeholder(tf.int32, shape=(), name='K')
         # # Number of particles for computing critic target.
-        # self.K_critic_pl = tf.placeholder(tf.int32, shape=(), name='K')
+        self.K_critic_pl = tf.placeholder(tf.int32, shape=(), name='K_critic')
 
         if q_target_type == 'soft':
             self.importance_weights_pl = tf.placeholder(
@@ -193,6 +204,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.eval_kl_n_sample_part = eval_kl_n_sample_part
 
         self.alpha_annealer = alpha_annealer
+        self.K_annealer = K_annealer
+        self.K_actor_annealer = K_actor_annealer
+        self.K_critic_annealer = K_critic_annealer
 
         self._init_figures()
 
@@ -405,7 +419,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
             if self.actor_sparse_update:
                 grad_log_p_from_Q = tf.gradients(
-                    log_p_from_Q, 
+                    log_p_from_Q,
                     self.kernel.fixed_actions_pl  # These are pre-actions
                 )
 
@@ -413,7 +427,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
                     tf.tanh(self.kernel.fixed_actions_pl)
                 )  # N*K x Da
             else:
-                grad_log_p_from_Q = tf.gradients(log_p_from_Q, 
+                grad_log_p_from_Q = tf.gradients(log_p_from_Q,
                                                  self.policy.pre_output)
                 # N*K x Da
                 grad_log_p_from_tanh = - 2. * self.policy.output # N*K x Da
@@ -496,7 +510,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             q_curr = self.qf.output
 
         # N x K x M
-        q_next = tf.reshape(q_next, tf_shape((-1, self.K_critic, M)))
+        q_next = tf.reshape(q_next, tf_shape((-1, self.K_critic_pl, M)))
         q_curr = tf.reshape(q_curr, (-1, M))  # N x M
 
         # average across reward dims of max Q - min Q, where max and min are
@@ -584,7 +598,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
                 )  # N*K
 
                 q = tf.reshape(self.critic_contrastive.output,
-                               tf_shape((-1, self.K_critic)))  # N x K
+                               tf_shape((-1, self.K_critic_pl)))  # N x K
 
                 # N x 1
                 contrastive_max = tf.reduce_max(q, axis=1, keep_dims=True)
@@ -755,6 +769,9 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
         feeds[self.K_pl] = K
 
+        # for debugging
+        # norms = [np.linalg.norm(sample) for sample in feeds[self.target_policy._sample_pl]]
+
         return feeds
 
     def _actor_feed_dict_for(self, critic, obs, temp, K):
@@ -779,6 +796,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
     def _critic_feed_dict(self, rewards, terminals, obs, actions, next_obs,
                           temp, K):
+        self.n_critic_feed_dict_call += 1
         N = obs.shape[0]
         Da = self.env.action_space.flat_dim
         feed = {}
@@ -806,7 +824,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
         if self.q_target_type == 'soft':
             # We'll use the same actions for each sample (first dimension).
 
-            if self.target_action_dist == "uniform":
+            if self.target_action_dist == "uniform" or \
+                self.n_critic_feed_dict_call <= self.target_action_dist_delay:
                 scale = self.policy.output_scale
                 next_actions = np.random.uniform(
                     low=-scale, high=scale, size=(N, self.K_critic, Da))
@@ -860,6 +879,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
         feed.update({
             self.rewards_placeholder: rewards,
             self.terminals_placeholder: np.expand_dims(terminals, axis=1),
+            self.K_critic_pl: K,
         })
 
         return feed
@@ -894,13 +914,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
 
             # List of holding line objects created by the environment
             self._env_lines = []
-<<<<<<< HEAD
-            # self._ax_env.set_xlim(self.env_plot_settings['xlim'])
-            # self._ax_env.set_ylim(self.env_plot_settings['ylim'])
-=======
-            self._ax_env.set_xlim(self.env_plot_settings['xlim'])
+           self._ax_env.set_xlim(self.env_plot_settings['xlim'])
             self._ax_env.set_ylim(self.env_plot_settings['ylim'])
->>>>>>> upstream/master
 
         # Init critic + actor figure.
         if self.q_plot_settings is not None:
@@ -1101,76 +1116,6 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.last_statistics.update(create_stats_ordered_dict(
             'KL', all_kls))
 
-<<<<<<< HEAD
-
-        # log kl(pi | exp(Q))
-
-        ## Create figure for plotting the environment.
-        #fig = plt.figure(figsize=(12, 7))
-        #if self.axis3d:
-        #    from mpl_toolkits.mplot3d import Axes3D
-        #    ax = fig.add_subplot(111, projection='3d')
-        #else:
-        #    ax = fig.add_subplot(111)
-
-        #true_env = self.env
-        #while isinstance(true_env, ProxyEnv):
-        #    true_env = true_env._wrapped_env
-        #if hasattr(true_env, "log_stats"):
-        #    env_stats = true_env.log_stats(self, epoch, paths, ax)
-        #    self.last_statistics.update(env_stats)
-
-        ## Close and save figs.
-        #snapshot_dir = logger.get_snapshot_dir()
-        #img_file = os.path.join(snapshot_dir, 'itr_%d_test_paths.png' % epoch)
-
-        #plt.draw()
-        #plt.pause(0.001)
-
-        #plt.savefig(img_file, dpi=100)
-        #plt.cla()
-        #plt.close('all')
-=======
-        # alternatively, we can consider the regularized reward =
-        # reward - kl(pi | pi_{uniform})
-
-        # lbs, ubs = self.env.action_space.bounds
-        # log_p_uniform = -np.sum([
-        #     np.log(ub - lb)
-        #     for lb, ub in zip(lbs, ubs)
-        # ])
-        # discounted_regularized_returns = []
-        # kl_cost_reward_ratios = []
-        # all_kls = []
-        # for path in paths:
-        #     kls, entropies = self.compute_kl_entropy(
-        #             path["observations"],
-        #             K=self.eval_kl_n_sample,
-        #             K_part=self.eval_kl_n_sample_part,
-        #         )
-        #     all_kls = np.concatenate([all_kls, kls])
-        #     entropy_bonuses = np.concatenate([[0], entropies[1:]])
-        #     kl_costs = -log_p_uniform - entropy_bonuses
-        #     discounted_rewards = special.discount_return(
-        #         path["rewards"], self.discount
-        #     )
-        #     discounted_kl_costs = special.discount_return(
-        #         kl_costs,  self.discount
-        #     )
-        #     discounted_regularized_returns.append(
-        #         discounted_rewards - self.alpha / self.scale_reward * discounted_kl_costs
-        #     )
-        #     kl_cost_reward_ratios.append(
-        #         self.alpha / self.scale_reward * discounted_kl_costs / discounted_rewards
-        #     )
-        # self.last_statistics.update(create_stats_ordered_dict(
-        #     'DiscRegReturn', discounted_regularized_returns))
-        # self.last_statistics.update(create_stats_ordered_dict(
-        #     'KLCostRewardRatio', kl_cost_reward_ratios))
-        # self.last_statistics.update(create_stats_ordered_dict(
-        #     'KL', all_kls))
-
->>>>>>> upstream/master
 
         # Collect environment info.
         snapshot_dir = logger.get_snapshot_dir()
@@ -1183,11 +1128,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             #env_stats = env.log_stats(epoch, paths)
             self.last_statistics.update(env_stats)
 
-<<<<<<< HEAD
-        if hasattr(env, 'plot_paths'):
-=======
         if hasattr(env, 'plot_paths') and self.env_plot_settings is not None:
->>>>>>> upstream/master
             img_file = os.path.join(snapshot_dir,
                                     'env_itr_%05d.png' % epoch)
 
@@ -1195,17 +1136,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
             if self._env_lines is not None:
                 [path.remove() for path in self._env_lines]
 
-<<<<<<< HEAD
-            #self._ax_env.clear()
-            self._env_lines = env.plot_paths(paths, self._ax_env)
-            # self._ax_env.set_xlim(self.env_plot_settings['xlim'])
-            # self._ax_env.set_ylim(self.env_plot_settings['ylim'])
-=======
-            self._ax_env.clear()
-            self._env_lines = env.plot_paths(paths, self._ax_env)
             self._ax_env.set_xlim(self.env_plot_settings['xlim'])
             self._ax_env.set_ylim(self.env_plot_settings['ylim'])
->>>>>>> upstream/master
 
             plt.pause(0.001)
             plt.draw()
@@ -1272,7 +1204,8 @@ class VDDPG(OnlineAlgorithm, Serializable):
         self.train_actor = (np.mod(
             self.actor_train_counter,
             self.actor_train_frequency,
-        ) == 0) and self.really_train_actor
+        ) == 0) and self.really_train_actor \
+            and self.train_count > self.train_actor_delay
         self.update_target = (np.mod(
             self.update_target_counter,
             self.update_target_frequency,
@@ -1292,6 +1225,7 @@ class VDDPG(OnlineAlgorithm, Serializable):
             self.update_target_counter + 1,
             self.update_target_frequency,
         )
+        self.train_count += 1
 
     @overrides
     def update_training_settings(self, epoch):
@@ -1299,6 +1233,49 @@ class VDDPG(OnlineAlgorithm, Serializable):
             self.scale_reward = self.scale_reward_annealer.get_new_value(epoch)
         if self.alpha_annealer is not None:
             self.alpha = self.alpha_annealer.get_new_value(epoch)
+
+        if self.K_annealer is not None:
+            self.K = np.max([1, int(np.ceil(self.K_annealer.get_new_value(epoch)))])
+            logger.log(colorize(
+                "Annealled K to %g"%(self.K),
+                "yellow",
+            ))
+        if self.K_actor_annealer is not None:
+            K_actor = np.max([1, int(np.ceil(self.K_actor_annealer.get_new_value(epoch)))])
+            self.policy._samples = self.policy._samples[:K_actor]
+            self.policy._K = K_actor
+            self.target_policy._K = K_actor
+
+            if self.policy._freeze:
+                self.policy._samples = self.policy._samples[:K_actor]
+            if self.target_policy._freeze:
+                self.target_policy._samples = self.target_policy._samples[:K_actor]
+            logger.log(colorize(
+                "Annealled K_actor to %g"%(self.K),
+                "yellow",
+            ))
+
+            if self.q_target_type != "soft":
+                self.K_critic = K_actor
+                logger.log(colorize(
+                    "Annealled K_critic to %g"%(self.K),
+                    "yellow",
+                ))
+
+            # for debugging
+            # print((
+            #     self.policy._freeze,
+            #     [np.linalg.norm(sample) for sample in self.policy._samples],
+            # ))
+            # print((
+            #     self.target_policy._freeze,
+            #     [np.linalg.norm(sample) for sample in self.target_policy._samples],
+            # ))
+
+        if self.K_critic_annealer is not None:
+            # cannot support dynamically changing K_critic for "soft"
+            raise NotImplementedError
+
 
 ## Use the following code to test whether the exp(Q-Qmax) code works
 # import tensorflow as tf

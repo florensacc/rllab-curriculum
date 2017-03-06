@@ -29,7 +29,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
-exp_prefix = "tuomas-" + exp_index
+exp_prefix = "tuomas/" + exp_index
 mode = "ec2"
 #mode = "local_test"
 ec2_instance = "c4.2xlarge"

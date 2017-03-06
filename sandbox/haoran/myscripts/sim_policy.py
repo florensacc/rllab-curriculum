@@ -7,59 +7,104 @@ import matplotlib.pyplot as plt
 from sandbox.haoran.myscripts.myutilities import get_true_env
 from gym.envs.mujoco import mujoco_env
 from sandbox.tuomas.mddpg.policies.stochastic_policy import StochasticNNPolicy
-from rllab.misc.ext import set_seed
+from rllab.misc.ext import set_seed, colorize
 from rllab.misc import tensor_utils
 import time
+import cv2
+import sys
+import matplotlib.animation as animation
+import pyprind
+
+
+def compile_video(img_list, ani_file, fps, figsize, dpi):
+    # configure figure and axis
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    fig.set_size_inches(figsize)
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0) # no fig margins
+
+    # set the example image
+    example_img = img_list[0]
+    I = ax.imshow(example_img)
+
+
+    progbar = pyprind.ProgBar(
+        len(img_list),
+        monitor=True,
+        title=colorize('\nWriting video', "yellow"),
+        bar_char='█',
+    )
+    def update_img(img):
+        I.set_data(img)
+        progbar.update()
+
+    ani = animation.FuncAnimation(fig, update_img, img_list)
+    writer = animation.writers['ffmpeg'](fps=fps)
+    ani.save(ani_file, writer=writer, dpi=dpi)
+    print(colorize("Video written to %s"%(ani_file), "green"))
+    return ani
 
 def rollout(sess, env, agent, max_path_length=np.inf,
-    animated=False, speedup=1, qf=None, exploration_strategy=None):
-    observations = []
-    actions = []
-    rewards = []
-    agent_infos = []
-    env_infos = []
+    animated=False, speedup=1, qf=None, exploration_strategy=None,
+    record=""):
+    """
+    record: the video path, only supported for mujoco_env
+    """
+    record = "/Users/haoran/Google Drive/2016-17 2nd/vddpg/figure/test.mp4"
+
+    t_start = time.time()
+    timestep = 0.05
+    if record != "":
+        img_list = []
+
     o = env.reset()
     agent.reset()
     path_length = 0
     if animated:
         env.render()
-    while path_length < max_path_length:
-        if exploration_strategy is not None:
-            a = exploration_strategy.get_action(path_length, o, agent)
-            agent_info = {}
-        else:
-            a, agent_info = agent.get_action(o)
-        next_o, r, d, env_info = env.step(a)
-        observations.append(env.observation_space.flatten(o))
-        rewards.append(r)
-        actions.append(env.action_space.flatten(a))
-        agent_infos.append(agent_info)
-        env_infos.append(env_info)
-        path_length += 1
-        if d:
-            if qf is not None:
-                feed = {
-                    qf.observations_placeholder: np.array([o]),
-                    qf.actions_placeholder: np.array([a]),
-                }
-                qvalue = sess.run(qf.output, feed).ravel()
-                print("terminate value:", qvalue - r)
-            break
-        o = next_o
+    try:
+        while path_length < max_path_length:
+            if exploration_strategy is not None:
+                a = exploration_strategy.get_action(path_length, o, agent)
+                agent_info = {}
+            else:
+                a, agent_info = agent.get_action(o)
+            next_o, r, d, env_info = env.step(a)
+            path_length += 1
+            if d:
+                if qf is not None:
+                    feed = {
+                        qf.observations_placeholder: np.array([o]),
+                        qf.actions_placeholder: np.array([a]),
+                    }
+                    qvalue = sess.run(qf.output, feed).ravel()
+                    print("terminate value:", qvalue - r)
+                break
+            o = next_o
+            if animated:
+                env.render()
+                time.sleep(timestep / speedup)
+            if record != "":
+                # only applies to mujoco_env
+                img = env.render(mode='rgb_array')
+                img_list.append(img)
+    except KeyboardInterrupt:
         if animated:
-            env.render()
-            timestep = 0.05
-            time.sleep(timestep / speedup)
-    if animated:
-        env.render(close=True)
+            env.render(close=False)
+        t_end = time.time()
+        fps = np.floor(len(img_list) / (t_end - t_start))
+        if record != "":
+            compile_video(
+                img_list=img_list,
+                ani_file=record,
+                fps=fps,
+                figsize=(5,5),
+                dpi=200,
+            )
+        sys.exit(0)
 
-    return dict(
-        observations=tensor_utils.stack_tensor_list(observations),
-        actions=tensor_utils.stack_tensor_list(actions),
-        rewards=tensor_utils.stack_tensor_list(rewards),
-        agent_infos=tensor_utils.stack_tensor_dict_list(agent_infos),
-        env_infos=tensor_utils.stack_tensor_dict_list(env_infos),
-    )
 
 if __name__ == "__main__":
 
@@ -76,6 +121,7 @@ if __name__ == "__main__":
     parser.add_argument('--show-qf', default=False, action='store_true')
     parser.add_argument('--use-es', default=False, action='store_true')
     parser.add_argument('--plt-backend', type=str, default="")
+    parser.add_argument('--record', type=str, default="")
     args = parser.parse_args()
 
     qf = None
@@ -118,4 +164,5 @@ if __name__ == "__main__":
                 speedup=args.speedup,
                 qf=qf,
                 exploration_strategy=es,
+                record=args.record,
             )

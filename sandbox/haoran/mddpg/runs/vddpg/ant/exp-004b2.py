@@ -1,7 +1,7 @@
 """
 Variational DDPG
 
-This script does nothing but checks whether vddpg plots are correct
+Repeat exp-004b but with sample target Qs from the policy
 """
 # imports -----------------------------------------------------
 import tensorflow as tf
@@ -34,7 +34,7 @@ from rllab.misc.instrument import VariantGenerator, variant
 # exp setup --------------------------------------------------------
 exp_index = os.path.basename(__file__).split('.')[0] # exp_xxx
 exp_prefix = "mddpg/vddpg/ant/" + exp_index
-mode = "local_test"
+mode = "ec2"
 ec2_instance = "c4.4xlarge"
 subnet = "us-west-1c"
 config.DOCKER_IMAGE = "tsukuyomi2044/rllab3" # needs psutils
@@ -76,8 +76,12 @@ class VG(VariantGenerator):
     @variant
     def target_action_dist(self):
         return [
-            "uniform",
+            "policy",
         ]
+
+    @variant
+    def target_action_dist_delay(self):
+        return [100000]
 
     @variant
     def ou_sigma(self):
@@ -112,12 +116,6 @@ class VG(VariantGenerator):
                 update_target_frequency=1000,
                 train_repeat=1,
             ),
-            dict(
-                actor_train_frequency=1,
-                critic_train_frequency=1,
-                update_target_frequency=5000,
-                train_repeat=1,
-            ),
         ]
 
     @variant
@@ -130,7 +128,7 @@ class VG(VariantGenerator):
 
     @variant
     def reward_type(self):
-        return ["distance_from_origin", "velocity"]
+        return ["velocity"]
 
 variants = VG().variants()
 batch_tasks = []
@@ -167,6 +165,7 @@ for v in variants:
         svgd_target=v["svgd_target"],
         K_critic=50,
         target_action_dist=v["target_action_dist"],
+        target_action_dist_delay=v["target_action_dist_delay"],
         train_repeat=v["train_frequency"]["train_repeat"],
         actor_train_frequency=v["train_frequency"]["actor_train_frequency"],
         critic_train_frequency=v["train_frequency"]["critic_train_frequency"],
@@ -183,7 +182,7 @@ for v in variants:
             epoch_length = 110,
             min_pool_size = 100,
             eval_samples = 100,
-            n_epochs = 10,
+            n_epochs = 2,
         )
     else:
         alg_kwargs = dict(

@@ -61,13 +61,19 @@ def get_action_probs_k(algo, obs, adv_obs, k, target_env):
         print("Algorithm type " + algo_name + " is not supported.")
         raise NotImplementedError
 
-def get_grad_x_k_a3c(obs, algo, k, target_env):
+def get_grad_x_k_a3c(obs, algo, k, target_env, lambdas=None):
     # Obtains gradient for current and next k timesteps, for the loss function
     # that encourages keeping all argmax actions the same except for the
     # last time step's
+    # lambdas - weights on the loss at each time step; length should be k+1
 
     import chainer
     from chainer import functions as F
+
+    if lambdas is not None:
+        assert len(lambdas) == k+1
+    else:
+        lambdas = [1]*k + [k]
 
     algo.cur_env.save_state()
     assert algo.cur_env.equiv_to(target_env)
@@ -94,8 +100,9 @@ def get_grad_x_k_a3c(obs, algo, k, target_env):
         # Calculate loss between predicted action distribution and the action distribution
         # that places all weight on the argmax action
         ce_loss_step = F.log(1.0 / F.sum(F.exp(logits[i] - max_logits[i])))
+        ce_loss_step *= lambdas[i]
         if i == k:
-            ce_loss_step *= -1*k  # Want the argmax action to be *different* k steps in future
+            ce_loss_step *= -1  # Want the argmax action to be *different* k steps in future
         ce_loss += ce_loss_step
 
     # The next three lines that clear gradients are probably not necessary (since
@@ -116,12 +123,12 @@ def get_grad_x_k_a3c(obs, algo, k, target_env):
     #print("A3C:", abs(grad_x).max(), abs(grad_x).sum() / grad_x.size, ce_loss.data)
     return grad_x
 
-def get_grad_x_k(obs, algo, k, target_env):
+def get_grad_x_k(obs, algo, k, target_env, lambdas=None):
     algo_name = type(algo).__name__
     if algo_name in ['TRPO', 'ParallelTRPO']:
         raise NotImplementedError
     elif algo_name in ['A3CALE']:
-        return get_grad_x_k_a3c(obs, algo, k, target_env)
+        return get_grad_x_k_a3c(obs, algo, k, target_env, lambdas=lambdas)
     elif algo_name in ['DQNAlgo']:
         raise NotImplementedError
     else:
