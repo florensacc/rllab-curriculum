@@ -14,7 +14,7 @@ from sandbox.young_clgan.lib.envs.rewards import linear_threshold_reward
 class PointEnv(GoalEnv, MujocoEnv, Serializable):
     FILE = 'point2.xml'
 
-    def __init__(self, goal_generator, reward_dist_threshold=0.3,
+    def __init__(self, goal_generator, reward_dist_threshold=0.3, indicator_reward=False, terminal_eps=None,
                  control_mode='linear', *args, **kwargs):
         """
         :param goal_generator: Proceedure to sample the and keep the goals
@@ -24,6 +24,10 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
         self.control_mode = control_mode
         self.update_goal_generator(goal_generator)
         self.reward_dist_threshold = reward_dist_threshold
+        self.indicator_reward = indicator_reward
+        self.terminal_eps = terminal_eps
+        if self.terminal_eps is None:
+            self.terminal_eps = self.reward_dist_threshold
         MujocoEnv.__init__(self, *args, **kwargs)
         Serializable.quick_init(self, locals())
 
@@ -42,6 +46,8 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
     def reset(self, *args, **kwargs):
         """This does both the reset of mujoco, the forward and reset goal"""
         self.update_goal()
+        # print("my goal is: ", self.get_body_com("target"))
+        # print("the goal gen has: ", self.goal_generator.goal)
         # this should be reset_mujoco(init_state) and model.forward()
         qpos = np.zeros((self.model.nq, 1))
         qpos[2:, :] = np.array(self.current_goal).reshape((2, 1))  # ??
@@ -81,6 +87,8 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
 
         ob = self.get_current_obs()
         done = False
+        if dist < self.terminal_eps and self.indicator_reward:
+            done = True
         return Step(
             ob, reward, done,
             reward_dist=reward_dist,
@@ -98,7 +106,10 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
         dist = np.linalg.norm(
             self.get_body_com("torso") - self.get_body_com("target")
         )
-        return linear_threshold_reward(dist, threshold=self.reward_dist_threshold, coefficient=-1000)
+        if self.indicator_reward and dist < self.reward_dist_threshold:
+            return 1000 * self.reward_dist_threshold
+        else:
+            return linear_threshold_reward(dist, threshold=self.reward_dist_threshold, coefficient=-1000)
 
     def set_state(self, qpos, qvel):
         assert qpos.shape == (self.model.nq, 1) and qvel.shape == (self.model.nv, 1)

@@ -71,6 +71,8 @@ if __name__ == '__main__':
         goal_size=2,
         goal_range=10,
         goal_noise_level=0.5,
+        reward_dist_threshold=0.3,
+        indicator_reward=True,
         min_reward=5,
         max_reward=6000,
         improvement_threshold=10,
