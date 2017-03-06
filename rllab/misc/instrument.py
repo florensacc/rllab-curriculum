@@ -194,6 +194,10 @@ class VariantGenerator(object):
             if cfg.get("hide", False):
                 self._hidden_keys.append(k)
 
+    @property
+    def size(self):
+        return len(self.variants())
+
     def add(self, key, vals, **kwargs):
         self._variants.append((key, vals, kwargs))
 
