@@ -1,5 +1,6 @@
 import tempfile
 import math
+import gc
 
 import numpy as np
 import scipy.misc
@@ -9,6 +10,8 @@ from sandbox.young_clgan.lib.envs.base import FixedGoalGenerator
 
 import matplotlib as mpl
 mpl.use('Agg')
+from matplotlib import rc
+rc('text', usetex=True)
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 
@@ -55,13 +58,16 @@ def plot_policy_reward(policy, env, limit, horizon=200, max_reward=6000, fname=N
         else:
             return img
 
+
 def save_image(fname=None):
     if fname is not None:
         plt.savefig(fname, format='png')
+        plt.close('all')
         return scipy.misc.imread(fname)
     else:
         fp = tempfile.TemporaryFile()
         plt.savefig(fp, format='png')
+        plt.close('all')
         fp.seek(0)
         img = scipy.misc.imread(fp)
         fp.close()
@@ -95,20 +101,7 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
                 label=text_labels[i]
             )
         if bounds is not None:
-            high, low = (np.array(b) for b in bounds)
-            for i in range(3):
-                j = (i + 1) % 3
-                k = (i + 2) % 3
-                a = np.copy(high)
-                a[i] = low[i]
-                b = np.copy(low)
-                b[j] = high[j]
-                c = np.copy(low)
-                c[k] = high[k]
-                ax.plot(*zip(high, a), color="b")
-                ax.plot(*zip(low, b), color="b")
-                ax.plot(*zip(a, b), color='b')
-                ax.plot(*zip(a, c), color='b')
+            plot_bounds(ax, bounds, dim=3)
         ax.set_ylim3d(-limit, limit)
         ax.set_xlim3d(-limit, limit)
         ax.set_zlim3d(-limit, limit)
@@ -126,22 +119,7 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
                 label=text_labels[i]
             )
         if bounds is not None:
-            low, high = bounds
-            print(low, high)
-            i = 0
-            a = high
-            a[i] = low[i]
-            b = low
-            b[i] = high[i]
-            print(*zip(high,a))
-            print(*zip(high,b))
-            print(*zip(low,a))
-            print(*zip(low,b))
-            ax.plot(*zip(high, a), color="b", label='state bounds')
-            ax.plot(*zip(high, b), color="b")
-            ax.plot(*zip(low, a), color="b")
-            ax.plot(*zip(low, b), color="b")
-
+            plot_bounds(ax, bounds, 2)
         ax.set_ylim(-limit, limit)
         ax.set_xlim(-limit, limit)
     # Place the legend to the right of the plot.
@@ -149,6 +127,11 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
 
     if fname is not None:
         plt.savefig(fname, format='png', bbox_extra_artists=(lgd,), bbox_inches='tight')
+        # plt.cla()
+        # plt.clf()
+        plt.close('all')
+        # del fig, ax, cmap, cbar, map_plot
+        gc.collect()
         return scipy.misc.imread(fname)
     else:
         fp = tempfile.TemporaryFile()
@@ -156,7 +139,41 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
         fp.seek(0)
         img = scipy.misc.imread(fp)
         fp.close()
+        # plt.cla()
+        # plt.clf()
+        plt.close('all')
+        # del fig, ax, cmap, cbar, map_plot
+        gc.collect()
         return img
+
+
+def plot_bounds(ax, bounds, dim=2):
+    if dim == 2:
+        low, high = bounds
+        i = 0
+        a = np.copy(high)
+        a[i] = low[i]
+        b = np.copy(low)
+        b[i] = high[i]
+        ax.plot(*zip(high, a), color="b", label='state bounds')
+        ax.plot(*zip(high, b), color="b")
+        ax.plot(*zip(low, a), color="b")
+        ax.plot(*zip(low, b), color="b")
+    elif dim ==3:
+        high, low = (np.array(b) for b in bounds)
+        for i in range(3):
+            j = (i + 1) % 3
+            k = (i + 2) % 3
+            a = np.copy(high)
+            a[i] = low[i]
+            b = np.copy(low)
+            b[j] = high[j]
+            c = np.copy(low)
+            c[k] = high[k]
+            ax.plot(*zip(high[:3], a[:3]), color="b")
+            ax.plot(*zip(low[:3], b[:3]), color="b")
+            ax.plot(*zip(a[:3], b[:3]), color='b')
+            ax.plot(*zip(a[:3], c[:3]), color='b')
 
 
 def plot_gan_samples(gan, limit, fname=None, size=500):
@@ -176,6 +193,11 @@ def plot_gan_samples(gan, limit, fname=None, size=500):
         plt.xlim(-limit, limit)
     if fname is not None:
         plt.savefig(fname, format='png')
+        # plt.cla()
+        # plt.clf()
+        plt.close('all')
+        # del fig, ax, cmap, cbar, map_plot
+        gc.collect()
         return scipy.misc.imread(fname)
     else:
         fp = tempfile.TemporaryFile()
@@ -183,6 +205,11 @@ def plot_gan_samples(gan, limit, fname=None, size=500):
         fp.seek(0)
         img = scipy.misc.imread(fp)
         fp.close()
+        # plt.cla()
+        # plt.clf()
+        plt.close('all')
+        # del fig, ax, cmap, cbar, map_plot
+        gc.collect()
         return img
 
 

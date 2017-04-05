@@ -40,7 +40,7 @@ if __name__ == '__main__':
         'ap-south-1a', 'us-east-2a', 'us-east-2b', 'us-east-2c', 'ap-south-1b', 'ap-northeast-2a', 'ap-northeast-2c',
         'us-east-1b', 'us-east-1a', 'us-east-1d', 'us-east-1e'
     ]
-    ec2_instance = args.type if args.type else 'c4.4xlarge'
+    ec2_instance = args.type if args.type else 'c4.2xlarge'
     # configure instance
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -53,10 +53,10 @@ if __name__ == '__main__':
         n_parallel = 4
     else:
         mode = 'local'
-        n_parallel = 0
+        n_parallel = 4
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'goal-trpo-maze2'
+    exp_prefix = 'goal-trpo-maze3'
 
     vg = VariantGenerator()
     vg.add('horizon', [400])
@@ -67,7 +67,7 @@ if __name__ == '__main__':
     vg.add('goal_noise_level', [0.5])  # ???
     vg.add('reward_dist_threshold', [0.3])
     vg.add('indicator_reward', [True])
-    vg.add('terminal_eps', [None])  # if None, reward_dist_threshold is used
+    vg.add('terminal_eps', [0.3])  # if None, reward_dist_threshold is used
     vg.add('min_reward', lambda indicator_reward: [10] if indicator_reward else [
         5])  # now running it with only the terminal reward of 1!
     vg.add('max_reward',
@@ -79,7 +79,7 @@ if __name__ == '__main__':
     vg.add('discount', [0.998])
     vg.add('gae_lambda', [0.995])
 
-    vg.add('seed', range(20, 100, 20))
+    vg.add('seed', range(50, 100, 20))
     # mine
     vg.add('distance_metric', ['L2'])
     # vg.add('terminal_bonus', [0])
@@ -89,7 +89,8 @@ if __name__ == '__main__':
     # policy initialization
     vg.add('output_gain', [1])
     vg.add('policy_init_std', [1])
-    vg.add('learn_std', [False])
+    vg.add('learn_std', [True])
+    vg.add('adaptive_std', [False])
 
     # Launch
     print("\n" + "**********"*10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))

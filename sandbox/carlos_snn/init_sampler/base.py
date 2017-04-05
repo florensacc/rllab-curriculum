@@ -53,6 +53,11 @@ class UniformInitGenerator(InitGenerator, Serializable):
     """ Generating goals uniformly inside a hyper-rectangle around the center (like the desired goal). """
 
     def __init__(self, init_size, bound=2, center=()):
+        """
+        :param init_size: Size of the initial positions
+        :param bound: UB array of dim init_size
+        :param center: (optional) offset of the square defined by bound.
+        """
         Serializable.quick_init(self, locals())
         self.init_size = init_size
         self.bound = bound
@@ -185,7 +190,7 @@ class InitExplorationEnv(InitEnvAngle, ProxyEnv, Serializable):
         if reset_inner:
             self.wrapped_env.reset(initial_state=self.current_init)
         obs = self.get_current_obs()
-        return self.get_current_obs()
+        return obs
 
     def step(self, action):
         observation, reward, done, info = ProxyEnv.step(self, action)
@@ -220,7 +225,7 @@ class InitExplorationEnv(InitEnvAngle, ProxyEnv, Serializable):
         if self._distance_metric == 'L1':
             goal_distance = np.sum(np.abs(obs - self.current_goal))
         elif self._distance_metric == 'L2':
-            goal_distance = np.sqrt(np.sum(np.square(obs - self.current_goal)))
+            goal_distance = np.sqrt(np.sum(np.square(obs[:np.size(self.current_goal)] - self.current_goal)))
         elif callable(self._distance_metric):
             goal_distance = self._distance_metric(obs, self.current_goal)
         else:
@@ -242,6 +247,7 @@ class InitExplorationEnv(InitEnvAngle, ProxyEnv, Serializable):
     @property
     @overrides
     def observation_space(self):
+        # TODO: This could be cached in the init of the class
         shp = self.get_current_obs().shape
         ub = BIG * np.ones(shp)
         return spaces.Box(ub * -1, ub)

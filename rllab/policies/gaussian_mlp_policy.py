@@ -3,6 +3,7 @@ import lasagne.layers as L
 import lasagne.init as LI
 import lasagne.nonlinearities as NL
 import numpy as np
+from contextlib import contextmanager
 
 from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
@@ -97,6 +98,7 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 )
 
         self.min_std = min_std
+        self._set_std_to_0 = False
 
         mean_var, log_std_var = L.get_output([l_mean, l_log_std])
 
@@ -128,16 +130,30 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
     def get_action(self, observation):
         flat_obs = self.observation_space.flatten(observation)
         mean, log_std = [x[0] for x in self._f_dist([flat_obs])]
-        rnd = np.random.normal(size=mean.shape)
-        action = rnd * np.exp(log_std) + mean
+        if self._set_std_to_0:
+            action = mean
+            log_std = -1e6 * np.ones_like(log_std)
+        else:
+            rnd = np.random.normal(size=mean.shape)
+            action = rnd * np.exp(log_std) + mean
         return action, dict(mean=mean, log_std=log_std)
 
     def get_actions(self, observations):
         flat_obs = self.observation_space.flatten_n(observations)
         means, log_stds = self._f_dist(flat_obs)
-        rnd = np.random.normal(size=means.shape)
-        actions = rnd * np.exp(log_stds) + means
+        if self._set_std_to_0:
+            actions = means
+            log_stds = -1e6 * np.ones_like(log_stds)
+        else:
+            rnd = np.random.normal(size=means.shape)
+            actions = rnd * np.exp(log_stds) + means
         return actions, dict(mean=means, log_std=log_stds)
+
+    @contextmanager
+    def set_std_to_0(self):
+        self._set_std_to_0 = True
+        yield
+        self._set_std_to_0 = False
 
     def get_reparam_action_sym(self, obs_var, action_var, old_dist_info_vars):
         """

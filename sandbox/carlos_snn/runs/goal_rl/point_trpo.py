@@ -31,7 +31,7 @@ from sandbox.carlos_snn.autoclone import autoclone
 # from sandbox.young_clgan.lib.utils import initialize_parallel_sampler
 # initialize_parallel_sampler()
 
-from sandbox.carlos_snn.runs.goal_rl.point_trpo2 import run_task
+from sandbox.carlos_snn.runs.goal_rl.point_trpo_algo import run_task
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -54,7 +54,8 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        'us-east-2b', 'us-east-1a', 'us-east-1d', 'us-east-1b', 'us-east-1e', 'ap-south-1b', 'ap-south-1a', 'us-west-1a'
+        'us-east-2c', 'us-east-2a', 'us-east-2b', 'ap-southeast-2b', 'ap-southeast-1b', 'ap-northeast-1c', 'us-west-2b',
+        'ap-northeast-2a', 'ap-southeast-2c'
     ]
     ec2_instance = args.type if args.type else 'm4.4xlarge'
 
@@ -71,75 +72,37 @@ if __name__ == '__main__':
     else:
         mode = 'local'
         n_parallel = 0
-    print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
-                                                                                   config.AWS_SPOT_PRICE, n_parallel),
-          *subnets)
 
-    exp_prefix = 'goal-point-trpo-nonSparse3'
+    exp_prefix = 'goal-point-trpo-indicator-unifFeas'
     vg = VariantGenerator()
 
-    vg.add('seed', range(10, 40, 10))
+    vg.add('seed', range(30, 90, 20))
     # # GeneratorEnv params
     vg.add('goal_size', [6, 5, 4, 3, 2])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('goal_range', [5])  # this will be used also as bound of the state_space
-    vg.add('reward_dist_threshold', lambda goal_size: [math.sqrt(goal_size) / math.sqrt(2) * 10])
+    vg.add('sample_unif_feas', [True])
+    vg.add('reward_dist_threshold', lambda goal_size: [math.sqrt(goal_size) / math.sqrt(2) * 0.3])
     # vg.add('angle_idxs', [((0, 1),)]) # these are the idx of the obs corresponding to angles (here the first 2)
     vg.add('distance_metric', ['L2'])
-    vg.add('terminal_bonus', [0])
+    vg.add('terminal_bonus', [300])
     vg.add('terminal_eps', lambda reward_dist_threshold: [
-        reward_dist_threshold / 10. * 0.5])  # if hte terminal bonus is 0 it doesn't kill it! Just count how many reached center
-    vg.add('state_bounds', lambda goal_range, goal_size:
-    [(1, goal_range) + (0.5,) * (goal_size - 2) + (goal_range, ) * goal_size])
+        reward_dist_threshold])  # if hte terminal bonus is 0 it doesn't kill it! Just count how many reached center
+    vg.add('state_bounds', lambda goal_range, goal_size, reward_dist_threshold:
+    [(1, goal_range) + (0.3,) * (goal_size - 2) + (goal_range, ) * goal_size])
     #############################################
-    vg.add('min_reward', [1])  # now running it with only the terminal reward of 1!
-    vg.add('max_reward', [1e3])
+    vg.add('min_reward', lambda terminal_bonus: [terminal_bonus * 0.1])  # now running it with only the terminal reward of 1!
+    vg.add('max_reward', lambda terminal_bonus: [terminal_bonus * 0.9])
     vg.add('horizon', [200])
-    vg.add('outer_iters', [500])
+    vg.add('outer_iters', [400])
     vg.add('inner_iters', [5])
     vg.add('pg_batch_size', [20000])
     # policy initialization
-    vg.add('output_gain', [0.1])
-    vg.add('policy_init_std', [0.1])
+    vg.add('output_gain', [1])
+    vg.add('policy_init_std', [1])
 
-    # def run_task(v):
-    #     # random.seed(v['seed'])
-    #     # np.random.seed(v['seed'])
-    #
-    #     inner_env = normalize(PointEnv(dim=v['goal_size'], state_bounds=v['state_bounds']))
-    #     goal_generator = UniformGoalGenerator(goal_size=v['goal_size'], bounds=[-1 * v['goal_range'] * np.ones(v['goal_size']),
-    #                                                                             v['goal_range'] * np.ones(v['goal_size'])])
-    #
-    #     env = GoalIdxExplorationEnv(env=inner_env, goal_generator=goal_generator,
-    #                                 idx=np.arange(v['goal_size']),
-    #                                 reward_dist_threshold=v['reward_dist_threshold'],
-    #                                 distance_metric=v['distance_metric'],
-    #                                 terminal_eps=v['terminal_eps'], terminal_bonus=v['terminal_bonus'],
-    #                                 )  # this goal_generator will be updated by a uniform after
-    #
-    #     policy = GaussianMLPPolicy(
-    #         env_spec=env.spec,
-    #         hidden_sizes=(32, 32),
-    #         # Fix the variance since different goals will require different variances, making this parameter hard to learn.
-    #         learn_std=False,
-    #         init_std=0.1,
-    #     )
-    #
-    #     baseline = LinearFeatureBaseline(env_spec=env.spec)
-    #
-    #     algo = TRPOGoal(
-    #         env=env,
-    #         policy=policy,
-    #         baseline=baseline,
-    #         batch_size=v['pg_batch_size'],
-    #         max_path_length=v['horizon'],
-    #         n_itr=v['n_itr'],
-    #         discount=0.99,
-    #         step_size=0.01,
-    #         plot=False,
-    #     )
-    #
-    #     algo.train()
-
+    print('Running {} inst. on type {}, with price {}, parallel {} on the subnets: '.format(vg.size, config.AWS_INSTANCE_TYPE,
+                                                                                            config.AWS_SPOT_PRICE, n_parallel),
+          *subnets)
 
     for vv in vg.variants():
 

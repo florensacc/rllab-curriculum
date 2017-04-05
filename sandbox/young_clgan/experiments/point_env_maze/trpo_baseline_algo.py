@@ -73,7 +73,7 @@ class TRPOPointEnvMaze(RLAlgorithm):
 
         baseline = LinearFeatureBaseline(env_spec=env.spec)
 
-        rewards, heatmap = test_and_plot_policy(policy, env)
+        rewards, avg_success, heatmap = test_and_plot_policy(policy, env)
         # reward_img = save_image(fname='{}/policy_reward_init.png'.format(log_config.plot_dir))
         report.add_image(
             heatmap,
@@ -115,7 +115,7 @@ class TRPOPointEnvMaze(RLAlgorithm):
 
                 algo.train()
 
-            rewards = test_and_plot_policy(policy, env)
+            rewards, avg_success, heatmap = test_and_plot_policy(policy, env)
             reward_img = save_image(fname='{}/policy_reward_{}.png'.format(log_config.plot_dir, outer_iter))
 
             mean_rewards = np.mean(rewards)

@@ -204,7 +204,7 @@ class CLGANPointEnvMaze(RLAlgorithm):
 
                 algo.train()
 
-            rewards = test_and_plot_policy(policy, env)
+            rewards, avg_success, heatmap = test_and_plot_policy(policy, env)
             reward_img = save_image(fname=osp.join(log_dir,'policy_reward_{}.png'.format(outer_iter)))
 
             mean_rewards = np.mean(rewards)

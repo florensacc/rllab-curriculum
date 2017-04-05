@@ -37,10 +37,10 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        'ap-south-1b', 'us-west-1b', 'us-west-1a', 'us-east-2c', 'us-east-1a', 'us-east-1b', 'us-east-1c', 'us-east-1e',
-        'eu-west-1b', 'eu-west-1c', 'eu-west-1a', 'us-east-1d'
+        # 'ap-south-1b', 'ap-northeast-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'us-west-1b', 'us-west-1a',
+        # 'ap-south-1a', 'ap-northeast-1a', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'us-east-1b'
     ]
-    ec2_instance = args.type if args.type else 'm4.4xlarge'
+    ec2_instance = args.type if args.type else 'c4.4xlarge'
     # configure instance
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -53,21 +53,25 @@ if __name__ == '__main__':
         n_parallel = 4
     else:
         mode = 'local'
-        n_parallel = 0
+        n_parallel = 4
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'goalGAN-maze2'
+    exp_prefix = 'goalGAN-maze-singleLabel-test'
 
     vg = VariantGenerator()
     vg.add('horizon', [400])
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
-    vg.add('goal_range', [7])  # this will be used also as bound of the state_space
+    vg.add('goal_range', [5])  # this will be used also as bound of the state_space
+    vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
     vg.add('goal_noise_level', [0.5])  # ???
     vg.add('reward_dist_threshold', [0.3])
-    vg.add('indicator_reward', [True, False])
-    vg.add('min_reward', lambda indicator_reward: [5] if indicator_reward else [10])  # now running it with only the terminal reward of 1!
-    vg.add('max_reward', lambda indicator_reward, reward_dist_threshold: [900 * reward_dist_threshold] if indicator_reward else [6e3])
-    vg.add('improvement_threshold', [10])  # is this based on the reward, now discounted success rate --> push for fast
+    vg.add('indicator_reward', [True])
+    vg.add('min_reward', lambda indicator_reward: [5] if indicator_reward else [
+        10])  # now running it with only the terminal reward of 1!
+    vg.add('max_reward',
+           lambda indicator_reward, reward_dist_threshold: [900 * reward_dist_threshold] if indicator_reward else [6e3])
+    vg.add('improvement_threshold', lambda indicator_reward: [10] if indicator_reward else [
+        10])  # is this based on the reward, now discounted success rate --> push for fast
     vg.add('outer_iters', [400])
     vg.add('inner_iters', [5])
     vg.add('pg_batch_size', [20000])
@@ -79,22 +83,24 @@ if __name__ == '__main__':
     vg.add('gan_noise_size', [4])
     vg.add('num_new_goals', [200])
     vg.add('num_old_goals', [100])
-    vg.add('gan_generator_layers', [[256, 256]]),
-    vg.add('gan_discriminator_layers', [[128, 128]]),
+    vg.add('gan_generator_layers', [[256, 256]])
+    vg.add('gan_discriminator_layers', [[128, 128]])
 
-    vg.add('seed', range(20, 100, 20))
+    vg.add('seed', range(100, 150, 10))
     # mine
     vg.add('distance_metric', ['L2'])
     # vg.add('terminal_bonus', [0])
     # vg.add('terminal_eps', lambda reward_dist_threshold: [
     #     reward_dist_threshold])  # if hte terminal bonus is 0 it doesn't kill it! Just count how many reached center
-    vg.add('smart_init', [False, True])
-    vg.add('coll_eps', lambda reward_dist_threshold: [0, reward_dist_threshold])
+    vg.add('smart_init', [True])
+    vg.add('replay_buffer', [True])
+    vg.add('coll_eps', [0.3])  #lambda reward_dist_threshold: [reward_dist_threshold, 0])
     # old hyperparams
     # policy initialization
     vg.add('output_gain', [1])
     vg.add('policy_init_std', [1])
-    vg.add('learn_std', [False, True])
+    vg.add('learn_std', [True])
+    vg.add('adaptive_std', [False])
     # gan_configs
     vg.add('GAN_batch_size', [128])  # proble with repeated name!!
     vg.add('GAN_generator_activation', ['relu'])
@@ -109,11 +115,10 @@ if __name__ == '__main__':
     vg.add('GAN_discriminator_weight_initializer_stddev', [0.02])
     vg.add('GAN_discriminator_batch_noise_stddev', [1e-2])
 
-
     # Launching
-    print("\n" + "**********"*10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
+    print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
-                                                                                   config.AWS_SPOT_PRICE,  n_parallel),
+                                                                                   config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
 
     for vv in vg.variants():
@@ -180,4 +185,3 @@ if __name__ == '__main__':
                 exp_prefix=exp_prefix,
                 # exp_name=exp_name,
             )
-

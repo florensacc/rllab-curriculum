@@ -10,6 +10,7 @@ from sandbox.young_clgan.lib.logging import HTMLReport
 from sandbox.young_clgan.lib.logging import format_dict
 from sandbox.young_clgan.lib.logging.visualization import save_image, plot_gan_samples, plot_labeled_samples, \
     plot_line_graph
+from collections import OrderedDict
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -30,6 +31,7 @@ import tflearn
 import matplotlib
 
 matplotlib.use('Agg')
+from matplotlib import pyplot as plt
 
 from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator, \
     generate_initial_goals, UniformGoalGenerator
@@ -57,12 +59,10 @@ def run_task(v):
     # Log performance of randomly initialized policy with FIXED goal [0.1, 0.1]
     logger.log("Initializing report and plot_policy_reward...")
     log_dir = logger.get_snapshot_dir()  # problem with logger module here!!
-    report = HTMLReport(osp.join(log_dir, 'report.html'))
+    report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=2)
 
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
-
-    tf_session = tf.Session()
 
     # # GAN
     # logger.log("Instantiating the GAN...")
@@ -103,13 +103,15 @@ def run_task(v):
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
 
-    n_traj = 3 if v['indicator_reward'] else 1
-    test_and_plot_policy(policy, env, max_reward=v['max_reward'], n_traj=n_traj)
-    reward_img = save_image(fname=osp.join(log_dir, 'policy_reward_init.png'))
-    report.add_image(
-        reward_img,
-        'policy performance initialization\n'
-    )
+    # n_traj = 3 if v['indicator_reward'] else 1
+    n_traj = 3
+    sampling_res = 2
+    # test_and_plot_policy(policy, env, max_reward=v['max_reward'], n_traj=n_traj)
+    # reward_img = save_image(fname=osp.join(log_dir, 'policy_reward_init.png'))
+    # report.add_image(
+    #     reward_img,
+    #     'policy performance initialization\n'
+    # )
 
     # logger.log("Pretraining the gan for uniform sampling")
     # gan.pretrain_uniform()
@@ -132,6 +134,7 @@ def run_task(v):
 
     all_mean_rewards = []
     all_coverage = []
+    all_success = []
 
     for outer_iter in range(v['outer_iters']):
 
@@ -145,17 +148,14 @@ def run_task(v):
         # else:
         #     goals = raw_goals
 
+        goals = np.random.uniform(-v['goal_range'], v['goal_range'], size=(300, v['goal_size']))
+
         with ExperimentLogger(log_dir, outer_iter, snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment goal generator")
             if v['unif_goals']:
                 update_env_goal_generator(
                     env,
-                    UniformListGoalGenerator(
-                        np.random.uniform(
-                            -v['goal_range'], v['goal_range'],
-                            size=(1000, v['goal_size'])
-                        ).tolist()
-                    )
+                    UniformListGoalGenerator(goals.tolist())
                 )
             else:
                 update_env_goal_generator(env, FixedGoalGenerator(v['final_goal']))
@@ -176,57 +176,67 @@ def run_task(v):
             algo.train()
 
         logger.log('Generating the Heatmap...')
-        avg_rewards, heatmap = test_and_plot_policy(policy, env, max_reward=v['max_reward'], n_traj=n_traj)
+        avg_rewards, avg_success, heatmap = test_and_plot_policy(policy, env, max_reward=v['max_reward'],
+                                                                 sampling_res=sampling_res, n_traj=n_traj)
         reward_img = save_image()
 
         mean_rewards = np.mean(avg_rewards)
+        # coverage is more restrictive! In avg it has to be above max_reward: if some are but not the avg, not count!
         coverage = np.mean([int(avg_reward >= v['max_reward']) for avg_reward in avg_rewards])
+        success = np.mean(avg_success)
 
         all_mean_rewards.append(mean_rewards)
         all_coverage.append(coverage)
+        all_success.append(success)
 
         with logger.tabular_prefix('Outer_'):
             logger.record_tabular('MeanRewards', mean_rewards)
             logger.record_tabular('Coverage', coverage)
+            logger.record_tabular('Success', success)
         # logger.dump_tabular(with_prefix=False)
 
         report.add_image(
             reward_img,
-            'policy performance\n itr: {} \nmean_rewards: {} \ncoverage: {}'.format(
+            'policy performance\n itr: {} \nmean_rewards: {} \ncoverage: {}\nsuccess: {}'.format(
                 outer_iter, all_mean_rewards[-1],
-                all_coverage[-1]
+                all_coverage[-1], all_success[-1],
             )
         )
+
+        # plt.scatter(goals[:, 0], goals[:, 1])
+        # scatter_plot = save_image()
+        # report.add_image(scatter_plot, 'goals sampled for itr{}'.format(outer_iter))
+
         report.save()
 
-        # logger.log("Labeling the goals")
-        # labels = label_goals(
-        #     goals, env, policy, v['horizon'],
-        #     min_reward=v['min_reward'],
-        #     max_reward=v['max_reward'],
-        #     old_rewards=rewards_before,
-        #     improvement_threshold=v['improvement_threshold'],
-        #     n_traj=n_traj)
-        #
-        # logger.log("Training the GAN")
-        # gan.train(
-        #     goals, labels,
-        #     v['gan_outer_iters'],
-        #     v['gan_generator_iters'],
-        #     v['gan_discriminator_iters'],
-        #     suppress_generated_goals=True
-        # )
-        #
-        # logger.log("Converting the labels")
-        # goal_classes, text_labels = convert_label(labels)
+        logger.log("Labeling the goals")
+        labels = label_goals(
+            goals, env, policy, v['horizon'],
+            min_reward=v['min_reward'],
+            max_reward=v['max_reward'],
+            old_rewards=None,
+            improvement_threshold=v['improvement_threshold'],
+            n_traj=n_traj)
 
-        # logger.log("Plotting the labeled samples")
-        # img = plot_labeled_samples(
-        #     samples=goals, sample_classes=goal_classes,
-        #     text_labels=text_labels, limit=v['goal_range'] + 5,
-        #     # fname=osp.join(log_dir, 'sampled_goals_{}.png'.format(outer_iter)),
-        # )
-        # report.add_image(img, 'goals\n itr: {}'.format(outer_iter), width=500)
+        logger.log("Converting the labels")
+        goal_classes, text_labels = convert_label(labels)
+
+        logger.log("Plotting the labeled samples")
+        total_goals = labels.shape[0]
+        goal_class_frac = OrderedDict()  # this needs to be an ordered dict!! (for the log tabular)
+        for k in text_labels.keys():
+            frac = np.sum(goal_classes == k) / total_goals
+            logger.record_tabular('GenGoal_frac_' + text_labels[k], frac)
+            goal_class_frac[text_labels[k]] = frac
+
+        img = plot_labeled_samples(
+            samples=goals, sample_classes=goal_classes, text_labels=text_labels, limit=v['goal_range'],
+            # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
+        )
+        summary_string = ''
+        for key, value in goal_class_frac.items():
+            summary_string += key + ' frac: ' + str(value) + '\n'
+        report.add_image(img, 'itr: {}\nLabels of generated goals:\n{}'.format(outer_iter, summary_string), width=500)
 
         logger.dump_tabular(with_prefix=False)
         report.save()

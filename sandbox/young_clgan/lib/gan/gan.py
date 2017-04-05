@@ -1,4 +1,5 @@
 import copy
+from rllab.misc import logger
 
 import numpy as np
 
@@ -48,12 +49,12 @@ class FCGAN(object):
             )
 
         self.generator_variables = tf.get_collection(
-            tf.GraphKeys.VARIABLES,
+            tf.GraphKeys.GLOBAL_VARIABLES,
             'generator'
         )
 
         self.discriminator_variables = tf.get_collection(
-            tf.GraphKeys.VARIABLES,
+            tf.GraphKeys.GLOBAL_VARIABLES,
             'discriminator'
         )
 
@@ -69,16 +70,16 @@ class FCGAN(object):
             )
 
         self.generator_optimizer_variables = tf.get_collection(
-            tf.GraphKeys.VARIABLES,
+            tf.GraphKeys.GLOBAL_VARIABLES,
             'fcgan_generator_optimizer'
         )
 
         self.discriminator_optimizer_variables = tf.get_collection(
-            tf.GraphKeys.VARIABLES,
+            tf.GraphKeys.GLOBAL_VARIABLES,
             'fcgan_discriminator_optimizer'
         )
 
-        self.initialize_trainable_variable_op = tf.initialize_variables(
+        self.initialize_trainable_variable_op = tf.variables_initializer(
             (self.generator_variables
              + self.discriminator_variables
              + self.generator_optimizer_variables
@@ -88,14 +89,25 @@ class FCGAN(object):
             self.initialize_trainable_variable_op
         )
 
-        self.initialize_generator_optimizer_op = tf.initialize_variables(
+        self.initialize_generator_optimizer_op = tf.variables_initializer(
             self.generator_optimizer_variables
         )
 
-        self.initialize_discriminator_optimizer_op = tf.initialize_variables(
+        self.initialize_discriminator_optimizer_op = tf.variables_initializer(
             self.discriminator_optimizer_variables
         )
 
+        self.tf_session.run(
+            self.initialize_generator_optimizer_op
+        )
+        self.tf_session.run(
+            self.initialize_discriminator_optimizer_op
+        )
+
+    def initialize(self):
+        self.tf_session.run(
+            self.initialize_trainable_variable_op
+        )
         self.tf_session.run(
             self.initialize_generator_optimizer_op
         )
@@ -137,7 +149,7 @@ class FCGAN(object):
             sample_size
         )
         generated_Y = np.zeros((train_size, Y.shape[1]))
-        for _ in range(outer_iters):
+        for i in range(outer_iters):
             if self.configs['reset_generator_optimizer']:
                 self.tf_session.run(
                     self.initialize_generator_optimizer_op
@@ -160,8 +172,14 @@ class FCGAN(object):
                 feed_X = np.vstack([sample_X])
                 feed_Y = np.vstack([sample_Y])
 
-            self.train_discriminator(feed_X, feed_Y, discriminator_iters)
-            self.train_generator(random_noise, generator_iters)
+            dis_log_loss = self.train_discriminator(feed_X, feed_Y, discriminator_iters)
+            gen_log_loss = self.train_generator(random_noise, generator_iters)
+        # if i == 0:
+        #         logger.record_tabular('Discrim_lossBefore', dis_log_loss[0])
+        #         logger.record_tabular('Gen_lossBefore', gen_log_loss[0])
+        # logger.record_tabular('Discim_lossAfter', dis_log_loss[-1])
+        # logger.record_tabular('Gen_lossAfter', gen_log_loss[-1])
+        return dis_log_loss, gen_log_loss
 
     def train_discriminator(self, X, Y, iters):
         """
@@ -171,6 +189,7 @@ class FCGAN(object):
         The batch size is given by the configs of the class!
         discriminator_batch_noise_stddev > 0: check that std on each component is at least this. (if com: 2)
         """
+        log_loss = []
         tflearn.config.is_training(is_training=True, session=self.tf_session)
         batch_size = self.configs['batch_size']
         for i in range(iters):
@@ -181,7 +200,7 @@ class FCGAN(object):
             if self.configs['discriminator_batch_noise_stddev'] > 0:
                 noise_indices = np.var(train_X, axis=0) < self.configs['discriminator_batch_noise_stddev']
                 noise = np.random.randn(*train_X.shape)
-                noise[np.logical_not(noise_indices)] = 0
+                noise[:, np.logical_not(noise_indices)] = 0
                 train_X += noise * self.configs['discriminator_batch_noise_stddev']
 
             self.tf_session.run(
@@ -190,15 +209,17 @@ class FCGAN(object):
                  self.discriminator.label: train_Y}
             )
 
-            if i % self.configs['print_iteration'] == 0:
+            if i % self.configs['print_iteration'] == 0 or i == iters - 1:
                 loss = self.tf_session.run(
                     self.discriminator.discriminator_loss,
                     {self.discriminator.sample_input: train_X,
                      self.discriminator.label: train_Y}
                 )
-                print('discriminator loss: %f' % loss)
+                log_loss.append(loss)
+                print('Disc_itr_%i: discriminator loss: %f' % (i, loss))
                 # if loss < 1e-3:
                 #     break
+        return log_loss
 
     def train_generator(self, X, iters):
         """
@@ -206,6 +227,7 @@ class FCGAN(object):
         :param iters:
         :return:
         """
+        log_loss = []
         tflearn.config.is_training(is_training=False, session=self.tf_session)
         batch_size = self.configs['batch_size']
         for i in range(iters):
@@ -217,14 +239,16 @@ class FCGAN(object):
                 {self.generator.input: train_X}
             )
 
-            if i % self.configs['print_iteration'] == 0:
+            if i % self.configs['print_iteration'] == 0 or i == iters - 1:
                 loss = self.tf_session.run(
                     self.discriminator.generator_loss,
                     {self.generator.input: train_X}
                 )
-                print('generator loss: %f' % loss)
+                log_loss.append(loss)
+                print('Gen_itr_%i: generator loss: %f' % (i, loss))
                 # if loss < 1e-3:
                 #     break
+        return log_loss
 
     def discriminator_predict(self, X):
         tflearn.config.is_training(is_training=False, session=self.tf_session)

@@ -88,6 +88,8 @@ def run_task(v):
                                 distance_metric=v['distance_metric'],
                                 terminal_eps=v['terminal_eps'], terminal_bonus=v['terminal_bonus'],
                                 )  # this goal_generator will be updated by a uniform after
+    if v['sample_unif_feas']:
+        env.update_goal_generator(uniform_feasible_goal_generator)
 
     policy = GaussianMLPPolicy(
         env_spec=env.spec,
@@ -99,6 +101,7 @@ def run_task(v):
     )
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
+    n_traj = 3 if v['terminal_bonus'] > 0 else 1
 
     # feasible_goals = generate_initial_goals(env, policy, v['goal_range'], horizon=v['horizon'], size=10000) #v['horizon'])
     # print(feasible_goals)
@@ -138,6 +141,7 @@ def run_task(v):
     logger.log("Starting the outer iterations")
     for outer_iter in range(v['outer_iters']):
 
+        logger.log("Outer itr # %i" % outer_iter)
         # # Train GAN
         # logger.log("Sampling goals...")
         # raw_goals, _ = gan.sample_goals_with_noise(v['num_new_goals'])
@@ -244,13 +248,13 @@ def run_task(v):
             update_env_goal_generator(env, goal_generator=uniform_feasible_goal_generator)
             evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=50,
                               fig_prefix='UnifFeasGoalGen_itr%d' % outer_iter,
-                              report=report)
+                              report=report, n_traj=n_traj)
         # back to old goal generator
         with logger.tabular_prefix("UnifGoalGen_"):
             update_env_goal_generator(env, goal_generator=old_goal_generator)
             evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=50,
                               fig_prefix='UnifGoalGen_itr%d' % outer_iter,
-                              report=report)
+                              report=report, n_traj=n_traj)
         # with logger.tabular_prefix('FixGoalGen_'):
         #     update_env_goal_generator(env, goal_generator=fixed_goal_generator)
         #     evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=5, fig_prefix='FixGoalGen',
@@ -263,8 +267,8 @@ def run_task(v):
     with logger.tabular_prefix('FINALUnifFeasGoalGen_'):
         update_env_goal_generator(env, goal_generator=uniform_feasible_goal_generator)
         evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=5e3, fig_prefix='FINAL1UnifFeasGoalGen_',
-                          report=report)
+                          report=report, n_traj=n_traj)
         evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=5e3, fig_prefix='FINAL2UnifFeasGoalGen_',
-                          report=report)
+                          report=report, n_traj=n_traj)
     logger.dump_tabular(with_prefix=False)
 

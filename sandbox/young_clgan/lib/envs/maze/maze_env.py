@@ -93,7 +93,7 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
                         material="",
                         contype="1",
                         conaffinity="1",
-                        rgba="0.4 0.4 0.4 1"
+                        rgba="0.4 0.4 0.4 0.5"
                     )
 
         torso = tree.find(".//body[@name='torso']")

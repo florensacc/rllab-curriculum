@@ -17,6 +17,7 @@ quick_test = False
 
 filename = str(uuid.uuid4())
 
+
 def get_policy(file):
     policy = None
     train_env = None
@@ -36,6 +37,7 @@ def get_policy(file):
         train_env = data['env']
     return policy, train_env
 
+
 def my_square_scatter(axes, x_array, y_array, z_array, min_z=None, max_z=None, size=0.5, **kwargs):
     size = float(size)
 
@@ -48,7 +50,7 @@ def my_square_scatter(axes, x_array, y_array, z_array, min_z=None, max_z=None, s
     colors = pylab.cm.jet(normal(z_array))
 
     for x, y, c in zip(x_array, y_array, colors):
-        square = pylab.Rectangle((x-size/2,y-size/2), size, size, color=c, **kwargs)
+        square = pylab.Rectangle((x - size / 2, y - size / 2), size, size, color=c, **kwargs)
         axes.add_patch(square)
 
     axes.autoscale()
@@ -59,7 +61,7 @@ def my_square_scatter(axes, x_array, y_array, z_array, min_z=None, max_z=None, s
     return True
 
 
-def plot_heatmap(rewards, goals, prefix='', max_reward=6000, spacing=spacing, show_heatmap=True):
+def plot_heatmap(rewards, goals, prefix='', max_reward=6000, spacing=1, show_heatmap=True):
     fig, ax = plt.subplots()
 
     x_goal, y_goal = np.array(goals).T
@@ -81,21 +83,20 @@ def plot_heatmap(rewards, goals, prefix='', max_reward=6000, spacing=spacing, sh
 
     # ax.set_xlim([np.max(ys), np.min(ys)])
     # ax.set_ylim([np.min(xs), np.max(xs)])
-    #plt.scatter(x_goal, y_goal, c=rewards, s=1000, vmin=0, vmax=max_reward)
-    #plt.colorbar()
+    # plt.scatter(x_goal, y_goal, c=rewards, s=1000, vmin=0, vmax=max_reward)
+    # plt.colorbar()
     if show_heatmap:
         plt.show()
     return fig
 
 
 def test_policy(policy, train_env, visualize=True, sampling_res=1, n_traj=1):
-
     empty_spaces = train_env.wrapped_env.find_empty_space()
 
     if quick_test:
         sampling_res = 0
         empty_spaces = empty_spaces[:3]
-        max_path_length=100
+        max_path_length = 100
     else:
         max_path_length = 400
 
@@ -105,12 +106,13 @@ def test_policy(policy, train_env, visualize=True, sampling_res=1, n_traj=1):
     starting_offset = spacing / 2
 
     avg_totRewards = []
+    avg_success = []
     goals = []
 
     distances = []
     for empty_space in empty_spaces:
-        delta_x = empty_space[0] # - train_env.wrapped_env._init_torso_x
-        delta_y = empty_space[1] # - train_env.wrapped_env._init_torso_y
+        delta_x = empty_space[0]  # - train_env.wrapped_env._init_torso_x
+        delta_y = empty_space[1]  # - train_env.wrapped_env._init_torso_y
         distance = (delta_x ** 2 + delta_y ** 2) ** 0.5
         distances.append(distance)
 
@@ -127,7 +129,7 @@ def test_policy(policy, train_env, visualize=True, sampling_res=1, n_traj=1):
                 paths = []
                 x = starting_x + i * spacing
                 y = starting_y + j * spacing
-                goal = (x,y)
+                goal = (x, y)
                 goals.append(goal)
                 update_env_goal_generator(train_env, FixedGoalGenerator(goal))
                 for n in range(n_traj):
@@ -135,24 +137,29 @@ def test_policy(policy, train_env, visualize=True, sampling_res=1, n_traj=1):
                     paths.append(path)
                 # print('goal: ', goal, ', the one in env_infos is: ', paths[-1]['env_infos']['x_goal'], paths[-1]['env_infos']['y_goal'])
                 avg_totRewards.append(np.mean([np.sum(path['rewards']) for path in paths]))
+                min_dist = [np.min(path['env_infos']['distance']) for path in paths]
+                # print("min_dists in {}-{} is: {}".format(i, j, min_dist))
+                avg_success.append(np.mean([int(np.min(path['env_infos']['distance'])
+                                                <= train_env.wrapped_env.wrapped_env.terminal_eps) for path in paths]))
 
-    return avg_totRewards, goals, spacing
+    return avg_totRewards, avg_success, goals, spacing
 
 
-def test_and_plot_policy(policy, env, max_reward=6000, visualize=False, n_traj=1):
-    avg_totRewards, goals, spacing = test_policy(policy, env, visualize, n_traj=n_traj)
+def test_and_plot_policy(policy, env, max_reward=6000, visualize=False, sampling_res=1, n_traj=1):
+    avg_totRewards, avg_success, goals, spacing = test_policy(policy, env, visualize, sampling_res=sampling_res, n_traj=n_traj)
 
-    heatmap = plot_heatmap(avg_totRewards, goals, max_reward=max_reward, spacing=spacing, show_heatmap=False)
+    # heatmap = plot_heatmap(avg_totRewards, goals, max_reward=max_reward, spacing=spacing, show_heatmap=False)
+    heatmap = plot_heatmap(avg_success, goals, max_reward=1, spacing=spacing, show_heatmap=False)
 
-    return avg_totRewards, heatmap
+    return avg_totRewards, avg_success, heatmap
 
 
 def main():
-    #pkl_file = "sandbox/young_clgan/experiments/point_env_maze/experiment_data/cl_gan_maze/2017-02-20_22-43-48_dav2/log/itr_129/itr_9.pkl"
-#    pkl_file = "sandbox/young_clgan/experiments/point_env_maze/experiment_data/cl_gan_maze/2017-02-21_15-30-36_dav2/log/itr_69/itr_4.pkl"
-#    pkl_file = "sandbox/young_clgan/experiments/point_env_maze/experiment_data/cl_gan_maze/2017-02-21_22-49-03_dav2/log/itr_199/itr_4.pkl"
-    #pkl_file = "sandbox/young_clgan/experiments/point_env_maze/experiment_data/cl_gan_maze/2017-02-22_13-06-53_dav2/log/itr_119/itr_4.pkl"
-    #pkl_file = "data/local/goalGAN-maze30/goalGAN-maze30_2017_02_24_01_44_03_0001/itr_27/itr_4.pkl"
+    # pkl_file = "sandbox/young_clgan/experiments/point_env_maze/experiment_data/cl_gan_maze/2017-02-20_22-43-48_dav2/log/itr_129/itr_9.pkl"
+    #    pkl_file = "sandbox/young_clgan/experiments/point_env_maze/experiment_data/cl_gan_maze/2017-02-21_15-30-36_dav2/log/itr_69/itr_4.pkl"
+    #    pkl_file = "sandbox/young_clgan/experiments/point_env_maze/experiment_data/cl_gan_maze/2017-02-21_22-49-03_dav2/log/itr_199/itr_4.pkl"
+    # pkl_file = "sandbox/young_clgan/experiments/point_env_maze/experiment_data/cl_gan_maze/2017-02-22_13-06-53_dav2/log/itr_119/itr_4.pkl"
+    # pkl_file = "data/local/goalGAN-maze30/goalGAN-maze30_2017_02_24_01_44_03_0001/itr_27/itr_4.pkl"
     pkl_file = "/home/davheld/repos/goalgen/rllab_goal_rl/data/s3/goalGAN-maze11/goalGAN-maze11_2017_02_23_01_06_12_0005/itr_199/itr_4.pkl"
 
     # parser = argparse.ArgumentParser()
@@ -172,7 +179,7 @@ def main():
 
     policy, train_env = get_policy(pkl_file)
 
-    avg_totRewards, goals, spacing = test_policy(policy, train_env, sampling_res=1)
+    avg_totRewards, avg_success, goals, spacing = test_policy(policy, train_env, sampling_res=1)
 
     plot_heatmap(avg_totRewards, goals, spacing=spacing)
 

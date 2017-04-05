@@ -13,22 +13,24 @@ import time
 # import cv2
 import pdb
 import copy
-np.set_printoptions(threshold=np.nan, linewidth=np.nan)
-class Pr2EnvLego(MujocoEnv, Serializable):
 
+np.set_printoptions(threshold=np.nan, linewidth=np.nan)
+
+
+class Pr2EnvLego(MujocoEnv, Serializable):
     FILE = 'pr2_legofree.xml'
 
     def __init__(
             self,
             goal_generator=None,
             lego_generator=None,
-            action_penalty_weight= 0.001, #originally was 0.001 #there is one with 0.0005
+            action_penalty_weight=0.001,  # originally was 0.001 #there is one with 0.0005
             distance_thresh=0.01,  # 1 cm
-            model='pr2_legofree.xml', #'pr2_1arm.xml',
+            model='pr2_legofree.xml',  # 'pr2_1arm.xml',
             max_action=float("inf"),
-            allow_random_restarts=True,   #same position: True
+            allow_random_restarts=True,  # same position: True
             allow_random_vel_restarts=True,
-            qvel_init_std=1, #0.01,
+            qvel_init_std=1,  # 0.01,
             pos_normal_sample=False,
             pos_normal_sample_std=0.01,
             action_limiter=FixedActionLimiter(),
@@ -61,18 +63,18 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.min_action_limit = 0.1
         self.qvel_init_std = qvel_init_std
         self.pos_normal_sample = pos_normal_sample
-        self.pos_normal_sample_std=pos_normal_sample_std
+        self.pos_normal_sample_std = pos_normal_sample_std
         self.mean_failure_rate = mean_failure_rate_init
         self.failure_rate_gamma = failure_rate_gamma
         self.use_running_average_failure_rate = use_running_average_failure_rate
         self.offset = offset
-        self.distance_tip_lego_penalty_weight = 0.6 #0.5 #0.4 #1  #0.1  #0.3
-        self.angle_penalty_weight = 0.2 #0.2 #0.4 #0.5 #1 #0.05
-        self.occlusion_weight = 0.0005 #0.0005
+        self.distance_tip_lego_penalty_weight = 0.6  # 0.5 #0.4 #1  #0.1  #0.3
+        self.angle_penalty_weight = 0.2  # 0.2 #0.4 #0.5 #1 #0.05
+        self.occlusion_weight = 0.0005  # 0.0005
         self.use_vision = use_vision
         self.use_depth = use_depth
         self.discount = 0.95
-        self.depth = np.zeros([99, 99, 3])  #TODO: Hacky
+        self.depth = np.zeros([99, 99, 3])  # TODO: Hacky
         # self.model = model
         self.gamma = 0
         self.iter = 0
@@ -101,7 +103,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             # depth = self.depth.transpose([2,0,1])
             idxpos = list(range(7)) + list(range(dim - 3, dim))  # TODO: Hacky
             idxvel = list(range(7))
-            return  np.concatenate([
+            return np.concatenate([
                 self.model.data.qpos.flat[idxpos],
                 # self.model.data.qpos.flat[:-3], # We do not need to explicitly include the goal
                 #                                 # since we already have the vec to the goal.
@@ -123,11 +125,11 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             ]).reshape(-1)
 
     def get_tip_position(self):
-        #return self.get_body_com("l_gripper_r_finger_tip_link")
+        # return self.get_body_com("l_gripper_r_finger_tip_link")
         return self.model.data.site_xpos[0]
 
     def get_lego_position(self):
-        #Return the position of the lego block
+        # Return the position of the lego block
         return self.model.data.site_xpos[-1]
 
     def get_vec_to_goal(self):
@@ -190,7 +192,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         reward_ctrl = - self.action_penalty_weight * np.square(action).sum()
         # reward = reward_dist + reward_ctrl + self.gamma * phi - phi_prev
         # reward = reward_dist + reward_ctrl + reward_tip
-        reward = reward_dist + reward_ctrl + self.gamma * phi - phi_prev #reward_ctrl#+ reward_occlusion
+        reward = reward_dist + reward_ctrl + self.gamma * phi - phi_prev  # reward_ctrl#+ reward_occlusion
 
         state = self._state
 
@@ -200,12 +202,11 @@ class Pr2EnvLego(MujocoEnv, Serializable):
 
         ob = self.get_current_obs()
 
-
         # Viewer
         if self.use_vision:
             self.viewer.loop_once()
 
-        return Step(ob, float(reward), done, #not self.do_rand,
+        return Step(ob, float(reward), done,  # not self.do_rand,
                     distance_to_goal=distance_to_goal,
                     distance_to_goal_x=vec_to_goal[0],
                     distance_to_goal_y=vec_to_goal[1],
@@ -221,24 +222,23 @@ class Pr2EnvLego(MujocoEnv, Serializable):
                     )
 
     def viewer_setup(self, is_bot=False):
-        #self.viewer.cam.lookat[0] = self.model.stat.center[0]
-        #self.viewer.cam.lookat[1] = self.model.stat.center[1]
-        #self.viewer.cam.lookat[2] = self.model.stat.center[2]
+        # self.viewer.cam.lookat[0] = self.model.stat.center[0]
+        # self.viewer.cam.lookat[1] = self.model.stat.center[1]
+        # self.viewer.cam.lookat[2] = self.model.stat.center[2]
         if self.use_vision:
             self.viewer.cam.camid = -1
             # self.viewer.cam.distance = self.model.stat.extent * 1.5
         else:
             self.viewer.cam.camid = -1
             self.viewer.cam.distance = self.model.stat.extent * 1.5
-        #self.viewer.cam.trackbodyid = -1   # 39
-        #self.viewer.cam.elevation = 0
-        #self.viewer.cam.azimuth = 0
-        #self.viewer.cam.VR = 1
-
+            # self.viewer.cam.trackbodyid = -1   # 39
+            # self.viewer.cam.elevation = 0
+            # self.viewer.cam.azimuth = 0
+            # self.viewer.cam.VR = 1
 
     @overrides
     def reset_mujoco(self, qpos=None, qvel=None):
-        goal_dims = 3 # self.goal_dims
+        goal_dims = 3  # self.goal_dims
         lego_dims = 6
         self.first_time = True
         if self.allow_random_restarts or self.first_time:
@@ -252,21 +252,21 @@ class Pr2EnvLego(MujocoEnv, Serializable):
                 qpos = np.zeros(self.model.data.qpos.shape)
                 for idx, jnt_range in enumerate(self.model.jnt_range):
                     qpos[idx] = np.random.uniform(jnt_range[0], jnt_range[1])
-                # Make sure joints are within limits
+                    # Make sure joints are within limits
             for idx, jnt_range in enumerate(self.model.jnt_range):
                 if self.model.jnt_limited[idx] == 1:
                     qpos[idx] = max(jnt_range[0], qpos[idx])
                     qpos[idx] = min(jnt_range[1], qpos[idx])
                     if idx == 1:
                         qpos[idx] = max(jnt_range[0], qpos[idx])
-                        qpos[idx] = min(jnt_range[0]*0.25 + jnt_range[1]*0.75, qpos[idx])
+                        qpos[idx] = min(jnt_range[0] * 0.25 + jnt_range[1] * 0.75, qpos[idx])
                     if idx == 3:
                         qpos[idx] = max(jnt_range[0], qpos[idx])
                         qpos[idx] = min(jnt_range[0] * 0.3 + 0.7 * jnt_range[1], qpos[idx])
 
         elif qpos is None:
             # Use current position as new position.
-            qpos_curr = self.model.data.qpos #[:-goal_dims]
+            qpos_curr = self.model.data.qpos  # [:-goal_dims]
             qpos = list(qpos_curr)
         # Generate a new goal.
         lego_position = self.get_lego_position()
@@ -274,7 +274,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             self.lego = self._lego_generator.generate_goal(lego_position)
             qpos[-goal_dims - lego_dims - 1:-goal_dims] = self.lego[:, None]
         else:
-        # print("No lego generator!")
+            # print("No lego generator!")
             qpos[-goal_dims - lego_dims - 1:-goal_dims] = np.array((0.6, 0.5, 0.5025, 1, 0, 0, 0))[:, None]
 
         if self._goal_generator is not None:
@@ -285,17 +285,17 @@ class Pr2EnvLego(MujocoEnv, Serializable):
 
         if self.allow_random_vel_restarts or self.first_time:
             # Generate a new random robot velocity.
-            #qvel = self.init_qvel + np.random.normal(size=self.init_qvel.shape) * 0.1
+            # qvel = self.init_qvel + np.random.normal(size=self.init_qvel.shape) * 0.1
             qvel = self.init_qvel + np.random.normal(size=self.init_qvel.shape) * self.qvel_init_std
-            #qvel = self.init_qvel + np.random.normal(size=self.init_qvel.shape) * 10
+            # qvel = self.init_qvel + np.random.normal(size=self.init_qvel.shape) * 10
         elif qvel is None:
             qvel = np.array(self.model.data.qvel)
 
         # Set the velocity of the goal (the goal itself -
         # this is NOT the arm velocity at the goal position!) to 0.
-        qvel[-goal_dims-lego_dims:] = 0
+        qvel[-goal_dims - lego_dims:] = 0
 
-        #The position of a free body has 7 components (3 space and 4 for quaternions)
+        # The position of a free body has 7 components (3 space and 4 for quaternions)
 
         self.init_qpos = qpos
         self.model.data.qpos = qpos
@@ -334,7 +334,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.first_time = False
 
         # Choose an action limit from the range of action limits.
-        #self.action_limit = np.random.uniform(self.min_action_limit, self.max_action_limit)
+        # self.action_limit = np.random.uniform(self.min_action_limit, self.max_action_limit)
 
     def update_env(self, env_vars):
         self._goal_generator = env_vars.goal_generator
@@ -345,7 +345,8 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         paths_within_thresh = np.mean([(d < self.distance_thresh).any() for d in distances_to_goal])
         failure_rate = 1 - paths_within_thresh
         if self.use_running_average_failure_rate:
-            self.mean_failure_rate = self.mean_failure_rate * self.failure_rate_gamma + failure_rate * (1 - self.failure_rate_gamma)
+            self.mean_failure_rate = self.mean_failure_rate * self.failure_rate_gamma + failure_rate * (
+            1 - self.failure_rate_gamma)
         else:
             # We don't want to be dependent on the initial failure rate, so just use a large batch size.
             self.mean_failure_rate = failure_rate
@@ -361,13 +362,13 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         logger.record_tabular('StdAbsActions', np.std(np.abs(actions)))
         logger.record_tabular('StdActions', np.std(actions))
 
-        #distances_to_goal_x = [path["env_infos"]["distance_to_goal_x"] for path in paths]
-        #distances_to_goal_y = [path["env_infos"]["distance_to_goal_y"] for path in paths]
-        #distances_to_goal_z = [path["env_infos"]["distance_to_goal_z"] for path in paths]
+        # distances_to_goal_x = [path["env_infos"]["distance_to_goal_x"] for path in paths]
+        # distances_to_goal_y = [path["env_infos"]["distance_to_goal_y"] for path in paths]
+        # distances_to_goal_z = [path["env_infos"]["distance_to_goal_z"] for path in paths]
 
-        #logger.record_tabular('FinalDistanceToGoalX', np.mean([d[-1] for d in distances_to_goal_x]))
-        #logger.record_tabular('FinalDistanceToGoalY', np.mean([d[-1] for d in distances_to_goal_y]))
-        #logger.record_tabular('FinalDistanceToGoalZ', np.mean([d[-1] for d in distances_to_goal_z]))
+        # logger.record_tabular('FinalDistanceToGoalX', np.mean([d[-1] for d in distances_to_goal_x]))
+        # logger.record_tabular('FinalDistanceToGoalY', np.mean([d[-1] for d in distances_to_goal_y]))
+        # logger.record_tabular('FinalDistanceToGoalZ', np.mean([d[-1] for d in distances_to_goal_z]))
 
 
         # logger.record_tabular('MaxFinalDistanceToGoalX', np.max([d[-1] for d in distances_to_goal_x]))
@@ -396,12 +397,13 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         # error_position_z = [path["env_infos"]["error_position_z"] for path in paths]
         # logger.record_tabular('ErrorpositionZ', np.max([np.max(e) for e in error_position_z]))
         # The task is considered complete when we get within distance_thresh of the goal.
-        #reached_goal_indices = np.where(distances_to_goal < distance_thresh)
-        #if (distances_to_goal < distance_thresh).any():
+        # reached_goal_indices = np.where(distances_to_goal < distance_thresh)
+        # if (distances_to_goal < distance_thresh).any():
         if any([(d < self.distance_thresh).any() for d in distances_to_goal]):
-            #distance_to_thresh = np.argmin(distances_to_goal < distance_thresh)
-            #np.mean([np.argmin(d < distance_thresh) for d in distances_to_goal if np.argmin(d < distance_thresh) > 0])
-            steps_to_thresh = np.mean([np.argmax(np.array(d) < self.distance_thresh) for d in distances_to_goal if (d < self.distance_thresh).any()])
+            # distance_to_thresh = np.argmin(distances_to_goal < distance_thresh)
+            # np.mean([np.argmin(d < distance_thresh) for d in distances_to_goal if np.argmin(d < distance_thresh) > 0])
+            steps_to_thresh = np.mean([np.argmax(np.array(d) < self.distance_thresh) for d in distances_to_goal if
+                                       (d < self.distance_thresh).any()])
         else:
             steps_to_thresh = len(distances_to_goal[0]) + 1
         time_to_thresh = steps_to_thresh * self.frame_skip * self.model.opt.timestep
@@ -413,7 +415,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         # vel_dim = len(self.model.data.qvel.flat[:-3])
         # Timesteps,
         # observations = [path["observations"] for path in paths]
-        #velocities = [path["observations"][:][pos_dim+1 : pos_dim+vel_dim] for path in paths]
+        # velocities = [path["observations"][:][pos_dim+1 : pos_dim+vel_dim] for path in paths]
         # velocities_nested = observations[:][pos_dim+1 : pos_dim+vel_dim]
         # velocities = list(itertools.chain.from_iterable(velocities_nested))
         # logger.record_tabular("MeanVelocities", np.mean(np.abs(velocities)))
@@ -435,6 +437,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         # failure_rate = self.get_mean_failure_rate()
         # expected_damage = action_limit * failure_rate
         # logger.record_tabular('Expected Damage', expected_damage)
+
     def __getstate__(self):
         d = super(Pr2EnvLego, self).__getstate__()
         d['_iter'] = self.iter
@@ -462,6 +465,5 @@ class Pr2EnvLego(MujocoEnv, Serializable):
     #
     def update_gamma(self):
         self.iter += 1
-        self.gamma = self.discount * (1 - np.exp(-self.iter/self.tau))
+        self.gamma = self.discount * (1 - np.exp(-self.iter / self.tau))
         # return self.angle_penalty_weight, self.distance_tip_lego_penalty_weight
-

@@ -10,7 +10,7 @@ from sandbox.dave.rllab.baselines.linear_feature_baseline import LinearFeatureBa
 
 from rllab.envs.normalized_env import normalize
 from sandbox.dave.rllab.goal_generators.pr2_goal_generators import PR2CrownGoalGeneratorSmall
-from sandbox.dave.rllab.lego_generators.pr2_lego_generators import PR2LegoFixedBlockGenerator
+from sandbox.dave.rllab.lego_generators.pr2_lego_generators import PR2LegoBoxBlockGeneratorSmall #PR2LegoBoxBlockGeneratorSmall #PR2LegoBoxBlockGeneratorSmall #PR2LegoFixedBlockGenerator
 from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.dave.rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.misc.instrument import VariantGenerator, variant
@@ -88,7 +88,7 @@ if __name__ == "__main__":
         for s in seeds:
             env = normalize(Pr2EnvLego(
                 goal_generator=train_goal_generator,
-                lego_generator=PR2LegoFixedBlockGenerator(),
+                lego_generator=PR2LegoBoxBlockGeneratorSmall(),
                 # action_limiter=action_limiter,
                 max_action=1,
                 pos_normal_sample=True,

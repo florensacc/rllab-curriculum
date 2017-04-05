@@ -24,6 +24,23 @@ from sandbox.carlos_snn.init_sampler.base import InitExplorationEnv
 from sandbox.young_clgan.lib.logging import *
 from sandbox.carlos_snn.autoclone import autoclone
 
+from sandbox.young_clgan.experiments.point_env_maze.maze_evaluate import test_and_plot_policy
+from sandbox.young_clgan.lib.envs.maze.point_maze_env import PointMazeEnv
+from sandbox.young_clgan.lib.goal.utils import GoalCollection
+from sandbox.young_clgan.lib.logging import HTMLReport
+from sandbox.young_clgan.lib.logging import format_dict
+from sandbox.young_clgan.lib.logging.visualization import save_image, plot_gan_samples, plot_labeled_samples, \
+    plot_line_graph
+from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator, \
+    generate_initial_goals, UniformGoalGenerator
+from sandbox.young_clgan.lib.goal import *
+# from sandbox.young_clgan.lib.logging import *
+# from sandbox.young_clgan.lib.logging.logger import ExperimentLogger
+
+from sandbox.young_clgan.lib.logging.logger import ExperimentLogger, AttrDict, format_experiment_log_path, make_log_dirs
+from sandbox.young_clgan.lib.goal.evaluator import convert_label, evaluate_goal_env
+from rllab.misc import logger
+
 # from sandbox.young_clgan.lib.utils import initialize_parallel_sampler
 # initialize_parallel_sampler()
 
@@ -70,7 +87,7 @@ if __name__ == '__main__':
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
 
-    exp_prefix = 'init-pendulum-3lim-trpo'
+    exp_prefix = 'init-maze-trpo'
     vg = VariantGenerator()
     # algorithm params
     vg.add('seed', range(30, 60, 10))
@@ -79,21 +96,47 @@ if __name__ == '__main__':
     vg.add('max_path_length', [200])
     # environemnt params
     vg.add('init_generator', [UniformInitGenerator])
-    vg.add('init_range', lambda init_generator: [np.pi] if init_generator == UniformInitGenerator else [None])
-    vg.add('angle_idxs', lambda init_generator: [(0,)] if init_generator == UniformInitGenerator else [None])
-    vg.add('goal', [(np.pi, 0), ])
+    vg.add('init_center', [(2,2)])
+    vg.add('init_range', lambda init_generator: [3] if init_generator == UniformInitGenerator else [None])
+    vg.add('angle_idxs', lambda init_generator: [(None,)])
+    vg.add('goal', [(0, 4), ])
+    vg.add('final_goal', lambda goal: [goal])
     vg.add('goal_reward', ['NegativeDistance'])
     vg.add('goal_weight', [0])  # this makes the task spars
     vg.add('terminal_bonus', [1])
+    vg.add('reward_dist_threshold', [0.3])
+    vg.add('terminal_eps', lambda reward_dist_threshold: [reward_dist_threshold])
+    vg.add('indicator_reward', [True])
+    vg.add('outer_iter', [500])
+    # policy hypers
+    vg.add('learn_std', [True])
+    vg.add('policy_init_std', [1])
+    vg.add('output_gain', [1])
 
 
     def run_task(v):
+        random.seed(v['seed'])
+        np.random.seed(v['seed'])
 
-        inner_env = normalize(PendulumEnv())
+        # tf_session = tf.Session()
+
+        # Log performance of randomly initialized policy with FIXED goal [0.1, 0.1]
+        logger.log("Initializing report and plot_policy_reward...")
+        log_dir = logger.get_snapshot_dir()  # problem with logger module here!!
+        report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=2)
+        report.add_header("{}".format(EXPERIMENT_TYPE))
+        report.add_text(format_dict(v))
+
+        inner_env = normalize(PointMazeEnv(
+            goal_generator=FixedGoalGenerator(v['final_goal']),
+            reward_dist_threshold=v['reward_dist_threshold'],
+            indicator_reward=v['indicator_reward'],
+            terminal_eps=v['terminal_eps'],
+        ))
 
         init_generator_class = v['init_generator']
         if init_generator_class == UniformInitGenerator:
-            init_generator = init_generator_class(init_size=np.size(v['goal']), bound=v['init_range'], center=v['goal'])
+            init_generator = init_generator_class(init_size=np.size(v['goal']), bound=v['init_range'], center=v['init_center'])
         else:
             assert init_generator_class == FixedInitGenerator, 'Init generator not recognized!'
             init_generator = init_generator_class(goal=v['goal'])
@@ -103,12 +146,27 @@ if __name__ == '__main__':
 
         policy = GaussianMLPPolicy(
             env_spec=env.spec,
-            hidden_sizes=(32, 32),
+            hidden_sizes=(64, 64),
             # Fix the variance since different goals will require different variances, making this parameter hard to learn.
-            learn_std=False
+            learn_std=v['learn_std'],
+            output_gain=v['output_gain'],
+            init_std=v['policy_init_std'],
         )
 
         baseline = LinearFeatureBaseline(env_spec=env.spec)
+
+        n_traj = 3
+        sampling_res = 2
+        # report.save()
+        report.new_row()
+
+        all_mean_rewards = []
+        all_coverage = []
+        all_success = []
+
+        # for outer_iter in range(v['outer_iters']):
+        #
+        #     goals = np.random.uniform(-v['goal_range'], v['goal_range'], size=(300, v['goal_size']))
 
         algo = TRPO(
             env=env,
@@ -156,7 +214,7 @@ if __name__ == '__main__':
                 n_parallel=n_parallel,
                 # Only keep the snapshot parameters for the last iteration
                 snapshot_mode="last",
-                seed=v['seed'],
+                seed=vv['seed'],
                 # plot=True,
                 exp_prefix=exp_prefix,
                 # exp_name=exp_name,
@@ -184,3 +242,4 @@ if __name__ == '__main__':
                 exp_prefix=exp_prefix,
                 # exp_name=exp_name,
             )
+

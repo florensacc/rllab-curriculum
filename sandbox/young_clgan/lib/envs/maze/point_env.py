@@ -106,7 +106,7 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
         dist = np.linalg.norm(
             self.get_body_com("torso") - self.get_body_com("target")
         )
-        if self.indicator_reward and dist < self.reward_dist_threshold:
+        if self.indicator_reward and dist <= self.reward_dist_threshold:
             return 1000 * self.reward_dist_threshold
         else:
             return linear_threshold_reward(dist, threshold=self.reward_dist_threshold, coefficient=-1000)

@@ -60,9 +60,9 @@ def parallel_map(func, iterable_object, num_processes=-1):
 
 
 def label_goals(goals, env, policy, horizon, min_reward, max_reward,
-                old_rewards=None, improvement_threshold=None, n_traj=1):
+                old_rewards=None, improvement_threshold=None, n_traj=1, n_processes=-1):
     print("Evaluating goals after training")
-    mean_rewards = evaluate_goals(goals, env, policy, horizon, n_traj)
+    mean_rewards = evaluate_goals(goals, env, policy, horizon, n_traj, n_processes=n_processes)
 
     print("Computing goal labels")
     mean_rewards = mean_rewards.reshape(-1, 1)
@@ -86,14 +86,16 @@ def label_goals(goals, env, policy, horizon, min_reward, max_reward,
 
 def convert_label(labels):
     """
-    :param labels: 3-dim evaluation of the goal
+    :param labels: 3-dim evaluation of the goal if they have learnability, 2-dim otherwise
     :return: convert to single integer label and gives associated texts (for plotting). Better if OrderedDict for log!
     """
     # label[0] --> LowRew, label[1] --> HighRew, label[2] --> Learnable ??
     # Put good goals last so they will be plotted on top of other goals and be most visible.
     classes = OrderedDict({
         0: 'Other',
+        # 1: r'Low rewards: $\bar{R}<R_{\min}$',
         1: 'Low rewards',
+        # 2: r'High rewards: $\bar{R}>R_{\max}$',
         2: 'High rewards',
         3: 'Unlearnable',
         4: 'Good goals',
@@ -102,12 +104,13 @@ def convert_label(labels):
     new_labels[np.logical_and(labels[:, 0], labels[:, 1])] = 4
     new_labels[labels[:, 0] == False] = 1
     new_labels[labels[:, 1] == False] = 2
-    new_labels[
-        np.logical_and(
-            np.logical_and(labels[:, 0], labels[:, 1]),
-            labels[:, 2] == False
-        )
-    ] = 3
+    if np.shape(labels)[-1] == 3:
+        new_labels[
+            np.logical_and(
+                np.logical_and(labels[:, 0], labels[:, 1]),
+                labels[:, 2] == False
+            )
+        ] = 3
 
     return new_labels, classes
 
@@ -118,7 +121,7 @@ def evaluate_goals(goals, env, policy, horizon, n_traj=1, n_processes=-1):
         env=env,
         policy=policy,
         horizon=horizon,
-        n_traj=n_traj
+        n_traj=n_traj,
     )
     mean_rewards = parallel_map(
         evaluate_goal_wrapper,
@@ -129,16 +132,27 @@ def evaluate_goals(goals, env, policy, horizon, n_traj=1, n_processes=-1):
 
 
 def evaluate_goal(goal, env, policy, horizon, n_traj=1):
-    mean_rewards = []
+    total_rewards = []
+    paths = []
     update_env_goal_generator(env, FixedGoalGenerator(goal))
     for j in range(n_traj):
-        mean_rewards.append(
-            np.sum(rollout(env, policy, horizon)['rewards'])
+        paths.append(rollout(env, policy, horizon))
+        total_rewards.append(
+            np.sum(paths[-1]['rewards'])
         )
+    mean_reward = np.mean(total_rewards)
+    # if 0 < mean_reward < 300:
+    #     # extra_paths = []
+    #     # for i in range(2):
+    #     #     extra_paths.append(rollout(env, policy, horizon, animated=True))
+    #     # print("Dists: ", [np.min(path['env_infos']['distance']) for path in extra_paths])
+    #     min_dists = [np.min(path['env_infos']['distance']) for path in paths]
+    #     traj_lens = [np.shape(path['rewards'])[0] for path in paths]
+    #     print("Goal: {}, Mean reward: {}, rewards: {}, traj_len: {}, min_dists: {}".format(goal, mean_reward, total_rewards, traj_lens, min_dists))
 
-    return np.mean(mean_rewards)
+    return mean_reward
 
 
-def evaluate_goal_env(env, policy, horizon, n_goals=10, **kwargs):
+def evaluate_goal_env(env, policy, horizon, n_goals=10, n_traj=1, **kwargs):
     paths = [rollout(env=env, agent=policy, max_path_length=horizon) for _ in range(n_goals)]
-    env.log_diagnostics(paths, **kwargs)
+    env.log_diagnostics(paths, n_traj=n_traj, **kwargs)

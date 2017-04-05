@@ -19,6 +19,7 @@ class GoalCollection(object):
         return sample_matrix_row(np.array(self.goal_list), size, replace)
 
     def _process_goals(self, goals):
+        "keep only the goals that are at more than dist_threshold from each other"
         goals = np.array(goals)
 
         results = [goals[0]]
@@ -28,14 +29,15 @@ class GoalCollection(object):
         return np.array(results)
 
     def append(self, goals):
-        goals = np.array(goals)
-        if self.distance_threshold is not None and self.distance_threshold > 0:
-            goals = self._process_goals(goals)
-            if len(self.goal_list) > 0:
-                dists = scipy.spatial.distance.cdist(self.goal_list, goals)
-                indices = np.amin(dists, axis=0) > self.distance_threshold
-                goals = goals[indices, :]
-        self.goal_list.extend(goals)
+        if goals:
+            goals = np.array(goals)
+            if self.distance_threshold is not None and self.distance_threshold > 0:
+                goals = self._process_goals(goals)
+                if len(self.goal_list) > 0:
+                    dists = scipy.spatial.distance.cdist(self.goal_list, goals)
+                    indices = np.amin(dists, axis=0) > self.distance_threshold
+                    goals = goals[indices, :]
+            self.goal_list.extend(goals)
 
     @property
     def goals(self):

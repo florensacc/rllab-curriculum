@@ -150,8 +150,8 @@ class GoalEnvAngle(GoalEnv, Serializable):
 
 class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
     def __init__(self, env, goal_generator, terminal_bonus=0, terminal_eps=-1, reward_dist_threshold=None,
-                 final_goal=None, goal_bounds=None,
-                 distance_metric='L2', goal_reward='NegativeDistance', goal_weight=1,
+                 final_goal=None, goal_bounds=None, max_reward=None,
+                 distance_metric='L2', goal_reward='NegativeDistance', dist_goal_weight=0,
                  inner_weight=0, angle_idxs=(None,), **kwargs):
         """
         :param env: wrapped env
@@ -160,7 +160,7 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
         :param terminal_eps: eps around which the terminal goal is considered reached
         :param distance_metric: L1 or L2 or a callable func
         :param goal_reward: NegativeDistance or InverseDistance or callable func
-        :param goal_weight: coef of the goal-dist reward
+        :param dist_goal_weight: coef of the goal-dist reward
         :param inner_weight: coef of the inner reward
         :param goal_bounds: array marking the UB of the rectangular limit of goals.
         """
@@ -173,14 +173,20 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
         self.reward_dist_threshold = reward_dist_threshold
         self._distance_metric = distance_metric
         self._goal_reward = goal_reward
-        self.goal_weight = goal_weight
+        self.dist_goal_weight = dist_goal_weight
         self.inner_weight = inner_weight
         self.fig_number = 0
         self.final_goal = final_goal
         self.goal_bounds = goal_bounds
+        self.max_reward = max_reward
+        if self.max_reward is None:
+            if self.terminal_bonus>0:
+                self.max_reward = self.terminal_bonus * 0.9
+            else:
+                print("Computing reward based on distance to goal only (not reward!)")
         GoalEnvAngle.__init__(self, angle_idxs=angle_idxs, **kwargs)
         if self.goal_bounds is None:
-            print("setting goal bounds to match env")
+            # print("setting goal bounds to match env")
             self.goal_bounds = self.wrapped_env.observation_space.bounds[1]  # we keep only UB
             self._feasible_goal_space = self.wrapped_env.observation_space
         else:
@@ -232,7 +238,7 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
         else:
             raise NotImplementedError('Unsupported goal_reward type.')
 
-        return self.goal_weight * intrinsic_reward
+        return self.dist_goal_weight * intrinsic_reward
 
     def _compute_dist(self, obs):
         if self._distance_metric == 'L1':
@@ -272,7 +278,7 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
         return spaces.Box(ub * -1, ub)
 
     @overrides
-    def log_diagnostics(self, paths, fig_prefix='', *args, **kwargs):
+    def log_diagnostics(self, paths, n_traj=1, fig_prefix='', *args, **kwargs):
         if fig_prefix == '':
             fig_prefix = str(self.fig_number)
             self.fig_number += 1
@@ -293,8 +299,17 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
             for path in paths
             ]
         goals = [path['observations'][0, -self.feasible_goal_space.flat_dim:] for path in paths]  # assumes const goal
-        success = [int(np.min(path['env_infos']['distance']) <= self.terminal_eps) for path in paths]
+        if self.max_reward:
+            success = [int(np.sum(path['rewards']) >= self.max_reward) for path in paths]
+        else:
+            success = [int(np.min(path['env_infos']['distance']) <= self.terminal_eps) for path in paths]
         feasible = [int(self.feasible_goal_space.contains(goal)) for goal in goals]
+        if n_traj > 1:
+            avg_success = []
+            for i in range(len(success) // n_traj):
+                avg_success.append(np.mean(success[3 * i: 3 * i + 3]))
+            success = avg_success  # here the success can be non-int
+
         print('the succes is: ', success)
         print('the feasible is: ', feasible)
 
@@ -305,7 +320,7 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
         logger.record_tabular('AvgTotalRewardInner', np.mean(reward_inner))
         logger.record_tabular('SuccessRate', np.mean(success))
         logger.record_tabular('FeasibilityRate', np.mean(feasible))
-        self.plot_success(paths, fig_prefix=fig_prefix, **kwargs)
+        self.plot_success(paths, fig_prefix=fig_prefix, **kwargs)  # if n_traj>1 this will plot several points atop
 
     def plot_success(self, paths, fig_prefix='', idx=None,
                      report=None, plot_paths=4):  # assume first 2 coord of state to plot
@@ -400,7 +415,7 @@ class GoalIdxExplorationEnv(GoalExplorationEnv, Serializable):
         self.idx = idx
         super(GoalIdxExplorationEnv, self).__init__(**kwargs)
         if self.feasible_goal_space.flat_dim > len(idx):
-            print("shrinking the feasible_goal_space to match idx")
+            # print("shrinking the feasible_goal_space to match idx")
             self.goal_bounds = self.goal_bounds[idx]
             self._feasible_goal_space = Box(low=-1 * self.goal_bounds, high=self.goal_bounds)
 
@@ -462,7 +477,6 @@ def get_current_goal(env):
 
 def generate_initial_goals(env, policy, goal_range, horizon=500, size=10000):
     current_goal = get_current_goal(env)
-
     goal_dim = np.array(current_goal).shape
     done = False
     obs = env.reset()
@@ -472,6 +486,7 @@ def generate_initial_goals(env, policy, goal_range, horizon=500, size=10000):
         steps += 1
         if done or steps >= horizon:
             steps = 0
+            done = False
             update_env_goal_generator(
                 env,
                 FixedGoalGenerator(

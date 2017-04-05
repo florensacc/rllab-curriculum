@@ -6,6 +6,9 @@ import os
 import random
 import numpy as np
 
+from sandbox.young_clgan.lib.envs.base import update_env_goal_generator
+from sandbox.young_clgan.lib.envs.base import FixedGoalGenerator
+
 filename = str(uuid.uuid4())
 
 if __name__ == "__main__":
@@ -21,8 +24,8 @@ if __name__ == "__main__":
                         help='# of loops')
     parser.add_argument('--seed', type=int, default=None,
                         help='seed')
-    parser.add_argument('--latent', type=str, default='',
-                        help='Type a string of 0 and 1 to prefix the latent')
+    parser.add_argument('--goal', type=str, default='',
+                        help='goal state, blank space separated')
     args = parser.parse_args()
 
     policy = None
@@ -38,7 +41,7 @@ if __name__ == "__main__":
             if policy:
                 new_policy = data['policy']
                 policy.set_param_values(new_policy.get_param_values())
-                if args.latent:
+                if args.goal:
                     policy.set_pre_fix_latent([int(i) for i in list(args.latent)])
                 path = rollout(env, policy, max_path_length=args.max_length,
                                animated=True, speedup=args.speedup)
@@ -53,8 +56,10 @@ if __name__ == "__main__":
             data = joblib.load(args.file)
             policy = data['policy']
             env = data['env']
-            if args.latent:
-                policy.set_pre_fix_latent([int(i) for i in list(args.latent)])
+            if args.goal:
+                print(args.goal.split(' '))
+                goal = [float(i) for i in args.goal.split(' ')]
+                update_env_goal_generator(env, FixedGoalGenerator(goal))
             path = rollout(env, policy, max_path_length=args.max_length,
                            animated=True, speedup=args.speedup)
         # print 'Total reward: ', sum(path["rewards"])
