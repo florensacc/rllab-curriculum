@@ -29,6 +29,7 @@ from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
 from sandbox.young_clgan.envs.init_sampler.base import update_env_init_generator, UniformListInitGenerator, FixedInitGenerator
 from sandbox.young_clgan.envs.init_sampler.evaluator import label_inits, convert_label
 from sandbox.young_clgan.goal.utils import GoalCollection
+from sandbox.young_clgan.goal.generator import GoalGAN
 from sandbox.young_clgan.logging import *
 from sandbox.young_clgan.logging import HTMLReport, format_dict
 from sandbox.young_clgan.logging.visualization import save_image, plot_labeled_samples

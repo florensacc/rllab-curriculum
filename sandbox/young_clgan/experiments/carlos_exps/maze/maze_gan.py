@@ -10,7 +10,7 @@ import math
 import random
 import sys
 from rllab.misc.instrument import run_experiment_lite
-from sandbox.young_clgan.experiments.point_env_maze.cl_gan_algo import CLGANPointEnvMaze
+from sandbox.young_clgan.experiments.point_maze.cl_gan_algo import CLGANPointEnvMaze
 from sandbox.young_clgan.logging import *
 from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone

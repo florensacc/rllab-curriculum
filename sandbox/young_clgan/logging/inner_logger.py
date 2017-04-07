@@ -28,15 +28,11 @@ class InnerExperimentLogger(object):
         self.snapshot_gap = snapshot_gap
         self.hold_outter_log = hold_outter_log
         # add and put tabular on hold for later
-        print("initializing inner tabular, _tabular_fds:", rllab.misc.logger._tabular_fds)
         rllab.misc.logger.add_tabular_output(self.inner_tabular_file)
-        print("after added inner tabular, _tabular_fds:", rllab.misc.logger._tabular_fds)
         # self.inner_tabular_file = rllab.misc.logger._tabular_outputs[-1]
         rllab.misc.logger.hold_tabular_output(self.inner_tabular_file)
-        print("put in hold inner tabular, _tabular_fds:", rllab.misc.logger._tabular_fds, rllab.misc.logger._tabular_fds_hold)
 
     def __enter__(self):
-        print("enter InnerExpLog _tabular_fds, _tabular_fds_hold:", rllab.misc.logger._tabular_fds, rllab.misc.logger._tabular_fds_hold)
         self.prev_snapshot_dir = rllab.misc.logger.get_snapshot_dir()
         self.prev_mode = rllab.misc.logger.get_snapshot_mode()
         # if you want to avoid dumping the data to the outer csv or log file.
@@ -45,17 +41,14 @@ class InnerExperimentLogger(object):
             self.prev_text_file = rllab.misc.logger._text_outputs[0]
             rllab.misc.logger.hold_tabular_output(self.prev_tabular_file)
             rllab.misc.logger.remove_text_output(self.prev_text_file)
-        print("holded outer tab. _tabular_fds, _tabular_fds_hold:", rllab.misc.logger._tabular_fds, rllab.misc.logger._tabular_fds_hold)
         rllab.misc.logger.add_text_output(self.text_file)
         rllab.misc.logger.add_tabular_output(self.inner_tabular_file)
         rllab.misc.logger.set_snapshot_dir(self.log_dir)
         rllab.misc.logger.set_snapshot_mode(self.snapshot_mode)
         rllab.misc.logger.set_snapshot_gap(self.snapshot_gap)
-        print("end enter. _tabular_fds, _tabular_fds_hold:", rllab.misc.logger._tabular_fds, rllab.misc.logger._tabular_fds_hold)
         return self
 
     def __exit__(self, type, value, traceback):
-        print("exiting ctxt. _tabular_fds, _tabular_fds_hold:", rllab.misc.logger._tabular_fds, rllab.misc.logger._tabular_fds_hold)
         if self.hold_outter_log:
             rllab.misc.logger.add_tabular_output(self.prev_tabular_file)
             rllab.misc.logger.add_text_output(self.prev_text_file)
@@ -63,7 +56,6 @@ class InnerExperimentLogger(object):
         rllab.misc.logger.set_snapshot_dir(self.prev_snapshot_dir)
         rllab.misc.logger.hold_tabular_output(self.inner_tabular_file)
         rllab.misc.logger.remove_text_output(self.text_file)
-        print("exited ctxt. _tabular_fds, _tabular_fds_hold:", rllab.misc.logger._tabular_fds, rllab.misc.logger._tabular_fds_hold)
 
 
 def format_experiment_log_path(script, experiment_type):
