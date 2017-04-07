@@ -30,10 +30,10 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 
-from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator
-from sandbox.young_clgan.lib.envs.point_env import PointEnv
-from sandbox.young_clgan.lib.goal import *
-from sandbox.young_clgan.lib.logging import *
+from sandbox.young_clgan.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator
+from sandbox.young_clgan.envs.point_env import PointEnv
+from sandbox.young_clgan.goal import *
+from sandbox.young_clgan.logging import *
 
 
 EXPERIMENT_TYPE = 'cl_gan'
@@ -61,7 +61,7 @@ else:
 if use_stub:
     stub(globals())
 
-from sandbox.young_clgan.lib.utils import AttrDict
+from sandbox.young_clgan.utils import AttrDict
 
 if __name__ == '__main__':
 

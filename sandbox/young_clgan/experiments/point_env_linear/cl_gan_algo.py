@@ -3,31 +3,24 @@ os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES']=''
 
 # Symbols that need to be stubbed
-import rllab
 from rllab.algos.base import RLAlgorithm
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
-from rllab.misc.instrument import stub, run_experiment_lite
-import rllab.misc.logger
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
-from rllab.sampler.stateful_pool import singleton_pool
 
 import time
 import random
 
 import numpy as np
-import scipy
 import tensorflow as tf
 import tflearn
 import matplotlib
 matplotlib.use('Agg')
-from matplotlib import pyplot as plt
 
 from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator
-from sandbox.young_clgan.lib.envs.point_env import PointEnv
-from sandbox.young_clgan.lib.goal import *
-from sandbox.young_clgan.lib.logging import *
+from sandbox.young_clgan.envs.point_env import PointEnv
+from sandbox.young_clgan.logging import *
 
 
 EXPERIMENT_TYPE = 'cl_gan'

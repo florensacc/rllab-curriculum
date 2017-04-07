@@ -1,13 +1,12 @@
+import datetime
 import os
 import os.path as osp
-import datetime
 
-from sandbox.young_clgan.experiments.point_env_maze.maze_evaluate import test_and_plot_policy
-from sandbox.young_clgan.lib.envs.maze.point_maze_env import PointMazeEnv
-from sandbox.young_clgan.lib.goal.utils import GoalCollection
-from sandbox.young_clgan.lib.logging import HTMLReport
-from sandbox.young_clgan.lib.logging import format_dict
-from sandbox.young_clgan.lib.logging.visualization import save_image, plot_gan_samples, plot_labeled_samples, \
+from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy
+from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
+from sandbox.young_clgan.logging import HTMLReport
+from sandbox.young_clgan.logging import format_dict
+from sandbox.young_clgan.logging.visualization import save_image, plot_gan_samples, plot_labeled_samples, \
     plot_line_graph
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
@@ -29,12 +28,13 @@ import tflearn
 import matplotlib
 matplotlib.use('Agg')
 
-from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator, generate_initial_goals
-from sandbox.young_clgan.lib.goal import *
-#from sandbox.young_clgan.lib.logging import *
-#from sandbox.young_clgan.lib.logging.logger import ExperimentLogger
+from sandbox.young_clgan.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator, generate_initial_goals
+from sandbox.young_clgan.goal.generator import GoalGAN
+from sandbox.young_clgan.goal.evaluator import label_goals, evaluate_goals
+from sandbox.young_clgan.goal.utils import GoalCollection
 
-from sandbox.young_clgan.lib.logging.logger import ExperimentLogger, AttrDict, format_experiment_log_path, make_log_dirs
+
+from sandbox.young_clgan.logging.logger import ExperimentLogger, AttrDict
 from rllab.misc import logger
 
 

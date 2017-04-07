@@ -1,11 +1,10 @@
 import os
 
-from sandbox.young_clgan.experiments.point_env_maze.maze_evaluate import test_and_plot_policy
+from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy
 from sandbox.young_clgan.lib.envs.maze.point_maze_env import PointMazeEnv
 from sandbox.young_clgan.lib.logging import HTMLReport
 from sandbox.young_clgan.lib.logging import format_dict
-from sandbox.young_clgan.lib.logging.visualization import save_image, plot_gan_samples, plot_labeled_samples, \
-    plot_line_graph
+from sandbox.young_clgan.lib.logging.visualization import save_image, plot_line_graph
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES']=''
@@ -21,17 +20,14 @@ import time
 import random
 
 import numpy as np
-import tensorflow as tf
-import tflearn
 import matplotlib
 matplotlib.use('Agg')
 
-from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator, generate_initial_goals
-from sandbox.young_clgan.lib.goal import *
+from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator
 #from sandbox.young_clgan.lib.logging import *
 #from sandbox.young_clgan.lib.logging.logger import ExperimentLogger
 
-from sandbox.young_clgan.lib.logging.logger import ExperimentLogger, AttrDict, format_experiment_log_path, make_log_dirs
+from sandbox.young_clgan.logging.logger import ExperimentLogger, AttrDict, format_experiment_log_path, make_log_dirs
 from rllab.misc import logger
 
 EXPERIMENT_TYPE = 'trpo_maze'

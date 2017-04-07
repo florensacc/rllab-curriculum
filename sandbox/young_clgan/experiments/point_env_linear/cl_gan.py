@@ -6,32 +6,12 @@ import multiprocessing
 
 # Symbols that need to be stubbed
 import rllab
-from rllab.algos.base import RLAlgorithm
-from rllab.algos.trpo import TRPO
-from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.misc.instrument import stub, run_experiment_lite
-import rllab.misc.logger
-from rllab.envs.normalized_env import normalize
-from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
-from rllab.sampler.stateful_pool import singleton_pool
 
-import time
-import datetime
-import random
-
-import numpy as np
-import scipy
-import tensorflow as tf
-import tflearn
 import matplotlib
 matplotlib.use('Agg')
-from matplotlib import pyplot as plt
 
-from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator
-from sandbox.young_clgan.lib.envs.point_env import PointEnv
-from sandbox.young_clgan.lib.goal import *
-from sandbox.young_clgan.lib.logging import *
-
+from sandbox.young_clgan.envs.point_env import PointEnv
 
 EXPERIMENT_TYPE = 'cl_gan'
 
@@ -40,7 +20,7 @@ from sandbox.young_clgan.experiments.point_env_linear.cl_gan_algo import CLGANPo
 
 stub(globals())
 
-from sandbox.young_clgan.lib.utils import AttrDict
+from sandbox.young_clgan.utils import AttrDict
 
 if __name__ == '__main__':
 
