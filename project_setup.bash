@@ -1,6 +1,8 @@
 # Project setup script
 # Source this file to set up the environment for this project.
 
+export CUDA_VISIBLE_DEVICES=''
+
 export RLLAB_HOME="$(pwd)"
 
 alias ph="cd $RLLAB_HOME"

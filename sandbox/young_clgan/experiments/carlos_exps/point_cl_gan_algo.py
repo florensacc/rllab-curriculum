@@ -21,7 +21,7 @@ from sandbox.young_clgan.envs.base import UniformListGoalGenerator, FixedGoalGen
     update_env_goal_generator, generate_initial_goals
 
 from sandbox.young_clgan.goal.evaluator import *
-from sandbox.young_clgan.goal.generator import GoalGAN
+from sandbox.young_clgan.goal.generator import StateGAN
 # from sandbox.young_clgan.lib.goal.utils import *
 from sandbox.young_clgan.logging.html_report import format_dict, HTMLReport
 from sandbox.young_clgan.logging.visualization import *
@@ -97,7 +97,7 @@ def run_task(v):
             gan_configs[key] = tf.train.AdamOptimizer(gan_configs[key + '_stepSize'])
         if 'initializer' in key and 'stddev' not in key:  # value is tflearn.initializations.truncated_normal: or isinstance(value, tf.initializations.truncated_normal):
             gan_configs[key] = tflearn.initializations.truncated_normal(stddev=gan_configs[key + '_stddev'])
-    gan = GoalGAN(
+    gan = StateGAN(
         goal_size=v['goal_size'],
         evaluater_size=v['num_labels'],
         goal_range=v['goal_range'],

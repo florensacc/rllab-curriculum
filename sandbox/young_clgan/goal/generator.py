@@ -1,9 +1,75 @@
 import numpy as np
 
 from sandbox.young_clgan.gan.gan import FCGAN
+from sandbox.young_clgan.goal.utils import sample_matrix_row
 
 
-class GoalGAN(object):
+
+class StateGenerator(object):
+    """A base class for state generation."""
+    
+    def pretrain_uniform(self):
+        """Pretrain the generator distribution to uniform distribution in the limit."""
+        raise NotImplementedError
+        
+    def pretain(self, goals):
+        """Pretrain with goal distribution in the goals list."""
+        raise NotImplementedError
+    
+    def sample_goals(self, size):
+        """Sample goals with given size."""
+        raise NotImplementedError
+    
+    def sample_goals_with_noise(self, size):
+        """Sample goals with noise."""
+        raise NotImplementedError
+        
+    def train(self, goals, labels):
+        """Train with respect to given goals and labels."""
+        raise NotImplementedError
+        
+
+class CrossEntropyStateGenerator(StateGenerator):
+    """Maintain a goal list and add noise to current goals to generate new goals."""
+    
+    def __init__(self, goal_size, evaluater_size, goal_range, noise_std=1.0,
+                 goal_center=None):
+        self.goal_list = np.array([])
+        self.goal_range = goal_range
+        self.noise_std = noise_std
+        self.goal_center = np.array(goal_center) if goal_center is not None else np.zeros(goal_size)
+        
+    def pretrain_uniform(self, size=1000):
+        goals = self.goal_center + np.random.uniform(
+            -self.goal_range, self.goal_range, size=(size, self.goal_size)
+        )
+        return self.pretrain(goals)
+        
+    def pretain(self, goals):
+        self.goal_list = np.array(goals)
+        
+    def sample_goals(self, size):
+        if len(self.goal_list) == 0:
+            raise ValueError('Generator uninitialized!')
+        
+        goals = sample_matrix_row(self.goal_list, size)
+        return np.clip(
+            goals + np.random.randn(*goals.shape) * self.noise_std,
+            -self.goal_range, self.goal_range
+        )
+    
+    def sample_goals_with_noise(self, size):
+        return self.sample_goals(size)
+        
+    def train(self, goals, labels):
+        labels = np.mean(labels, axis=1) >= 1
+        good_goals = np.array(goals)[labels, :]
+        if len(good_goals) != 0:
+            self.goal_list = good_goals
+        
+
+
+class StateGAN(StateGenerator):
     """A GAN for generating goals. It is just a wrapper for clgan.GAN.FCGAN"""
 
     def __init__(self, goal_size, evaluater_size, goal_range,

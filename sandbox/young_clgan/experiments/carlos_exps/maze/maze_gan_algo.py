@@ -27,7 +27,7 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
 from sandbox.young_clgan.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator, \
     generate_initial_goals
-from sandbox.young_clgan.goal.generator import GoalGAN
+from sandbox.young_clgan.goal.generator import StateGAN
 
 from sandbox.young_clgan.logging.logger import ExperimentLogger
 from sandbox.young_clgan.goal.evaluator import convert_label, label_goals, evaluate_goals
@@ -124,7 +124,7 @@ def run_task(v):
     k = -1
     while final_gen_loss > 10:
         k += 1
-        gan = GoalGAN(
+        gan = StateGAN(
             goal_size=v['goal_size'],
             evaluater_size=v['num_labels'],
             goal_range=v['goal_range'],
