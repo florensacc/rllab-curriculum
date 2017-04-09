@@ -23,7 +23,7 @@ from sandbox.young_clgan.envs.base import GoalExplorationEnv
 from sandbox.young_clgan.envs.base import UniformListGoalGenerator, FixedGoalGenerator,\
     UniformGoalGenerator, update_env_goal_generator
 from sandbox.young_clgan.goal.evaluator import *
-from sandbox.young_clgan.goal.generator import GoalGAN
+from sandbox.young_clgan.goal.generator import StateGAN
 # from sandbox.young_clgan.lib.goal.utils import *
 from sandbox.young_clgan.logging.html_report import HTMLReport
 from sandbox.young_clgan.logging.visualization import *
@@ -100,7 +100,7 @@ if __name__ == '__main__':
             if value is tflearn.initializations.truncated_normal:
                 gan_configs[key] = tflearn.initializations.truncated_normal(stddev=gan_configs[key + '_stddev'])
 
-        gan = GoalGAN(
+        gan = StateGAN(
             goal_size=goal_size,
             evaluater_size=3,
             goal_range=v['goal_range'],

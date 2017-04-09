@@ -61,7 +61,7 @@ def run_task(v):
     #     if value is tflearn.initializations.truncated_normal:
     #         gan_configs[key] = tflearn.initializations.truncated_normal(stddev=gan_configs[key + '_stddev'])
     #
-    # gan = GoalGAN(
+    # gan = StateGAN(
     #     goal_size=v['goal_size'],
     #     evaluater_size=3,
     #     goal_range=v['goal_range'],
