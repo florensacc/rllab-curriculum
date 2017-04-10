@@ -119,7 +119,7 @@ if __name__ == '__main__':
     for outer_iter in range(hyperparams.outer_iters):
 
         # Train GAN
-        raw_goals, _ = gan.sample_goals_with_noise(2000)
+        raw_goals, _ = gan.sample_states_with_noise(2000)
 
         if outer_iter > 0:
             old_goal_indices = np.random.randint(0, all_goals.shape[0], 2000)

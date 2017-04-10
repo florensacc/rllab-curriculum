@@ -145,7 +145,7 @@ if __name__ == '__main__':
     for outer_iter in range(hyperparams.outer_iters):
 
         # Train GAN
-        raw_goals, _ = gan.sample_goals_with_noise(2000)
+        raw_goals, _ = gan.sample_states_with_noise(2000)
 
         if outer_iter > 0:
             # sampler uniformly 2000 old goals and add them to the training pool (50/50)

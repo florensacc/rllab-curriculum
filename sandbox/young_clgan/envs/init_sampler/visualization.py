@@ -93,7 +93,7 @@ def plot_labeled_samples(samples, labels, limit,
 
 def plot_gan_samples(gan, limit, fname=None, size=500):
     """Scatter size samples of the gan: no evaluation"""
-    samples, _ = gan.sample_goals(size)
+    samples, _ = gan.sample_states(size)
     plt.figure()
     plt.clf()
     plt.scatter(samples[:, 0], samples[:, 1])

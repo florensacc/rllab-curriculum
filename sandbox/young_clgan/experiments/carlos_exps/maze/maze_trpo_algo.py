@@ -128,7 +128,7 @@ def run_task(v):
 
         # # Train GAN
         # logger.log("Sampling goals from the GAN")
-        # raw_goals, _ = gan.sample_goals_with_noise(v['num_new_goals'])
+        # raw_goals, _ = gan.sample_states_with_noise(v['num_new_goals'])
         #
         # if outer_iter > 0 and all_goals.size > 0:
         #     old_goals = all_goals.sample(v['num_old_goals'])

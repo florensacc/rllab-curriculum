@@ -148,7 +148,7 @@ def run_task(v):
             final_gen_loss = 0
 
     # log first samples form the GAN
-    initial_goals, _ = gan.sample_goals_with_noise(v['num_new_goals'])
+    initial_goals, _ = gan.sample_states_with_noise(v['num_new_goals'])
     logger.log("Labeling the goals")
     labels = label_goals(
         initial_goals, env, policy, v['horizon'],
@@ -187,7 +187,7 @@ def run_task(v):
         logger.log("Outer itr # %i" % outer_iter)
         # Sample GAN
         logger.log("Sampling goals from the GAN")
-        raw_goals, _ = gan.sample_goals_with_noise(v['num_new_goals'])
+        raw_goals, _ = gan.sample_states_with_noise(v['num_new_goals'])
 
         if v['replay_buffer'] and outer_iter > 0 and all_goals.size > 0:
             old_goals = all_goals.sample(v['num_old_goals'])

@@ -254,7 +254,7 @@ if __name__ == '__main__':
                 final_gen_loss = 0
 
         # log first samples form the GAN
-        initial_inits, _ = gan.sample_goals_with_noise(v['num_new_goals'])
+        initial_inits, _ = gan.sample_states_with_noise(v['num_new_goals'])
         logger.log("Labeling the goals")
         labels = label_inits(
             initial_inits, env, policy, v['max_path_length'],
@@ -294,7 +294,7 @@ if __name__ == '__main__':
             logger.log("Outer itr # %i" % outer_itr)
             # Sample GAN
             logger.log("Sampling inits from the GAN")
-            raw_inits, _ = gan.sample_goals_with_noise(v['num_new_goals'])
+            raw_inits, _ = gan.sample_states_with_noise(v['num_new_goals'])
 
             if v['replay_buffer'] and outer_itr > 0 and all_inits.size > 0:
                 old_inits = all_inits.sample(v['num_old_goals'])

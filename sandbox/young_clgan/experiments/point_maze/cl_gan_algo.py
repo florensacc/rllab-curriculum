@@ -166,7 +166,7 @@ class CLGANPointEnvMaze(RLAlgorithm):
 
             # Train GAN
             logger.log("Sampling goals from the GAN")
-            raw_goals, _ = gan.sample_goals_with_noise(hyperparams.num_new_goals)
+            raw_goals, _ = gan.sample_states_with_noise(hyperparams.num_new_goals)
 
             if outer_iter > 0:
                 old_goals = all_goals.sample(hyperparams.num_old_goals)

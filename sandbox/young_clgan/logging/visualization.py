@@ -187,7 +187,7 @@ def plot_bounds(ax, bounds, dim=2):
 
 def plot_gan_samples(gan, limit, fname=None, size=500):
     """Scatter size samples of the gan: no evaluation"""
-    samples, _ = gan.sample_goals(size)
+    samples, _ = gan.sample_states(size)
     fig = plt.figure()
     # plt.clf()
     if np.size(samples[0]) >= 3:

@@ -150,7 +150,7 @@ def run_task(v):
         logger.log("Outer itr # %i" % outer_iter)
         # Train GAN
         logger.log("Sampling goals...")
-        raw_goals, _ = gan.sample_goals_with_noise(v['num_new_goals'])
+        raw_goals, _ = gan.sample_states_with_noise(v['num_new_goals'])
 
         if v['replay_buffer'] and outer_iter > 0 and all_goals.size > 0:
             # sampler uniformly 2000 old goals and add them to the training pool (50/50)

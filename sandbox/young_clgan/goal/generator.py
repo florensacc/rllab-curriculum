@@ -16,11 +16,11 @@ class StateGenerator(object):
         """Pretrain with goal distribution in the goals list."""
         raise NotImplementedError
     
-    def sample_goals(self, size):
+    def sample_states(self, size):
         """Sample goals with given size."""
         raise NotImplementedError
     
-    def sample_goals_with_noise(self, size):
+    def sample_states_with_noise(self, size):
         """Sample goals with noise."""
         raise NotImplementedError
         
@@ -30,7 +30,7 @@ class StateGenerator(object):
         
 
 class CrossEntropyStateGenerator(StateGenerator):
-    """Maintain a goal list and add noise to current goals to generate new goals."""
+    """Maintain a state list and add noise to current goals to generate new goals."""
     
     def __init__(self, goal_size, evaluater_size, goal_range, noise_std=1.0,
                  goal_center=None):
@@ -48,7 +48,7 @@ class CrossEntropyStateGenerator(StateGenerator):
     def pretain(self, goals):
         self.goal_list = np.array(goals)
         
-    def sample_goals(self, size):
+    def sample_states(self, size):
         if len(self.goal_list) == 0:
             raise ValueError('Generator uninitialized!')
         
@@ -58,8 +58,8 @@ class CrossEntropyStateGenerator(StateGenerator):
             -self.goal_range, self.goal_range
         )
     
-    def sample_goals_with_noise(self, size):
-        return self.sample_goals(size)
+    def sample_states_with_noise(self, size):
+        return self.sample_states(size)
         
     def train(self, goals, labels):
         labels = np.mean(labels, axis=1) >= 1
@@ -70,7 +70,7 @@ class CrossEntropyStateGenerator(StateGenerator):
 
 
 class StateGAN(StateGenerator):
-    """A GAN for generating goals. It is just a wrapper for clgan.GAN.FCGAN"""
+    """A GAN for generating states. It is just a wrapper for clgan.GAN.FCGAN"""
 
     def __init__(self, goal_size, evaluater_size, goal_range,
                  goal_noise_level, goal_center=None, *args, **kwargs):
@@ -90,7 +90,7 @@ class StateGAN(StateGenerator):
     def pretrain_uniform(self, size=10000, outer_iters=10, generator_iters=5,
                          discriminator_iters=200):
         """
-        :param size: number of uniformly sampled goals (that we will try to fit as output of the GAN)
+        :param size: number of uniformly sampled states (that we will try to fit as output of the GAN)
         :param outer_iters: of the GAN
         """
         goals = self.goal_center + np.random.uniform(
@@ -115,13 +115,13 @@ class StateGAN(StateGenerator):
         goals += noise
         return np.clip(goals, self.goal_center - self.goal_range, self.goal_center + self.goal_range)
 
-    def sample_goals(self, size):  # un-normalizes the goals
+    def sample_states(self, size):  # un-normalizes the goals
         normalized_goals, noise = self.gan.sample_generator(size)
         goals = self.goal_center + normalized_goals * self.goal_range
         return goals, noise
 
-    def sample_goals_with_noise(self, size):
-        goals, noise = self.sample_goals(size)
+    def sample_states_with_noise(self, size):
+        goals, noise = self.sample_states(size)
         goals = self._add_noise_to_goals(goals)
         return goals, noise
 
