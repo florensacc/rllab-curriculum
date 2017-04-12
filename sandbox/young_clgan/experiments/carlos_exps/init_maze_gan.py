@@ -27,7 +27,7 @@ from sandbox.young_clgan.envs.init_sampler.base import InitExplorationEnv
 from sandbox.young_clgan.envs.base import FixedGoalGenerator, generate_initial_goals
 from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
 from sandbox.young_clgan.envs.init_sampler.base import update_env_init_generator, UniformListInitGenerator, FixedInitGenerator
-from sandbox.young_clgan.envs.init_sampler.evaluator import label_inits, convert_label
+from sandbox.young_clgan.goal.evaluator import label_goals, convert_label
 from sandbox.young_clgan.goal.utils import GoalCollection
 from sandbox.young_clgan.goal.generator import StateGAN
 from sandbox.young_clgan.logging import *
@@ -85,14 +85,14 @@ if __name__ == '__main__':
     # algorithm params
     vg.add('seed', range(20, 60, 7))
     vg.add('n_itr', [300])
-    vg.add('inner_itr', [2])
+    vg.add('inner_itr', [5])
     vg.add('outer_itr', lambda n_itr, inner_itr: [int(n_itr/inner_itr)])
     vg.add('batch_size', [20000])
     vg.add('max_path_length', [400])
     # environemnt params
     vg.add('init_generator', [UniformInitGenerator])
     vg.add('init_center', [(2,2)])
-    vg.add('init_range', lambda init_generator: [3] if init_generator == UniformInitGenerator else [None])
+    vg.add('init_range', lambda init_generator: [4] if init_generator == UniformInitGenerator else [None])
     vg.add('angle_idxs', lambda init_generator: [(None,)])
     vg.add('goal', [(0, 4), ])
     vg.add('final_goal', lambda goal: [goal])
@@ -118,7 +118,7 @@ if __name__ == '__main__':
     # vg.add('discount', [0.998])
     # vg.add('gae_lambda', [0.995])
     vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
-    vg.add('goal_noise_level', [1.2])  # ???
+    vg.add('goal_noise_level', [0.5])  # ???
     vg.add('gan_outer_iters', [5])
     vg.add('gan_discriminator_iters', [200])
     vg.add('gan_generator_iters', [10])
@@ -256,7 +256,7 @@ if __name__ == '__main__':
         # log first samples form the GAN
         initial_inits, _ = gan.sample_states_with_noise(v['num_new_goals'])
         logger.log("Labeling the goals")
-        labels = label_inits(
+        labels = label_goals(
             initial_inits, env, policy, v['max_path_length'],
             min_reward=v['min_reward'],
             max_reward=v['max_reward'],
@@ -282,7 +282,7 @@ if __name__ == '__main__':
         summary_string = ''
         for key, value in init_class_frac.items():
             summary_string += key + ' frac: ' + str(value) + '\n'
-        report.add_image(img, 'itr: {}\nLabels of generated goals:\n{}'.format(outer_itr, summary_string), width=500)
+            report.add_image(img, 'itr: {}\nLabels of generated goals:\n{}'.format(outer_itr, summary_string), width=500)
         report.save()
         report.new_row()
         logger.dump_tabular(with_prefix=False)
@@ -351,7 +351,7 @@ if __name__ == '__main__':
             report.save()
 
             logger.log("Labeling the goals")
-            labels = label_inits(
+            labels = label_goals(
                 inits, env, policy, v['max_path_length'],
                 min_reward=v['min_reward'],
                 max_reward=v['max_reward'],

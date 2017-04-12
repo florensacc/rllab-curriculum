@@ -205,7 +205,7 @@ def run_task(v):
 
         # this re-evaluate the final policy in the collection of goals
         logger.log("Generating labels by re-evaluating policy on List of goals...")
-        labels = label_goals(
+        labels = label_states(
             goals, env, policy, v['horizon'],
             min_reward=v['min_reward'],
             max_reward=v['max_reward'],

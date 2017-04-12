@@ -4,14 +4,9 @@ os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
 import tensorflow as tf
 import tflearn
-import multiprocessing
 import argparse
-import math
-import random
 import sys
 from rllab.misc.instrument import run_experiment_lite
-from sandbox.young_clgan.experiments.point_maze.cl_gan_algo import CLGANPointEnvMaze
-from sandbox.young_clgan.logging import *
 from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
@@ -90,8 +85,8 @@ if __name__ == '__main__':
     # mine
     vg.add('distance_metric', ['L2'])
     # vg.add('terminal_bonus', [0])
-    # vg.add('terminal_eps', lambda reward_dist_threshold: [
-    #     reward_dist_threshold])  # if hte terminal bonus is 0 it doesn't kill it! Just count how many reached center
+    vg.add('terminal_eps', lambda reward_dist_threshold: [
+        reward_dist_threshold])  # if hte terminal bonus is 0 it doesn't kill it! Just count how many reached center
     vg.add('smart_init', [True])
     vg.add('replay_buffer', [True])
     vg.add('coll_eps', [0.3])  #lambda reward_dist_threshold: [reward_dist_threshold, 0])

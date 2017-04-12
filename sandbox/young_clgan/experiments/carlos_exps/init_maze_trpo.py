@@ -92,7 +92,7 @@ if __name__ == '__main__':
     # environemnt params
     vg.add('init_generator', [UniformInitGenerator])
     vg.add('init_center', [(2,2)])
-    vg.add('init_range', lambda init_generator: [3] if init_generator == UniformInitGenerator else [None])
+    vg.add('init_range', lambda init_generator: [4] if init_generator == UniformInitGenerator else [None])
     vg.add('angle_idxs', lambda init_generator: [(None,)])
     vg.add('goal', [(0, 4), ])
     vg.add('final_goal', lambda goal: [goal])
@@ -192,7 +192,7 @@ if __name__ == '__main__':
             logger.log('Generating the Heatmap...')
             avg_rewards, avg_success, heatmap = test_and_plot_policy(policy, env,
                                                                      sampling_res=sampling_res, n_traj=n_traj)
-            reward_img = save_image()
+            reward_img = save_image(fig=heatmap)
 
             mean_rewards = np.mean(avg_rewards)
             success = np.mean(avg_success)

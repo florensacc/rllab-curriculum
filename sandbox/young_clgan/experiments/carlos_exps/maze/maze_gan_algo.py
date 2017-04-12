@@ -79,37 +79,33 @@ def run_task(v):
     # initialize all logging arrays on itr0
     all_mean_rewards = []
     all_success = []
-    all_coverage = []
     outer_iter = 0
     n_traj = 3 if v['indicator_reward'] else 1
     sampling_res = 2
-    logger.log('Generating the Initial Heatmap...')
-    avg_rewards, avg_success, heatmap = test_and_plot_policy(policy, env, max_reward=v['max_reward'],
-                                                             sampling_res=sampling_res, n_traj=n_traj)
-    reward_img = save_image()
+    # logger.log('Generating the Initial Heatmap...')
+    # avg_rewards, avg_success, heatmap = test_and_plot_policy(policy, env, max_reward=v['max_reward'],
+    #                                                          sampling_res=sampling_res, n_traj=n_traj)
+    # reward_img = save_image()
 
-    mean_rewards = np.mean(avg_rewards)
-    coverage = np.mean([int(avg_reward >= v['max_reward']) for avg_reward in avg_rewards])
-    success = np.mean(avg_success)
+    # mean_rewards = np.mean(avg_rewards)
+    # success = np.mean(avg_success)
 
-    all_mean_rewards.append(mean_rewards)
-    all_coverage.append(coverage)
-    all_success.append(success)
-
-    with logger.tabular_prefix('Outer_'):
-        logger.record_tabular('iter', outer_iter)
-        logger.record_tabular('MeanRewards', mean_rewards)
-        logger.record_tabular('Coverage', coverage)
-        logger.record_tabular('Success', success)
-    # logger.dump_tabular(with_prefix=False)
-
-    report.add_image(
-        reward_img,
-        'policy performance\n itr: {} \nmean_rewards: {} \ncoverage: {}\nsuccess: {}'.format(
-            outer_iter, all_mean_rewards[-1],
-            all_coverage[-1], all_success[-1]
-        )
-    )
+    # all_mean_rewards.append(mean_rewards)
+    # all_success.append(success)
+    #
+    # with logger.tabular_prefix('Outer_'):
+    #     logger.record_tabular('iter', outer_iter)
+    #     logger.record_tabular('MeanRewards', mean_rewards)
+    #     logger.record_tabular('Success', success)
+    # # logger.dump_tabular(with_prefix=False)
+    #
+    # report.add_image(
+    #     reward_img,
+    #     'policy performance\n itr: {} \nmean_rewards: {} \nsuccess: {}'.format(
+    #         outer_iter, all_mean_rewards[-1],
+    #         all_success[-1]
+    #     )
+    # )
 
     # GAN
     logger.log("Instantiating the GAN...")
@@ -231,24 +227,22 @@ def run_task(v):
         reward_img = save_image()
 
         mean_rewards = np.mean(avg_rewards)
-        coverage = np.mean([int(avg_reward >= v['max_reward']) for avg_reward in avg_rewards])
         success = np.mean(avg_success)
 
         all_mean_rewards.append(mean_rewards)
-        all_coverage.append(coverage)
+        all_success.append(success)
 
         with logger.tabular_prefix('Outer_'):
             logger.record_tabular('iter', outer_iter)
             logger.record_tabular('MeanRewards', mean_rewards)
-            logger.record_tabular('Coverage', coverage)
             logger.record_tabular('Success', success)
         # logger.dump_tabular(with_prefix=False)
 
         report.add_image(
             reward_img,
-            'policy performance\n itr: {} \nmean_rewards: {} \ncoverage: {}\nsuccess: {}'.format(
+            'policy performance\n itr: {} \nmean_rewards: {}\nsuccess: {}'.format(
                 outer_iter, all_mean_rewards[-1],
-                all_coverage[-1], all_success[-1]
+                all_success[-1]
             )
         )
         report.save()
@@ -340,10 +334,4 @@ def run_task(v):
     )
     report.add_image(img, 'Mean rewards', width=500)
 
-    img = plot_line_graph(
-        osp.join(log_dir, 'coverages.png'),
-        range(v['outer_iters'], all_coverage),
-    )
-
-    report.add_image(img, 'Coverages', width=500)
     report.save()
