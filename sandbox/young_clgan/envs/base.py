@@ -449,10 +449,11 @@ class GoalIdxExplorationEnv(GoalExplorationEnv, Serializable):
 
 def update_env_goal_generator(env, goal_generator):
     """ Update the goal generator for normalized environment. """
-    if hasattr(env, 'update_goal_generator'):
-        return env.update_goal_generator(goal_generator)
-    elif hasattr(env, 'wrapped_env'):
-        return env.wrapped_env.update_goal_generator(goal_generator)
+    obj = env
+    while not hasattr(obj, 'update_goal_generator') and hasattr(obj, 'wrapped_env'):
+        obj = obj.wrapped_env
+    if hasattr(obj, 'update_goal_generator'):
+        return obj.update_goal_generator(goal_generator)
     else:
         raise NotImplementedError('Unsupported environment')
 
