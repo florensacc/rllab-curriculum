@@ -7,14 +7,13 @@ import tensorflow as tf
 import tflearn
 import sys
 import math
-import random
 
 from rllab.misc.instrument import run_experiment_lite
 from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.carlos_exps.point_cl_gan_algo import run_task
+from sandbox.young_clgan.experiments.carlos_exps.goals.point_cl_gan_algo import run_task
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

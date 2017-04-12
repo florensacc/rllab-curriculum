@@ -106,7 +106,7 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
             plot_bounds(ax, bounds, dim=3)
         if limit:
             if center is None:
-                center = np.zeros(2)
+                center = np.zeros(3)
             ax.set_ylim3d(center[0] - limit, center[0] + limit)
             ax.set_xlim3d(center[1] - limit, center[1] + limit)
             ax.set_zlim3d(center[2] - limit, center[2] + limit)
