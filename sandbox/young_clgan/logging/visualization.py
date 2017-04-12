@@ -13,7 +13,7 @@ import matplotlib as mpl
 mpl.use('Agg')
 from matplotlib import rc
 
-rc('text', usetex=True)
+# rc('text', usetex=True)
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 
@@ -61,19 +61,18 @@ def plot_policy_reward(policy, env, limit, horizon=200, max_reward=6000, fname=N
             return img
 
 
-def save_image(fname=None):
-    if fname is not None:
-        plt.savefig(fname, format='png')
-        plt.close('all')
-        return scipy.misc.imread(fname)
+def save_image(fig=None, fname=None):
+    if fname is None:
+        fname = tempfile.TemporaryFile()
+    if fig is not None:
+        fig.savefig(fname)
     else:
-        fp = tempfile.TemporaryFile()
-        plt.savefig(fp, format='png')
-        plt.close('all')
-        fp.seek(0)
-        img = scipy.misc.imread(fp)
-        fp.close()
-        return img
+        plt.savefig(fname, format='png')
+    plt.close('all')
+    fname.seek(0)
+    img = scipy.misc.imread(fname)
+    fname.close()
+    return img
 
 
 def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers=None, fname=None, limit=None,
