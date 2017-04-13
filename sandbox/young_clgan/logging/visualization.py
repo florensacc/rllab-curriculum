@@ -76,14 +76,21 @@ def save_image(fig=None, fname=None):
 
 
 def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers=None, fname=None, limit=None,
-                         center=None,
-                         size=1000, colors=('k', 'm', 'c', 'y', 'r', 'g', 'b'), bounds=None):
+                         center=None, size=1000, colors=('r', 'g', 'b'), bounds=None):
+    """
+    :param samples: 
+    :param sample_classes: numerical value of the class
+    :param text_labels: text corresponding to the class (dict)
+    :param markers: dic with marker for every sample_class (dict, or list if the keys are ints)
+    :param colors: 
+    :param fname: 
+    """
     size = min(size, samples.shape[0])
     indices = np.random.choice(samples.shape[0], size, replace=False)
     samples = samples[indices, :]
     sample_classes = sample_classes[indices]
     if markers is None:
-        markers = {i: 'o' for i in text_labels.keys()}
+        markers = {i: 'o' for i in text_labels.keys()}  # the keys of the text_labels are 0, 1, ...
 
     unique_classes = list(set(sample_classes))
     assert (len(colors) > max(unique_classes))
@@ -100,6 +107,7 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
                 c=colors[i],
                 marker=markers[i],
                 alpha=0.8,
+                lw=0,
                 label=text_labels[i]
             )
         if bounds is not None:
@@ -120,6 +128,7 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
                 # Choose a fixed color for each class.
                 c=colors[i],
                 alpha=0.8,
+                lw=0,
                 marker=markers[i],
                 label=text_labels[i]
             )

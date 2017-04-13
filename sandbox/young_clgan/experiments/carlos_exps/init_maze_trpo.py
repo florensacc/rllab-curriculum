@@ -4,7 +4,6 @@ import os.path as osp
 import random
 import sys
 from collections import OrderedDict
-
 import numpy as np
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
@@ -18,8 +17,9 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab import config
 from rllab.misc.instrument import VariantGenerator
 
-from sandbox.young_clgan.envs.init_sampler.base import UniformInitGenerator
-from sandbox.young_clgan.envs.init_sampler.base import InitExplorationEnv
+from sandbox.young_clgan.state.selectors import UniformStateSelector, UniformListStateSelector, FixedStateSelector
+from sandbox.young_clgan.envs.init_sampler.base import  InitIdxEnv
+from sandbox.young_clgan.logging.inner_logger import InnerExperimentLogger
 from sandbox.carlos_snn.autoclone import autoclone
 
 from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy  # this used for both init and goal
@@ -29,14 +29,9 @@ from sandbox.young_clgan.logging import format_dict
 from sandbox.young_clgan.logging.visualization import save_image, plot_labeled_samples
 from sandbox.young_clgan.envs.base import FixedGoalGenerator
 
-from sandbox.young_clgan.envs.init_sampler.base import update_env_init_generator, UniformListInitGenerator, FixedInitGenerator
 from sandbox.young_clgan.logging.logger import ExperimentLogger
-from sandbox.young_clgan.envs.init_sampler.evaluator import label_inits, convert_label
+from sandbox.young_clgan.state.evaluator import label_states, convert_label
 from rllab.misc import logger
-
-# from sandbox.young_clgan.utils import initialize_parallel_sampler
-# initialize_parallel_sampler()
-
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -76,46 +71,46 @@ if __name__ == '__main__':
     else:
         mode = 'local'
         n_parallel = 4
-    print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
-                                                                                   config.AWS_SPOT_PRICE, n_parallel),
-          *subnets)
 
-    exp_prefix = 'init-maze-trpo2'
+    exp_prefix = 'init-maze-trpo3'
     vg = VariantGenerator()
+    vg.add('n_traj', [3])
+    vg.add('persistence', [1, 3])
+    vg.add('sampling_res', [2])
     # algorithm params
-    vg.add('seed', range(20, 70, 7))
-    vg.add('n_itr', [300])
+    vg.add('seed', range(20, 70, 10))
+    vg.add('n_itr', [500])
     vg.add('inner_itr', [5])
-    vg.add('outer_itr', lambda n_itr, inner_itr: [int(n_itr/inner_itr)])
+    vg.add('outer_itr', lambda n_itr, inner_itr: [int(n_itr / inner_itr)])
     vg.add('batch_size', [20000])
     vg.add('max_path_length', [400])
     # environemnt params
-    vg.add('init_generator', [UniformInitGenerator])
-    vg.add('init_center', [(2,2)])
-    vg.add('init_range', lambda init_generator: [4] if init_generator == UniformInitGenerator else [None])
-    vg.add('angle_idxs', lambda init_generator: [(None,)])
+    vg.add('init_center', [(2, 2)])
+    vg.add('init_range', [4])
     vg.add('goal', [(0, 4), ])
-    vg.add('final_goal', lambda goal: [goal])
     vg.add('goal_reward', ['NegativeDistance'])
+    vg.add('distance_metric', ['L2'])
     vg.add('goal_weight', [0])  # this makes the task spars
-    vg.add("inner_weight", [1])
+    vg.add("inner_weight", [0])
     vg.add('terminal_bonus', [1])
     vg.add('reward_dist_threshold', [0.3])
     vg.add('terminal_eps', lambda reward_dist_threshold: [reward_dist_threshold])
     vg.add('indicator_reward', [True])
-    vg.add('max_reward', [270])
-    vg.add('min_reward', [10])
+    vg.add('max_reward', [0.9])
+    vg.add('min_reward', [0.1])
     # policy hypers
     vg.add('learn_std', [True])
     vg.add('policy_init_std', [1])
     vg.add('output_gain', [1])
 
+    vg.add('discount', [0.99, 0.995])
+    vg.add('gae_lambda', [1])
+    vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
+
 
     def run_task(v):
         random.seed(v['seed'])
         np.random.seed(v['seed'])
-
-        # tf_session = tf.Session()
 
         # Log performance of randomly initialized policy with FIXED goal [0.1, 0.1]
         logger.log("Initializing report and plot_policy_reward...")
@@ -125,27 +120,22 @@ if __name__ == '__main__':
         report.add_text(format_dict(v))
 
         inner_env = normalize(PointMazeEnv(
-            goal_generator=FixedGoalGenerator(v['final_goal']),
-            reward_dist_threshold=v['reward_dist_threshold'],
-            indicator_reward=v['indicator_reward'],
-            terminal_eps=v['terminal_eps'],
+            goal_generator=FixedGoalGenerator(v['goal']),
+            reward_dist_threshold=v['reward_dist_threshold'] * 0.1,  # never stop for inner_env!
+            append_goal=False,
         ))
 
-        init_generator_class = v['init_generator']
-        if init_generator_class == UniformInitGenerator:
-            init_generator = init_generator_class(init_size=np.size(v['goal']), bound=v['init_range'], center=v['init_center'])
-        else:
-            assert init_generator_class == FixedInitGenerator, 'Init generator not recognized!'
-            init_generator = init_generator_class(goal=v['goal'])
+        goal_selector = FixedStateSelector(state=v['goal'])
+        init_selector = UniformStateSelector(state_size=np.size(v['goal']), bounds=v['init_range'],
+                                             center=v['init_center'])
 
-        env = InitExplorationEnv(env=inner_env, goal=v['goal'], init_generator=init_generator, goal_reward=v['goal_reward'],
-                                 goal_weight=v['goal_weight'], terminal_bonus=v['terminal_bonus'], angle_idxs=v['angle_idxs'],
-                                 inner_weight=v['inner_weight'], terminal_eps=v['terminal_eps'])
+        env = InitIdxEnv(idx=range(2), env=inner_env, goal_selector=goal_selector, init_selector=init_selector,
+                         goal_reward=v['goal_reward'], goal_weight=v['goal_weight'], terminal_bonus=v['terminal_bonus'],
+                         inner_weight=v['inner_weight'], terminal_eps=v['terminal_eps'], persistence=v['persistence'])
 
         policy = GaussianMLPPolicy(
             env_spec=env.spec,
             hidden_sizes=(64, 64),
-            # Fix the variance since different goals will require different variances, making thio cs parameter hard to learn.
             learn_std=v['learn_std'],
             output_gain=v['output_gain'],
             init_std=v['policy_init_std'],
@@ -153,26 +143,79 @@ if __name__ == '__main__':
 
         baseline = LinearFeatureBaseline(env_spec=env.spec)
 
-        n_traj = 3
-        sampling_res = 2
         report.save()
         report.new_row()
 
-        all_mean_rewards = []
-        all_success = []
+        outer_itr = 0
+        logger.log('Generating the Initial Heatmap...')
+        avg_rewards, avg_success, heatmap = test_and_plot_policy(policy, env, as_goals=False, visualize=False,
+                                                                 sampling_res=v['sampling_res'], n_traj=v['n_traj'])
+        reward_img = save_image()
+
+        mean_rewards = np.mean(avg_rewards)
+        mean_success = np.mean(avg_success)
+
+        with logger.tabular_prefix('Outer_'):
+            logger.record_tabular('iter', outer_itr)
+            logger.record_tabular('MeanRewards', mean_rewards)
+            logger.record_tabular('Success', mean_success)
+        # logger.dump_tabular(with_prefix=False)
+
+        report.add_image(
+            reward_img,
+            'policy performance\n itr: {} \nmean_rewards: {} \nsuccess: {}'.format(
+                outer_itr, mean_rewards, mean_success
+            )
+        )
+
+        initial_inits = np.array(v['init_center']) + \
+                      np.random.uniform(-v['init_range'], v['init_range'], size=(300, np.size(v['goal'])))
+        logger.log("Labeling the goals")
+        labels = label_states(
+            initial_inits, env, policy, v['max_path_length'],
+            min_reward=v['min_reward'],
+            max_reward=v['max_reward'],
+            as_goals=False,
+            old_rewards=None,
+            n_traj=v['n_traj'])
+
+        logger.log("Converting the labels")
+        init_classes, text_labels = convert_label(labels)
+
+        logger.log("Plotting the labeled samples")
+        total_goals = labels.shape[0]
+        init_class_frac = OrderedDict()  # this needs to be an ordered dict!! (for the log tabular)
+        for k in text_labels.keys():
+            frac = np.sum(init_classes == k) / total_goals
+            logger.record_tabular('GenInit_frac_' + text_labels[k], frac)
+            init_class_frac[text_labels[k]] = frac
+
+        img = plot_labeled_samples(
+            samples=initial_inits, sample_classes=init_classes, text_labels=text_labels,
+            limit=v['init_range'] + 0.5, center=v['init_center']
+            # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
+        )
+        summary_string = ''
+        for key, value in init_class_frac.items():
+            summary_string += key + ' frac: ' + str(value) + '\n'
+
+        report.add_image(img, 'itr: {}\nLabels of generated goals:\n{}'.format(outer_itr, summary_string),
+                         width=500)
+
+        report.save()
+        report.new_row()
+        logger.dump_tabular(with_prefix=False)
+
+        inner_experiment_logger = InnerExperimentLogger(log_dir, 'inner', snapshot_mode='last', hold_outter_log=True)
 
         for outer_itr in range(v['outer_itr']):
-
+            logger.log("Outer itr # %i" % outer_itr)
             init_states = np.array(v['init_center']) + \
                           np.random.uniform(-v['init_range'], v['init_range'], size=(300, np.size(v['goal'])))
 
-            # with ExperimentLogger(log_dir, outer_itr, snapshot_mode='last', hold_outter_log=True):
-            with ExperimentLogger(log_dir, 'inner', snapshot_mode='last', hold_outter_log=True):
+            with inner_experiment_logger:
                 logger.log("Updating the environment init generator")
-                update_env_init_generator(
-                    env,
-                    UniformListInitGenerator(init_states.tolist())
-                )
+                env.update_init_selector(UniformListStateSelector(init_states.tolist()))
 
                 logger.log('Training the algorithm')
                 algo = TRPO(
@@ -182,7 +225,8 @@ if __name__ == '__main__':
                     batch_size=v['batch_size'],
                     max_path_length=v['max_path_length'],
                     n_itr=v['inner_itr'],
-                    discount=0.99,
+                    gae_lambda=v['gae_lambda'],
+                    discount=v['discount'],
                     step_size=0.01,
                     plot=False,
                 )
@@ -190,39 +234,32 @@ if __name__ == '__main__':
                 algo.train()
 
             logger.log('Generating the Heatmap...')
-            avg_rewards, avg_success, heatmap = test_and_plot_policy(policy, env,
-                                                                     sampling_res=sampling_res, n_traj=n_traj)
+            avg_rewards, avg_success, heatmap = test_and_plot_policy(policy, env, as_goals=False, visualize=False,
+                                                                     sampling_res=v['sampling_res'], n_traj=v['n_traj'])
             reward_img = save_image(fig=heatmap)
 
             mean_rewards = np.mean(avg_rewards)
-            success = np.mean(avg_success)
-
-            all_mean_rewards.append(mean_rewards)
-            all_success.append(success)
+            mean_success = np.mean(avg_success)
 
             with logger.tabular_prefix('Outer_'):
+                logger.record_tabular('iter', outer_itr)
                 logger.record_tabular('MeanRewards', mean_rewards)
-                logger.record_tabular('Success', success)
-            # logger.dump_tabular(with_prefix=False)
+                logger.record_tabular('Success', mean_success)
 
             report.add_image(
                 reward_img,
                 'policy performance\n itr: {} \nmean_rewards: {} \nsuccess: {}'.format(
-                    outer_itr, all_mean_rewards[-1], all_success[-1],
+                    outer_itr, mean_rewards, mean_success,
                 )
             )
 
-            report.save()
-
-            logger.log("Labeling the goals")
-            labels = label_inits(
+            labels = label_states(
                 init_states, env, policy, v['max_path_length'],
                 min_reward=v['min_reward'],
                 max_reward=v['max_reward'],
+                as_goals=False,
                 old_rewards=None,
-                n_traj=n_traj)
-
-            logger.log("Converting the labels")
+                n_traj=v['n_traj'])
             init_classes, text_labels = convert_label(labels)
 
             logger.log("Plotting the labeled samples")
@@ -235,18 +272,23 @@ if __name__ == '__main__':
 
             img = plot_labeled_samples(
                 samples=init_states, sample_classes=init_classes, text_labels=text_labels,
-                limit=v['init_range'], center=v['init_center']
+                limit=v['init_range'] + 0.5, center=v['init_center']
                 # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
             )
             summary_string = ''
             for key, value in init_class_frac.items():
                 summary_string += key + ' frac: ' + str(value) + '\n'
-            report.add_image(img, 'itr: {}\nLabels of generated inits:\n{}'.format(outer_itr, summary_string), width=500)
+            report.add_image(img, 'itr: {}\nLabels of generated inits:\n{}'.format(outer_itr, summary_string),
+                             width=500)
 
             logger.dump_tabular(with_prefix=False)
             report.save()
             report.new_row()
 
+
+    print('Running {} inst. on type {}, with price {}, parallel {} on the subnets: '.format(vg.size, config.AWS_INSTANCE_TYPE,
+                                                                                            config.AWS_SPOT_PRICE, n_parallel),
+          *subnets)
 
     for vv in vg.variants(randomized=False):
 
@@ -286,6 +328,7 @@ if __name__ == '__main__':
                 sync_s3_pkl=True,
                 # for sync the pkl file also during the training
                 sync_s3_png=True,
+                sync_s3_html=True,
                 # # use this ONLY with ec2 or local_docker!!!
                 pre_commands=[
                     'export MPLBACKEND=Agg',
@@ -312,4 +355,3 @@ if __name__ == '__main__':
                 exp_prefix=exp_prefix,
                 # exp_name=exp_name,
             )
-

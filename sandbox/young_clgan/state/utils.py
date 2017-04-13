@@ -5,6 +5,7 @@ import sys
 import os.path as osp
 
 import matplotlib as mpl
+
 mpl.use('Agg')
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
@@ -24,8 +25,11 @@ class StateCollection(object):
     def size(self):
         return len(self.state_list)
 
-    def sample(self, size, replace=False):
-        return sample_matrix_row(np.array(self.state_list), size, replace)
+    def sample(self, size, replace=False, replay_noise=0):
+        states = sample_matrix_row(np.array(self.state_list), size, replace)
+        if replay_noise > 0:
+            states += replay_noise * np.random.randn(*states.shape)
+        return states
 
     def _process_states(self, states):
         "keep only the states that are at more than dist_threshold from each other"

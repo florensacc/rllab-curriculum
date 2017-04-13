@@ -11,8 +11,8 @@ import pylab
 import matplotlib.colorbar as cbar
 
 from rllab.sampler.utils import rollout
-from sandbox.young_clgan.envs.base import FixedGoalGenerator, update_env_goal_generator
-from sandbox.young_clgan.envs.init_sampler.base import FixedInitGenerator, update_env_init_generator
+from sandbox.young_clgan.envs.base import FixedGoalGenerator
+from sandbox.young_clgan.state.selectors import FixedStateSelector
 
 quick_test = False
 
@@ -91,7 +91,7 @@ def plot_heatmap(rewards, goals, prefix='', max_reward=6000, spacing=1, show_hea
     return fig
 
 
-def test_policy(policy, train_env, visualize=True, sampling_res=1, n_traj=1):
+def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1, n_traj=1):
     if hasattr(train_env.wrapped_env, 'find_empty_space'):
         maze_env = train_env.wrapped_env
     else:
@@ -112,8 +112,7 @@ def test_policy(policy, train_env, visualize=True, sampling_res=1, n_traj=1):
 
     avg_totRewards = []
     avg_success = []
-    goals = []
-    init_states = []
+    states = []
 
     distances = []
     for empty_space in empty_spaces:
@@ -135,40 +134,36 @@ def test_policy(policy, train_env, visualize=True, sampling_res=1, n_traj=1):
                 paths = []
                 x = starting_x + i * spacing
                 y = starting_y + j * spacing
-                if hasattr(train_env, 'goal_generator'):
+                if as_goals:
                     goal = (x, y)
-                    goals.append(goal)
-                    update_env_goal_generator(train_env, FixedGoalGenerator(goal))
-                elif hasattr(train_env, 'init_generator'):
-                    init_state = (x, y)
-                    init_states.append(init_state)
-                    update_env_init_generator(train_env, FixedInitGenerator(init_state))
+                    states.append(goal)
+                    train_env.update_goal_selector(FixedGoalGenerator(goal))
                 else:
-                    goal = (x, y)
-                    goals.append(goal)
-                    update_env_goal_generator(train_env, FixedGoalGenerator(goal))
+                    init_state = (x, y)
+                    states.append(init_state)
+                    train_env.update_init_selector(FixedStateSelector(init_state))
+                    # print("fixing init selector to: ", init_state)
+                    # print("the goal is set to: ", train_env.current_goal)
                 for n in range(n_traj):
                     path = rollout(train_env, policy, animated=visualize, max_path_length=max_path_length, speedup=100)
                     paths.append(path)
+                    # print("the first obs in the path is ", path['observations'][0])
+                    # print("total length: ", np.size(path['rewards']))
+                    # print("the goal is: ", train_env.current_goal)
+                    # print("the min dist is: ", np.min(path['env_infos']['distance']))
                 # print('goal: ', goal, ', the one in env_infos is: ', paths[-1]['env_infos']['x_goal'], paths[-1]['env_infos']['y_goal'])
                 avg_totRewards.append(np.mean([np.sum(path['rewards']) for path in paths]))
-                min_dist = [np.min(path['env_infos']['distance']) for path in paths]
-                # print("min_dists in {}-{} is: {}".format(i, j, min_dist))
                 avg_success.append(np.mean([int(np.min(path['env_infos']['distance'])
-                                                <= maze_env.wrapped_env.terminal_eps) for path in paths]))
+                                                <= train_env.terminal_eps) for path in paths]))
 
-    if hasattr(train_env, 'goal_generator'):
-        return avg_totRewards, avg_success, goals, spacing
-    elif hasattr(train_env, 'init_generator'):
-        return avg_totRewards, avg_success, init_states, spacing
-    else:
-        return avg_totRewards, avg_success, goals, spacing
+    return avg_totRewards, avg_success, states, spacing
 
 
-def test_and_plot_policy(policy, env, visualize=False, sampling_res=1, n_traj=1, max_reward=1):
-    avg_totRewards, avg_success, goals, spacing = test_policy(policy, env, visualize, sampling_res=sampling_res, n_traj=n_traj)
+def test_and_plot_policy(policy, env, as_goals=True, visualize=True, sampling_res=1, n_traj=1, max_reward=1):
+    avg_totRewards, avg_success, states, spacing = test_policy(policy, env, as_goals, visualize,
+                                                               sampling_res=sampling_res, n_traj=n_traj)
 
-    heatmap = plot_heatmap(avg_success, goals, max_reward=max_reward, spacing=spacing, show_heatmap=False)
+    heatmap = plot_heatmap(avg_success, states, max_reward=max_reward, spacing=spacing, show_heatmap=False)
 
     return avg_totRewards, avg_success, heatmap
 

@@ -1,4 +1,5 @@
 import numpy as np
+from rllab.misc.overrides import overrides
 from sandbox.young_clgan.gan.gan import FCGAN
 from sandbox.young_clgan.state.utils import sample_matrix_row
 
@@ -10,7 +11,7 @@ class StateGenerator(object):
         """Pretrain the generator distribution to uniform distribution in the limit."""
         raise NotImplementedError
         
-    def pretain(self, states):
+    def pretrain(self, states):
         """Pretrain with state distribution in the states list."""
         raise NotImplementedError
     
@@ -30,7 +31,7 @@ class StateGenerator(object):
 class CrossEntropyStateGenerator(StateGenerator):
     """Maintain a state list and add noise to current states to generate new states."""
     
-    def __init__(self, state_size, evaluater_size, state_range, noise_std=1.0,
+    def __init__(self, state_size, state_range, noise_std=1.0,
                  state_center=None):
         self.state_list = np.array([])
         self.state_range = state_range
@@ -43,7 +44,7 @@ class CrossEntropyStateGenerator(StateGenerator):
         )
         return self.pretrain(states)
         
-    def pretain(self, states):
+    def pretrain(self, states):
         self.state_list = np.array(states)
         
     def sample_states(self, size):
@@ -53,7 +54,7 @@ class CrossEntropyStateGenerator(StateGenerator):
         states = sample_matrix_row(self.state_list, size)
         return np.clip(
             states + np.random.randn(*states.shape) * self.noise_std,
-            -self.state_range, self.state_range
+            self.state_center - self.state_range, self.state_center + self.state_range
         )
     
     def sample_states_with_noise(self, size):
@@ -65,7 +66,6 @@ class CrossEntropyStateGenerator(StateGenerator):
         if len(good_states) != 0:
             self.state_list = good_states
         
-
 
 class StateGAN(StateGenerator):
     """A GAN for generating states. It is just a wrapper for clgan.GAN.FCGAN"""
@@ -123,6 +123,7 @@ class StateGAN(StateGenerator):
         states = self._add_noise_to_states(states)
         return states, noise
 
+    @overrides
     def train(self, states, labels, outer_iters, generator_iters,
               discriminator_iters, suppress_generated_states=True):
         normalized_states = (states - self.state_center) / self.state_range

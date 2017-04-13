@@ -7,8 +7,7 @@ from collections import OrderedDict
 from rllab.sampler.utils import rollout
 from rllab.misc import logger
 
-# from sandbox.young_clgan.envs.base import update_env_state_generator
-from sandbox.young_clgan.state.selectors import FixedStateSelector, update_env_state_selector
+from sandbox.young_clgan.state.selectors import FixedStateSelector
 
 
 class FunctionWrapper(object):
@@ -59,14 +58,14 @@ def parallel_map(func, iterable_object, num_processes=-1):
     return results
 
 
-def label_states(states, env, policy, horizon, min_reward, max_reward,
+def label_states(states, env, policy, horizon, min_reward, max_reward, as_goals=True,
                  old_rewards=None, improvement_threshold=None, n_traj=1, n_processes=-1):
     print("Evaluating states after training")
-    mean_rewards = evaluate_states(states, env, policy, horizon, n_traj, n_processes=n_processes)
-
-    print("Computing state labels")
+    mean_rewards = evaluate_states(states, env, policy, horizon, as_goals=as_goals,
+                                   n_traj=n_traj, n_processes=n_processes)
     mean_rewards = mean_rewards.reshape(-1, 1)
 
+    print("Computing state labels")
     if old_rewards is not None:
         old_rewards = old_rewards.reshape(-1, 1)
         labels = np.hstack(
@@ -100,10 +99,10 @@ def convert_label(labels):
         3: 'Unlearnable',
         4: 'Other',
     })
-    new_labels = np.zeros(labels.shape[0], dtype=int)
-    new_labels[np.logical_and(labels[:, 0], labels[:, 1])] = 4
-    new_labels[labels[:, 0] == False] = 1
-    new_labels[labels[:, 1] == False] = 2
+    new_labels = 4 * np.ones(labels.shape[0], dtype=int)
+    new_labels[np.logical_and(labels[:, 0], labels[:, 1])] = 2
+    new_labels[labels[:, 0] == False] = 0
+    new_labels[labels[:, 1] == False] = 1
     if np.shape(labels)[-1] == 3:
         new_labels[
             np.logical_and(
@@ -115,12 +114,13 @@ def convert_label(labels):
     return new_labels, classes
 
 
-def evaluate_states(states, env, policy, horizon, n_traj=1, n_processes=-1):
+def evaluate_states(states, env, policy, horizon, as_goals=True, n_traj=1, n_processes=-1):
     evaluate_state_wrapper = FunctionWrapper(
         evaluate_state,
         env=env,
         policy=policy,
         horizon=horizon,
+        as_goals=as_goals,
         n_traj=n_traj,
     )
     mean_rewards = parallel_map(
@@ -131,25 +131,19 @@ def evaluate_states(states, env, policy, horizon, n_traj=1, n_processes=-1):
     return np.array(mean_rewards)
 
 
-def evaluate_state(state, env, policy, horizon, n_traj=1):
+def evaluate_state(state, env, policy, horizon, as_goals=False, n_traj=1):
     total_rewards = []
     paths = []
-    update_env_state_selector(env, FixedStateSelector(state))
+    if as_goals:
+        env.update_goal_selector(FixedStateSelector(state=state))
+    else:
+        env.update_init_selector(FixedStateSelector(state=state))
     for j in range(n_traj):
         paths.append(rollout(env, policy, horizon))
         total_rewards.append(
             np.sum(paths[-1]['rewards'])
         )
     mean_reward = np.mean(total_rewards)
-    # if 0 < mean_reward < 300:
-    #     # extra_paths = []
-    #     # for i in range(2):
-    #     #     extra_paths.append(rollout(env, policy, horizon, animated=True))
-    #     # print("Dists: ", [np.min(path['env_infos']['distance']) for path in extra_paths])
-    #     min_dists = [np.min(path['env_infos']['distance']) for path in paths]
-    #     traj_lens = [np.shape(path['rewards'])[0] for path in paths]
-    #     print("State: {}, Mean reward: {}, rewards: {}, traj_len: {}, min_dists: {}".format(state, mean_reward, total_rewards, traj_lens, min_dists))
-
     return mean_reward
 
 

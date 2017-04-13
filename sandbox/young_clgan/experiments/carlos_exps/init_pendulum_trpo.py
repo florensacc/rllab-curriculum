@@ -17,7 +17,7 @@ from rllab import config
 from rllab.misc.instrument import VariantGenerator
 
 from sandbox.young_clgan.envs.init_sampler.base import UniformInitGenerator, FixedInitGenerator
-from sandbox.young_clgan.envs.init_sampler.base import InitExplorationEnv
+from sandbox.young_clgan.envs.init_sampler.base import InitEnv
 from sandbox.carlos_snn.autoclone import autoclone
 
 # from sandbox.young_clgan.lib.utils import initialize_parallel_sampler
@@ -94,8 +94,8 @@ if __name__ == '__main__':
             assert init_generator_class == FixedInitGenerator, 'Init generator not recognized!'
             init_generator = init_generator_class(goal=v['goal'])
 
-        env = InitExplorationEnv(env=inner_env, goal=v['goal'], init_generator=init_generator, goal_reward=v['goal_reward'],
-                                 goal_weight=v['goal_weight'], terminal_bonus=v['terminal_bonus'], angle_idxs=v['angle_idxs'])
+        env = InitEnv(env=inner_env, goal=v['goal'], init_generator=init_generator, goal_reward=v['goal_reward'],
+                      goal_weight=v['goal_weight'], terminal_bonus=v['terminal_bonus'], angle_idxs=v['angle_idxs'])
 
         policy = GaussianMLPPolicy(
             env_spec=env.spec,

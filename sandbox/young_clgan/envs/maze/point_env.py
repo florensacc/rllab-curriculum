@@ -14,8 +14,8 @@ from sandbox.young_clgan.envs.rewards import linear_threshold_reward
 class PointEnv(GoalEnv, MujocoEnv, Serializable):
     FILE = 'point2.xml'
 
-    def __init__(self, goal_generator, reward_dist_threshold=0.3, indicator_reward=False, terminal_eps=None,
-                 control_mode='linear', *args, **kwargs):
+    def __init__(self, goal_generator, reward_dist_threshold=0.3, indicator_reward=True, terminal_eps=None,
+                 control_mode='linear', append_goal=True, *args, **kwargs):
         """
         :param goal_generator: Proceedure to sample the and keep the goals
         :param reward_dist_threshold:
@@ -26,6 +26,7 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
         self.reward_dist_threshold = reward_dist_threshold
         self.indicator_reward = indicator_reward
         self.terminal_eps = terminal_eps
+        self.append_goal = append_goal
         if self.terminal_eps is None:
             self.terminal_eps = self.reward_dist_threshold
         MujocoEnv.__init__(self, *args, **kwargs)
@@ -36,22 +37,27 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
         """Append obs with current_goal"""
         pos = self.model.data.qpos.flat[:2]
         vel = self.model.data.qvel.flat[:2]
-        return np.concatenate([
-            pos,
-            vel,
-            self.current_goal,
-        ])
+        if self.append_goal:
+            return np.concatenate([
+                pos,
+                vel,
+                self.current_goal,
+            ])
+        else:
+            return np.concatenate([pos, vel])
 
     @overrides
     def reset(self, init_state=None, *args, **kwargs):
-    # def reset(self, *args, **kwargs):
+        # def reset(self, *args, **kwargs):
         """This does both the reset of mujoco, the forward and reset goal"""
         self.update_goal()
         qpos = np.zeros((self.model.nq, 1))
-        if init_state is not None:
-            qpos[:2] = np.array(init_state).reshape((2,1))
-        qpos[2:, :] = np.array(self.current_goal).reshape((2, 1))  # the goal is part of the mujoco!!
         qvel = np.zeros((self.model.nv, 1))  # 0 velocity
+        if init_state is not None:
+            qpos[:2] = np.array(init_state[:2]).reshape((2, 1))
+            if init_state.size == 4:
+                qvel[:2] = np.array(init_state[2:]).reshape((2, 1))
+        qpos[2:, :] = np.array(self.current_goal).reshape((2, 1))  # the goal is part of the mujoco!!
         self.set_state(qpos, qvel)
         # this is usually the usual reset
         self.current_com = self.model.data.com_subtree[0]  # CF: this is very weird... gets 0, 2, 0.1 even when it's 0
@@ -87,7 +93,6 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
         )
 
         ob = self.get_current_obs()
-        # import pdb; pdb.set_trace()
         # print('current obs:', ob)
         done = False
         if dist < self.terminal_eps and self.indicator_reward:
@@ -139,18 +144,18 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
         distances = [
             np.mean(path['env_infos']['distance'])
             for path in paths
-            ]
+        ]
         goal_distances = [
             path['env_infos']['distance'][0] for path in paths
-            ]
+        ]
         reward_dist = [
             np.mean(path['env_infos']['reward_dist'])
             for path in paths
-            ]
+        ]
         reward_ctrl = [
             np.mean(path['env_infos']['reward_ctrl'])
             for path in paths
-            ]
+        ]
         # Process by trajectories
         logger.record_tabular('GoalDistance', np.mean(goal_distances))
         logger.record_tabular('MeanDistance', np.mean(distances))
