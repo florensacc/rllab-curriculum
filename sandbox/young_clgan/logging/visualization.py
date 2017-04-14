@@ -12,6 +12,8 @@ import matplotlib as mpl
 
 mpl.use('Agg')
 from matplotlib import rc
+import matplotlib.patches as patches
+
 
 # rc('text', usetex=True)
 from mpl_toolkits.mplot3d import Axes3D
@@ -133,7 +135,12 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
                 label=text_labels[i]
             )
         if bounds is not None:
-            plot_bounds(ax, bounds, 2)
+            plot_bounds(ax, bounds, 2, label='state_bound')
+        if True:
+            bounds_ext = [[-1, -1], [5,5]]
+            plot_bounds(ax, bounds_ext, 2, label='maze_walls', color='k')
+            bounds_int = [[-1,1], [3,3]]
+            plot_bounds(ax, bounds_int, 2, color='k')
         if limit is not None:
             if center is None:
                 center = np.zeros(2)
@@ -164,7 +171,7 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
         return img
 
 
-def plot_bounds(ax, bounds, dim=2):
+def plot_bounds(ax, bounds, dim=2, label='', color='b'):
     if dim == 2:
         low, high = bounds
         i = 0
@@ -172,10 +179,10 @@ def plot_bounds(ax, bounds, dim=2):
         a[i] = low[i]
         b = np.copy(low)
         b[i] = high[i]
-        ax.plot(*zip(high, a), color="b", label='state bounds')
-        ax.plot(*zip(high, b), color="b")
-        ax.plot(*zip(low, a), color="b")
-        ax.plot(*zip(low, b), color="b")
+        ax.plot(*zip(high, a), color=color, label=label)
+        ax.plot(*zip(high, b), color=color)
+        ax.plot(*zip(low, a), color=color)
+        ax.plot(*zip(low, b), color=color)
     elif dim == 3:
         high, low = (np.array(b) for b in bounds)
         for i in range(3):
@@ -187,10 +194,10 @@ def plot_bounds(ax, bounds, dim=2):
             b[j] = high[j]
             c = np.copy(low)
             c[k] = high[k]
-            ax.plot(*zip(high[:3], a[:3]), color="b")
-            ax.plot(*zip(low[:3], b[:3]), color="b")
-            ax.plot(*zip(a[:3], b[:3]), color='b')
-            ax.plot(*zip(a[:3], c[:3]), color='b')
+            ax.plot(*zip(high[:3], a[:3]), color=color, label=label)
+            ax.plot(*zip(low[:3], b[:3]), color=color)
+            ax.plot(*zip(a[:3], b[:3]), color=color)
+            ax.plot(*zip(a[:3], c[:3]), color=color)
 
 
 def plot_gan_samples(gan, limit, fname=None, size=500):

@@ -18,7 +18,7 @@ from rllab import config
 from rllab.misc.instrument import VariantGenerator
 
 from sandbox.young_clgan.state.selectors import UniformStateSelector, UniformListStateSelector, FixedStateSelector
-from sandbox.young_clgan.envs.init_sampler.base import  InitIdxEnv
+from sandbox.young_clgan.envs.init_sampler.base import InitIdxEnv
 from sandbox.young_clgan.logging.inner_logger import InnerExperimentLogger
 from sandbox.carlos_snn.autoclone import autoclone
 
@@ -28,6 +28,7 @@ from sandbox.young_clgan.logging import HTMLReport
 from sandbox.young_clgan.logging import format_dict
 from sandbox.young_clgan.logging.visualization import save_image, plot_labeled_samples
 from sandbox.young_clgan.envs.base import FixedGoalGenerator
+from sandbox.young_clgan.state.utils import StateCollection
 
 from sandbox.young_clgan.logging.logger import ExperimentLogger
 from sandbox.young_clgan.state.evaluator import label_states, convert_label
@@ -72,15 +73,20 @@ if __name__ == '__main__':
         mode = 'local'
         n_parallel = 4
 
-    exp_prefix = 'init-maze-oracle'
+    exp_prefix = 'init-maze-oracle2'
     vg = VariantGenerator()
     vg.add('n_traj', [3])
     vg.add('persistence', [1, 3])
     vg.add('sampling_res', [2])
+    vg.add('num_new_states', [50])
+    vg.add('num_old_states', [20])
+    vg.add('replay_buffer', [True, False])
+    vg.add('coll_eps', [0.3])
+    vg.add('replay_noise', lambda replay_buffer: [0.1, 0] if replay_buffer else [0])
     # algorithm params
     vg.add('seed', range(20, 70, 10))
-    vg.add('n_itr', [500])
-    vg.add('inner_itr', [5])
+    vg.add('n_itr', [200])
+    vg.add('inner_itr', [2, 5])
     vg.add('outer_itr', lambda n_itr, inner_itr: [int(n_itr / inner_itr)])
     vg.add('batch_size', [20000])
     vg.add('max_path_length', [400])
@@ -103,7 +109,7 @@ if __name__ == '__main__':
     vg.add('policy_init_std', [1])
     vg.add('output_gain', [1])
 
-    vg.add('discount', [0.99, 0.995])
+    vg.add('discount', [0.995])
     vg.add('gae_lambda', [1])
     vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
 
@@ -206,27 +212,38 @@ if __name__ == '__main__':
         # report.new_row()
         # logger.dump_tabular(with_prefix=False)
 
+        all_inits = StateCollection(distance_threshold=v['coll_eps'])
+
         inner_experiment_logger = InnerExperimentLogger(log_dir, 'inner', snapshot_mode='last', hold_outter_log=True)
 
         for outer_itr in range(v['outer_itr']):
             logger.log("Outer itr # %i" % outer_itr)
-            logger.log("Sampling and labeling the inits")
-            initial_inits = np.array(v['init_center']) + \
-                            np.random.uniform(-v['init_range'], v['init_range'], size=(1000, np.size(v['goal'])))
-            labels = label_states(
-                initial_inits, env, policy, v['max_path_length'],
-                min_reward=v['min_reward'],
-                max_reward=v['max_reward'],
-                as_goals=False,
-                old_rewards=None,
-                n_traj=v['n_traj'])
-            logger.log("Converting the labels")
-            init_classes, text_labels = convert_label(labels)
-            init_states = initial_inits[init_classes == 2]
+            init_states = np.array([]).reshape((-1, np.size(v['goal'])))
+            k = 0
+            while init_states.shape[0] < v['num_new_states']:
+                logger.log("Sampling and labeling the inits: %d" % k)
+                k += 1
+                initial_inits = np.array(v['init_center']) + \
+                                np.random.uniform(-v['init_range'], v['init_range'], size=(1000, np.size(v['goal'])))
+                labels = label_states(
+                    initial_inits, env, policy, v['max_path_length'],
+                    min_reward=v['min_reward'],
+                    max_reward=v['max_reward'],
+                    as_goals=False,
+                    old_rewards=None,
+                    n_traj=v['n_traj'])
+                logger.log("Converting the labels")
+                init_classes, text_labels = convert_label(labels)
+                init_states = np.concatenate([init_states, initial_inits[init_classes == 2]]).reshape((-1,np.size(v['goal'])))
+            if v['replay_buffer'] and all_inits.size > 0:
+                old_inits = all_inits.sample(v['num_old_states'], replay_noise=v['replay_noise'])
+                inits = np.vstack([init_states, old_inits])
+            else:
+                inits = init_states
 
             with inner_experiment_logger:
                 logger.log("Updating the environment init generator")
-                env.update_init_selector(UniformListStateSelector(init_states.tolist()))
+                env.update_init_selector(UniformListStateSelector(inits.tolist()))
 
                 logger.log('Training the algorithm')
                 algo = TRPO(
@@ -254,6 +271,7 @@ if __name__ == '__main__':
 
             with logger.tabular_prefix('Outer_'):
                 logger.record_tabular('iter', outer_itr)
+                logger.record_tabular('StatesSampled_for50good', 1000*k)
                 logger.record_tabular('MeanRewards', mean_rewards)
                 logger.record_tabular('Success', mean_success)
 
@@ -265,7 +283,7 @@ if __name__ == '__main__':
             )
 
             labels = label_states(
-                init_states, env, policy, v['max_path_length'],
+                inits, env, policy, v['max_path_length'],
                 min_reward=v['min_reward'],
                 max_reward=v['max_reward'],
                 as_goals=False,
@@ -282,7 +300,7 @@ if __name__ == '__main__':
                 init_class_frac[text_labels[k]] = frac
 
             img = plot_labeled_samples(
-                samples=init_states, sample_classes=init_classes, text_labels=text_labels,
+                samples=inits, sample_classes=init_classes, text_labels=text_labels,
                 limit=v['init_range'] + 0.5, center=v['init_center']
                 # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
             )
@@ -296,9 +314,14 @@ if __name__ == '__main__':
             report.save()
             report.new_row()
 
+            # append new inits to list of all inits (replay buffer): Not the low reward ones!!
+            filtered_raw_inits = [init for init, label in zip(inits, labels) if label[0] == 2]
+            all_inits.append(filtered_raw_inits)
 
-    print('Running {} inst. on type {}, with price {}, parallel {} on the subnets: '.format(vg.size, config.AWS_INSTANCE_TYPE,
-                                                                                            config.AWS_SPOT_PRICE, n_parallel),
+    print('Running {} inst. on type {}, with price {}, parallel {} on the subnets: '.format(vg.size,
+                                                                                            config.AWS_INSTANCE_TYPE,
+                                                                                            config.AWS_SPOT_PRICE,
+                                                                                            n_parallel),
           *subnets)
 
     for vv in vg.variants(randomized=False):

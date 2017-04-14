@@ -80,7 +80,7 @@ if __name__ == '__main__':
     # algorithm params
     vg.add('seed', range(20, 70, 10))
     vg.add('n_itr', [500])
-    vg.add('inner_itr', [5])
+    vg.add('inner_itr', [3])
     vg.add('outer_itr', lambda n_itr, inner_itr: [int(n_itr / inner_itr)])
     vg.add('batch_size', [20000])
     vg.add('max_path_length', [400])
@@ -103,7 +103,7 @@ if __name__ == '__main__':
     vg.add('policy_init_std', [1])
     vg.add('output_gain', [1])
 
-    vg.add('discount', [0.99, 0.995])
+    vg.add('discount', [0.995])
     vg.add('gae_lambda', [1])
     vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
 

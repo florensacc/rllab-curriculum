@@ -113,7 +113,7 @@ if __name__ == '__main__':
     vg.add('coll_eps', [0.3])  # lambda reward_dist_threshold: [reward_dist_threshold, 0])
     vg.add('replay_noise', [0, 0.1])
 
-    vg.add('discount', [0.99, 0.995])
+    vg.add('discount', [0.995])
     vg.add('gae_lambda', [1])
     vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
 
@@ -122,8 +122,8 @@ if __name__ == '__main__':
     vg.add('gan_discriminator_iters', [200])
     vg.add('gan_generator_iters', [10])
     vg.add('gan_noise_size', [4])
-    vg.add('num_new_goals', [200])
-    vg.add('num_old_goals', [100])
+    vg.add('num_new_states', [200])
+    vg.add('num_old_states', [100])
     vg.add('gan_generator_layers', [[256, 256]])
     vg.add('gan_discriminator_layers', [[128, 128]])
     # gan_configs
@@ -240,7 +240,7 @@ if __name__ == '__main__':
                 final_gen_loss = 0
 
         # log first samples form the GAN
-        initial_inits, _ = gan.sample_states_with_noise(v['num_new_goals'])
+        initial_inits, _ = gan.sample_states_with_noise(v['num_new_states'])
         logger.log("Labeling the goals")
         labels = label_states(
             initial_inits, env, policy, v['max_path_length'],
@@ -286,10 +286,10 @@ if __name__ == '__main__':
             logger.log("Outer itr # %i" % outer_itr)
             # Sample GAN
             logger.log("Sampling inits from the GAN")
-            raw_inits, _ = gan.sample_states_with_noise(v['num_new_goals'])
+            raw_inits, _ = gan.sample_states_with_noise(v['num_new_states'])
 
             if v['replay_buffer'] and outer_itr > 0 and all_inits.size > 0:
-                old_inits = all_inits.sample(v['num_old_goals'], replay_noise=v['replay_noise'])
+                old_inits = all_inits.sample(v['num_old_states'], replay_noise=v['replay_noise'])
                 inits = np.vstack([raw_inits, old_inits])
             else:
                 inits = raw_inits
@@ -417,7 +417,7 @@ if __name__ == '__main__':
             report.new_row()
 
             # append new inits to list of all inits (replay buffer): Not the low reward ones!!
-            filtered_raw_inits = [init for init, label in zip(inits, labels) if label[0] == 1]
+            filtered_raw_inits = [init for init, label in zip(inits, labels) if label[0] == 2]
             all_inits.append(filtered_raw_inits)
 
     print('Running {} inst. on type {}, with price {}, parallel {} on the subnets: '.format(vg.size, config.AWS_INSTANCE_TYPE,
