@@ -3,6 +3,7 @@ import os
 import os.path as osp
 import random
 import sys
+from multiprocessing import cpu_count
 from collections import OrderedDict
 import numpy as np
 
@@ -71,14 +72,15 @@ if __name__ == '__main__':
         n_parallel = 4
     else:
         mode = 'local'
-        n_parallel = 4
+        n_parallel = cpu_count()
 
     exp_prefix = 'init-maze-oracle2'
     vg = VariantGenerator()
-    vg.add('n_traj', [3])
+    vg.add('n_traj', [10])
+    vg.add('n_traj_training', [3])
     vg.add('persistence', [1, 3])
     vg.add('sampling_res', [2])
-    vg.add('num_new_states', [50])
+    vg.add('num_new_states', [100])
     vg.add('num_old_states', [20])
     vg.add('replay_buffer', [True, False])
     vg.add('coll_eps', [0.3])
@@ -263,7 +265,7 @@ if __name__ == '__main__':
 
             logger.log('Generating the Heatmap...')
             avg_rewards, avg_success, heatmap = test_and_plot_policy(policy, env, as_goals=False, visualize=False,
-                                                                     sampling_res=v['sampling_res'], n_traj=v['n_traj'])
+                                                                     sampling_res=v['sampling_res'], n_traj=v['n_traj_training'])
             reward_img = save_image(fig=heatmap)
 
             mean_rewards = np.mean(avg_rewards)
