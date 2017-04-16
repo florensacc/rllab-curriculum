@@ -65,7 +65,7 @@ class HTMLReport:
         sio.close()
         return encoded
 
-    def add_image(self, im, txt, width=400, font_pct=100):
+    def add_image(self, im, txt='', width=400, font_pct=100):
         if self.t is None or self.row_image_count >= self.images_per_row:
             self._add_table()
         with self.t:
