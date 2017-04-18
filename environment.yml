@@ -51,8 +51,8 @@ dependencies:
         - jupyter
         - progressbar2
         - chainer==1.18.0
-        - https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-0.11.0-cp35-cp35m-linux_x86_64.whl; 'linux' in sys_platform
-        - https://storage.googleapis.com/tensorflow/mac/cpu/tensorflow-0.11.0-py3-none-any.whl; sys_platform == 'darwin'
+        - tensorflow-gpu; 'linux' in sys_platform
+        - tensorflow; sys_platform == 'darwin'
         - dominate
         - scikit-image
         - git+https://github.com/tflearn/tflearn.git

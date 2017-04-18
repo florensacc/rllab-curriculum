@@ -5,20 +5,26 @@ import numpy as np
 
 import tensorflow as tf
 
-
+# Here we use a function to avoid reuse of objects
 DEFAULT_GAN_CONFIGS = lambda: {
     'batch_size': 64,
+    'generator_output_activation': 'tanh',
+    'hidden_layer_activation': 'leaky_relu',
     'generator_optimizer': tf.train.AdamOptimizer(0.001),
     'discriminator_optimizer': tf.train.AdamOptimizer(0.001),
     'generator_weight_initializer': tf.contrib.layers.xavier_initializer(),
     'discriminator_weight_initializer': tf.contrib.layers.xavier_initializer(),
-    'print_iteration': 20,
+    'print_iteration': 5,
     'reset_generator_optimizer': True,
     'reset_discriminator_optimizer': True,
     'batch_normalize_discriminator': True,
     'batch_normalize_generator': True,
     'discriminator_batch_noise_stddev': 0,
     'generator_loss_weights': None,
+    'numerical_stable_epsilon': 1e-15,
+    'supress_all_logging': False,
+    'default_generator_iters': 2,
+    'default_discriminator_iters': 1,
 }
 
 
@@ -144,7 +150,13 @@ class FCGAN(object):
             )
         return np.vstack(generator_samples), np.vstack(generator_noise)
 
-    def train(self, X, Y, outer_iters, generator_iters, discriminator_iters, suppress_generated_goals=True):
+    def train(self, X, Y, outer_iters, generator_iters=None, discriminator_iters=None):
+        
+        if generator_iters is None:
+            generator_iters = self.configs['default_generator_iters']
+        if discriminator_iters is None:
+            discriminator_iters = self.configs['default_discriminator_iters']
+        
         sample_size = X.shape[0]
         train_size = min(
             int(self.configs['batch_size'] * discriminator_iters / 10),
@@ -165,22 +177,17 @@ class FCGAN(object):
             sample_X = X[indices, :]
             sample_Y = Y[indices, :]
 
-            if suppress_generated_goals:
-                generated_X, random_noise = self.sample_generator(train_size)
-                feed_X = np.vstack([sample_X, generated_X])
-                feed_Y = np.vstack([sample_Y, generated_Y])
-            else:
-                random_noise = self.sample_random_noise(train_size)
-                feed_X = np.vstack([sample_X])
-                feed_Y = np.vstack([sample_Y])
+            generated_X, random_noise = self.sample_generator(train_size)
+            feed_X = np.vstack([sample_X, generated_X])
+            feed_Y = np.vstack([sample_Y, generated_Y])
+
 
             dis_log_loss = self.train_discriminator(feed_X, feed_Y, discriminator_iters)
             gen_log_loss = self.train_generator(random_noise, generator_iters)
-        # if i == 0:
-        #         logger.record_tabular('Discrim_lossBefore', dis_log_loss[0])
-        #         logger.record_tabular('Gen_lossBefore', gen_log_loss[0])
-        # logger.record_tabular('Discim_lossAfter', dis_log_loss[-1])
-        # logger.record_tabular('Gen_lossAfter', gen_log_loss[-1])
+            
+            if i % self.configs['print_iteration'] == 0 and not self.configs['supress_all_logging']:
+                print('Iter: {}, generator loss: {}, discriminator loss: {}'.format(i, gen_log_loss, dis_log_loss))
+
         return dis_log_loss, gen_log_loss
 
     def train_discriminator(self, X, Y, iters):
@@ -198,30 +205,20 @@ class FCGAN(object):
             train_X = X[indices, :]
             train_Y = Y[indices]
 
-            if self.configs['discriminator_batch_noise_stddev'] > 0:
-                noise_indices = np.var(train_X, axis=0) < self.configs['discriminator_batch_noise_stddev']
-                noise = np.random.randn(*train_X.shape)
-                noise[:, np.logical_not(noise_indices)] = 0
-                train_X += noise * self.configs['discriminator_batch_noise_stddev']
+            # if self.configs['discriminator_batch_noise_stddev'] > 0:
+            #     noise_indices = np.var(train_X, axis=0) < self.configs['discriminator_batch_noise_stddev']
+            #     noise = np.random.randn(*train_X.shape)
+            #     noise[:, np.logical_not(noise_indices)] = 0
+            #     train_X += noise * self.configs['discriminator_batch_noise_stddev']
 
-            self.tf_session.run(
-                self.discriminator_train_op,
+            loss, _ = self.tf_session.run(
+                [self.discriminator.discriminator_loss, self.discriminator_train_op],
                 {self.discriminator.sample_input: train_X,
                  self.discriminator.label: train_Y,
                  self.discriminator_is_training: True}
             )
-
-            if i % self.configs['print_iteration'] == 0 or i == iters - 1:
-                loss = self.tf_session.run(
-                    self.discriminator.discriminator_loss,
-                    {self.discriminator.sample_input: train_X,
-                     self.discriminator.label: train_Y}
-                )
-                log_loss.append(loss)
-                print('Disc_itr_%i: discriminator loss: %f' % (i, loss))
-                # if loss < 1e-3:
-                #     break
-        return log_loss
+                
+        return loss
 
     def train_generator(self, X, iters):
         """
@@ -235,21 +232,12 @@ class FCGAN(object):
             indices = np.random.randint(0, X.shape[0], size=(batch_size,))
             train_X = X[indices, :]
 
-            self.tf_session.run(
-                self.generator_train_op,
+            loss, _ = self.tf_session.run(
+                [self.discriminator.generator_loss, self.generator_train_op],
                 {self.generator.input: train_X, self.generator_is_training: True}
             )
-
-            if i % self.configs['print_iteration'] == 0 or i == iters - 1:
-                loss = self.tf_session.run(
-                    self.discriminator.generator_loss,
-                    {self.generator.input: train_X}
-                )
-                log_loss.append(loss)
-                print('Gen_itr_%i: generator loss: %f' % (i, loss))
-                # if loss < 1e-3:
-                #     break
-        return log_loss
+               
+        return loss
 
     def discriminator_predict(self, X):
         batch_size = self.configs['batch_size']
@@ -258,7 +246,7 @@ class FCGAN(object):
             sample_size = min(batch_size, X.shape[0] - i)
             output.append(
                 self.tf_session.run(
-                    self.discriminator.output,
+                    self.discriminator.sample_output,
                     {self.discriminator.sample_input: X[i:i + sample_size]}
                 )
             )
@@ -271,17 +259,19 @@ class Generator(object):
         self._input = tf.placeholder(tf.float32, shape=[None, noise_size])
         out = self._input
 
-        # if callable(configs['generator_activation']):
-        #     activation = configs['generator_activation']()
-        # else:
-        #     activation = configs['generator_activation']
-
         for size in hidden_layers:
             out = tf.layers.dense(
                 out, size,
                 kernel_initializer=configs['generator_weight_initializer'],
             )
-            out = tf.nn.relu(out)
+            
+            if configs['hidden_layer_activation'] == 'relu':
+                out = tf.nn.relu(out)
+            elif configs['hidden_layer_activation'] == 'leaky_relu':
+                out = tf.maximum(0.1 * out, out)
+            else:
+                raise ValueError('Unsupported activation type')
+                
             if configs['batch_normalize_generator']:
                 out = tf.layers.batch_normalization(
                     out, training=is_training
@@ -292,7 +282,14 @@ class Generator(object):
             kernel_initializer=configs['generator_weight_initializer'],
         )
         
-        self._output = tf.nn.tanh(out)
+        if configs['generator_output_activation'] == 'tanh':
+            self._output = tf.nn.tanh(out)
+        elif configs['generator_output_activation'] == 'sigmoid':
+            self._output = tf.nn.sigmoid(out)
+        elif configs['generator_output_activation'] == 'linear':
+            self._output = out
+        else:
+            raise ValueError('Unsupported activation type!')
         
 
     @property
@@ -315,10 +312,6 @@ class Discriminator(object):
         generator_out = self._generator_input
         sample_out = self._sample_input
 
-        # if callable(configs['discriminator_activation']):
-        #     activation = configs['discriminator_activation']()
-        # else:
-        #     activation = configs['discriminator_activation']
         
         for i, size in enumerate(hidden_layers):
             generator_out = tf.layers.dense(
@@ -326,7 +319,14 @@ class Discriminator(object):
                 name='fc_{}'.format(i), reuse=False,
                 kernel_initializer=configs['discriminator_weight_initializer'],
             )
-            generator_out = tf.nn.relu(generator_out)
+            
+            if configs['hidden_layer_activation'] == 'relu':
+                generator_out = tf.nn.relu(generator_out)
+            elif configs['hidden_layer_activation'] == 'leaky_relu':
+                generator_out = tf.maximum(0.1 * generator_out, generator_out)
+            else:
+                raise ValueError('Unsupported activation type')
+            
             if configs['batch_normalize_discriminator']:
                 generator_out = tf.layers.batch_normalization(
                     generator_out, name='bn_{}'.format(i),
@@ -337,7 +337,14 @@ class Discriminator(object):
                 sample_out, size,
                 name='fc_{}'.format(i), reuse=True
             )
-            sample_out = tf.nn.relu(sample_out)
+            
+            if configs['hidden_layer_activation'] == 'relu':
+                sample_out = tf.nn.relu(sample_out)
+            elif configs['hidden_layer_activation'] == 'leaky_relu':
+                sample_out = tf.maximum(0.1 * sample_out, sample_out)
+            else:
+                raise ValueError('Unsupported activation type')
+            
             if configs['batch_normalize_discriminator']:
                 sample_out = tf.layers.batch_normalization(
                     sample_out, name='bn_{}'.format(i),
@@ -359,26 +366,22 @@ class Discriminator(object):
         )
         
         self._sample_output = tf.sigmoid(sample_out)
+        
+        eps = configs['numerical_stable_epsilon']
 
-        self._discriminator_loss = tf.reduce_mean(
-            -tf.reduce_sum(
-                self._label * tf.log(self._sample_output + 1e-10) + (1 - self._label) * tf.log(
-                    1 - self._sample_output + 1e-10),
-                reduction_indices=[1]
-            )
+        self._discriminator_loss = -tf.reduce_mean(
+            self._label * tf.log(self._sample_output + eps)
+            + (1. - self._label) * tf.log(1. - self._sample_output + eps),
         )
 
         generator_loss_weights = configs['generator_loss_weights']
         if generator_loss_weights is None:
-            generator_loss_weights = 1
+            generator_loss_weights = 1.
         else:
             generator_loss_weights = np.array(generator_loss_weights).reshape(1, -1)
 
-        self._generator_loss = tf.reduce_mean(
-            -tf.reduce_sum(
-                tf.log(self._generator_output + 1e-10) * generator_loss_weights,
-                reduction_indices=[1]
-            )
+        self._generator_loss = -tf.reduce_mean(
+            tf.log(self._generator_output + eps) * generator_loss_weights,
         )
 
     @property

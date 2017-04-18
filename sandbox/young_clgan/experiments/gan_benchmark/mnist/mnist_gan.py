@@ -35,8 +35,9 @@ def run_task(variant):
     
     gan_configs = {
         'batch_size': 512,
-        'generator_optimizer': tf.train.AdamOptimizer(0.001),
-        'discriminator_optimizer': tf.train.AdamOptimizer(0.001),
+        'generator_output_activation': 'sigmoid',
+        'generator_optimizer': tf.train.AdamOptimizer(variant['generator_learning_rate']),
+        'discriminator_optimizer': tf.train.AdamOptimizer(variant['discriminator_learning_rate']),
         'reset_generator_optimizer': False,
         'reset_discriminator_optimizer': False,
     }
@@ -67,13 +68,14 @@ def run_task(variant):
         one_hot=True
     )
     
-    mnist_data_normalized = 2 * (mnist.train.images - 0.5)
+    # mnist_data_normalized = 2 * (mnist.train.images - 0.5)
+    mnist_data_normalized = mnist.train.images
     
     
-    for outer_iter in range(100):
+    for outer_iter in range(10):
         dloss, gloss = gan.train(
             mnist_data_normalized, np.ones((mnist_data_normalized.shape[0], 1)),
-            outer_iters=20, generator_iters=variant['generator_iters'],
+            outer_iters=variant['outer_iters'], generator_iters=variant['generator_iters'],
             discriminator_iters=variant['discriminator_iters']
         )
         logger.log(
@@ -89,7 +91,7 @@ def run_task(variant):
         sampled_images, _ = gan.sample_generator(10)
         for arr in sampled_images:
             report.add_image(
-                plot_array(arr.reshape(28, 28)), width=150
+                arr.reshape(28, 28), width=150
             )
         
         report.save()
@@ -98,12 +100,15 @@ def run_task(variant):
     
 if __name__ == '__main__':
     vg = VariantGenerator()
-    vg.add('generator_init', ['xavier', 0.01, 0.05, 0.1])
-    vg.add('generator_iters', [3, 10, 30, 100, 200])
-    vg.add('discriminator_iters', [3, 10, 30, 100, 200])
+    vg.add('generator_init', ['xavier'])
+    vg.add('generator_iters', [2])
+    vg.add('discriminator_iters', [1])
+    vg.add('generator_learning_rate', [0.001, 0.01, 0.1])
+    vg.add('discriminator_learning_rate', [0.001, 0.01, 0.1])
+    vg.add('outer_iters', [1000])
     
     
-    for variant in vg.variants(randomized=True):
+    for variant in vg.variants(randomized=False):
         run_experiment_lite(
             stub_method_call=run_task,
             mode='local',
