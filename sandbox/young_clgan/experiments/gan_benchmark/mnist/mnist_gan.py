@@ -34,12 +34,13 @@ def plot_array(array):
 def run_task(variant):
     
     gan_configs = {
-        'batch_size': 512,
+        'batch_size': 128,
         'generator_output_activation': 'sigmoid',
         'generator_optimizer': tf.train.AdamOptimizer(variant['generator_learning_rate']),
         'discriminator_optimizer': tf.train.AdamOptimizer(variant['discriminator_learning_rate']),
         'reset_generator_optimizer': False,
         'reset_discriminator_optimizer': False,
+        'wgan': True,
     }
     
     if variant['generator_init'] == 'xavier':
@@ -101,11 +102,11 @@ def run_task(variant):
 if __name__ == '__main__':
     vg = VariantGenerator()
     vg.add('generator_init', ['xavier'])
-    vg.add('generator_iters', [2])
-    vg.add('discriminator_iters', [1])
-    vg.add('generator_learning_rate', [0.001, 0.01, 0.1])
-    vg.add('discriminator_learning_rate', [0.001, 0.01, 0.1])
-    vg.add('outer_iters', [1000])
+    vg.add('generator_iters', [5, 10, 20, 40])
+    vg.add('discriminator_iters', [5])
+    vg.add('generator_learning_rate', [0.0002, 0.001])
+    vg.add('discriminator_learning_rate', [0.0002, 0.001])
+    vg.add('outer_iters', [100])
     
     
     for variant in vg.variants(randomized=False):

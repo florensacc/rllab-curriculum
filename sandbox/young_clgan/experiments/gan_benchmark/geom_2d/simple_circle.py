@@ -1,6 +1,6 @@
 import time
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = ''
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 import io
 
@@ -24,6 +24,8 @@ from rllab.misc.instrument import run_experiment_lite, VariantGenerator
 def plot_samples(samples):
     file = io.BytesIO()
     plt.scatter(samples[:, 0], samples[:, 1])
+    plt.xlim([-1, 1])
+    plt.ylim([-1, 1])
     plt.savefig(file, format='png')
     file.seek(0)
     plt.close()
@@ -42,7 +44,7 @@ def plot_dicriminator(gan, grid_size=60):
     file = io.BytesIO()
     plt.figure()
     plt.clf()
-    plt.pcolormesh(x, y, z, cmap='jet', vmin=0, vmax=1)
+    plt.pcolormesh(x, y, z, cmap='jet')
     plt.colorbar()
     plt.savefig(file, format='png')
     file.seek(0)
@@ -55,11 +57,10 @@ def run_task(variant):
     gan_configs = {
         'batch_size': 64,
         'generator_output_activation': 'tanh',
-        'generator_optimizer': tf.train.AdamOptimizer(variant['generator_learning_rate']),
-        'discriminator_optimizer': tf.train.AdamOptimizer(variant['discriminator_learning_rate']),
-        'reset_generator_optimizer': True,
-        'reset_discriminator_optimizer': True,
-        'batch_normalize_generator': False,
+        'generator_optimizer': tf.train.AdamOptimizer(variant['generator_learning_rate'], beta1=0.5),
+        'discriminator_optimizer': tf.train.AdamOptimizer(variant['discriminator_learning_rate'], beta1=0.5),
+        'batch_normalize_generator': True,
+        'wgan': True,
     }
     
     if variant['generator_init'] == 'xavier':
@@ -70,8 +71,8 @@ def run_task(variant):
     gan = FCGAN(
         generator_output_size=2,
         discriminator_output_size=1,
-        generator_layers=[256, 256],
-        discriminator_layers=[128, 128],
+        generator_layers=[700, 700],
+        discriminator_layers=[200, 200],
         noise_size=2,
         tf_session=tf.Session(),
         configs=gan_configs,
@@ -79,7 +80,7 @@ def run_task(variant):
     
     log_dir = logger.get_snapshot_dir()
     report = HTMLReport(
-        os.path.join(log_dir, 'report.html'), images_per_row=5,
+        os.path.join(log_dir, 'report.html'), images_per_row=2,
         default_image_width=500
     )
     report.add_header('Simple Circle Sampling')
@@ -95,44 +96,51 @@ def run_task(variant):
     )
     
     
-    for outer_iter in range(30):
-        loss = gan.train_discriminator(data, 1. * data[:, 0:1] < 0, 100)
-        logger.log(str(loss))
-        
-    report.add_image(
-        plot_dicriminator(gan)
-    )
-    report.save()
-        
-    for outer_iter in range(30):
-        loss = gan.train_generator(np.random.randn(1000, 2), 100)
-        logger.log(str(loss))
-    
     # for outer_iter in range(30):
-    #     dloss, gloss = gan.train(
-    #         data, np.ones((data.shape[0], 1)),
-    #         outer_iters=variant['outer_iters'], generator_iters=variant['generator_iters'],
-    #         discriminator_iters=variant['discriminator_iters']
-    #     )
-    #     logger.log(
-    #         'Outer iteration: {}, disc loss: {}, gen loss: {}'.format(
-    #             outer_iter, dloss, gloss
-    #         )
-    #     )
-    #     report.add_text(
-    #         'Outer iteration: {}, disc loss: {}, gen loss: {}'.format(
-    #             outer_iter, dloss, gloss
-    #         )
-    #     )
-    #     generated_samples, _ = gan.sample_generator(50)
-    #     report.add_image(
-    #         plot_samples(generated_samples)
-    #     )
-    #     report.add_image(
-    #         plot_dicriminator(gan)
-    #     )
+    #     loss = gan.train_discriminator(data, data[:, 0:1] < 0, 100)
+    #     logger.log(str(loss))
         
-    #     report.save()
+    # report.add_image(
+    #     plot_dicriminator(gan)
+    # )
+    # report.save()
+    
+    # logger.log('Now training generator')
+        
+    # for outer_iter in range(30):
+    #     loss = gan.train_generator(np.random.randn(1000, 2), 100)
+    #     logger.log(str(loss))
+        
+    # generated_samples, _ = gan.sample_generator(50)
+    # report.add_image(
+    #     plot_samples(generated_samples)
+    # )
+    
+    for outer_iter in range(30):
+        dloss, gloss = gan.train(
+            data, np.ones((data.shape[0], 1)),
+            outer_iters=variant['outer_iters'], generator_iters=variant['generator_iters'],
+            discriminator_iters=variant['discriminator_iters']
+        )
+        logger.log(
+            'Outer iteration: {}, disc loss: {}, gen loss: {}'.format(
+                outer_iter, dloss, gloss
+            )
+        )
+        report.add_text(
+            'Outer iteration: {}, disc loss: {}, gen loss: {}'.format(
+                outer_iter, dloss, gloss
+            )
+        )
+        generated_samples, _ = gan.sample_generator(50)
+        report.add_image(
+            plot_samples(generated_samples)
+        )
+        report.add_image(
+            plot_dicriminator(gan)
+        )
+        
+        report.save()
         
     
 if __name__ == '__main__':
@@ -140,8 +148,8 @@ if __name__ == '__main__':
     vg.add('generator_init', ['xavier'])
     vg.add('generator_iters', [2])
     vg.add('discriminator_iters', [1])
-    vg.add('generator_learning_rate', [0.001])
-    vg.add('discriminator_learning_rate', [0.001])
+    vg.add('generator_learning_rate', [0.0002])
+    vg.add('discriminator_learning_rate', [0.0002])
     vg.add('outer_iters', [200])
     
     

@@ -15,16 +15,16 @@ DEFAULT_GAN_CONFIGS = lambda: {
     'generator_weight_initializer': tf.contrib.layers.xavier_initializer(),
     'discriminator_weight_initializer': tf.contrib.layers.xavier_initializer(),
     'print_iteration': 5,
-    'reset_generator_optimizer': True,
-    'reset_discriminator_optimizer': True,
+    'reset_generator_optimizer': False,
+    'reset_discriminator_optimizer': False,
     'batch_normalize_discriminator': True,
     'batch_normalize_generator': True,
     'discriminator_batch_noise_stddev': 0,
-    'generator_loss_weights': None,
-    'numerical_stable_epsilon': 1e-15,
     'supress_all_logging': False,
     'default_generator_iters': 2,
     'default_discriminator_iters': 1,
+    'wgan': False,
+    'wgan_gradient_penalty': 10.,
 }
 
 
@@ -309,80 +309,65 @@ class Discriminator(object):
         self._label = tf.placeholder(tf.float32, shape=[None, output_size])
         self.configs = configs
         
-        generator_out = self._generator_input
-        sample_out = self._sample_input
-
+        self.sample_discriminator = DiscriminatorNet(
+            self._sample_input, hidden_layers, output_size, is_training,
+            configs, reuse=False
+        )
         
-        for i, size in enumerate(hidden_layers):
-            generator_out = tf.layers.dense(
-                generator_out, size,
-                name='fc_{}'.format(i), reuse=False,
-                kernel_initializer=configs['discriminator_weight_initializer'],
+        self.generator_discriminator = DiscriminatorNet(
+            self._generator_input, hidden_layers, output_size, is_training,
+            configs, reuse=True
+        )
+        
+        
+        if configs['wgan']:
+            self._generator_output = self.generator_discriminator.output
+            self._sample_output = self.sample_discriminator.output
+            
+            self._discriminator_loss_logits = tf.reduce_mean(
+                -2 * (self._label - 0.5) * self._sample_output
             )
             
-            if configs['hidden_layer_activation'] == 'relu':
-                generator_out = tf.nn.relu(generator_out)
-            elif configs['hidden_layer_activation'] == 'leaky_relu':
-                generator_out = tf.maximum(0.1 * generator_out, generator_out)
-            else:
-                raise ValueError('Unsupported activation type')
+            self._discriminator_loss_gradient = tf.nn.relu(
+                tf.nn.l2_loss(
+                    tf.gradients(
+                        self._discriminator_loss_logits, self._sample_input
+                    )[0]
+                ) - 1
+            ) * configs['wgan_gradient_penalty']
             
-            if configs['batch_normalize_discriminator']:
-                generator_out = tf.layers.batch_normalization(
-                    generator_out, name='bn_{}'.format(i),
-                    training=is_training, reuse=False
-                )
-            
-            sample_out = tf.layers.dense(
-                sample_out, size,
-                name='fc_{}'.format(i), reuse=True
+            self._discriminator_loss = self._discriminator_loss_logits + self._discriminator_loss_gradient
+    
+            self._generator_loss_logits = tf.reduce_mean(
+                -self._generator_output
             )
             
-            if configs['hidden_layer_activation'] == 'relu':
-                sample_out = tf.nn.relu(sample_out)
-            elif configs['hidden_layer_activation'] == 'leaky_relu':
-                sample_out = tf.maximum(0.1 * sample_out, sample_out)
-            else:
-                raise ValueError('Unsupported activation type')
+            self._generator_loss_gradient = tf.nn.relu(
+                tf.nn.l2_loss(
+                    tf.gradients(
+                        self._generator_loss_logits, self._generator_input
+                    )[0]
+                ) - 1
+            ) * configs['wgan_gradient_penalty']
             
-            if configs['batch_normalize_discriminator']:
-                sample_out = tf.layers.batch_normalization(
-                    sample_out, name='bn_{}'.format(i),
-                    training=is_training, reuse=True
-                )
-
-        generator_out = tf.layers.dense(
-            generator_out, output_size,
-            name='fc_out'.format(i),
-            kernel_initializer=configs['discriminator_weight_initializer'],
-            reuse=False
-        )
+            self._generator_loss = self._generator_loss_logits + self._generator_loss_gradient
         
-        self._generator_output = tf.sigmoid(generator_out)
-        
-        sample_out = tf.layers.dense(
-            sample_out, output_size,
-            name='fc_out'.format(i), reuse=True
-        )
-        
-        self._sample_output = tf.sigmoid(sample_out)
-        
-        eps = configs['numerical_stable_epsilon']
-
-        self._discriminator_loss = -tf.reduce_mean(
-            self._label * tf.log(self._sample_output + eps)
-            + (1. - self._label) * tf.log(1. - self._sample_output + eps),
-        )
-
-        generator_loss_weights = configs['generator_loss_weights']
-        if generator_loss_weights is None:
-            generator_loss_weights = 1.
         else:
-            generator_loss_weights = np.array(generator_loss_weights).reshape(1, -1)
-
-        self._generator_loss = -tf.reduce_mean(
-            tf.log(self._generator_output + eps) * generator_loss_weights,
-        )
+            self._generator_output = tf.sigmoid(self.generator_discriminator.output)
+            self._sample_output = tf.sigmoid(self.sample_discriminator.output)
+    
+            self._discriminator_loss = tf.reduce_mean(
+                tf.nn.sigmoid_cross_entropy_with_logits(
+                    labels=self._label, logits=self.sample_discriminator.output
+                )
+            )
+    
+            self._generator_loss = tf.reduce_mean(
+                tf.nn.sigmoid_cross_entropy_with_logits(
+                    labels=tf.ones_like(self.generator_discriminator.output),
+                    logits=self._generator_logits
+                )
+            )
 
     @property
     def sample_input(self):
@@ -411,3 +396,42 @@ class Discriminator(object):
     @property
     def generator_loss(self):
         return self._generator_loss
+
+
+
+class DiscriminatorNet(object):
+    
+    def __init__(self, input_tensor, hidden_layers, output_size, is_training, configs, reuse=False):
+        out = input_tensor
+
+        for i, size in enumerate(hidden_layers):
+            out = tf.layers.dense(
+                out, size,
+                name='fc_{}'.format(i), reuse=reuse,
+                kernel_initializer=configs['discriminator_weight_initializer'],
+            )
+            
+            if configs['hidden_layer_activation'] == 'relu':
+                out = tf.nn.relu(out)
+            elif configs['hidden_layer_activation'] == 'leaky_relu':
+                out = tf.maximum(0.1 * out, out)
+            else:
+                raise ValueError('Unsupported activation type')
+            
+            if configs['batch_normalize_discriminator']:
+                out = tf.layers.batch_normalization(
+                    out, name='bn_{}'.format(i),
+                    training=is_training, reuse=reuse
+                )
+
+        self._output = tf.layers.dense(
+            out, output_size,
+            name='fc_out'.format(i),
+            kernel_initializer=configs['discriminator_weight_initializer'],
+            reuse=reuse
+        )
+        
+        
+    @property
+    def output(self):
+        return self._output
