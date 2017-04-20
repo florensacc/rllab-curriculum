@@ -150,7 +150,7 @@ class GoalEnvAngle(GoalEnv, Serializable):
 
 class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
     def __init__(self, env, goal_generator, terminal_bonus=0, terminal_eps=-1, reward_dist_threshold=None,
-                 final_goal=None, goal_bounds=None, max_reward=None,
+                 final_goal=None, goal_bounds=None, only_feas=True, max_reward=None,
                  distance_metric='L2', goal_reward='NegativeDistance', dist_goal_weight=0,
                  inner_weight=0, angle_idxs=(None,), **kwargs):
         """
@@ -178,6 +178,7 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
         self.fig_number = 0
         self.final_goal = final_goal
         self.goal_bounds = goal_bounds
+        self.only_feas = only_feas
         self.max_reward = max_reward
         if self.max_reward is None:
             if self.terminal_bonus>0:
@@ -215,8 +216,12 @@ class GoalExplorationEnv(GoalEnvAngle, ProxyEnv, Serializable):
         info['distance'] = dist = self._compute_dist(observation)
         info['reward_dist'] = reward_dist = self._compute_dist_reward(observation)
         if self.terminal_bonus and dist <= self.terminal_eps:
-            done = True
-            reward_dist += self.terminal_bonus
+            if self.only_feas and not self.feasible_goal_space.contains(self.current_goal):
+                done = False
+                reward_dist = reward_inner = 0
+            else:
+                done = True
+                reward_dist += self.terminal_bonus
         return (
             self._append_observation(observation),
             reward_dist + reward_inner,
@@ -427,9 +432,12 @@ class GoalIdxExplorationEnv(GoalExplorationEnv, Serializable):
         reward_dist = self._compute_dist_reward(body_com)
         info['reward_dist'] = reward_dist
         if self.terminal_bonus and dist <= self.terminal_eps:
-            # print("*****done!!*******")
-            done = True
-            reward_dist += self.terminal_bonus
+            if self.only_feas and not self.wrapped_env.wrapped_env.is_feas(self.current_goal):  # TODO: hacky!! normaliz
+                done = False
+                reward_dist = reward_inner = 0
+            else:
+                done = True
+                reward_dist += self.terminal_bonus
         return (
             self._append_observation(observation),
             reward_dist + reward_inner,
@@ -467,6 +475,16 @@ def get_goal_observation(env):
         raise NotImplementedError('Unsupported environment')
 
 
+def get_goal_generator(env):
+    obj = env
+    while not hasattr(obj, 'goal_generator') and hasattr(obj, 'wrapped_env'):
+        obj = obj.wrapped_env
+    if hasattr(obj, 'goal_generator'):
+        return obj.goal_generator  # should be unnecessary
+    else:
+        raise NotImplementedError('Unsupported environment (doesnt have goal_generator attr)')
+
+
 def get_current_goal(env):
     if hasattr(env, 'current_goal'):
         return env.current_goal
@@ -476,12 +494,14 @@ def get_current_goal(env):
         raise NotImplementedError('Unsupported environment')
 
 
-def generate_initial_goals(env, policy, goal_range, horizon=500, size=10000):
-    current_goal = get_current_goal(env)
-    goal_dim = np.array(current_goal).shape
-    done = False
-    obs = env.reset()
-    goals = [get_goal_observation(env)]
+def generate_onpolicy_goals(env, policy, goal_range, center=None, horizon=500, size=10000):
+    old_goal_generator = get_goal_generator(env)  # TODO: make this compatible with new INIT!
+    old_goal = get_current_goal(env)
+    goal_dim = np.array(old_goal).shape
+    center = np.zeros(goal_dim) if center is None else np.array(center)
+
+    done = True
+    goals = []
     steps = 0
     while len(goals) < size:
         steps += 1
@@ -491,7 +511,7 @@ def generate_initial_goals(env, policy, goal_range, horizon=500, size=10000):
             update_env_goal_generator(
                 env,
                 FixedGoalGenerator(
-                    np.random.uniform(-goal_range, goal_range, goal_dim)
+                    np.random.uniform(center - goal_range, center + goal_range, goal_dim)
                 )
             )
             obs = env.reset()
@@ -500,5 +520,6 @@ def generate_initial_goals(env, policy, goal_range, horizon=500, size=10000):
             action, _ = policy.get_action(obs)
             obs, _, done, _ = env.step(action)
             goals.append(get_goal_observation(env))
+    update_env_goal_generator(env, old_goal_generator)
 
     return np.array(goals)

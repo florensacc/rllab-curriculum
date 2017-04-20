@@ -44,10 +44,7 @@ def run_task(v):
     inner_env = normalize(PointEnv(dim=v['goal_size'], state_bounds=v['state_bounds']))
     # inner_env = normalize(PendulumEnv())
 
-    center = np.zeros(v['goal_size'])
-    fixed_goal_generator = FixedGoalGenerator(goal=center)
-    # uniform_goal_generator = UniformGoalGenerator(goal_size=v['goal_size'], bounds=v['goal_range'],
-    #                                               center=center)
+    fixed_goal_generator = FixedGoalGenerator(goal=v['goal_center'])
     feasible_goal_ub = np.array(v['state_bounds'])[:v['goal_size']]
     # print("the feasible_goal_ub is: ", feasible_goal_ub)
     uniform_feasible_goal_generator = UniformGoalGenerator(goal_size=v['goal_size'], bounds=[-1 * feasible_goal_ub,
@@ -59,6 +56,7 @@ def run_task(v):
                                 distance_metric=v['distance_metric'],
                                 dist_goal_weight=v['dist_goal_weight'], max_reward=v['max_reward'],
                                 terminal_eps=v['terminal_eps'], terminal_bonus=v['terminal_bonus'],
+                                only_feas=v['only_feas'],
                                 )  # this goal_generator will be updated by a uniform after
 
     policy = GaussianMLPPolicy(
@@ -101,10 +99,15 @@ def run_task(v):
         goal_size=v['goal_size'],
         evaluater_size=v['num_labels'],
         goal_range=v['goal_range'],
+        goal_center=v['goal_center'],
         goal_noise_level=v['goal_noise_level'],
         generator_layers=v['gan_generator_layers'],
         discriminator_layers=v['gan_discriminator_layers'],
         noise_size=v['gan_noise_size'],
+        generator_max_iters=v['gan_generator_max_iters'],
+        discriminator_max_iters=v['gan_discriminator_max_iters'],
+        # generator_min_loss=v['gan_generator_min_loss'],
+        # discriminator_min_loss=v['gan_discriminator_min_loss'],
         tf_session=tf_session,
         configs=gan_configs,
     )
@@ -127,8 +130,8 @@ def run_task(v):
                 img = save_image()
                 report.add_image(img, 'goals sampled to pretrain GAN: {}'.format(np.shape(initial_goals)))
             dis_loss, gen_loss = gan.pretrain(
-                initial_goals, outer_iters=30, generator_iters=10 + k, discriminator_iters=200 - k * 10,
-                # initial_goals, outer_iters=30, generator_iters=10, discriminator_iters=200,
+                initial_goals, outer_iters=30, generator_max_iters=10 + k, discriminator_max_iters=200 - k * 10,
+                # initial_goals, outer_iters=30, generator_max_iters=10, discriminator_max_iters=200,
             )
             final_gen_loss = gen_loss[-1]
             logger.log("error at the end of {}th trial: {}gen, {}disc".format(k, gen_loss[-1], dis_loss[-1]))
@@ -169,7 +172,7 @@ def run_task(v):
                                             n_processes=multiprocessing.cpu_count())
 
         logger.log("Perform TRPO with UniformListGoalGenerator...")
-        with ExperimentLogger(log_dir, outer_iter, snapshot_mode='last', hold_outter_log=True):
+        with ExperimentLogger(log_dir, itr='inner_itr', snapshot_mode='last', hold_outter_log=True):
             # set goal generator to uniformly sample from selected all_goals
             update_env_goal_generator(
                 env,
@@ -185,9 +188,10 @@ def run_task(v):
                 batch_size=v['pg_batch_size'],
                 max_path_length=v['horizon'],
                 n_itr=v['inner_iters'],
-                discount=0.995,
+                discount=v['discount'],  # 0.995
                 step_size=0.01,
                 plot=False,
+                gae_lambda=v['gae_lambda'],
             )
 
             algo.train()
@@ -223,6 +227,7 @@ def run_task(v):
 
         img = plot_labeled_samples(
             samples=goals, sample_classes=goal_classes, text_labels=text_labels, limit=v['goal_range'] + 1,
+            bounds=env.feasible_goal_space.bounds,
             # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
         )
         summary_string = ''
@@ -250,8 +255,8 @@ def run_task(v):
         gan.train(
             goals, labels,
             v['gan_outer_iters'],
-            v['gan_generator_iters'],
-            v['gan_discriminator_iters']
+            v['gan_generator_max_iters'],
+            v['gan_discriminator_max_iters']
         )
 
         logger.log("Evaluating performance on Unif and Fix Goal Gen...")

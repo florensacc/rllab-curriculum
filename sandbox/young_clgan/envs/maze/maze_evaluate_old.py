@@ -11,7 +11,7 @@ import pylab
 import matplotlib.colorbar as cbar
 
 from rllab.sampler.utils import rollout
-from sandbox.young_clgan.envs.base import FixedGoalGenerator
+from sandbox.young_clgan.envs.base import FixedGoalGenerator, update_env_goal_generator
 from sandbox.young_clgan.state.selectors import FixedStateSelector
 
 quick_test = False
@@ -90,7 +90,6 @@ def plot_heatmap(rewards, goals, prefix='', max_reward=6000, spacing=1, show_hea
         plt.show()
     return fig
 
-
 def sample_unif_feas(train_env, samples_per_cell):
     """
     :param train_env: 
@@ -112,7 +111,6 @@ def sample_unif_feas(train_env, samples_per_cell):
             states.append(state)
 
     return np.array(states)
-
 
 def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1, n_traj=1):
     if hasattr(train_env.wrapped_env, 'find_empty_space'):
@@ -160,11 +158,11 @@ def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1
                 if as_goals:
                     goal = (x, y)
                     states.append(goal)
-                    train_env.update_goal_selector(FixedGoalGenerator(goal))
+                    update_env_goal_generator(train_env, FixedGoalGenerator(goal))
                 else:
                     init_state = (x, y)
                     states.append(init_state)
-                    train_env.update_init_selector(FixedStateSelector(init_state))
+                    update_env_goal_generator(train_env, FixedStateSelector(init_state))
                     # print("fixing init selector to: ", init_state)
                     # print("the goal is set to: ", train_env.current_goal)
                 for n in range(n_traj):
@@ -177,7 +175,7 @@ def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1
                 # print('goal: ', goal, ', the one in env_infos is: ', paths[-1]['env_infos']['x_goal'], paths[-1]['env_infos']['y_goal'])
                 avg_totRewards.append(np.mean([np.sum(path['rewards']) for path in paths]))
                 avg_success.append(np.mean([int(np.min(path['env_infos']['distance'])
-                                                <= train_env.terminal_eps) for path in paths]))
+                                                <= maze_env.wrapped_env.terminal_eps) for path in paths]))
 
     return avg_totRewards, avg_success, states, spacing
 
@@ -192,28 +190,7 @@ def test_and_plot_policy(policy, env, as_goals=True, visualize=True, sampling_re
 
 
 def main():
-    # pkl_file = "sandbox/young_clgan/experiments/point_maze/experiment_data/cl_gan_maze/2017-02-20_22-43-48_dav2/log/itr_129/itr_9.pkl"
-    #    pkl_file = "sandbox/young_clgan/experiments/point_maze/experiment_data/cl_gan_maze/2017-02-21_15-30-36_dav2/log/itr_69/itr_4.pkl"
-    #    pkl_file = "sandbox/young_clgan/experiments/point_maze/experiment_data/cl_gan_maze/2017-02-21_22-49-03_dav2/log/itr_199/itr_4.pkl"
-    # pkl_file = "sandbox/young_clgan/experiments/point_maze/experiment_data/cl_gan_maze/2017-02-22_13-06-53_dav2/log/itr_119/itr_4.pkl"
-    # pkl_file = "data/local/goalGAN-maze30/goalGAN-maze30_2017_02_24_01_44_03_0001/itr_27/itr_4.pkl"
     pkl_file = "/home/davheld/repos/goalgen/rllab_goal_rl/data/s3/goalGAN-maze11/goalGAN-maze11_2017_02_23_01_06_12_0005/itr_199/itr_4.pkl"
-
-    # parser = argparse.ArgumentParser()
-    # # parser.add_argument('--file', type=str, default=pkl_file,
-    # #                     help='path to the snapshot file')
-    # parser.add_argument('--max_length', type=int, default=100,
-    #                     help='Max length of rollout')
-    # parser.add_argument('--speedup', type=int, default=1,
-    #                     help='Speedup')
-    # parser.add_argument('--num_goals', type=int, default=200, #1 * np.int(np.square(0.3/0.02))
-    #                     help='Number of test goals')
-    # parser.add_argument('--num_tests', type=int, default=1,
-    #                     help='Number of test goals')
-    # args = parser.parse_args()
-    #
-    # paths = []
-
     policy, train_env = get_policy(pkl_file)
 
     avg_totRewards, avg_success, goals, spacing = test_policy(policy, train_env, sampling_res=1)

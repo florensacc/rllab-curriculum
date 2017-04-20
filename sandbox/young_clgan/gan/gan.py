@@ -25,13 +25,21 @@ DEFAULT_GAN_CONFIGS = {
 
 class FCGAN(object):
     def __init__(self, generator_output_size, discriminator_output_size,
-                 generator_layers, discriminator_layers, noise_size,
-                 tf_session, configs=None):
+                 generator_layers, discriminator_layers, noise_size, tf_session,
+                 discriminator_max_iters=200, generator_max_iters=10, outer_iters=5,
+                 discriminator_min_loss=-np.infty, generator_min_loss=-np.infty,
+                 configs=None):
 
         self.noise_size = noise_size
         self.tf_graph = tf.Graph()
         self.tf_session = tf_session
         self.configs = copy.deepcopy(DEFAULT_GAN_CONFIGS)
+        # training hyperparams
+        self.outer_iters = outer_iters
+        self.discriminator_max_iters = discriminator_max_iters
+        self.generator_max_iters = generator_max_iters
+        self.discriminator_min_loss = discriminator_min_loss
+        self.generator_min_loss = generator_min_loss
         if configs is not None:
             self.configs.update(configs)
 
@@ -142,14 +150,24 @@ class FCGAN(object):
             )
         return np.vstack(generator_samples), np.vstack(generator_noise)
 
-    def train(self, X, Y, outer_iters, generator_iters, discriminator_iters, suppress_generated_goals=True):
+    def train(self, X, Y, outer_iters=None, generator_max_iters=None, discriminator_max_iters=None,
+              suppress_generated_states=True, discriminator_min_loss=None, generator_min_loss=None):
+
+        # overwrite the ones in init if provided
+        outer_iters = self.outer_iters if outer_iters is None else outer_iters
+        generator_max_iters = self.generator_max_iters if generator_max_iters is None else generator_max_iters
+        discriminator_max_iters = self.discriminator_max_iters if discriminator_max_iters is None else discriminator_max_iters
+        discriminator_min_loss = self.discriminator_min_loss if discriminator_min_loss is None else discriminator_min_loss
+        generator_min_loss = self.generator_min_loss if generator_min_loss is None else generator_min_loss
+
         sample_size = X.shape[0]
         train_size = min(
-            int(self.configs['batch_size'] * discriminator_iters / 10),
+            int(self.configs['batch_size'] * discriminator_max_iters / 10),
             sample_size
         )
         generated_Y = np.zeros((train_size, Y.shape[1]))
         for i in range(outer_iters):
+            print("\n*******  GAN iter {} ******".format(i))
             if self.configs['reset_generator_optimizer']:
                 self.tf_session.run(
                     self.initialize_generator_optimizer_op
@@ -163,7 +181,7 @@ class FCGAN(object):
             sample_X = X[indices, :]
             sample_Y = Y[indices, :]
 
-            if suppress_generated_goals:
+            if suppress_generated_states:
                 generated_X, random_noise = self.sample_generator(train_size)
                 feed_X = np.vstack([sample_X, generated_X])
                 feed_Y = np.vstack([sample_Y, generated_Y])
@@ -172,8 +190,8 @@ class FCGAN(object):
                 feed_X = np.vstack([sample_X])
                 feed_Y = np.vstack([sample_Y])
 
-            dis_log_loss = self.train_discriminator(feed_X, feed_Y, discriminator_iters)
-            gen_log_loss = self.train_generator(random_noise, generator_iters)
+            dis_log_loss = self.train_discriminator(feed_X, feed_Y, discriminator_max_iters, discriminator_min_loss)
+            gen_log_loss = self.train_generator(random_noise, generator_max_iters, generator_min_loss)
         # if i == 0:
         #         logger.record_tabular('Discrim_lossBefore', dis_log_loss[0])
         #         logger.record_tabular('Gen_lossBefore', gen_log_loss[0])
@@ -181,18 +199,19 @@ class FCGAN(object):
         # logger.record_tabular('Gen_lossAfter', gen_log_loss[-1])
         return dis_log_loss, gen_log_loss
 
-    def train_discriminator(self, X, Y, iters):
+    def train_discriminator(self, X, Y, max_iters, min_loss=-np.infty):
         """
-        :param X: goal that we know lables of
-        :param Y: labels of those goals
-        :param iters: of the discriminator trainig
+        :param X: states that we know lables of
+        :param Y: labels of those states
+        :param max_iters: of the discriminator trainig
+        :param min_loss: beyond this loss we don't keep training
         The batch size is given by the configs of the class!
         discriminator_batch_noise_stddev > 0: check that std on each component is at least this. (if com: 2)
         """
         log_loss = []
         tflearn.config.is_training(is_training=True, session=self.tf_session)
         batch_size = self.configs['batch_size']
-        for i in range(iters):
+        for i in range(max_iters):
             indices = np.random.randint(0, X.shape[0], size=(batch_size,))
             train_X = X[indices, :]
             train_Y = Y[indices]
@@ -209,7 +228,7 @@ class FCGAN(object):
                  self.discriminator.label: train_Y}
             )
 
-            if i % self.configs['print_iteration'] == 0 or i == iters - 1:
+            if i % self.configs['print_iteration'] == 0 or i == max_iters - 1:
                 loss = self.tf_session.run(
                     self.discriminator.discriminator_loss,
                     {self.discriminator.sample_input: train_X,
@@ -217,20 +236,21 @@ class FCGAN(object):
                 )
                 log_loss.append(loss)
                 print('Disc_itr_%i: discriminator loss: %f' % (i, loss))
-                # if loss < 1e-3:
-                #     break
-        return log_loss
+                if loss < min_loss:
+                    break
+        return log_loss  # the length of this already tells the number of itrs that were used
 
-    def train_generator(self, X, iters):
+    def train_generator(self, X, max_iters, min_loss=-np.infty):
         """
         :param X: These are the latent variables that were used to generate??
-        :param iters:
+        :param max_iters: maximum number of itrs
+        :param min_loss: beyond this loss we don't keep training
         :return:
         """
         log_loss = []
         tflearn.config.is_training(is_training=False, session=self.tf_session)
         batch_size = self.configs['batch_size']
-        for i in range(iters):
+        for i in range(max_iters):
             indices = np.random.randint(0, X.shape[0], size=(batch_size,))
             train_X = X[indices, :]
 
@@ -239,15 +259,15 @@ class FCGAN(object):
                 {self.generator.input: train_X}
             )
 
-            if i % self.configs['print_iteration'] == 0 or i == iters - 1:
+            if i % self.configs['print_iteration'] == 0 or i == max_iters - 1:
                 loss = self.tf_session.run(
                     self.discriminator.generator_loss,
                     {self.generator.input: train_X}
                 )
                 log_loss.append(loss)
                 print('Gen_itr_%i: generator loss: %f' % (i, loss))
-                # if loss < 1e-3:
-                #     break
+                if loss < min_loss:
+                    break
         return log_loss
 
     def discriminator_predict(self, X):

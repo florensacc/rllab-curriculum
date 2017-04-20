@@ -61,7 +61,7 @@ def parallel_map(func, iterable_object, num_processes=-1):
 
 def label_goals(goals, env, policy, horizon, min_reward, max_reward,
                 old_rewards=None, improvement_threshold=None, n_traj=1, n_processes=-1):
-    print("Evaluating goals after training")
+    print("Evaluating goals")
     mean_rewards = evaluate_goals(goals, env, policy, horizon, n_traj, n_processes=n_processes)
 
     print("Computing goal labels")
@@ -86,24 +86,24 @@ def label_goals(goals, env, policy, horizon, min_reward, max_reward,
 
 def convert_label(labels):
     """
-    :param labels: 3-dim evaluation of the goal if they have learnability, 2-dim otherwise
+    :param labels: 3-dim evaluation of the state if they have learnability, 2-dim otherwise
     :return: convert to single integer label and gives associated texts (for plotting). Better if OrderedDict for log!
     """
     # label[0] --> LowRew, label[1] --> HighRew, label[2] --> Learnable ??
-    # Put good goals last so they will be plotted on top of other goals and be most visible.
+    # Put good states last so they will be plotted on top of other states and be most visible.
     classes = OrderedDict({
-        0: 'Other',
-        # 1: r'Low rewards: $\bar{R}<R_{\min}$',
-        1: 'Low rewards',
-        # 2: r'High rewards: $\bar{R}>R_{\max}$',
-        2: 'High rewards',
+        # 0: r'Low rewards: $\bar{R}<R_{\min}$',
+        0: 'Low rewards',
+        # 1: r'High rewards: $\bar{R}>R_{\max}$',
+        1: 'High rewards',
+        2: 'Good states',
         3: 'Unlearnable',
-        4: 'Good goals',
+        4: 'Other',
     })
-    new_labels = np.zeros(labels.shape[0], dtype=int)
-    new_labels[np.logical_and(labels[:, 0], labels[:, 1])] = 4
-    new_labels[labels[:, 0] == False] = 1
-    new_labels[labels[:, 1] == False] = 2
+    new_labels = 4 * np.ones(labels.shape[0], dtype=int)
+    new_labels[np.logical_and(labels[:, 0], labels[:, 1])] = 2
+    new_labels[labels[:, 0] == False] = 0
+    new_labels[labels[:, 1] == False] = 1
     if np.shape(labels)[-1] == 3:
         new_labels[
             np.logical_and(

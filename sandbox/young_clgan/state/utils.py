@@ -1,16 +1,5 @@
-import scipy.spatial
-import random
-from rllab import spaces
-import sys
-import os.path as osp
-
-import matplotlib as mpl
-
-mpl.use('Agg')
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.pyplot as plt
-
 import numpy as np
+import scipy.spatial
 import scipy.misc
 
 

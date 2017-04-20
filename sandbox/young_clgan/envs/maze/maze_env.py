@@ -45,7 +45,9 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
             maze_height=0.5,
             maze_size_scaling=2,
             coef_inner_rew=0.,  # a coef of 0 gives no reward to the maze from the wrapped env.
+            terminal_eps=0.3,
             goal_rew=1.,  # reward obtained when reaching the goal
+            only_feas=True,
             *args,
             **kwargs):
         Serializable.quick_init(self, locals())
@@ -56,6 +58,8 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
         self.length = length
         self.coef_inner_rew = coef_inner_rew
         self.goal_rew = goal_rew
+        self.terminal_eps = terminal_eps
+        self.only_feas = only_feas
 
         model_cls = self.__class__.MODEL_CLASS
         if model_cls is None:
@@ -119,7 +123,7 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
         self._goal_range = self._find_goal_range()
         self._cached_segments = None
 
-        inner_env = model_cls(goal_generator=goal_generator, *args, file_path=file_path, **kwargs)  # file to the robot specifications
+        inner_env = model_cls(goal_generator=goal_generator, terminal_eps=self.terminal_eps, *args, file_path=file_path, **kwargs)  # file to the robot specifications
         ProxyEnv.__init__(self, inner_env)  # here is where the robot env will be initialized
         self.update_goal_generator(goal_generator)
 
@@ -222,6 +226,15 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
                     #return j * size_scaling, i * size_scaling
         return empty_space
 
+    def is_feas(self, pos):
+        empty_space = self.find_empty_space()
+        for space in empty_space:
+            if np.size(np.where(np.abs(np.array(pos)-np.array(space)) < self.MAZE_SIZE_SCALING/2)[0]) == 2:
+                # print("Pos {} is in empty space: {}".format(pos, space))
+                return True
+        return False
+
+
     @overrides
     def reset(self, *args, **kwargs):
         # print("resetting maze, passing to the Point env:", args, kwargs)
@@ -239,9 +252,15 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
             inner_next_obs, inner_rew, done, info = self.wrapped_env.step(action)
         next_obs = self.get_current_obs()
 
-        reward = inner_rew
+        # reward = inner_rew
 
-        #x, y = self.wrapped_env.get_body_com("torso")[:2]
+        com = self.wrapped_env.get_body_com("torso")[:2]
+        goal = self.wrapped_env.get_body_com("target")[:2]
+        dist = np.linalg.norm(com - goal)
+
+        # print("the inner env says we are at dist: {}, the outer: {}".format(info['distance'], dist))
+        # print("the inner env says we are at goal: {}, the gaol: {}".format(self.wrapped_env.get_body_com('target'),
+        #                                                                    self.wrapped_env.current_goal))
         # ref_x = x + self._init_torso_x
         # ref_y = y + self._init_torso_y
         #info['outer_rew'] = 0
@@ -251,6 +270,14 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
         goal = self.wrapped_env.current_goal
         info['x_goal']= goal[0]
         info['y_goal']= goal[1]
+
+        # eliminate the problem of the goals outside the feasible area... hacky!
+        reward = 0
+        done = False
+        if dist < self.terminal_eps and self.only_feas and self.is_feas(goal):
+            logger.log('reached feas. goal {} at dist {}'.format(goal, dist))
+            reward = self.goal_rew
+            done = True
 
         # reward = self.coef_inner_rew * inner_rew
         # minx, maxx, miny, maxy = self._goal_range

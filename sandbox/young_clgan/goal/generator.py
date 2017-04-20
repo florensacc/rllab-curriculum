@@ -87,8 +87,7 @@ class StateGAN(StateGenerator):
         self.goal_noise_level = goal_noise_level
         print('goal_center is : ', self.goal_center, 'goal_range: ', self.goal_range)
 
-    def pretrain_uniform(self, size=10000, outer_iters=10, generator_iters=5,
-                         discriminator_iters=200):
+    def pretrain_uniform(self, size=10000, *args, **kwargs):
         """
         :param size: number of uniformly sampled states (that we will try to fit as output of the GAN)
         :param outer_iters: of the GAN
@@ -96,19 +95,16 @@ class StateGAN(StateGenerator):
         goals = self.goal_center + np.random.uniform(
             -self.goal_range, self.goal_range, size=(size, self.goal_size)
         )
-        return self.pretrain(goals, outer_iters, generator_iters, discriminator_iters)
+        return self.pretrain(goals, *args, **kwargs)
 
-    def pretrain(self, goals, outer_iters=10, generator_iters=5,
-                 discriminator_iters=200):
+    def pretrain(self, goals, *args, **kwargs):
         """
         Pretrain the goal GAN to match the distribution of given goals.
         :param goals: the goal distribution to match
         :param outer_iters: of the GAN
         """
         labels = np.ones((goals.shape[0], self.evaluater_size))  # all goal same label --> uniform
-        return self.train(
-            goals, labels, outer_iters, generator_iters, discriminator_iters
-        )
+        return self.train(goals, labels, *args, **kwargs)
 
     def _add_noise_to_goals(self, goals):
         noise = np.random.randn(*goals.shape) * self.goal_noise_level
@@ -125,12 +121,10 @@ class StateGAN(StateGenerator):
         goals = self._add_noise_to_goals(goals)
         return goals, noise
 
-    def train(self, goals, labels, outer_iters, generator_iters,
-              discriminator_iters, suppress_generated_goals=True):
+    def train(self, goals, labels, suppress_generated_goals=True, *args, **kwargs):
         normalized_goals = (goals - self.goal_center) / self.goal_range
         return self.gan.train(
-            normalized_goals, labels, outer_iters, generator_iters, discriminator_iters, suppress_generated_goals
-        )
+            normalized_goals, labels, suppress_generated_states=suppress_generated_goals, *args, **kwargs)
 
     def discriminator_predict(self, goals):
         return self.gan.discriminator_predict(goals)

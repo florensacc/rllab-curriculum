@@ -14,7 +14,6 @@ mpl.use('Agg')
 from matplotlib import rc
 import matplotlib.patches as patches
 
-
 # rc('text', usetex=True)
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
@@ -78,11 +77,11 @@ def save_image(fig=None, fname=None):
 
 
 def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers=None, fname=None, limit=None,
-                         center=None, size=1000, colors=('r', 'g', 'b'), bounds=None):
+                         center=None, size=1000, colors=('r', 'g', 'b', 'm', 'y', 'c'), bounds=None):
     """
     :param samples: 
-    :param sample_classes: numerical value of the class
-    :param text_labels: text corresponding to the class (dict)
+    :param sample_classes: list of numerical value of the class
+    :param text_labels: dict of text corresponding to the class 
     :param markers: dic with marker for every sample_class (dict, or list if the keys are ints)
     :param colors: 
     :param fname: 
@@ -95,7 +94,10 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
         markers = {i: 'o' for i in text_labels.keys()}  # the keys of the text_labels are 0, 1, ...
 
     unique_classes = list(set(sample_classes))
-    assert (len(colors) > max(unique_classes))
+    if not (len(colors) > max(unique_classes)):
+        import pdb;
+        pdb.set_trace()
+    # assert (len(colors) > max(unique_classes))
 
     if len(samples[0]) >= 3:
         fig = plt.figure()
@@ -136,11 +138,11 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
             )
         if bounds is not None:
             plot_bounds(ax, bounds, 2, label='state_bound')
-        if True:
-            bounds_ext = [[-1, -1], [5,5]]
-            plot_bounds(ax, bounds_ext, 2, label='maze_walls', color='k')
-            bounds_int = [[-1,1], [3,3]]
-            plot_bounds(ax, bounds_int, 2, color='k')
+        # if True:  # for maze!
+        #     bounds_ext = [[-1, -1], [5, 5]]
+        #     plot_bounds(ax, bounds_ext, 2, label='maze_walls', color='m')
+        #     bounds_int = [[-1, 1], [3, 3]]
+        #     plot_bounds(ax, bounds_int, 2, color='m')
         if limit is not None:
             if center is None:
                 center = np.zeros(2)
@@ -171,7 +173,7 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
         return img
 
 
-def plot_bounds(ax, bounds, dim=2, label='', color='b'):
+def plot_bounds(ax, bounds, dim=2, label='', color='m'):
     if dim == 2:
         low, high = bounds
         i = 0

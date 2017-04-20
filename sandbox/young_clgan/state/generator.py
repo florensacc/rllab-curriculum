@@ -85,8 +85,7 @@ class StateGAN(StateGenerator):
         self.state_noise_level = state_noise_level
         print('state_center is : ', self.state_center, 'state_range: ', self.state_range)
 
-    def pretrain_uniform(self, size=10000, outer_iters=10, generator_iters=5,
-                         discriminator_iters=200):
+    def pretrain_uniform(self, size=10000, *args, **kwargs):
         """
         :param size: number of uniformly sampled states (that we will try to fit as output of the GAN)
         :param outer_iters: of the GAN
@@ -94,18 +93,17 @@ class StateGAN(StateGenerator):
         states = self.state_center + np.random.uniform(
             -self.state_range, self.state_range, size=(size, self.state_size)
         )
-        return self.pretrain(states, outer_iters, generator_iters, discriminator_iters)
+        return self.pretrain(states, *args, **kwargs)
 
-    def pretrain(self, states, outer_iters=10, generator_iters=5,
-                 discriminator_iters=200):
+    def pretrain(self, states, *args, **kwargs):
         """
         Pretrain the state GAN to match the distribution of given states.
         :param states: the state distribution to match
-        :param outer_iters: of the GAN
+        :param *args **kwargs: for the train method
         """
         labels = np.ones((states.shape[0], self.evaluater_size))  # all state same label --> uniform
         return self.train(
-            states, labels, outer_iters, generator_iters, discriminator_iters
+            states, labels, *args, **kwargs
         )
 
     def _add_noise_to_states(self, states):
@@ -124,11 +122,10 @@ class StateGAN(StateGenerator):
         return states, noise
 
     @overrides
-    def train(self, states, labels, outer_iters, generator_iters,
-              discriminator_iters, suppress_generated_states=True):
+    def train(self, states, labels, suppress_generated_states=True, *args, **kwargs):
         normalized_states = (states - self.state_center) / self.state_range
         return self.gan.train(
-            normalized_states, labels, outer_iters, generator_iters, discriminator_iters, suppress_generated_states
+            normalized_states, labels, suppress_generated_states=suppress_generated_states, *args, **kwargs
         )
 
     def discriminator_predict(self, states):

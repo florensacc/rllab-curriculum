@@ -107,7 +107,7 @@ def run_task(v):
     # logger.log("pretraining the GAN...")
     # if v['smart_init']:
     #     gan.pretrain(
-    #         generate_initial_goals(env, policy, v['goal_range'], horizon=v['horizon']),
+    #         generate_onpolicy_goals(env, policy, v['goal_range'], horizon=v['horizon']),
     #         outer_iters=30, generator_iters=10, discriminator_iters=200,
     #     )
     # else:

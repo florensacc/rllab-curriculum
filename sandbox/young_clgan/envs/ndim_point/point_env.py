@@ -53,6 +53,15 @@ class PointEnv(Env, Serializable):
             reward_ctrl=reward_ctrl,
         )
 
+    def is_feas(self, pos):
+        pos = np.array(pos)
+        if len(pos) == self.dim:
+            return (pos >= - self.state_ub[:self.dim]).all() and (pos <= self.state_ub[:self.dim]).all()
+        elif len(pos) == 2 * self.dim:
+            return (pos >= - self.state_ub).all() and (pos <= self.state_ub).all()
+        else:
+            raise NotImplementedError
+
     @overrides
     def reset(self, pos=None, vel=None, **kwargs):
         if pos is None:

@@ -10,7 +10,7 @@ class ExperimentLogger(object):
                  tabular_file='progress.csv', snapshot_gap=1, hold_outter_log=False):
         """
         :param base_dir:
-        :param itr:
+        :param itr: put a string if not wamt to save all! 
         :param snapshot_mode:
         :param text_file:
         :param tabular_file:
@@ -22,7 +22,7 @@ class ExperimentLogger(object):
         if itr is not None:
             self.log_dir = os.path.join(base_dir, 'itr_{}'.format(itr))
         else:
-            self.log_dir = base_dir
+            self.log_dir = os.path.join(base_dir, 'inner_log')
         self.text_file = os.path.join(self.log_dir, text_file)
         self.tabular_file = os.path.join(self.log_dir, tabular_file)
         self.snapshot_mode = snapshot_mode

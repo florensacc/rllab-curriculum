@@ -28,7 +28,7 @@ import tflearn
 import matplotlib
 matplotlib.use('Agg')
 
-from sandbox.young_clgan.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator, generate_initial_goals
+from sandbox.young_clgan.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator, generate_onpolicy_goals
 from sandbox.young_clgan.goal.generator import GoalGAN
 from sandbox.young_clgan.goal.evaluator import label_goals, evaluate_goals
 from sandbox.young_clgan.goal.utils import GoalCollection
@@ -145,7 +145,7 @@ class CLGANPointEnvMaze(RLAlgorithm):
 
         logger.log("Pretraining the gan with initial goals")
         gan.pretrain(
-            generate_initial_goals(env, policy, hyperparams.goal_range)
+            generate_onpolicy_goals(env, policy, hyperparams.goal_range)
         )
 
         logger.log("Plotting GAN samples")
@@ -244,7 +244,7 @@ class CLGANPointEnvMaze(RLAlgorithm):
                 hyperparams.gan_outer_iters,
                 hyperparams.gan_generator_iters,
                 hyperparams.gan_discriminator_iters,
-                suppress_generated_goals=True
+                suppress_generated_states=True
             )
 
             logger.log("Converting the labels")

@@ -76,7 +76,7 @@ if __name__ == '__main__':
         mode = 'local'
         n_parallel = 4
 
-    exp_prefix = 'init-maze-gan2'
+    exp_prefix = 'init-maze-gan-test'
     vg = VariantGenerator()
     vg.add('test', [False])
     vg.add('n_traj', lambda test: [3])

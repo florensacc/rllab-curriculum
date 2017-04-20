@@ -31,7 +31,7 @@ from sandbox.young_clgan.goal.generator import StateGAN
 
 from sandbox.young_clgan.logging.logger import ExperimentLogger
 from sandbox.young_clgan.goal.evaluator import convert_label, label_goals, evaluate_goals
-from sandbox.young_clgan.goal.utils import GoalCollection
+from sandbox.young_clgan.state.utils import StateCollection
 
 from rllab.misc import logger
 
@@ -63,6 +63,7 @@ def run_task(v):
         # append_goal=False,
         indicator_reward=v['indicator_reward'],
         terminal_eps=v['terminal_eps'],
+        only_feas=v['only_feas'],
     ))
 
     policy = GaussianMLPPolicy(
@@ -126,23 +127,36 @@ def run_task(v):
             goal_size=v['goal_size'],
             evaluater_size=v['num_labels'],
             goal_range=v['goal_range'],
+            goal_center=v['goal_center'],
             goal_noise_level=v['goal_noise_level'],
             generator_layers=v['gan_generator_layers'],
             discriminator_layers=v['gan_discriminator_layers'],
             noise_size=v['gan_noise_size'],
+            generator_max_iters=v['gan_generator_max_iters'],
+            discriminator_max_iters=v['gan_discriminator_max_iters'],
+            generator_min_loss=v['gan_generator_min_loss'],
+            discriminator_min_loss=v['gan_discriminator_min_loss'],
             tf_session=tf_session,
             configs=gan_configs,
         )
         logger.log("pretraining the GAN...")
         if v['smart_init']:
-            dis_loss, gen_loss = gan.pretrain(
-                generate_onpolicy_goals(env, policy, v['goal_range'], horizon=v['horizon']),
-                outer_iters=30, generator_iters=10 + k, discriminator_iters=200 - k * 10,
-            )
+            on_policy_goals = generate_onpolicy_goals(env, policy, goal_range=v['goal_range'],
+                                                      center=v['goal_center'], horizon=v['horizon'])
+            dis_loss, gen_loss = gan.pretrain(on_policy_goals,
+                                              outer_iters=v['gan_outer_iters'],
+                                              generator_max_iters=v['gan_generator_max_iters'] + k,
+                                              discriminator_max_iters=v['gan_discriminator_max_iters'] - k * 10,
+                                              )
             final_gen_loss = gen_loss[-1]
-            logger.log("error at the end of {}th trial: {}gen, {}disc".format(k, gen_loss[-1], dis_loss[-1]))
+            img = plot_labeled_samples(on_policy_goals, sample_classes=np.zeros(len(on_policy_goals), dtype=int),
+                                       colors=['k'], text_labels={0: 'training states'}, limit=v['goal_range'],
+                                       center=v['goal_center'])
+            report.add_image(img,
+                             "States used to train the NEXT gan.\nerror at the end of {}th trial:\n {}gen,\n {}disc".format(
+                                 k, gen_loss[-1], dis_loss[-1]), width=500)
         else:
-            gan.pretrain_uniform()
+            dis_loss, gen_loss = gan.pretrain_uniform()
             final_gen_loss = 0
 
     # log first samples form the GAN
@@ -168,17 +182,26 @@ def run_task(v):
         goal_class_frac[text_labels[k]] = frac
 
     img = plot_labeled_samples(
-        samples=initial_goals, sample_classes=goal_classes, text_labels=text_labels, limit=v['goal_range'] + 1,
+        samples=initial_goals, sample_classes=goal_classes, text_labels=text_labels, limit=v['goal_range'],
+        center=v['goal_center'],
         # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
     )
     summary_string = ''
     for key, value in goal_class_frac.items():
-        summary_string += key + ' frac: ' + str(value) + '\n'
+        if value > 0:
+            summary_string += key + ' frac: ' + str(value) + '\n'
+    summary_string += "\nGANerror at the end of {}th outerItr:\n {}gen,\n {}disc".format(v['gan_outer_iters'], gen_loss[-1], dis_loss[-1])
     report.add_image(img, 'itr: {}\nLabels of generated goals:\n{}'.format(outer_iter, summary_string), width=500)
     report.save()
     report.new_row()
 
-    all_goals = GoalCollection(distance_threshold=v['coll_eps'])
+    # save here to be in same order as outer_iters
+    logger.record_tabular("GAN_dis_itr", len(dis_loss))
+    logger.record_tabular("GAN_gen_itr", len(gen_loss))
+    logger.record_tabular("GAN_dis_final_loss", dis_loss[-1])
+    logger.record_tabular("GAN_gen_final_loss", gen_loss[-1])
+
+    all_goals = StateCollection(distance_threshold=v['coll_eps'])
 
     for outer_iter in range(1, v['outer_iters']):
 
@@ -188,7 +211,7 @@ def run_task(v):
         raw_goals, _ = gan.sample_states_with_noise(v['num_new_goals'])
 
         if v['replay_buffer'] and outer_iter > 0 and all_goals.size > 0:
-            old_goals = all_goals.sample(v['num_old_goals'])
+            old_goals = all_goals.sample(v['num_old_goals'], replay_noise=v['replay_noise'])
             goals = np.vstack([raw_goals, old_goals])
         else:
             goals = raw_goals
@@ -224,8 +247,9 @@ def run_task(v):
             algo.train()
 
         logger.log('Generating the Heatmap...')
-        avg_rewards, avg_success, heatmap = test_and_plot_policy(policy, env, max_reward=v['max_reward'],
-                                                                 sampling_res=sampling_res, n_traj=n_traj, visualize=False)
+        avg_rewards, avg_success, heatmap = test_and_plot_policy(policy, env,  # max_reward=v['max_reward'],
+                                                                 sampling_res=sampling_res, n_traj=n_traj,
+                                                                 visualize=False)
         reward_img = save_image()
 
         mean_rewards = np.mean(avg_rewards)
@@ -258,6 +282,10 @@ def run_task(v):
             improvement_threshold=v['improvement_threshold'],
             n_traj=n_traj)
 
+        # append new goals to list of all goals (replay buffer): Not the low reward ones!!
+        filtered_raw_goals = [goal for goal, label in zip(goals, labels) if label[0] == 1]
+        all_goals.append(filtered_raw_goals)
+
         logger.log("Converting the labels")
         goal_classes, text_labels = convert_label(labels)
 
@@ -271,11 +299,14 @@ def run_task(v):
 
         img = plot_labeled_samples(
             samples=goals, sample_classes=goal_classes, text_labels=text_labels, limit=v['goal_range'],
+            center=v['goal_center'],
             # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
         )
         summary_string = ''
         for key, value in goal_class_frac.items():
-            summary_string += key + ' frac: ' + str(value) + '\n'
+            if value > 0:
+                summary_string += key + ' frac: ' + str(value) + '\n'
+        summary_string += "\nGANerror at the end of {}th trial:\n {}gen,\n {}disc".format(k, gen_loss[-1], dis_loss[-1])
         report.add_image(img, 'itr: {}\nLabels of generated goals:\n{}'.format(outer_iter, summary_string), width=500)
 
         # ###### extra for deterministic:
@@ -311,24 +342,19 @@ def run_task(v):
 
         ######  try single label for good goals
         if v['num_labels'] == 1:
-            labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1,1))
+            labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
 
         logger.log("Training the GAN")
-        gan.train(
-            goals, labels,
-            v['gan_outer_iters'],
-            v['gan_generator_iters'],
-            v['gan_discriminator_iters'],
-            suppress_generated_goals=True
-        )
+        dis_loss, gen_loss = gan.train(goals, labels)
+
+        logger.record_tabular("GAN_dis_itr", len(dis_loss) * gan.gan.configs['print_iteration'])
+        logger.record_tabular("GAN_gen_itr", len(gen_loss))
+        logger.record_tabular("GAN_dis_final_loss", dis_loss[-1])
+        logger.record_tabular("GAN_gen_final_loss", gen_loss[-1])
 
         logger.dump_tabular(with_prefix=False)
         report.save()
         report.new_row()
-
-        # append new goals to list of all goals (replay buffer): Not the low reward ones!!
-        filtered_raw_goals = [goal for goal, label in zip(goals, labels) if label[0] == 1]
-        all_goals.append(filtered_raw_goals)
 
     img = plot_line_graph(
         osp.join(log_dir, 'mean_rewards.png'),

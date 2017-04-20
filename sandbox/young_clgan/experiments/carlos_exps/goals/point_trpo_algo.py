@@ -93,7 +93,7 @@ def run_task(v):
     baseline = LinearFeatureBaseline(env_spec=env.spec)
     n_traj = 3 if v['terminal_bonus'] > 0 else 1
 
-    # feasible_goals = generate_initial_goals(env, policy, v['goal_range'], horizon=v['horizon'], size=10000) #v['horizon'])
+    # feasible_goals = generate_onpolicy_goals(env, policy, v['goal_range'], horizon=v['horizon'], size=10000) #v['horizon'])
     # print(feasible_goals)
     # uniform_list_goal_generator = UniformListGoalGenerator(goal_list=feasible_goals.tolist())
     # env.update_goal_generator(uniform_list_goal_generator)
@@ -116,7 +116,7 @@ def run_task(v):
     # logger.log("pretraining the GAN...")
     # if v['smart_init']:
     #     gan.pretrain(
-    #         generate_initial_goals(env, policy, v['goal_range'], horizon=v['horizon'])
+    #         generate_onpolicy_goals(env, policy, v['goal_range'], horizon=v['horizon'])
     #     )
     # else:
     #     gan.pretrain_uniform()
