@@ -29,13 +29,14 @@ def format_dict(d):
 
 
 class HTMLReport:
-    def __init__(self, path, images_per_row=2):
+    def __init__(self, path, images_per_row=2, default_image_width=400):
         self.path = path
         title = datetime.datetime.today().strftime(
             "Report %Y-%m-%d_%H-%M-%S_{}".format(os.uname()[1])
         )
         self.doc = dominate.document(title=title)
         self.images_per_row = images_per_row
+        self.default_image_width = default_image_width
         self.t = None
         self.row_image_count = 0
 
@@ -65,7 +66,9 @@ class HTMLReport:
         sio.close()
         return encoded
 
-    def add_image(self, im, txt, width=400, font_pct=100):
+    def add_image(self, im, txt='', width=None, font_pct=100):
+        if width is None:
+            width = self.default_image_width
         if self.t is None or self.row_image_count >= self.images_per_row:
             self._add_table()
         with self.t:
@@ -98,4 +101,7 @@ class HTMLReport:
         f = open(self.path, 'w')
         f.write(self.doc.render())
         f.close()
+        
+    def __del__(self):
+        self.save()
 
