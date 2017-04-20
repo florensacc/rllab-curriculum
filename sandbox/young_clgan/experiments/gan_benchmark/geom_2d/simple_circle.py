@@ -1,6 +1,6 @@
 import time
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
 import io
 
@@ -71,9 +71,9 @@ def run_task(variant):
     gan = FCGAN(
         generator_output_size=2,
         discriminator_output_size=1,
-        generator_layers=[700, 700],
-        discriminator_layers=[200, 200],
-        noise_size=2,
+        generator_layers=[128, 128],
+        discriminator_layers=[64, 64],
+        noise_size=20,
         tf_session=tf.Session(),
         configs=gan_configs,
     )
@@ -148,9 +148,9 @@ if __name__ == '__main__':
     vg.add('generator_init', ['xavier'])
     vg.add('generator_iters', [2])
     vg.add('discriminator_iters', [1])
-    vg.add('generator_learning_rate', [0.0002])
-    vg.add('discriminator_learning_rate', [0.0002])
-    vg.add('outer_iters', [200])
+    vg.add('generator_learning_rate', [0.01])
+    vg.add('discriminator_learning_rate', [0.01])
+    vg.add('outer_iters', [20])
     
     
     for variant in vg.variants(randomized=False):
