@@ -133,8 +133,8 @@ def run_task(v):
                 initial_goals, outer_iters=30, generator_max_iters=10 + k, discriminator_max_iters=200 - k * 10,
                 # initial_goals, outer_iters=30, generator_max_iters=10, discriminator_max_iters=200,
             )
-            final_gen_loss = gen_loss[-1]
-            logger.log("error at the end of {}th trial: {}gen, {}disc".format(k, gen_loss[-1], dis_loss[-1]))
+            final_gen_loss = gen_loss
+            logger.log("error at the end of {}th trial: {}gen, {}disc".format(k, gen_loss, dis_loss))
         else:
             gan.pretrain_uniform()
             final_gen_loss = 0

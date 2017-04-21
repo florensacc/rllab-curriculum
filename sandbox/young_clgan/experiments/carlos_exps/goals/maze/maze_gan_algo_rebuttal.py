@@ -148,13 +148,13 @@ def run_task(v):
                                               generator_max_iters=v['gan_generator_max_iters'] + k,
                                               discriminator_max_iters=v['gan_discriminator_max_iters'] - k * 10,
                                               )
-            final_gen_loss = gen_loss[-1]
+            final_gen_loss = gen_loss
             img = plot_labeled_samples(on_policy_goals, sample_classes=np.zeros(len(on_policy_goals), dtype=int),
                                        colors=['k'], text_labels={0: 'training states'}, limit=v['goal_range'],
                                        center=v['goal_center'])
             report.add_image(img,
                              "States used to train the NEXT gan.\nerror at the end of {}th trial:\n {}gen,\n {}disc".format(
-                                 k, gen_loss[-1], dis_loss[-1]), width=500)
+                                 k, gen_loss, dis_loss), width=500)
         else:
             dis_loss, gen_loss = gan.pretrain_uniform()
             final_gen_loss = 0
@@ -190,16 +190,16 @@ def run_task(v):
     for key, value in goal_class_frac.items():
         if value > 0:
             summary_string += key + ' frac: ' + str(value) + '\n'
-    summary_string += "\nGANerror at the end of {}th outerItr:\n {}gen,\n {}disc".format(v['gan_outer_iters'], gen_loss[-1], dis_loss[-1])
+    summary_string += "\nGANerror at the end of {}th outerItr:\n {}gen,\n {}disc".format(v['gan_outer_iters'], gen_loss, dis_loss)
     report.add_image(img, 'itr: {}\nLabels of generated goals:\n{}'.format(outer_iter, summary_string), width=500)
     report.save()
     report.new_row()
 
     # save here to be in same order as outer_iters
-    logger.record_tabular("GAN_dis_itr", len(dis_loss))
-    logger.record_tabular("GAN_gen_itr", len(gen_loss))
-    logger.record_tabular("GAN_dis_final_loss", dis_loss[-1])
-    logger.record_tabular("GAN_gen_final_loss", gen_loss[-1])
+    # logger.record_tabular("GAN_dis_itr", len(dis_loss))
+    # logger.record_tabular("GAN_gen_itr", len(gen_loss))
+    logger.record_tabular("GAN_dis_final_loss", dis_loss)
+    logger.record_tabular("GAN_gen_final_loss", gen_loss)
 
     all_goals = StateCollection(distance_threshold=v['coll_eps'])
 
@@ -306,7 +306,7 @@ def run_task(v):
         for key, value in goal_class_frac.items():
             if value > 0:
                 summary_string += key + ' frac: ' + str(value) + '\n'
-        summary_string += "\nGANerror at the end of {}th trial:\n {}gen,\n {}disc".format(k, gen_loss[-1], dis_loss[-1])
+        summary_string += "\nGANerror at the end of itrs:\n {}gen,\n {}disc".format(gen_loss, dis_loss)
         report.add_image(img, 'itr: {}\nLabels of generated goals:\n{}'.format(outer_iter, summary_string), width=500)
 
         # ###### extra for deterministic:
@@ -347,10 +347,10 @@ def run_task(v):
         logger.log("Training the GAN")
         dis_loss, gen_loss = gan.train(goals, labels)
 
-        logger.record_tabular("GAN_dis_itr", len(dis_loss) * gan.gan.configs['print_iteration'])
-        logger.record_tabular("GAN_gen_itr", len(gen_loss))
-        logger.record_tabular("GAN_dis_final_loss", dis_loss[-1])
-        logger.record_tabular("GAN_gen_final_loss", gen_loss[-1])
+        # logger.record_tabular("GAN_dis_itr", len(dis_loss) * gan.gan.configs['print_iteration'])
+        # logger.record_tabular("GAN_gen_itr", len(gen_loss))
+        logger.record_tabular("GAN_dis_final_loss", dis_loss)
+        logger.record_tabular("GAN_gen_final_loss", gen_loss)
 
         logger.dump_tabular(with_prefix=False)
         report.save()

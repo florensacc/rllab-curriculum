@@ -125,7 +125,7 @@ class StateGAN(StateGenerator):
     def train(self, states, labels, suppress_generated_states=True, *args, **kwargs):
         normalized_states = (states - self.state_center) / self.state_range
         return self.gan.train(
-            normalized_states, labels, suppress_generated_states=suppress_generated_states, *args, **kwargs
+            normalized_states, labels, *args, **kwargs
         )
 
     def discriminator_predict(self, states):

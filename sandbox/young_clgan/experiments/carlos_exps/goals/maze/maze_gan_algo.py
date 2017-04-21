@@ -139,8 +139,8 @@ def run_task(v):
                 generate_onpolicy_goals(env, policy, v['goal_range'], horizon=v['horizon']),
                 outer_iters=30, generator_iters=10 + k, discriminator_iters=200 - k * 10,
             )
-            final_gen_loss = gen_loss[-1]
-            logger.log("error at the end of {}th trial: {}gen, {}disc".format(k, gen_loss[-1], dis_loss[-1]))
+            final_gen_loss = gen_loss
+            logger.log("error at the end of {}th trial: {}gen, {}disc".format(k, gen_loss, dis_loss))
         else:
             gan.pretrain_uniform()
             final_gen_loss = 0

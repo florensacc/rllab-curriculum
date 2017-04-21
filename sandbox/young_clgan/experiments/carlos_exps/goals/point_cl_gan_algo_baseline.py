@@ -133,8 +133,8 @@ def run_task(v):
                 initial_goals, outer_iters=30, generator_max_iters=10 + k, discriminator_max_iters=200 - k * 10,
                 # initial_goals, outer_iters=30, generator_max_iters=10, discriminator_max_iters=200,
             )
-            final_gen_loss = gen_loss[-1]
-            logger.log("error at the end of {}th trial: {}gen, {}disc".format(k, gen_loss[-1], dis_loss[-1]))
+            final_gen_loss = gen_loss
+            logger.log("error at the end of {}th trial: {}gen, {}disc".format(k, gen_loss, dis_loss))
         else:
             gan.pretrain_uniform()
             final_gen_loss = 0
@@ -258,12 +258,12 @@ def run_task(v):
                                    colors=['k'], text_labels={0: 'training states'}, limit=v['goal_range'],
                                    center=v['goal_center'])
         report.add_image(img, "States used to train the gan.\nerror at the end of {}th trial: {}gen, {}disc".format(k,
-                         gen_loss[-1], dis_loss[-1]), width=500)
+                         gen_loss, dis_loss), width=500)
 
-        logger.record_tabular("GAN_dis_itr", len(dis_loss) * gan.gan.configs['print_iteration'])
-        logger.record_tabular("GAN_gen_itr", len(gen_loss))
-        logger.record_tabular("GAN_dis_final_loss", dis_loss[-1])
-        logger.record_tabular("GAN_gen_final_loss", gen_loss[-1])
+        # logger.record_tabular("GAN_dis_itr", len(dis_loss) * gan.gan.configs['print_iteration'])
+        # logger.record_tabular("GAN_gen_itr", len(gen_loss))
+        logger.record_tabular("GAN_dis_final_loss", dis_loss)
+        logger.record_tabular("GAN_gen_final_loss", gen_loss)
 
         logger.log("Evaluating performance on Unif Goal Gen...")
         with logger.tabular_prefix('UnifFeasGoalGen_'):

@@ -56,7 +56,7 @@ if __name__ == '__main__':
 
     vg = VariantGenerator()
     # # GeneratorEnv params
-    vg.add('goal_size', [4, 3, 2, 5, 6])  # this is the ultimate goal we care about: getting the pendulum upright
+    vg.add('goal_size', [2, 3, 4, 5, 6])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('reward_dist_threshold', lambda goal_size: [math.sqrt(goal_size) / math.sqrt(2) * 0.3])
     # vg.add('reward_dist_threshold', [0.5, 1])
     vg.add('goal_range', [5])  # this will be used also as bound of the state_space
@@ -101,7 +101,7 @@ if __name__ == '__main__':
     vg.add('gan_discriminator_max_iters', [200])
     vg.add('gan_generator_max_iters', [10])
     vg.add('GAN_batch_size', [128])  # proble with repeated name!!
-    vg.add('GAN_print_iteration', [100])
+    vg.add('GAN_print_iteration', [5])
     vg.add('GAN_generator_activation', ['relu'])
     vg.add('GAN_discriminator_activation', ['relu'])
     vg.add('GAN_generator_optimizer', [tf.train.AdamOptimizer])

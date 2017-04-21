@@ -138,11 +138,11 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
             )
         if bounds is not None:
             plot_bounds(ax, bounds, 2, label='state_bound')
-        # if True:  # for maze!
-        #     bounds_ext = [[-1, -1], [5, 5]]
-        #     plot_bounds(ax, bounds_ext, 2, label='maze_walls', color='m')
-        #     bounds_int = [[-1, 1], [3, 3]]
-        #     plot_bounds(ax, bounds_int, 2, color='m')
+        if True:  # for maze!
+            bounds_ext = [[-1, -1], [5, 5]]
+            plot_bounds(ax, bounds_ext, 2, label='maze_walls', color='m')
+            bounds_int = [[-1, 1], [3, 3]]
+            plot_bounds(ax, bounds_int, 2, color='m')
         if limit is not None:
             if center is None:
                 center = np.zeros(2)

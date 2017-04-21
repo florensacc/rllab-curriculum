@@ -56,7 +56,7 @@ if __name__ == '__main__':
 
     vg = VariantGenerator()
     # # GeneratorEnv params
-    vg.add('goal_size', [3])  # this is the ultimate goal we care about: getting the pendulum upright
+    vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('reward_dist_threshold', lambda goal_size: [math.sqrt(goal_size) / math.sqrt(2) * 0.3])
     # vg.add('reward_dist_threshold', [0.5, 1])
     vg.add('goal_range', [5])  # this will be used also as bound of the state_space

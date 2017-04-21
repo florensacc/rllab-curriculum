@@ -1,5 +1,6 @@
 import os
 import random
+import numpy as np
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -75,10 +76,10 @@ if __name__ == '__main__':
     vg.add('gae_lambda', [0.995])
     # GAN main params
     vg.add('gan_outer_iters', [5, 7])
-    vg.add('gan_discriminator_max_iters', [2000])
-    vg.add('gan_generator_max_iters', [100])
-    vg.add('gan_generator_min_loss', [1e-3])
-    vg.add('gan_discriminator_min_loss', [1e-3])
+    vg.add('gan_discriminator_max_iters', [200])
+    vg.add('gan_generator_max_iters', [10])
+    vg.add('gan_generator_min_loss', [-np.infty, 1e-3])
+    vg.add('gan_discriminator_min_loss', [-np.infty, 1e-3])
     vg.add('gan_noise_size', [4])
 
     vg.add('gan_generator_layers', [[256, 256]])

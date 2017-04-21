@@ -275,7 +275,7 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
         reward = 0
         done = False
         if dist < self.terminal_eps and self.only_feas and self.is_feas(goal):
-            logger.log('reached feas. goal {} at dist {}'.format(goal, dist))
+            # logger.log('reached feas. goal {} at dist {}'.format(goal, dist))
             reward = self.goal_rew
             done = True
 
