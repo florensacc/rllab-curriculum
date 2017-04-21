@@ -11,20 +11,19 @@ DEFAULT_GAN_CONFIGS = lambda: {
     'generator_output_activation': 'tanh',
     'generator_hidden_activation': 'relu',
     'discriminator_hidden_activation': 'leaky_relu',
-    'generator_optimizer': tf.train.AdamOptimizer(0.001),
-    'discriminator_optimizer': tf.train.AdamOptimizer(0.001),
+    'generator_optimizer': tf.train.RMSPropOptimizer(0.001),
+    'discriminator_optimizer': tf.train.RMSPropOptimizer(0.001),
     'generator_weight_initializer': tf.contrib.layers.xavier_initializer(),
     'discriminator_weight_initializer': tf.contrib.layers.xavier_initializer(),
-    'print_iteration': 5,
+    'print_iteration': 50,
     'reset_generator_optimizer': False,
     'reset_discriminator_optimizer': False,
-    'batch_normalize_discriminator': True,
-    'batch_normalize_generator': True,
-    'discriminator_batch_noise_stddev': 0,
+    'batch_normalize_discriminator': False,
+    'batch_normalize_generator': False,
     'supress_all_logging': False,
-    'default_generator_iters': 2,
+    'default_generator_iters': 1,
     'default_discriminator_iters': 1,
-    'wgan': False,
+    'gan_type': 'lsgan',
     'wgan_gradient_penalty': 0.1,
 }
 
@@ -203,21 +202,26 @@ class FCGAN(object):
                     self.initialize_discriminator_optimizer_op
                 )
 
-            for _ in range(discriminator_max_iters):
+            for j in range(discriminator_max_iters):
                 sample_X = next(batch_feed_X)
                 sample_Y = next(batch_feed_Y)
-                generated_X, _ = self.sample_generator(batch_size)
 
-                dis_loss = (
-                    self.train_discriminator(sample_X, sample_Y, 1)
-                    + self.train_discriminator(generated_X, generated_Y, 1)
+                generated_X, random_noise = self.sample_generator(batch_size)
+
+                train_X = np.vstack([sample_X, generated_X])
+                train_Y = np.vstack([sample_Y, generated_Y])
+
+                dis_loss = self.train_discriminator(
+                    train_X, train_Y, 1, no_batch=True
                 )
+
                 if dis_loss < discriminator_min_loss:
                     break
 
-            for _ in range(generator_max_iters):
-                random_noise = self.sample_random_noise(batch_size)
+            for i in range(generator_max_iters):
+
                 gen_loss = self.train_generator(random_noise, 1)
+
                 if gen_loss < generator_min_loss:
                     break
 
@@ -226,7 +230,7 @@ class FCGAN(object):
 
         return dis_loss, gen_loss
 
-    def train_discriminator(self, X, Y, max_iters, min_loss=-np.infty):
+    def train_discriminator(self, X, Y, max_iters, min_loss=-np.infty, no_batch=False):
         """
         :param X: states that we know lables of
         :param Y: labels of those states
@@ -235,8 +239,12 @@ class FCGAN(object):
         The batch size is given by the configs of the class!
         discriminator_batch_noise_stddev > 0: check that std on each component is at least this. (if com: 2)
         """
-        batch_size = self.configs['batch_size']
-
+        if no_batch:
+            assert X.shape[0] == Y.shape[0]
+            batch_size = X.shape[0]
+        else:
+            batch_size = self.configs['batch_size']
+        
         batch_feed_X = batch_feed_array(X, batch_size)
         batch_feed_Y = batch_feed_array(Y, batch_size)
 
@@ -250,6 +258,8 @@ class FCGAN(object):
                  self.discriminator.label: train_Y,
                  self.discriminator_is_training: True}
             )
+            if loss < min_loss:
+                break
         return loss  # the length of this already tells the number of itrs that were used
 
     def train_generator(self, X, max_iters, min_loss=-np.infty):
@@ -270,6 +280,8 @@ class FCGAN(object):
                 [self.discriminator.generator_loss, self.generator_train_op],
                 {self.generator.input: train_X, self.generator_is_training: True}
             )
+            if loss < min_loss:
+                break
 
         return loss
 
@@ -351,9 +363,7 @@ class Discriminator(object):
             self._generator_input, hidden_layers, output_size, is_training,
             configs, reuse=True
         )
-
-        if configs['wgan']:
-            print("using wgan!!")
+        if configs['gan_type'] == 'wgan':
             self._generator_output = self.generator_discriminator.output
             self._sample_output = self.sample_discriminator.output
 
@@ -371,21 +381,23 @@ class Discriminator(object):
 
             self._discriminator_loss = self._discriminator_loss_logits + self._discriminator_loss_gradient
 
-            self._generator_loss_logits = tf.reduce_mean(
+            self._generator_loss = tf.reduce_mean(
                 -self._generator_output
             )
-
-            self._generator_loss_gradient = tf.nn.relu(
-                tf.nn.l2_loss(
-                    tf.gradients(
-                        self._generator_loss_logits, self._generator_input
-                    )[0]
-                ) - 1
-            ) * configs['wgan_gradient_penalty']
-
-            self._generator_loss = self._generator_loss_logits + self._generator_loss_gradient
-
-        else:
+            
+        elif configs['gan_type'] == 'lsgan':
+            self._generator_output = self.generator_discriminator.output
+            self._sample_output = self.sample_discriminator.output
+            
+            self._discriminator_loss = tf.reduce_mean(
+                tf.square(2 * self._label - 1 - self._sample_output)
+            )
+            
+            self._generator_loss = tf.reduce_mean(
+                tf.square(self._generator_output - 1)
+            )
+        
+        elif configs['gan_type'] == 'original':
             self._generator_output = tf.sigmoid(self.generator_discriminator.output)
             self._sample_output = tf.sigmoid(self.sample_discriminator.output)
 
@@ -401,6 +413,8 @@ class Discriminator(object):
                     logits=self.generator_discriminator.output
                 )
             )
+        else:
+            raise ValueError('Unsupported GAN type!')
 
     @property
     def sample_input(self):
@@ -461,7 +475,11 @@ class DiscriminatorNet(object):
             kernel_initializer=configs['discriminator_weight_initializer'],
             reuse=reuse
         )
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> fc034693cd776389fd7a4d7ec0be610383d50e97
     @property
     def output(self):
         return self._output

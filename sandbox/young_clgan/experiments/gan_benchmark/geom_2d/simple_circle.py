@@ -57,10 +57,11 @@ def run_task(variant):
     gan_configs = {
         'batch_size': 64,
         'generator_output_activation': 'tanh',
-        'generator_optimizer': tf.train.AdamOptimizer(variant['generator_learning_rate'], beta1=0.5),
-        'discriminator_optimizer': tf.train.AdamOptimizer(variant['discriminator_learning_rate'], beta1=0.5),
-        'batch_normalize_generator': True,
-        'wgan': True,
+        'generator_optimizer': tf.train.RMSPropOptimizer(variant['generator_learning_rate']),
+        'discriminator_optimizer': tf.train.RMSPropOptimizer(variant['discriminator_learning_rate']),
+        'batch_normalize_discriminator': False,
+        'batch_normalize_generator': False,
+        'gan_type': 'lsgan',
     }
     
     if variant['generator_init'] == 'xavier':
@@ -71,9 +72,9 @@ def run_task(variant):
     gan = FCGAN(
         generator_output_size=2,
         discriminator_output_size=1,
-        generator_layers=[128, 128],
-        discriminator_layers=[64, 64],
-        noise_size=20,
+        generator_layers=[200, 200],
+        discriminator_layers=[128, 128],
+        noise_size=5,
         tf_session=tf.Session(),
         configs=gan_configs,
     )
@@ -146,11 +147,11 @@ def run_task(variant):
 if __name__ == '__main__':
     vg = VariantGenerator()
     vg.add('generator_init', ['xavier'])
-    vg.add('generator_iters', [2])
+    vg.add('generator_iters', [1])
     vg.add('discriminator_iters', [1])
-    vg.add('generator_learning_rate', [0.01])
-    vg.add('discriminator_learning_rate', [0.01])
-    vg.add('outer_iters', [20])
+    vg.add('generator_learning_rate', [0.001])
+    vg.add('discriminator_learning_rate', [0.001])
+    vg.add('outer_iters', [500])
     
     
     for variant in vg.variants(randomized=False):
@@ -164,4 +165,5 @@ if __name__ == '__main__':
             exp_prefix='simple_circle_gan',
             variant=variant,
             # exp_name=exp_name,
+            print_command=False
         )

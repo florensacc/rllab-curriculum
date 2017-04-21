@@ -36,22 +36,24 @@ def run_task(variant):
     gan_configs = {
         'batch_size': 128,
         'generator_output_activation': 'sigmoid',
-        'generator_optimizer': tf.train.AdamOptimizer(variant['generator_learning_rate']),
-        'discriminator_optimizer': tf.train.AdamOptimizer(variant['discriminator_learning_rate']),
+        'generator_optimizer': tf.train.RMSPropOptimizer(variant['generator_learning_rate']),
+        'discriminator_optimizer': tf.train.RMSPropOptimizer(variant['discriminator_learning_rate']),
         'reset_generator_optimizer': False,
         'reset_discriminator_optimizer': False,
-        'wgan': True,
+        'batch_normalize_discriminator': False,
+        'batch_normalize_generator': False,
+        'gan_type': 'lsgan',
     }
     
     if variant['generator_init'] == 'xavier':
         gan_configs['generator_weight_initializer'] = tf.contrib.layers.xavier_initializer()
     else:
-        gan_configs['generator_weight_initializer'] = tflearn.initializations.truncated_normal(stddev=variant['generator_init'])
+        gan_configs['generator_weight_initializer'] = tf.truncated_normal_initializer(stddev=variant['generator_init'])
     
     gan = FCGAN(
         generator_output_size=28 * 28,
         discriminator_output_size=1,
-        generator_layers=[1200, 1200],
+        generator_layers=[1500, 1500],
         discriminator_layers=[500, 500],
         noise_size=100,
         tf_session=tf.Session(),
@@ -102,11 +104,11 @@ def run_task(variant):
 if __name__ == '__main__':
     vg = VariantGenerator()
     vg.add('generator_init', ['xavier'])
-    vg.add('generator_iters', [5, 10, 20, 40])
-    vg.add('discriminator_iters', [5])
-    vg.add('generator_learning_rate', [0.0002, 0.001])
-    vg.add('discriminator_learning_rate', [0.0002, 0.001])
-    vg.add('outer_iters', [100])
+    vg.add('generator_iters', [2])
+    vg.add('discriminator_iters', [1])
+    vg.add('generator_learning_rate', [0.001])
+    vg.add('discriminator_learning_rate', [0.001])
+    vg.add('outer_iters', [500])
     
     
     for variant in vg.variants(randomized=False):
@@ -120,4 +122,5 @@ if __name__ == '__main__':
             exp_prefix='mnist_gan',
             variant=variant,
             # exp_name=exp_name,
+            print_command=False
         )
