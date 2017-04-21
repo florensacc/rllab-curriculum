@@ -366,6 +366,7 @@ def run_experiment_lite(
         sync_all_data_node_to_s3=True,
         use_cloudpickle=True,
         pre_commands=None,
+        print_command=True,
         **kwargs):
     """
     Serialize the stubbed method call and run the experiment using the specified mode.
@@ -477,7 +478,8 @@ def run_experiment_lite(
                 script=osp.join(config.PROJECT_PATH, script),
                 use_gpu=use_gpu
             )
-            print(command)
+            if print_command:
+                print(command)
             if dry:
                 return
             try:
