@@ -206,7 +206,8 @@ class FCGAN(object):
             
             for i in range(generator_iters):
                 gen_log_loss = self.train_generator(random_noise, 1)
-                # random_noise = self.sample_random_noise(batch_size)
+                if i > 5:
+                    random_noise = self.sample_random_noise(batch_size)
                 
             
             if i % self.configs['print_iteration'] == 0 and not self.configs['supress_all_logging']:
