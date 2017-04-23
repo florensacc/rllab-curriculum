@@ -87,8 +87,8 @@ class StateGAN(StateGenerator):
         self.goal_noise_level = goal_noise_level
         print('goal_center is : ', self.goal_center, 'goal_range: ', self.goal_range)
 
-    def pretrain_uniform(self, size=10000, outer_iters=10, generator_iters=5,
-                         discriminator_iters=200):
+    def pretrain_uniform(self, size=10000, outer_iters=10, generator_iters=None,
+                         discriminator_iters=None):
         """
         :param size: number of uniformly sampled states (that we will try to fit as output of the GAN)
         :param outer_iters: of the GAN
@@ -98,8 +98,8 @@ class StateGAN(StateGenerator):
         )
         return self.pretrain(goals, outer_iters, generator_iters, discriminator_iters)
 
-    def pretrain(self, goals, outer_iters=10, generator_iters=5,
-                 discriminator_iters=200):
+    def pretrain(self, goals, outer_iters=10, generator_iters=None,
+                 discriminator_iters=None):
         """
         Pretrain the goal GAN to match the distribution of given goals.
         :param goals: the goal distribution to match
@@ -125,8 +125,8 @@ class StateGAN(StateGenerator):
         goals = self._add_noise_to_goals(goals)
         return goals, noise
 
-    def train(self, goals, labels, outer_iters, generator_iters,
-              discriminator_iters, suppress_generated_goals=True):
+    def train(self, goals, labels, outer_iters, generator_iters=None,
+              discriminator_iters=None, suppress_generated_goals=True):
         normalized_goals = (goals - self.goal_center) / self.goal_range
         return self.gan.train(
             normalized_goals, labels, outer_iters, generator_iters, discriminator_iters, suppress_generated_goals

@@ -1,6 +1,7 @@
 import argparse
 import os
 import os.path as osp
+from multiprocessing import cpu_count()
 import random
 import sys
 from collections import OrderedDict
@@ -67,10 +68,10 @@ if __name__ == '__main__':
         mode = 'ec2'
     elif args.local_docker:
         mode = 'local_docker'
-        n_parallel = 4
+        n_parallel = cpu_count()
     else:
         mode = 'local'
-        n_parallel = 4
+        n_parallel = cpu_count()
 
     exp_prefix = 'init-maze-trpo3'
     vg = VariantGenerator()

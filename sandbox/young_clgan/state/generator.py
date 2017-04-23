@@ -124,8 +124,8 @@ class StateGAN(StateGenerator):
         return states, noise
 
     @overrides
-    def train(self, states, labels, outer_iters, generator_iters,
-              discriminator_iters):
+    def train(self, states, labels, outer_iters, generator_iters=None,
+              discriminator_iters=None):
         normalized_states = (states - self.state_center) / self.state_range
         return self.gan.train(
             normalized_states, labels, outer_iters, generator_iters, discriminator_iters
