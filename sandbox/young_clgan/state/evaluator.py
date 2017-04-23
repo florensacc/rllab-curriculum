@@ -114,7 +114,7 @@ def convert_label(labels):
     return new_labels, classes
 
 
-def evaluate_states(states, env, policy, horizon, as_goals=True, n_traj=1, n_processes=-1):
+def evaluate_states(states, env, policy, horizon, as_goals=True, n_traj=1, n_processes=-1, full_path=False):
     evaluate_state_wrapper = FunctionWrapper(
         evaluate_state,
         env=env,
@@ -122,16 +122,19 @@ def evaluate_states(states, env, policy, horizon, as_goals=True, n_traj=1, n_pro
         horizon=horizon,
         as_goals=as_goals,
         n_traj=n_traj,
+        full_path=full_path,
     )
-    mean_rewards = parallel_map(
+    result = parallel_map(
         evaluate_state_wrapper,
         states,
         n_processes
     )
-    return np.array(mean_rewards)
+    if full_path:
+        return [inner for outer in result for inner in outer]
+    return np.array(result)
 
 
-def evaluate_state(state, env, policy, horizon, as_goals=False, n_traj=1):
+def evaluate_state(state, env, policy, horizon, as_goals=False, n_traj=1, full_path=False):
     total_rewards = []
     paths = []
     if as_goals:
@@ -144,6 +147,9 @@ def evaluate_state(state, env, policy, horizon, as_goals=False, n_traj=1):
             np.sum(paths[-1]['rewards'])
         )
     mean_reward = np.mean(total_rewards)
+    if full_path:
+        return paths
+    
     return mean_reward
 
 

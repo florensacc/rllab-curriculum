@@ -85,8 +85,8 @@ class StateGAN(StateGenerator):
         self.state_noise_level = state_noise_level
         print('state_center is : ', self.state_center, 'state_range: ', self.state_range)
 
-    def pretrain_uniform(self, size=10000, outer_iters=10, generator_iters=5,
-                         discriminator_iters=200):
+    def pretrain_uniform(self, size=10000, outer_iters=100, generator_iters=None,
+                         discriminator_iters=None):
         """
         :param size: number of uniformly sampled states (that we will try to fit as output of the GAN)
         :param outer_iters: of the GAN
@@ -96,8 +96,8 @@ class StateGAN(StateGenerator):
         )
         return self.pretrain(states, outer_iters, generator_iters, discriminator_iters)
 
-    def pretrain(self, states, outer_iters=10, generator_iters=5,
-                 discriminator_iters=200):
+    def pretrain(self, states, outer_iters=100, generator_iters=None,
+                 discriminator_iters=None):
         """
         Pretrain the state GAN to match the distribution of given states.
         :param states: the state distribution to match
@@ -125,10 +125,10 @@ class StateGAN(StateGenerator):
 
     @overrides
     def train(self, states, labels, outer_iters, generator_iters,
-              discriminator_iters, suppress_generated_states=True):
+              discriminator_iters):
         normalized_states = (states - self.state_center) / self.state_range
         return self.gan.train(
-            normalized_states, labels, outer_iters, generator_iters, discriminator_iters, suppress_generated_states
+            normalized_states, labels, outer_iters, generator_iters, discriminator_iters
         )
 
     def discriminator_predict(self, states):

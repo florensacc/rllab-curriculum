@@ -13,6 +13,7 @@ import matplotlib.colorbar as cbar
 from rllab.sampler.utils import rollout
 from sandbox.young_clgan.envs.base import FixedGoalGenerator
 from sandbox.young_clgan.state.selectors import FixedStateSelector
+from sandbox.young_clgan.state.evaluator import evaluate_states
 
 quick_test = False
 
@@ -91,7 +92,12 @@ def plot_heatmap(rewards, goals, prefix='', max_reward=6000, spacing=1, show_hea
     return fig
 
 
-def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1, n_traj=1):
+def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1, n_traj=1, parallel=True):
+    
+    if parallel:
+        return test_policy_parallel(policy, train_env, as_goals, visualize, sampling_res, n_traj)
+    
+    
     if hasattr(train_env.wrapped_env, 'find_empty_space'):
         maze_env = train_env.wrapped_env
     else:
@@ -157,6 +163,69 @@ def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1
                                                 <= train_env.terminal_eps) for path in paths]))
 
     return avg_totRewards, avg_success, states, spacing
+    
+    
+def test_policy_parallel(policy, train_env, as_goals=True, visualize=True, sampling_res=1, n_traj=1):
+    if hasattr(train_env.wrapped_env, 'find_empty_space'):
+        maze_env = train_env.wrapped_env
+    else:
+        maze_env = train_env.wrapped_env.wrapped_env
+    empty_spaces = maze_env.find_empty_space()
+
+    if quick_test:
+        sampling_res = 0
+        empty_spaces = empty_spaces[:3]
+        max_path_length = 100
+    else:
+        max_path_length = 400
+
+    size_scaling = maze_env.MAZE_SIZE_SCALING
+    num_samples = 2 ** sampling_res
+    spacing = size_scaling / num_samples
+    starting_offset = spacing / 2
+
+    avg_totRewards = []
+    avg_success = []
+    states = []
+
+    distances = []
+    for empty_space in empty_spaces:
+        delta_x = empty_space[0]  # - train_env.wrapped_env._init_torso_x
+        delta_y = empty_space[1]  # - train_env.wrapped_env._init_torso_y
+        distance = (delta_x ** 2 + delta_y ** 2) ** 0.5
+        distances.append(distance)
+
+    sort_indices = np.argsort(distances)[::-1]
+
+    empty_spaces = np.array(empty_spaces)
+    empty_spaces = empty_spaces[sort_indices]
+    
+    test_states = []
+
+    for empty_space in empty_spaces:
+        starting_x = empty_space[0] - size_scaling / 2 + starting_offset
+        starting_y = empty_space[1] - size_scaling / 2 + starting_offset
+        for i in range(num_samples):
+            for j in range(num_samples):
+                x = starting_x + i * spacing
+                y = starting_y + j * spacing
+                states.append((x, y))
+                
+    paths = evaluate_states(states, train_env, policy, max_path_length, as_goals, n_traj, full_path=True)
+   
+    path_index = 0
+    for empty_space in empty_spaces:
+        for i in range(num_samples):
+            for j in range(num_samples):
+                state_paths = paths[path_index:path_index + n_traj]
+                avg_totRewards.append(np.mean([np.sum(path['rewards']) for path in state_paths]))
+                avg_success.append(np.mean([int(np.min(path['env_infos']['distance'])
+                                                <= train_env.terminal_eps) for path in state_paths]))
+                
+                path_index += n_traj
+
+    return avg_totRewards, avg_success, states, spacing
+
 
 
 def test_and_plot_policy(policy, env, as_goals=True, visualize=True, sampling_res=1, n_traj=1, max_reward=1):
