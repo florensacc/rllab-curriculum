@@ -1,7 +1,7 @@
 import argparse
 import os
 import os.path as osp
-from multiprocessing import cpu_count()
+from multiprocessing import cpu_count
 import random
 import sys
 from collections import OrderedDict
@@ -355,4 +355,5 @@ if __name__ == '__main__':
                 seed=vv['seed'],
                 exp_prefix=exp_prefix,
                 # exp_name=exp_name,
+                print_command=False,
             )

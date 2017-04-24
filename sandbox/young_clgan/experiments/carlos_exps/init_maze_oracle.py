@@ -395,4 +395,5 @@ if __name__ == '__main__':
                 seed=vv['seed'],
                 exp_prefix=exp_prefix,
                 # exp_name=exp_name,
+                print_command=False,
             )
