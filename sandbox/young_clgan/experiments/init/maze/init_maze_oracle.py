@@ -2,6 +2,7 @@ import argparse
 import os
 import os.path as osp
 import random
+import datetime
 import sys
 from multiprocessing import cpu_count
 from collections import OrderedDict
@@ -186,7 +187,7 @@ def run_task(v):
 
         logger.log('Generating the Heatmap...')
         avg_rewards, avg_success, heatmap = test_and_plot_policy(policy, env, as_goals=False, visualize=False,
-                                                                 sampling_res=v['sampling_res'], n_traj=v['n_traj_training'])
+                                                                 sampling_res=v['sampling_res'], n_traj=v['n_traj'])
         reward_img = save_image(fig=heatmap)
 
         mean_rewards = np.mean(avg_rewards)
@@ -269,7 +270,7 @@ if __name__ == '__main__':
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
     config.AWS_SPOT_PRICE = str(info["price"])
-    n_parallel = int(info["vCPU"] / 2)  # make the default 4 if not using ec2
+    n_parallel = int(info["vCPU"])  # make the default 4 if not using ec2
     if args.ec2:
         mode = 'ec2'
     elif args.local_docker:
@@ -279,10 +280,9 @@ if __name__ == '__main__':
         mode = 'local'
         n_parallel = cpu_count()
 
-    exp_prefix = 'init-maze-oracle2'
+    exp_prefix = datetime.datetime.today().strftime('init-maze-oracle-%Y-%m-%d--%H-%M-%S')
     vg = VariantGenerator()
-    vg.add('n_traj', [10])
-    vg.add('n_traj_training', [3])
+    vg.add('n_traj', [3])
     vg.add('persistence', [3])
     vg.add('sampling_res', [2])
     vg.add('num_new_states', [100])

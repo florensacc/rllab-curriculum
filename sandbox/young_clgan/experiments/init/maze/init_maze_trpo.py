@@ -1,6 +1,7 @@
 import argparse
 import os
 import os.path as osp
+import datetime
 from multiprocessing import cpu_count
 import random
 import sys
@@ -63,7 +64,7 @@ if __name__ == '__main__':
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
     config.AWS_SPOT_PRICE = str(info["price"])
-    n_parallel = int(info["vCPU"] / 2)  # make the default 4 if not using ec2
+    n_parallel = int(info["vCPU"])  # make the default 4 if not using ec2
     if args.ec2:
         mode = 'ec2'
     elif args.local_docker:
@@ -73,7 +74,7 @@ if __name__ == '__main__':
         mode = 'local'
         n_parallel = cpu_count()
 
-    exp_prefix = 'init-maze-trpo3'
+    exp_prefix = datetime.datetime.today().strftime('init-maze-trpo-%Y-%m-%d--%H-%M-%S')
     vg = VariantGenerator()
     vg.add('n_traj', [3])
     vg.add('persistence', [1, 3])
