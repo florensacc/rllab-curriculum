@@ -288,9 +288,17 @@ if __name__ == '__main__':
             report.new_row()
 
 
-    print('Running {} inst. on type {}, with price {}, parallel {} on the subnets: '.format(vg.size, config.AWS_INSTANCE_TYPE,
-                                                                                            config.AWS_SPOT_PRICE, n_parallel),
-          *subnets)
+    # print('Running {} inst. on type {}, with price {}, parallel {} on the subnets: '.format(vg.size, config.AWS_INSTANCE_TYPE,
+    #                                                                                         config.AWS_SPOT_PRICE, n_parallel),
+    #       *subnets)
+    print(
+        'Running {} inst. on type {}, with price {}, parallel {}'.format(
+            vg.size,
+            config.AWS_INSTANCE_TYPE,
+            config.AWS_SPOT_PRICE,
+            n_parallel
+        )
+    )
 
     for vv in vg.variants(randomized=False):
 

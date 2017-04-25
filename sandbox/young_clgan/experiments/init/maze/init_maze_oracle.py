@@ -322,14 +322,22 @@ if __name__ == '__main__':
 
 
 
+    # print(
+    #     'Running {} inst. on type {}, with price {}, parallel {} on the subnets: '.format(
+    #         vg.size,
+    #         config.AWS_INSTANCE_TYPE,
+    #         config.AWS_SPOT_PRICE,
+    #         n_parallel
+    #     ),
+    #     *subnets
+    # )
     print(
-        'Running {} inst. on type {}, with price {}, parallel {} on the subnets: '.format(
+        'Running {} inst. on type {}, with price {}, parallel {}'.format(
             vg.size,
             config.AWS_INSTANCE_TYPE,
             config.AWS_SPOT_PRICE,
             n_parallel
-        ),
-        *subnets
+        )
     )
 
     for vv in vg.variants(randomized=False):

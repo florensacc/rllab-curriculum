@@ -421,9 +421,18 @@ if __name__ == '__main__':
     # vg.add('GAN_discriminator_weight_initializer_stddev', [0.02])
     # vg.add('GAN_discriminator_batch_noise_stddev', [1e-2])
 
-    print('Running {} inst. on type {}, with price {}, parallel {} on the subnets: '.format(vg.size, config.AWS_INSTANCE_TYPE,
-                                                                                            config.AWS_SPOT_PRICE, n_parallel),
-          *subnets)
+    # print('Running {} inst. on type {}, with price {}, parallel {} on the subnets: '.format(vg.size, config.AWS_INSTANCE_TYPE,
+    #                                                                                         config.AWS_SPOT_PRICE, n_parallel),
+    #       *subnets)
+          
+    print(
+        'Running {} inst. on type {}, with price {}, parallel {}'.format(
+            vg.size,
+            config.AWS_INSTANCE_TYPE,
+            config.AWS_SPOT_PRICE,
+            n_parallel
+        )
+    )
 
     for vv in vg.variants(randomized=False):
 
