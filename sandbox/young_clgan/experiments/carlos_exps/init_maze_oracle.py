@@ -253,6 +253,7 @@ if __name__ == '__main__':
     parser.add_argument('--price', '-p', type=str, default='', help='set betting price')
     parser.add_argument('--subnet', '-sn', type=str, default='', help='set subnet like us-west-1a')
     parser.add_argument('--name', '-n', type=str, default='', help='set exp prefix name and new file name')
+    parser.add_argument('--dry', action='store_true', default=False, help="add flag to run in ec2")
     args = parser.parse_args()
 
     if args.clone:
@@ -380,6 +381,7 @@ if __name__ == '__main__':
                     'pip install scikit-image',
                     'conda install numpy -n rllab3 -y',
                 ],
+                dry=args.dry,
             )
             if mode == 'local_docker':
                 sys.exit()
