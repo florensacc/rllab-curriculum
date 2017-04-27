@@ -475,11 +475,7 @@ class DiscriminatorNet(object):
             kernel_initializer=configs['discriminator_weight_initializer'],
             reuse=reuse
         )
-<<<<<<< HEAD
 
-=======
-        
->>>>>>> fc034693cd776389fd7a4d7ec0be610383d50e97
     @property
     def output(self):
         return self._output
