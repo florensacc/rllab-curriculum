@@ -21,7 +21,7 @@ DEFAULT_GAN_CONFIGS = lambda: {
     'batch_normalize_discriminator': False,
     'batch_normalize_generator': False,
     'supress_all_logging': False,
-    'default_generator_iters': 1,
+    'default_generator_iters': 1,   # It is highly recommend to not change these parameters
     'default_discriminator_iters': 1,
     'gan_type': 'lsgan',
     'wgan_gradient_penalty': 0.1,

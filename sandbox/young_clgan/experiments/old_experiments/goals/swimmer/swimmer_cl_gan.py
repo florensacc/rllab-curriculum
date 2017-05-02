@@ -1,15 +1,19 @@
 import os
-os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
-os.environ['CUDA_VISIBLE_DEVICES']=''
 
-# from sandbox.young_clgan.lib.utils import initialize_parallel_sampler
-# initialize_parallel_sampler()
+os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
+
+from sandbox.young_clgan.utils import initialize_parallel_sampler
+
+initialize_parallel_sampler()
 
 # Symbols that need to be stubbed
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
+from rllab.envs.mujoco.swimmer_env import SwimmerEnv
+from sandbox.young_clgan.lib.envs.base import GoalIdxExplorationEnv
 
 import time
 import random
@@ -18,15 +22,38 @@ import numpy as np
 import tensorflow as tf
 import tflearn
 import matplotlib
+
 matplotlib.use('Agg')
 
-from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator
-from sandbox.young_clgan.envs.point_env import PointEnv
-from sandbox.young_clgan.goal.evaluator import convert_label, evaluate_goals, label_goals
-from sandbox.young_clgan.goal import GoalGAN
+from sandbox.young_clgan.lib.envs.base import UniformListStateGenerator, FixedStateGenerator, update_env_state_generator
+from sandbox.young_clgan.goal import *
 from sandbox.young_clgan.logging import *
 
-EXPERIMENT_TYPE = 'cl_gan'
+EXPERIMENT_TYPE = 'cl_gan_swimmer'
+
+
+def convert_label(labels):
+    # label[0] --> LowRew, label[1] --> HighRew, label[2] --> Learnable ??
+    # Put good goals last so they will be plotted on top of other goals and be most visible.
+    classes = {
+        0: 'Other',
+        1: 'Low rewards',
+        2: 'High rewards',
+        3: 'Unlearnable',
+        4: 'Good goals',
+    }
+    new_labels = np.zeros(labels.shape[0], dtype=int)
+    new_labels[np.logical_and(labels[:, 0], labels[:, 1])] = 4
+    new_labels[labels[:, 0] == False] = 1
+    new_labels[labels[:, 1] == False] = 2
+    new_labels[
+        np.logical_and(
+            np.logical_and(labels[:, 0], labels[:, 1]),
+            labels[:, 2] == False
+        )
+    ] = 3
+
+    return new_labels, classes
 
 
 if __name__ == '__main__':
@@ -40,14 +67,14 @@ if __name__ == '__main__':
     report = HTMLReport(log_config.report_file)
 
     hyperparams = AttrDict(
-        horizon=200,
-        goal_range=15,
+        horizon=500,  # horizon for the robot
+        goal_range=4,  # max distance at which the CoM goals are generated
         goal_noise_level=1,
         min_reward=5,
         max_reward=6000,
         improvement_threshold=10,
         outer_iters=50,
-        inner_iters=5,
+        inner_iters=50,
         pg_batch_size=20000,
         gan_outer_iters=5,
         gan_discriminator_iters=200,
@@ -58,7 +85,6 @@ if __name__ == '__main__':
     report.add_text(format_dict(hyperparams))
 
     tf_session = tf.Session()
-
 
     gan_configs = {
         'batch_size': 128,
@@ -85,9 +111,9 @@ if __name__ == '__main__':
         configs=gan_configs
     )
 
-    env = normalize(PointEnv(
-        FixedGoalGenerator([0.1, 0.1])
-    ))
+    inner_env = normalize(SwimmerEnv())
+    goal_generator = FixedStateGenerator([0.1, 0.1])
+    env = GoalIdxExplorationEnv(inner_env, goal_generator, goal_weight=1)  # this goal_generator will be updated by a uniform after
 
     policy = GaussianMLPPolicy(
         env_spec=env.spec,
@@ -98,18 +124,18 @@ if __name__ == '__main__':
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
 
-    # img = plot_policy_reward(
-    #     policy, env, hyperparams.goal_range,
-    #     horizon=hyperparams.horizon,
-    #     fname='{}/policy_reward_init.png'.format(log_config.plot_dir),
-    # )
-    # report.add_image(img, 'policy performance initialization\n')
+    # Log performance of randomly initialized policy with FIXED goal [0.1, 0.1]
+    img = plot_policy_reward(
+        policy, env, hyperparams.goal_range,
+        horizon=hyperparams.horizon,
+        fname='{}/policy_reward_init.png'.format(log_config.plot_dir),
+    )
+    report.add_image(img, 'policy performance initialization\n')
 
-    # Pretrain GAN with uniform distribution on the GAN output space
+    # Pretrain GAN with uniform distribution on the GAN output space and log a sample
     gan.pretrain_uniform()
-
-    # img = plot_gan_samples(gan, hyperparams.goal_range, '{}/start.png'.format(log_config.plot_dir))
-    # report.add_image(img, 'GAN pretrained uniform')
+    img = plot_gan_samples(gan, hyperparams.goal_range, '{}/start.png'.format(log_config.plot_dir))
+    report.add_image(img, 'GAN pretrained uniform')
 
     report.save()
     report.new_row()
@@ -122,22 +148,23 @@ if __name__ == '__main__':
         raw_goals, _ = gan.sample_states_with_noise(2000)
 
         if outer_iter > 0:
+            # sampler uniformly 2000 old goals and add them to the training pool (50/50)
             old_goal_indices = np.random.randint(0, all_goals.shape[0], 2000)
             old_goals = all_goals[old_goal_indices, :]
             goals = np.vstack([raw_goals, old_goals])
         else:
             goals = raw_goals
 
+        # append new goals to list of all goals (replay buffer)
         all_goals = np.vstack([all_goals, raw_goals])
-
 
         rewards_before = evaluate_goals(goals, env, policy, hyperparams.horizon)
 
-
         with ExperimentLogger(log_config.log_dir, outer_iter):
-            update_env_goal_generator(
+            # set goal generator to uniformly sample from selected all_goals
+            update_env_state_generator(
                 env,
-                UniformListGoalGenerator(
+                UniformListStateGenerator(
                     goals.tolist()
                 )
             )
@@ -164,6 +191,7 @@ if __name__ == '__main__':
             report.add_image(img, 'policy performance\n itr: {}'.format(outer_iter))
             report.save()
 
+            # this re-evaluate the final policy in the collection of goals
             labels = label_goals(
                 goals, env, policy, hyperparams.horizon,
                 min_reward=hyperparams.min_reward,
@@ -181,9 +209,9 @@ if __name__ == '__main__':
 
             plot_labels, classes = convert_label(labels)
             img = plot_labeled_samples(
-                goals, plot_labels,
-                classes, hyperparams.goal_range + 5,
-                '{}/sampled_goals_{}.png'.format(log_config.plot_dir, outer_iter),
+                samples=goals, sample_classes=plot_labels,
+                text_labels=classes, limit=hyperparams.goal_range + 5,
+                fname='{}/sampled_goals_{}.png'.format(log_config.plot_dir, outer_iter),
             )
             report.add_image(img, 'goals\n itr: {}'.format(outer_iter), width=500)
             report.save()

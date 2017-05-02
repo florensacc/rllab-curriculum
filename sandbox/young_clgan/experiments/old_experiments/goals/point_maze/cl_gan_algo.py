@@ -28,7 +28,7 @@ import tflearn
 import matplotlib
 matplotlib.use('Agg')
 
-from sandbox.young_clgan.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator, generate_initial_goals
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator, update_env_state_generator, generate_initial_goals
 from sandbox.young_clgan.goal.generator import GoalGAN
 from sandbox.young_clgan.goal.evaluator import label_goals, evaluate_goals
 from sandbox.young_clgan.goal.utils import GoalCollection
@@ -120,7 +120,7 @@ class CLGANPointEnvMaze(RLAlgorithm):
         reward_dist_threshold = 0.3
 
         env = normalize(PointMazeEnv(
-            goal_generator=FixedGoalGenerator([0.1, 0.1]),
+            goal_generator=FixedStateGenerator([0.1, 0.1]),
             reward_dist_threshold=reward_dist_threshold
         ))
 
@@ -181,9 +181,9 @@ class CLGANPointEnvMaze(RLAlgorithm):
 
             with ExperimentLogger(log_dir, outer_iter, hold_outter_log=True):
                 logger.log("Updating the environment goal generator")
-                update_env_goal_generator(
+                update_env_state_generator(
                     env,
-                    UniformListGoalGenerator(
+                    UniformListStateGenerator(
                         goals.tolist()
                     )
                 )

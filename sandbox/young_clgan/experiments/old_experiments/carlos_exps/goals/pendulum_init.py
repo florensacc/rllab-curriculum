@@ -20,7 +20,7 @@ from rllab.envs.box2d.pendulum_env import PendulumEnv
 from rllab.misc.instrument import VariantGenerator
 
 from sandbox.young_clgan.envs.base import GoalExplorationEnv
-from sandbox.young_clgan.envs.base import UniformListGoalGenerator, FixedGoalGenerator, UniformGoalGenerator, update_env_goal_generator
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator, UniformStateGenerator, update_env_state_generator
 from sandbox.young_clgan.goal.evaluator import *
 from sandbox.young_clgan.goal.generator import StateGAN
 # from sandbox.young_clgan.lib.goal.utils import *
@@ -87,8 +87,8 @@ if __name__ == '__main__':
         # inner_env.wrapped_env.reset(noisy=False)
         center = [0, 0]
         goal_size = np.size(v['goal'])
-        fixed_goal_generator = FixedGoalGenerator(goal=v['goal'])
-        uniform_goal_generator = UniformGoalGenerator(goal_size=np.size(v['goal']), bounds=v['goal_range'], center=center)
+        fixed_goal_generator = FixedStateGenerator(goal=v['goal'])
+        uniform_goal_generator = UniformStateGenerator(goal_size=np.size(v['goal']), bounds=v['goal_range'], center=center)
 
         # GAN
         logger.log("Instantiating the GAN...")
@@ -171,12 +171,12 @@ if __name__ == '__main__':
             logger.log("Evaluating goals before inner training...")
             rewards_before = evaluate_goals(goals, env, policy, v['horizon'])
 
-            logger.log("Perform TRPO with UniformListGoalGenerator...")
+            logger.log("Perform TRPO with UniformListStateGenerator...")
             with ExperimentLogger(log_dir, outer_iter, snapshot_mode='last'):  # set log_dir for inner TRPO to save csv
                 # set goal generator to uniformly sample from selected all_goals
-                update_env_goal_generator(
+                update_env_state_generator(
                     env,
-                    UniformListGoalGenerator(
+                    UniformListStateGenerator(
                         goals.tolist()
                     )
                 )
@@ -235,10 +235,10 @@ if __name__ == '__main__':
             logger.log("Evaluating performance on Unif and Fix Goal Gen...")
             # log some more on how the pendulum performs the upright and general task
             with logger.tabular_prefix('UnifGoalGen_'):
-                update_env_goal_generator(env, goal_generator=uniform_goal_generator)
+                update_env_state_generator(env, goal_generator=uniform_goal_generator)
                 evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=10)
             with logger.tabular_prefix('FixGoalGen_'):
-                update_env_goal_generator(env, goal_generator=fixed_goal_generator)
+                update_env_state_generator(env, goal_generator=fixed_goal_generator)
                 evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=5)
             logger.dump_tabular(with_prefix=False)
 

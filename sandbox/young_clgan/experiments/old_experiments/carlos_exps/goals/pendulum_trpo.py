@@ -21,7 +21,7 @@ from rllab import config
 from rllab.misc.instrument import VariantGenerator, variant
 
 from sandbox.young_clgan.envs.base import GoalExplorationEnv, GoalIdxExplorationEnv
-from sandbox.young_clgan.envs.base import UniformGoalGenerator, FixedGoalGenerator
+from sandbox.young_clgan.envs.base import UniformStateGenerator, FixedStateGenerator
 from sandbox.young_clgan.goal import *
 from sandbox.young_clgan.logging import *
 from sandbox.carlos_snn.autoclone import autoclone
@@ -80,9 +80,9 @@ if __name__ == '__main__':
     vg.add('batch_size', [5000])
     vg.add('max_path_length', [200])
     # environemnt params
-    vg.add('goal_generator', [UniformGoalGenerator])
-    vg.add('goal_range', lambda goal_generator: [np.pi] if goal_generator == UniformGoalGenerator else [None])
-    vg.add('angle_idxs', lambda goal_generator: [(0,)] if goal_generator == UniformGoalGenerator else [None])
+    vg.add('goal_generator', [UniformStateGenerator])
+    vg.add('goal_range', lambda goal_generator: [np.pi] if goal_generator == UniformStateGenerator else [None])
+    vg.add('angle_idxs', lambda goal_generator: [(0,)] if goal_generator == UniformStateGenerator else [None])
     vg.add('goal', [(np.pi, 0), ])
     vg.add('goal_reward', ['NegativeDistance'])
     vg.add('goal_weight', [0])
@@ -94,10 +94,10 @@ if __name__ == '__main__':
         inner_env = normalize(PendulumEnv())
 
         goal_generator_class = v['goal_generator']
-        if goal_generator_class == UniformGoalGenerator:
+        if goal_generator_class == UniformStateGenerator:
             goal_generator = goal_generator_class(goal_size=np.size(v['goal']), bounds=v['goal_range'])
         else:
-            assert goal_generator_class == FixedGoalGenerator, 'goal generator not recognized!'
+            assert goal_generator_class == FixedStateGenerator, 'goal generator not recognized!'
             goal_generator = goal_generator_class(goal=v['goal'])
 
         env = GoalExplorationEnv(env=inner_env, final_goal=v['goal'], goal_bounds=v['goal_range'],

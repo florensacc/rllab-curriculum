@@ -22,7 +22,7 @@ from rllab.envs.mujoco.swimmer_env import SwimmerEnv
 from rllab.misc.instrument import VariantGenerator
 
 from sandbox.young_clgan.envs.base import GoalIdxExplorationEnv
-from sandbox.young_clgan.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator, update_env_state_generator
 from sandbox.young_clgan.goal.generator import StateGAN
 from sandbox.young_clgan.logging.html_report import HTMLReport
 from sandbox.young_clgan.logging.visualization import *
@@ -43,7 +43,7 @@ if __name__ == '__main__':
     vg.add('batch_size', [5000])
     vg.add('max_path_length', [500])
     # # GAN params
-    # vg.add('goal', lambda goal_generator: [(0, -1, 0), ] if goal_generator == FixedGoalGenerator else [None])
+    # vg.add('goal', lambda goal_generator: [(0, -1, 0), ] if goal_generator == FixedStateGenerator else [None])
     # vg.add('goal_reward', ['InverseDistance', 'NegativeDistance'])
     # vg.add('goal_weight', [1, 0])
     # vg.add('terminal_bonus', [1e3, 0])
@@ -102,7 +102,7 @@ if __name__ == '__main__':
         )
 
         inner_env = normalize(SwimmerEnv())
-        goal_generator = FixedGoalGenerator([0.1, 0.1])
+        goal_generator = FixedStateGenerator([0.1, 0.1])
         env = GoalIdxExplorationEnv(env=inner_env, goal_generator=goal_generator, goal_weight=1)  # this goal_generator will be updated by a uniform after
 
         policy = GaussianMLPPolicy(
@@ -161,9 +161,9 @@ if __name__ == '__main__':
 
             with ExperimentLogger(log_dir, outer_iter):
                 # set goal generator to uniformly sample from selected all_goals
-                update_env_goal_generator(
+                update_env_state_generator(
                     env,
-                    UniformListGoalGenerator(
+                    UniformListStateGenerator(
                         goals.tolist()
                     )
                 )

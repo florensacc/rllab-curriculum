@@ -24,6 +24,8 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 
+from sandbox.young_clgan.utils import format_experiment_prefix
+
 from sandbox.young_clgan.logging import *
 from sandbox.young_clgan.logging import HTMLReport, format_dict
 from sandbox.young_clgan.logging.visualization import save_image, plot_labeled_samples
@@ -35,7 +37,7 @@ from sandbox.young_clgan.state.generator import StateGAN
 from sandbox.young_clgan.state.evaluator import label_states, convert_label
 from sandbox.young_clgan.state.utils import StateCollection
 from sandbox.young_clgan.state.selectors import UniformStateSelector, UniformListStateSelector, FixedStateSelector
-from sandbox.young_clgan.envs.base import FixedGoalGenerator  # kept for the point-mass env...
+from sandbox.young_clgan.envs.base import FixedStateGenerator  # kept for the point-mass env...
 
 from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy  # this used for both init and goal
 
@@ -55,7 +57,7 @@ def run_task(v):
     tf_session = tf.Session()
 
     inner_env = normalize(PointMazeEnv(
-        goal_generator=FixedGoalGenerator(v['goal']),
+        goal_generator=FixedStateGenerator(v['goal']),
         reward_dist_threshold=v['reward_dist_threshold'] * 0.1,  # never stop from inner_env!
         append_goal=False,
     ))
@@ -357,7 +359,7 @@ if __name__ == '__main__':
         mode = 'local'
         n_parallel = cpu_count()
 
-    exp_prefix = datetime.datetime.today().strftime('init-maze-gan-%Y-%m-%d--%H-%M-%S')
+    exp_prefix = format_experiment_prefix('init-maze-gan')
     vg = VariantGenerator()
     vg.add('test', [False])
     vg.add('n_traj', lambda test: [3])

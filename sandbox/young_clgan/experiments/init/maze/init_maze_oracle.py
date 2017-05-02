@@ -19,6 +19,8 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab import config
 from rllab.misc.instrument import VariantGenerator
 
+from sandbox.young_clgan.utils import format_experiment_prefix
+
 from sandbox.young_clgan.state.selectors import UniformStateSelector, UniformListStateSelector, FixedStateSelector
 from sandbox.young_clgan.envs.init_sampler.base import InitIdxEnv
 from sandbox.young_clgan.logging.inner_logger import InnerExperimentLogger
@@ -29,7 +31,7 @@ from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
 from sandbox.young_clgan.logging import HTMLReport
 from sandbox.young_clgan.logging import format_dict
 from sandbox.young_clgan.logging.visualization import save_image, plot_labeled_samples
-from sandbox.young_clgan.envs.base import FixedGoalGenerator
+from sandbox.young_clgan.envs.base import FixedStateGenerator
 from sandbox.young_clgan.state.utils import StateCollection
 
 from sandbox.young_clgan.logging.logger import ExperimentLogger
@@ -50,7 +52,7 @@ def run_task(v):
     report.add_text(format_dict(v))
 
     inner_env = normalize(PointMazeEnv(
-        goal_generator=FixedGoalGenerator(v['goal']),
+        goal_generator=FixedStateGenerator(v['goal']),
         reward_dist_threshold=v['reward_dist_threshold'] * 0.1,  # never stop for inner_env!
         append_goal=False,
     ))
@@ -280,7 +282,7 @@ if __name__ == '__main__':
         mode = 'local'
         n_parallel = cpu_count()
 
-    exp_prefix = datetime.datetime.today().strftime('init-maze-oracle-%Y-%m-%d--%H-%M-%S')
+    exp_prefix = format_experiment_prefix('init-maze-oracle')
     vg = VariantGenerator()
     vg.add('n_traj', [3])
     vg.add('persistence', [3])

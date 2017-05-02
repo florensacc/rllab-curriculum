@@ -25,7 +25,7 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator, \
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator, update_env_state_generator, \
     generate_initial_goals
 from sandbox.young_clgan.goal.generator import StateGAN
 
@@ -57,7 +57,7 @@ def run_task(v):
     tf_session = tf.Session()
 
     env = normalize(PointMazeEnv(
-        goal_generator=FixedGoalGenerator([0.1, 0.1]),
+        goal_generator=FixedStateGenerator([0.1, 0.1]),
         reward_dist_threshold=v['reward_dist_threshold'],
         indicator_reward=v['indicator_reward'],
         terminal_eps=v['terminal_eps'],
@@ -199,9 +199,9 @@ def run_task(v):
 
         with ExperimentLogger(log_dir, outer_iter, snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment goal generator")
-            update_env_goal_generator(
+            update_env_state_generator(
                 env,
-                UniformListGoalGenerator(
+                UniformListStateGenerator(
                     goals.tolist()
                 )
             )

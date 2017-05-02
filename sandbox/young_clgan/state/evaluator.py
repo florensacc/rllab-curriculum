@@ -1,4 +1,4 @@
-import multiprocessing
+import multiprocessing_on_dill as multiprocessing
 import os
 import tempfile
 import numpy as np
@@ -31,7 +31,7 @@ class FunctionWrapper(object):
 def disable_cuda_initializer(*args, **kwargs):
     import os
     os.environ['THEANO_FLAGS'] = 'device=cpu'
-    os.environ['CUDA_VISIBLE_DEVICES'] = ""
+    os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
 
 def parallel_map(func, iterable_object, num_processes=-1):
@@ -114,7 +114,7 @@ def convert_label(labels):
     return new_labels, classes
 
 
-def evaluate_states(states, env, policy, horizon, as_goals=True, n_traj=1, n_processes=-1, full_path=False):
+def evaluate_states(states, env, policy, horizon, as_goals=True, n_traj=1, n_processes=-1, full_path=False, key='rewards'):
     evaluate_state_wrapper = FunctionWrapper(
         evaluate_state,
         env=env,
@@ -123,6 +123,7 @@ def evaluate_states(states, env, policy, horizon, as_goals=True, n_traj=1, n_pro
         as_goals=as_goals,
         n_traj=n_traj,
         full_path=full_path,
+        key=key,
     )
     result = parallel_map(
         evaluate_state_wrapper,
@@ -134,7 +135,7 @@ def evaluate_states(states, env, policy, horizon, as_goals=True, n_traj=1, n_pro
     return np.array(result)
 
 
-def evaluate_state(state, env, policy, horizon, as_goals=False, n_traj=1, full_path=False):
+def evaluate_state(state, env, policy, horizon, as_goals=False, n_traj=1, full_path=False, key='rewards'):
     total_rewards = []
     paths = []
     if as_goals:
@@ -144,7 +145,7 @@ def evaluate_state(state, env, policy, horizon, as_goals=False, n_traj=1, full_p
     for j in range(n_traj):
         paths.append(rollout(env, policy, horizon))
         total_rewards.append(
-            np.sum(paths[-1]['rewards'])
+            np.sum(paths[-1][key])
         )
     mean_reward = np.mean(total_rewards)
     if full_path:

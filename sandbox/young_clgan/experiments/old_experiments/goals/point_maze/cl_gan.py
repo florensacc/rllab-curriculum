@@ -30,7 +30,7 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 
-from sandbox.young_clgan.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator, update_env_state_generator
 from sandbox.young_clgan.envs.point_env import PointEnv
 from sandbox.young_clgan.goal import *
 from sandbox.young_clgan.logging import *

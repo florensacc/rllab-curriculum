@@ -23,7 +23,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 
-from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator
+from sandbox.young_clgan.lib.envs.base import UniformListStateGenerator, FixedStateGenerator, update_env_state_generator
 #from sandbox.young_clgan.lib.logging import *
 #from sandbox.young_clgan.lib.logging.logger import ExperimentLogger
 
@@ -57,7 +57,7 @@ class TRPOPointEnvMaze(RLAlgorithm):
         report.add_text(format_dict(hyperparams))
 
         env = normalize(PointMazeEnv(
-            goal_generator=FixedGoalGenerator([0.1, 0.1])
+            goal_generator=FixedStateGenerator([0.1, 0.1])
         ))
 
         policy = GaussianMLPPolicy(
@@ -86,9 +86,9 @@ class TRPOPointEnvMaze(RLAlgorithm):
         for outer_iter in range(hyperparams.outer_iters):
             with ExperimentLogger(log_config.log_dir, outer_iter, hold_outter_log=True):
                 print("Sampling goals uniformly at random")
-                update_env_goal_generator(
+                update_env_state_generator(
                     env,
-                    UniformListGoalGenerator(
+                    UniformListStateGenerator(
                         np.random.uniform(
                             -hyperparams.goal_range, hyperparams.goal_range,
                             size=(1000, hyperparams.goal_size)

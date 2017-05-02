@@ -11,7 +11,7 @@ import pylab
 import matplotlib.colorbar as cbar
 
 from rllab.sampler.utils import rollout
-from sandbox.young_clgan.envs.base import FixedGoalGenerator
+from sandbox.young_clgan.envs.base import FixedStateGenerator
 from sandbox.young_clgan.state.selectors import FixedStateSelector
 from sandbox.young_clgan.state.evaluator import evaluate_states
 
@@ -143,7 +143,7 @@ def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1
                 if as_goals:
                     goal = (x, y)
                     states.append(goal)
-                    train_env.update_goal_selector(FixedGoalGenerator(goal))
+                    train_env.update_goal_selector(FixedStateGenerator(goal))
                 else:
                     init_state = (x, y)
                     states.append(init_state)

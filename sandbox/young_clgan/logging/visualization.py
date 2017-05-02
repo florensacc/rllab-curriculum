@@ -6,7 +6,7 @@ import numpy as np
 import scipy.misc
 
 from sandbox.young_clgan.goal.evaluator import evaluate_goals, convert_label
-from sandbox.young_clgan.envs.base import FixedGoalGenerator
+from sandbox.young_clgan.envs.base import FixedStateGenerator
 
 import matplotlib as mpl
 

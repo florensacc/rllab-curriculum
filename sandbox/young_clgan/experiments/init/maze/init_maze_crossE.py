@@ -33,7 +33,7 @@ from sandbox.young_clgan.state.generator import CrossEntropyStateGenerator
 from sandbox.young_clgan.state.evaluator import label_states, convert_label
 from sandbox.young_clgan.state.utils import StateCollection
 from sandbox.young_clgan.state.selectors import UniformStateSelector, UniformListStateSelector, FixedStateSelector
-from sandbox.young_clgan.envs.base import FixedGoalGenerator  # kept for the point-mass env...
+from sandbox.young_clgan.envs.base import FixedStateGenerator  # kept for the point-mass env...
 
 from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy  # this used for both init and goal
 
@@ -153,7 +153,7 @@ if __name__ == '__main__':
         report.add_text(format_dict(v))
 
         inner_env = normalize(PointMazeEnv(
-            goal_generator=FixedGoalGenerator(v['goal']),
+            goal_generator=FixedStateGenerator(v['goal']),
             reward_dist_threshold=v['reward_dist_threshold'] * 0.1,  # never stop from inner_env!
             append_goal=False,
         ))

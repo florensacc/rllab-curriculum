@@ -316,7 +316,7 @@ def pop_prefix():
     _prefix_str = ''.join(_prefixes)
 
 
-def save_itr_params(itr, params, use_cloudpickle=False):
+def save_itr_params(itr, params, use_cloudpickle=True):
     if _snapshot_dir:
         if _snapshot_mode == 'all':
             file_name = osp.join(get_snapshot_dir(), 'itr_%d.pkl' % itr)

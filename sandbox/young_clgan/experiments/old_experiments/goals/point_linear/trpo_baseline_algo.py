@@ -18,7 +18,7 @@ from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 import rllab.misc.logger
 
-from sandbox.young_clgan.lib.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator
+from sandbox.young_clgan.lib.envs.base import UniformListStateGenerator, FixedStateGenerator, update_env_state_generator
 from sandbox.young_clgan.envs.point_env import PointEnv
 from sandbox.young_clgan.goal import *
 from sandbox.young_clgan.logging import *
@@ -53,7 +53,7 @@ class TRPOPointEnvLinear(RLAlgorithm):
         report.add_text(format_dict(hyperparams))
     
         env = normalize(PointEnv(
-            FixedGoalGenerator([0.1, 0.1])
+            FixedStateGenerator([0.1, 0.1])
         ))
     
         policy = GaussianMLPPolicy(
@@ -69,9 +69,9 @@ class TRPOPointEnvLinear(RLAlgorithm):
     
         for outer_iter in range(hyperparams.outer_iters):
             with ExperimentLogger(log_config.log_dir, outer_iter):
-                update_env_goal_generator(
+                update_env_state_generator(
                     env,
-                    UniformListGoalGenerator(
+                    UniformListStateGenerator(
                         np.random.uniform(
                             -hyperparams.goal_range, hyperparams.goal_range,
                             size=(1000, hyperparams.goal_size)

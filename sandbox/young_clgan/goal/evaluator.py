@@ -1,4 +1,4 @@
-import multiprocessing
+import multiprocessing_on_dill as multiprocessing
 import os
 import tempfile
 import numpy as np
@@ -7,8 +7,8 @@ from collections import OrderedDict
 from rllab.sampler.utils import rollout
 from rllab.misc import logger
 
-from sandbox.young_clgan.envs.base import update_env_goal_generator
-from sandbox.young_clgan.envs.base import FixedGoalGenerator
+from sandbox.young_clgan.envs.base import update_env_state_generator
+from sandbox.young_clgan.envs.base import FixedStateGenerator
 
 
 class FunctionWrapper(object):
@@ -134,7 +134,7 @@ def evaluate_goals(goals, env, policy, horizon, n_traj=1, n_processes=-1):
 def evaluate_goal(goal, env, policy, horizon, n_traj=1):
     total_rewards = []
     paths = []
-    update_env_goal_generator(env, FixedGoalGenerator(goal))
+    update_env_state_generator(env, FixedStateGenerator(goal))
     for j in range(n_traj):
         paths.append(rollout(env, policy, horizon))
         total_rewards.append(

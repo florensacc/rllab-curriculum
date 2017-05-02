@@ -25,7 +25,7 @@ import tensorflow as tf
 import matplotlib
 matplotlib.use('Agg')
 
-from sandbox.young_clgan.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator, update_env_state_generator
 
 from sandbox.young_clgan.logging.logger import ExperimentLogger
 from sandbox.young_clgan.goal.evaluator import convert_label, label_goals
@@ -74,7 +74,7 @@ def run_task(v):
     # )
 
     env = normalize(PointMazeEnv(
-        goal_generator=FixedGoalGenerator(v['final_goal']),
+        goal_generator=FixedStateGenerator(v['final_goal']),
         reward_dist_threshold=v['reward_dist_threshold'],
         indicator_reward=v['indicator_reward'],
         terminal_eps=v['terminal_eps'],
@@ -141,12 +141,12 @@ def run_task(v):
         with ExperimentLogger(log_dir, outer_iter, snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment goal generator")
             if v['unif_goals']:
-                update_env_goal_generator(
+                update_env_state_generator(
                     env,
-                    UniformListGoalGenerator(goals.tolist())
+                    UniformListStateGenerator(goals.tolist())
                 )
             else:
-                update_env_goal_generator(env, FixedGoalGenerator(v['final_goal']))
+                update_env_state_generator(env, FixedStateGenerator(v['final_goal']))
 
             logger.log("Training the algorithm")
             algo = TRPO(

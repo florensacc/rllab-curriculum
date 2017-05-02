@@ -15,8 +15,11 @@ alias unset_display="unset DISPLAY"
 
 alias viskit="python $RLLAB_HOME/rllab/viskit/frontend.py"
 
-alias ec2ssh="ssh -i $RLLAB_HOME/private/key_pairs/rllab-us-west-1.pem"
 alias ec2scp="scp -i $RLLAB_HOME/private/key_pairs/rllab-us-west-1.pem"
+
+function ec2ssh {
+  ssh -o "UserKnownHostsFile /dev/null" -o "StrictHostKeyChecking=no" -i "$RLLAB_HOME"'/private/key_pairs/rllab-us-west-1.pem' 'ubuntu@'"$1"
+}
 
 alias s3sync="python $RLLAB_HOME/scripts/sync_s3.py"
 

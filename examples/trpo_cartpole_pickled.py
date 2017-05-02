@@ -3,14 +3,14 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import run_experiment_lite
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
-from sandbox.young_clgan.lib.envs.base import FixedGoalGenerator
+from sandbox.young_clgan.lib.envs.base import FixedStateGenerator
 from sandbox.young_clgan.lib.envs.maze.point_maze_env import PointMazeEnv
 
 
 def run_task(*_):
     #env = normalize(CartpoleEnv())
     #env = normalize(PointMazeEnv())
-    env = normalize(PointMazeEnv(goal_generator=FixedGoalGenerator([0.1, 0.1])))
+    env = normalize(PointMazeEnv(goal_generator=FixedStateGenerator([0.1, 0.1])))
 
     policy = GaussianMLPPolicy(
         env_spec=env.spec,

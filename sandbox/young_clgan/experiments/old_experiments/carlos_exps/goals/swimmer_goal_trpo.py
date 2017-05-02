@@ -18,7 +18,7 @@ from rllab.envs.mujoco.swimmer_env import SwimmerEnv
 from rllab import config
 
 from sandbox.young_clgan.envs.base import GoalIdxExplorationEnv
-from sandbox.young_clgan.envs.base import UniformGoalGenerator, FixedGoalGenerator, update_env_goal_generator
+from sandbox.young_clgan.envs.base import UniformStateGenerator, FixedStateGenerator, update_env_state_generator
 from sandbox.young_clgan.goal import *
 from sandbox.young_clgan.logging import *
 from sandbox.carlos_snn.autoclone import autoclone
@@ -77,7 +77,7 @@ if __name__ == '__main__':
     for goal_reward in ['InverseDistance', 'NegativeDistance']:
         for goal_range in [2, 4]:
             inner_env = normalize(SwimmerEnv())
-            goal_generator = UniformGoalGenerator(goal_size=2, bounds=goal_range)
+            goal_generator = UniformStateGenerator(goal_size=2, bounds=goal_range)
             env = GoalIdxExplorationEnv(env=inner_env, goal_generator=goal_generator, goal_reward=goal_reward,
                                         goal_weight=1)  # this goal_generator will be updated by a uniform after
 

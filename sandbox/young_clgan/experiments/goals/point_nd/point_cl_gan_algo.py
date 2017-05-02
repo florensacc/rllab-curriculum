@@ -17,8 +17,8 @@ from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
 from sandbox.young_clgan.envs.base import GoalIdxExplorationEnv
-from sandbox.young_clgan.envs.base import UniformListGoalGenerator, FixedGoalGenerator, UniformGoalGenerator, \
-    update_env_goal_generator, generate_initial_goals
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator, UniformStateGenerator, \
+    update_env_state_generator, generate_initial_goals
 
 from sandbox.young_clgan.goal.evaluator import *
 from sandbox.young_clgan.goal.generator import StateGAN
@@ -45,12 +45,12 @@ def run_task(v):
     # inner_env = normalize(PendulumEnv())
 
     center = np.zeros(v['goal_size'])
-    fixed_goal_generator = FixedGoalGenerator(goal=center)
-    # uniform_goal_generator = UniformGoalGenerator(goal_size=v['goal_size'], bounds=v['goal_range'],
+    fixed_goal_generator = FixedStateGenerator(goal=center)
+    # uniform_goal_generator = UniformStateGenerator(goal_size=v['goal_size'], bounds=v['goal_range'],
     #                                               center=center)
     feasible_goal_ub = np.array(v['state_bounds'])[:v['goal_size']]
     # print("the feasible_goal_ub is: ", feasible_goal_ub)
-    uniform_feasible_goal_generator = UniformGoalGenerator(goal_size=v['goal_size'], bounds=[-1 * feasible_goal_ub,
+    uniform_feasible_goal_generator = UniformStateGenerator(goal_size=v['goal_size'], bounds=[-1 * feasible_goal_ub,
                                                                                              feasible_goal_ub])
 
     env = GoalIdxExplorationEnv(env=inner_env, goal_generator=fixed_goal_generator,
@@ -168,12 +168,12 @@ def run_task(v):
             rewards_before = evaluate_goals(goals, env, policy, v['horizon'], n_traj=n_traj,
                                             n_processes=multiprocessing.cpu_count())
 
-        logger.log("Perform TRPO with UniformListGoalGenerator...")
+        logger.log("Perform TRPO with UniformListStateGenerator...")
         with ExperimentLogger(log_dir, outer_iter, snapshot_mode='last', hold_outter_log=True):
             # set goal generator to uniformly sample from selected all_goals
-            update_env_goal_generator(
+            update_env_state_generator(
                 env,
-                UniformListGoalGenerator(
+                UniformListStateGenerator(
                     goals.tolist()
                 )
             )
@@ -256,11 +256,11 @@ def run_task(v):
 
         logger.log("Evaluating performance on Unif and Fix Goal Gen...")
         with logger.tabular_prefix('UnifFeasGoalGen_'):
-            update_env_goal_generator(env, goal_generator=uniform_feasible_goal_generator)
+            update_env_state_generator(env, goal_generator=uniform_feasible_goal_generator)
             evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=50, fig_prefix='UnifFeasGoalGen_',
                               report=report, n_traj=n_traj)
         # with logger.tabular_prefix('FixGoalGen_'):
-        #     update_env_goal_generator(env, goal_generator=fixed_goal_generator)
+        #     update_env_state_generator(env, goal_generator=fixed_goal_generator)
         #     evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=5, fig_prefix='FixGoalGen',
         #                       report=report)
 
@@ -274,7 +274,7 @@ def run_task(v):
         all_goals.append(filtered_raw_goals)
 
     with logger.tabular_prefix('FINALUnifFeasGoalGen_'):
-        update_env_goal_generator(env, goal_generator=uniform_feasible_goal_generator)
+        update_env_state_generator(env, goal_generator=uniform_feasible_goal_generator)
         evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=5e3, fig_prefix='FINAL1UnifFeasGoalGen_',
                           report=report, n_traj=n_traj)
         evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=5e3, fig_prefix='FINAL2UnifFeasGoalGen_',
