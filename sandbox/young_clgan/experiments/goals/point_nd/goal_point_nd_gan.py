@@ -9,6 +9,7 @@ import math
 import os
 import os.path as osp
 import random
+from multiprocessing import cpu_count
 
 import tensorflow as tf
 
@@ -24,9 +25,10 @@ from sandbox.young_clgan.envs.ndim_point.point_env import PointEnv
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.envs.base import GoalExplorationEnv
+from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, update_env_goal_generator, \
+    evaluate_goal_env, GoalCollection, generate_initial_goals
 from sandbox.young_clgan.envs.base import FixedStateGenerator, UniformStateGenerator, \
-    update_env_state_generator, generate_initial_goals
+    update_env_state_generator, UniformListStateGenerator
 
 from sandbox.young_clgan.state.evaluator import *
 from sandbox.young_clgan.state.generator import StateGAN
@@ -35,8 +37,6 @@ from sandbox.young_clgan.logging.html_report import format_dict, HTMLReport
 from sandbox.young_clgan.logging.visualization import *
 from sandbox.young_clgan.logging.logger import ExperimentLogger
 from sandbox.young_clgan.goal.utils import GoalCollection
-
-from sandbox.young_clgan.utils import initialize_parallel_sampler
 
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
@@ -53,13 +53,14 @@ def run_task(v):
     # inner_env = normalize(PendulumEnv())
 
     center = np.zeros(v['goal_size'])
-    fixed_goal_generator = FixedStateGenerator(goal=center)
-    # uniform_goal_generator = UniformStateGenerator(state_size=v['goal_size'], bounds=v['goal_range'],
-    #                                               center=center)
+    fixed_goal_generator = FixedStateGenerator(center)
+    uniform_goal_generator = UniformStateGenerator(state_size=v['goal_size'], bounds=v['goal_range'],
+                                                  center=center)
     feasible_goal_ub = np.array(v['state_bounds'])[:v['goal_size']]
     # print("the feasible_goal_ub is: ", feasible_goal_ub)
-    uniform_feasible_goal_generator = UniformStateGenerator(state_size=v['goal_size'], bounds=[-1 * feasible_goal_ub,
-                                                                                             feasible_goal_ub])
+    uniform_feasible_goal_generator = UniformStateGenerator(
+        state_size=v['goal_size'], bounds=[-1 * feasible_goal_ub, feasible_goal_ub]
+    )
 
     env = GoalExplorationEnv(
         env=inner_env, goal_generator=uniform_goal_generator,
@@ -102,10 +103,10 @@ def run_task(v):
     gan_configs = {key[4:]: value for key, value in v.items() if 'GAN_' in key}
     
     gan = StateGAN(
-        goal_size=v['goal_size'],
+        state_size=v['goal_size'],
         evaluater_size=v['num_labels'],
-        goal_range=v['goal_range'],
-        goal_noise_level=v['goal_noise_level'],
+        state_range=v['goal_range'],
+        state_noise_level=v['goal_noise_level'],
         generator_layers=v['gan_generator_layers'],
         discriminator_layers=v['gan_discriminator_layers'],
         noise_size=v['gan_noise_size'],
@@ -134,8 +135,8 @@ def run_task(v):
                 initial_goals, outer_iters=30
                 # initial_goals, outer_iters=30, generator_iters=10, discriminator_iters=200,
             )
-            final_gen_loss = gen_loss[-1]
-            logger.log("error at the end of {}th trial: {}gen, {}disc".format(k, gen_loss[-1], dis_loss[-1]))
+            final_gen_loss = gen_loss
+            logger.log("error at the end of {}th trial: {}gen, {}disc".format(k, gen_loss, dis_loss))
         else:
             gan.pretrain_uniform()
             final_gen_loss = 0
@@ -169,8 +170,7 @@ def run_task(v):
 
         rewards_before = None
         if v['num_labels'] == 3:
-            rewards_before = evaluate_goals(goals, env, policy, v['horizon'], n_traj=n_traj,
-                                            n_processes=multiprocessing.cpu_count())
+            rewards_before = evaluate_states(goals, env, policy, v['horizon'], n_traj=n_traj)
 
         logger.log("Perform TRPO with UniformListStateGenerator...")
         with ExperimentLogger(log_dir, outer_iter, snapshot_mode='last', hold_outter_log=True):
@@ -209,12 +209,12 @@ def run_task(v):
 
         # this re-evaluate the final policy in the collection of goals
         logger.log("Generating labels by re-evaluating policy on List of goals...")
-        labels = label_goals(
+        labels = label_states(
             goals, env, policy, v['horizon'],
             min_reward=v['min_reward'],
             max_reward=v['max_reward'],
             old_rewards=rewards_before,
-            improvement_threshold=v['improvement_threshold'],
+            improvement_threshold=0,
             n_traj=n_traj,
         )
         goal_classes, text_labels = convert_label(labels)
@@ -225,26 +225,26 @@ def run_task(v):
             logger.record_tabular('GenGoal_frac_' + text_labels[k], frac)
             goal_class_frac[text_labels[k]] = frac
 
-        img = plot_labeled_samples(
-            samples=goals, sample_classes=goal_classes, text_labels=text_labels, limit=v['goal_range'] + 1,
-            # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
-        )
-        summary_string = ''
-        for key, value in goal_class_frac.items():
-            summary_string += key + ' frac: ' + str(value) + '\n'
-        report.add_image(img, 'itr: {}\nLabels of generated goals:\n{}'.format(outer_iter, summary_string), width=500)
+        # img = plot_labeled_samples(
+        #     samples=goals, sample_classes=goal_classes, text_labels=text_labels, limit=v['goal_range'] + 1,
+        #     # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
+        # )
+        # summary_string = ''
+        # for key, value in goal_class_frac.items():
+        #     summary_string += key + ' frac: ' + str(value) + '\n'
+        # report.add_image(img, 'itr: {}\nLabels of generated goals:\n{}'.format(outer_iter, summary_string), width=500)
 
         # log feasibility of generated goals
         feasible = np.array([1 if env.feasible_goal_space.contains(goal) else 0 for goal in goals], dtype=int)
         feasibility_rate = np.mean(feasible)
         logger.record_tabular('GenGoalFeasibilityRate', feasibility_rate)
-        img = plot_labeled_samples(
-            samples=goals, sample_classes=feasible, text_labels={0: 'Infeasible', 1: "Feasible"},
-            markers={0: 'v', 1: 'o'}, limit=v['goal_range'] + 1, bounds=env.feasible_goal_space.bounds,
-            # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
-        )
-        report.add_image(img, 'feasibility of generated goals: {}\n itr: {}'.format(feasibility_rate, outer_iter),
-                         width=500)
+        # img = plot_labeled_samples(
+        #     samples=goals, sample_classes=feasible, text_labels={0: 'Infeasible', 1: "Feasible"},
+        #     markers={0: 'v', 1: 'o'}, limit=v['goal_range'] + 1, bounds=env.feasible_goal_space.bounds,
+        #     # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
+        # )
+        # report.add_image(img, 'feasibility of generated goals: {}\n itr: {}'.format(feasibility_rate, outer_iter),
+        #                  width=500)
 
         ######  try single label for good goals
         if v['num_labels'] == 1:
@@ -258,7 +258,7 @@ def run_task(v):
 
         logger.log("Evaluating performance on Unif and Fix Goal Gen...")
         with logger.tabular_prefix('UnifFeasGoalGen_'):
-            update_env_state_generator(env, goal_generator=uniform_feasible_goal_generator)
+            update_env_state_generator(env, uniform_feasible_goal_generator)
             evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=50, fig_prefix='UnifFeasGoalGen_',
                               report=report, n_traj=n_traj)
         # with logger.tabular_prefix('FixGoalGen_'):
@@ -276,7 +276,7 @@ def run_task(v):
         all_goals.append(filtered_raw_goals)
 
     with logger.tabular_prefix('FINALUnifFeasGoalGen_'):
-        update_env_state_generator(env, goal_generator=uniform_feasible_goal_generator)
+        update_env_state_generator(env, uniform_feasible_goal_generator)
         evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=5e3, fig_prefix='FINAL1UnifFeasGoalGen_',
                           report=report, n_traj=n_traj)
         evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=5e3, fig_prefix='FINAL2UnifFeasGoalGen_',
@@ -297,6 +297,7 @@ if __name__ == '__main__':
     parser.add_argument('--price', '-p', type=str, default='', help='set betting price')
     parser.add_argument('--subnet', '-sn', type=str, default='', help='set subnet like us-west-1a')
     parser.add_argument('--name', '-n', type=str, default='', help='set exp prefix name and new file name')
+    parser.add_argument('--debug', action='store_true', default=False, help="run code without multiprocessing")
     args = parser.parse_args()
 
     if args.clone:
@@ -318,10 +319,10 @@ if __name__ == '__main__':
         mode = 'ec2'
     elif args.local_docker:
         mode = 'local_docker'
-        n_parallel = 4
+        n_parallel = cpu_count() if not args.debug else 1
     else:
         mode = 'local'
-        n_parallel = 0
+        n_parallel = cpu_count() if not args.debug else 1
 
     exp_prefix = format_experiment_prefix('goal-point-nd-gan')
 
@@ -334,14 +335,12 @@ if __name__ == '__main__':
     vg.add('state_bounds', lambda reward_dist_threshold, goal_range, goal_size:
     [(1, goal_range) + (reward_dist_threshold,) * (goal_size - 2) + (goal_range, ) * goal_size])
     vg.add('distance_metric', ['L2'])
-    vg.add('dist_goal_weight', [0])
-    vg.add('terminal_bonus', [300])
+    vg.add('goal_weight', [300])
     vg.add('terminal_eps', lambda reward_dist_threshold: [
         reward_dist_threshold])  # if hte terminal bonus is 0 it doesn't kill it! Just count how many reached center
     #############################################
-    vg.add('min_reward', [0.1])  # now running it with only the terminal reward of 1!
-    vg.add('max_reward', [0.9])
-    vg.add('improvement_threshold', lambda terminal_bonus: [terminal_bonus * 0.1])  # is this based on the reward, now discounted success rate --> push for fast
+    vg.add('min_reward', lambda goal_weight: [goal_weight * 0.1])  # now running it with only the terminal reward of 1!
+    vg.add('max_reward', lambda goal_weight: [goal_weight * 0.9])
     vg.add('smart_init', [True])
     vg.add('replay_buffer', [False])
     vg.add('coll_eps', lambda reward_dist_threshold: [0])
@@ -416,3 +415,5 @@ if __name__ == '__main__':
                 # exp_name=exp_name,
                 print_command=False,
             )
+            if args.debug:
+                sys.exit()

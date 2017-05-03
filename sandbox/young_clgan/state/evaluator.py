@@ -1,8 +1,9 @@
-import multiprocessing_on_dill as multiprocessing
+import multiprocessing as multiprocessing
 import os
 import tempfile
 import numpy as np
 from collections import OrderedDict
+import cloudpickle
 
 from rllab.sampler.utils import rollout
 from rllab.misc import logger
@@ -26,6 +27,20 @@ class FunctionWrapper(object):
 
     def __call__(self, obj):
         return self.func(obj, *self.args, **self.kwargs)
+        
+        
+    def __getstate__(self):
+        """ Here we overwrite the default pickle protocol to use cloudpickle. """
+        return dict(
+            func=cloudpickle.dumps(self.func),
+            args=cloudpickle.dumps(self.args),
+            kwargs=cloudpickle.dumps(self.kwargs)
+        )
+        
+    def __setstate__(self, d):
+        self.func = cloudpickle.loads(d['func'])
+        self.args = cloudpickle.loads(d['args'])
+        self.kwargs = cloudpickle.loads(d['kwargs'])
 
 
 def disable_cuda_initializer(*args, **kwargs):
@@ -58,11 +73,13 @@ def parallel_map(func, iterable_object, num_processes=-1):
     return results
 
 
-def label_states(states, env, policy, horizon, min_reward, max_reward, as_goals=True,
+def label_states(states, env, policy, horizon, min_reward, max_reward,
                  old_rewards=None, improvement_threshold=None, n_traj=1, n_processes=-1):
     print("Evaluating states after training")
-    mean_rewards = evaluate_states(states, env, policy, horizon, as_goals=as_goals,
-                                   n_traj=n_traj, n_processes=n_processes)
+    mean_rewards = evaluate_states(
+        states, env, policy, horizon,
+        n_traj=n_traj, n_processes=n_processes
+    )
     mean_rewards = mean_rewards.reshape(-1, 1)
 
     print("Computing state labels")
@@ -114,13 +131,12 @@ def convert_label(labels):
     return new_labels, classes
 
 
-def evaluate_states(states, env, policy, horizon, as_goals=True, n_traj=1, n_processes=-1, full_path=False, key='rewards'):
+def evaluate_states(states, env, policy, horizon, n_traj=1, n_processes=-1, full_path=False, key='rewards'):
     evaluate_state_wrapper = FunctionWrapper(
         evaluate_state,
         env=env,
         policy=policy,
         horizon=horizon,
-        as_goals=as_goals,
         n_traj=n_traj,
         full_path=full_path,
         key=key,

@@ -172,6 +172,7 @@ if __name__ == '__main__':
     parser.add_argument('--price', '-p', type=str, default='', help='set betting price')
     parser.add_argument('--subnet', '-sn', type=str, default='', help='set subnet like us-west-1a')
     parser.add_argument('--name', '-n', type=str, default='', help='set exp prefix name and new file name')
+    parser.add_argument('--debug', action='store_true', default=False, help="run code without multiprocessing")
     args = parser.parse_args()
 
     if args.clone:
@@ -189,10 +190,10 @@ if __name__ == '__main__':
         mode = 'ec2'
     elif args.local_docker:
         mode = 'local_docker'
-        n_parallel = cpu_count()
+        n_parallel = cpu_count() if not args.debug else 1
     else:
         mode = 'local'
-        n_parallel = cpu_count()
+        n_parallel = cpu_count() if not args.debug else 1
 
     exp_prefix = format_experiment_prefix('goal-point-nd-trpo')
     vg = VariantGenerator()
@@ -209,8 +210,8 @@ if __name__ == '__main__':
     vg.add('state_bounds', lambda goal_range, goal_size, reward_dist_threshold:
     [(1, goal_range) + (0.3,) * (goal_size - 2) + (goal_range, ) * goal_size])
     #############################################
-    vg.add('min_reward', [0.1])  # now running it with only the terminal reward of 1!
-    vg.add('max_reward', [0.9])
+    vg.add('min_reward', lambda goal_weight: [goal_weight * 0.1])  # now running it with only the terminal reward of 1!
+    vg.add('max_reward', lambda goal_weight: [goal_weight * 0.9])
     vg.add('horizon', [200])
     vg.add('outer_iters', [400])
     vg.add('inner_iters', [5])
@@ -271,3 +272,5 @@ if __name__ == '__main__':
                 exp_prefix=exp_prefix,
                 print_command=False,
             )
+            if args.debug:
+                sys.exit()
