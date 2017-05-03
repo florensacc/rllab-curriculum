@@ -7,7 +7,7 @@ from collections import OrderedDict
 from rllab.sampler.utils import rollout
 from rllab.misc import logger
 
-from sandbox.young_clgan.state.selectors import FixedStateSelector
+from sandbox.young_clgan.envs.base import FixedStateGenerator, update_env_state_generator
 
 
 class FunctionWrapper(object):
@@ -135,13 +135,10 @@ def evaluate_states(states, env, policy, horizon, as_goals=True, n_traj=1, n_pro
     return np.array(result)
 
 
-def evaluate_state(state, env, policy, horizon, as_goals=False, n_traj=1, full_path=False, key='rewards'):
+def evaluate_state(state, env, policy, horizon, n_traj=1, full_path=False, key='rewards'):
     total_rewards = []
     paths = []
-    if as_goals:
-        env.update_goal_selector(FixedStateSelector(state=state))
-    else:
-        env.update_init_selector(FixedStateSelector(state=state))
+    update_env_state_generator(env, FixedStateGenerator(state))
     for j in range(n_traj):
         paths.append(rollout(env, policy, horizon))
         total_rewards.append(

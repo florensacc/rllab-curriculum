@@ -24,12 +24,12 @@ from sandbox.young_clgan.envs.ndim_point.point_env import PointEnv
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.envs.base import GoalIdxExplorationEnv
-from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator, UniformStateGenerator, \
+from sandbox.young_clgan.envs.base import GoalExplorationEnv
+from sandbox.young_clgan.envs.base import FixedStateGenerator, UniformStateGenerator, \
     update_env_state_generator, generate_initial_goals
 
-from sandbox.young_clgan.goal.evaluator import *
-from sandbox.young_clgan.goal.generator import StateGAN
+from sandbox.young_clgan.state.evaluator import *
+from sandbox.young_clgan.state.generator import StateGAN
 # from sandbox.young_clgan.lib.goal.utils import *
 from sandbox.young_clgan.logging.html_report import format_dict, HTMLReport
 from sandbox.young_clgan.logging.visualization import *
@@ -54,20 +54,20 @@ def run_task(v):
 
     center = np.zeros(v['goal_size'])
     fixed_goal_generator = FixedStateGenerator(goal=center)
-    # uniform_goal_generator = UniformStateGenerator(goal_size=v['goal_size'], bounds=v['goal_range'],
+    # uniform_goal_generator = UniformStateGenerator(state_size=v['goal_size'], bounds=v['goal_range'],
     #                                               center=center)
     feasible_goal_ub = np.array(v['state_bounds'])[:v['goal_size']]
     # print("the feasible_goal_ub is: ", feasible_goal_ub)
-    uniform_feasible_goal_generator = UniformStateGenerator(goal_size=v['goal_size'], bounds=[-1 * feasible_goal_ub,
+    uniform_feasible_goal_generator = UniformStateGenerator(state_size=v['goal_size'], bounds=[-1 * feasible_goal_ub,
                                                                                              feasible_goal_ub])
 
-    env = GoalIdxExplorationEnv(env=inner_env, goal_generator=fixed_goal_generator,
-                                idx=np.arange(v['goal_size']),
-                                reward_dist_threshold=v['reward_dist_threshold'],
-                                distance_metric=v['distance_metric'],
-                                dist_goal_weight=v['dist_goal_weight'], max_reward=v['max_reward'],
-                                terminal_eps=v['terminal_eps'], terminal_bonus=v['terminal_bonus'],
-                                )  # this goal_generator will be updated by a uniform after
+    env = GoalExplorationEnv(
+        env=inner_env, goal_generator=uniform_goal_generator,
+        obs_transform=lambda x:x[:int(len(x) / 2)],
+        dist_threshold=v['reward_dist_threshold'],
+        distance_metric=v['distance_metric'],
+        terminate_env=True, goal_weight=v['goal_weight'],
+    )  # this goal_generator will be updated by a uniform after
 
     policy = GaussianMLPPolicy(
         env_spec=env.spec,
@@ -81,7 +81,7 @@ def run_task(v):
     )
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
-    n_traj = 3 if v['terminal_bonus'] > 0 else 1
+    n_traj = 3
 
     logger.log("Initializing report and plot_policy_reward...")
     log_dir = logger.get_snapshot_dir()
@@ -339,8 +339,8 @@ if __name__ == '__main__':
     vg.add('terminal_eps', lambda reward_dist_threshold: [
         reward_dist_threshold])  # if hte terminal bonus is 0 it doesn't kill it! Just count how many reached center
     #############################################
-    vg.add('min_reward', lambda terminal_bonus: [terminal_bonus * 0.1])  # now running it with only the terminal reward of 1!
-    vg.add('max_reward', lambda terminal_bonus: [terminal_bonus * 0.9])
+    vg.add('min_reward', [0.1])  # now running it with only the terminal reward of 1!
+    vg.add('max_reward', [0.9])
     vg.add('improvement_threshold', lambda terminal_bonus: [terminal_bonus * 0.1])  # is this based on the reward, now discounted success rate --> push for fast
     vg.add('smart_init', [True])
     vg.add('replay_buffer', [False])
@@ -371,24 +371,6 @@ if __name__ == '__main__':
           *subnets)
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
-            # # choose subnet
-            # subnet = random.choice(subnets)
-            # config.AWS_REGION_NAME = subnet[:-1]
-            # config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_SECURITY_GROUP_IDS = \
-            #     config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
-            #         config.AWS_REGION_NAME]
-            # config.AWS_NETWORK_INTERFACES = [
-            #     dict(
-            #         SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
-            #         Groups=config.AWS_SECURITY_GROUP_IDS,
-            #         DeviceIndex=0,
-            #         AssociatePublicIpAddress=True,
-            #     )
-            # ]
 
             run_experiment_lite(
                 # use_cloudpickle=False,
