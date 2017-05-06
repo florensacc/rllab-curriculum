@@ -276,7 +276,7 @@ def update_env_goal_generator(env, goal_generator):
 
 
 def evaluate_goal_env(env, policy, horizon, n_goals=10, n_traj=1, **kwargs):
-    paths = [rollout(env=env, agent=policy, max_path_length=horizon) for _ in range(n_goals)]
+    paths = [rollout(env=env, agent=policy, max_path_length=horizon) for _ in range(int(n_goals))]
     env.log_diagnostics(paths, n_traj=n_traj, **kwargs)
 
 

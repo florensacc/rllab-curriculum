@@ -36,7 +36,7 @@ from sandbox.young_clgan.state.generator import StateGAN
 from sandbox.young_clgan.logging.html_report import format_dict, HTMLReport
 from sandbox.young_clgan.logging.visualization import *
 from sandbox.young_clgan.logging.logger import ExperimentLogger
-from sandbox.young_clgan.goal.utils import GoalCollection
+from sandbox.young_clgan.envs.goal_env import GoalCollection
 
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
@@ -86,6 +86,7 @@ def run_task(v):
 
     logger.log("Initializing report and plot_policy_reward...")
     log_dir = logger.get_snapshot_dir()
+    inner_log_dir = osp.join(log_dir, 'inner_iters')
     report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=3)
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
@@ -173,7 +174,7 @@ def run_task(v):
             rewards_before = evaluate_states(goals, env, policy, v['horizon'], n_traj=n_traj)
 
         logger.log("Perform TRPO with UniformListStateGenerator...")
-        with ExperimentLogger(log_dir, outer_iter, snapshot_mode='last', hold_outter_log=True):
+        with ExperimentLogger(inner_log_dir, outer_iter, snapshot_mode='last', hold_outter_log=True):
             # set goal generator to uniformly sample from selected all_goals
             update_env_state_generator(
                 env,

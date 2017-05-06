@@ -90,6 +90,7 @@ def run_task(v):
 
     logger.log("Initializing report and plot_policy_reward...")
     log_dir = logger.get_snapshot_dir()
+    inner_log_dir = osp.join(log_dir, 'inner_iters')
     report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=3)
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
@@ -102,7 +103,7 @@ def run_task(v):
         
 
         logger.log("Perform TRPO with UniformListStateGenerator...")
-        with ExperimentLogger(log_dir, outer_iter, snapshot_mode='last', hold_outter_log=True):
+        with ExperimentLogger(inner_log_dir, outer_iter, snapshot_mode='last', hold_outter_log=True):
             # set goal generator to uniformly sample from selected all_goals
             # update_env_state_generator(
             #     env,
