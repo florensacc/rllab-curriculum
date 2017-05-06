@@ -1,4 +1,4 @@
-import multiprocessing as multiprocessing
+import multiprocessing
 import os
 import tempfile
 import numpy as np
