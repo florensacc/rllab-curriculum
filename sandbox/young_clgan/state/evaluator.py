@@ -74,7 +74,7 @@ def parallel_map(func, iterable_object, num_processes=-1):
 
 
 def label_states(states, env, policy, horizon, min_reward, max_reward,
-                 old_rewards=None, improvement_threshold=None, n_traj=1, n_processes=-1):
+                 old_rewards=None, improvement_threshold=0, n_traj=1, n_processes=-1):
     print("Evaluating states after training")
     mean_rewards = evaluate_states(
         states, env, policy, horizon,
