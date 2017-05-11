@@ -38,6 +38,7 @@ class CrossEntropyStateGenerator(StateGenerator):
         self.goal_range = goal_range
         self.noise_std = noise_std
         self.goal_center = np.array(goal_center) if goal_center is not None else np.zeros(goal_size)
+        self.goal_size = goal_size
         
     def pretrain_uniform(self, size=1000):
         goals = self.goal_center + np.random.uniform(
@@ -45,7 +46,7 @@ class CrossEntropyStateGenerator(StateGenerator):
         )
         return self.pretrain(goals)
         
-    def pretain(self, goals):
+    def pretrain(self, goals):
         self.goal_list = np.array(goals)
         
     def sample_states(self, size):
@@ -126,10 +127,10 @@ class StateGAN(StateGenerator):
         return goals, noise
 
     def train(self, goals, labels, outer_iters, generator_iters=None,
-              discriminator_iters=None, suppress_generated_goals=True):
+              discriminator_iters=None):
         normalized_goals = (goals - self.goal_center) / self.goal_range
         return self.gan.train(
-            normalized_goals, labels, outer_iters, generator_iters, discriminator_iters, suppress_generated_goals
+            normalized_goals, labels, outer_iters, generator_iters, discriminator_iters
         )
 
     def discriminator_predict(self, goals):
