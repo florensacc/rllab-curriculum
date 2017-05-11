@@ -55,7 +55,7 @@ class GoalEnv(StateAuxiliaryEnv):
 class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
     def __init__(self, env, goal_generator, obs_transform=None, dist_threshold=0.05,
                  terminate_env=False, goal_bounds=None, distance_metric='L2', goal_weight=1,
-                 inner_weight=1, append_transformed_obs=False, **kwargs):
+                 inner_weight=0, append_transformed_obs=False, **kwargs):
         """
         This environment wraps around a normal environment to facilitate goal based exploration.
         Initial position based experiments should not use this class.
@@ -85,14 +85,12 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         self.goal_bounds = goal_bounds
         self.dist_threshold = dist_threshold
         
-        
         self.distance_metric = distance_metric
         self.goal_weight = goal_weight
         self.inner_weight = inner_weight
         
         self.append_transformed_obs = append_transformed_obs
 
-        
         # TODO fix this
         if self.goal_bounds is None:
             # print("setting goal bounds to match env")
