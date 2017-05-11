@@ -2,7 +2,6 @@ from sandbox.young_clgan.utils import set_env_no_gpu, format_experiment_prefix
 set_env_no_gpu()
 
 import argparse
-import tensorflow as tf
 import tflearn
 import sys
 import math
@@ -26,7 +25,7 @@ from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
 from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, update_env_goal_generator, \
-    evaluate_goal_env, GoalCollection, generate_initial_goals
+    evaluate_goal_env, generate_initial_goals
 from sandbox.young_clgan.envs.base import FixedStateGenerator, UniformStateGenerator, \
     update_env_state_generator, UniformListStateGenerator
 
@@ -36,7 +35,7 @@ from sandbox.young_clgan.state.generator import StateGAN
 from sandbox.young_clgan.logging.html_report import format_dict, HTMLReport
 from sandbox.young_clgan.logging.visualization import *
 from sandbox.young_clgan.logging.logger import ExperimentLogger
-from sandbox.young_clgan.envs.goal_env import GoalCollection
+from sandbox.young_clgan.goal.utils import GoalCollection
 
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
@@ -329,22 +328,20 @@ if __name__ == '__main__':
 
     vg = VariantGenerator()
     # # GeneratorEnv params
-    vg.add('goal_size', [3])  # this is the ultimate goal we care about: getting the pendulum upright
+    vg.add('goal_size', [2, 3, 4, 5, 6])
     vg.add('reward_dist_threshold', lambda goal_size: [math.sqrt(goal_size) / math.sqrt(2) * 0.3])
     # vg.add('reward_dist_threshold', [0.5, 1])
     vg.add('goal_range', [5])  # this will be used also as bound of the state_space
     vg.add('state_bounds', lambda reward_dist_threshold, goal_range, goal_size:
     [(1, goal_range) + (reward_dist_threshold,) * (goal_size - 2) + (goal_range, ) * goal_size])
     vg.add('distance_metric', ['L2'])
-    vg.add('goal_weight', [300])
-    vg.add('terminal_eps', lambda reward_dist_threshold: [
-        reward_dist_threshold])  # if hte terminal bonus is 0 it doesn't kill it! Just count how many reached center
+    vg.add('goal_weight', [1])
     #############################################
     vg.add('min_reward', lambda goal_weight: [goal_weight * 0.1])  # now running it with only the terminal reward of 1!
     vg.add('max_reward', lambda goal_weight: [goal_weight * 0.9])
     vg.add('smart_init', [True])
     vg.add('replay_buffer', [False])
-    vg.add('coll_eps', lambda reward_dist_threshold: [0])
+    vg.add('coll_eps', lambda reward_dist_threshold: [reward_dist_threshold])
     # old hyperparams
     vg.add('num_new_goals', [200])
     vg.add('num_old_goals', [100])
@@ -363,7 +360,7 @@ if __name__ == '__main__':
     vg.add('gan_generator_layers', [[256, 256]])
     vg.add('gan_discriminator_layers', [[128, 128]])
     vg.add('gan_noise_size', [4])
-    vg.add('goal_noise_level', [0.5])  # ???
+    vg.add('goal_noise_level', [0.5])
     vg.add('gan_outer_iters', [100])
 
     print('Running {} inst. on type {}, with price {}, parallel {} on the subnets: '.format(vg.size, config.AWS_INSTANCE_TYPE,
@@ -396,6 +393,7 @@ if __name__ == '__main__':
                     'pip install --upgrade -I tensorflow',
                     'pip install git+https://github.com/tflearn/tflearn.git',
                     'pip install dominate',
+                    'pip install multiprocesssing_on_dill',
                     'pip install scikit-image',
                     'conda install numpy -n rllab3 -y',
                 ],

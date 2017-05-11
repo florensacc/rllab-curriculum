@@ -7,7 +7,8 @@ import numpy as np
 import math
 import random
 
-from sandbox.young_clgan.envs.base import GoalEnv
+# from sandbox.young_clgan.envs.base import GoalEnv
+from sandbox.young_clgan.envs.goal_env import GoalEnv
 from sandbox.young_clgan.envs.rewards import linear_threshold_reward
 
 
