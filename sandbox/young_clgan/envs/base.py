@@ -80,8 +80,10 @@ class FixedStateGenerator(StateGenerator, Serializable):
 class StateAuxiliaryEnv(Serializable):
     """ Base class for state auxiliary environment. Implements state update utilities. """
 
-    def __init__(self, **kwargs):
+    def __init__(self, state_generator=None, *args, **kwargs):
         Serializable.quick_init(self, locals())
+        if state_generator is not None:
+            self._state_generator = state_generator
 
     def update_state_generator(self, state_generator):
         self._state_generator = state_generator
