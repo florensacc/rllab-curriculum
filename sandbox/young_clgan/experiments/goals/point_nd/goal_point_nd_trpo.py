@@ -207,7 +207,7 @@ if __name__ == '__main__':
     vg.add('reward_dist_threshold', lambda goal_size: [math.sqrt(goal_size) / math.sqrt(2) * 0.3])
     # vg.add('angle_idxs', [((0, 1),)]) # these are the idx of the obs corresponding to angles (here the first 2)
     vg.add('distance_metric', ['L2'])
-    vg.add('goal_weight', [300])
+    vg.add('goal_weight', [1])
     vg.add('state_bounds', lambda goal_range, goal_size, reward_dist_threshold:
     [(1, goal_range) + (0.3,) * (goal_size - 2) + (goal_range, ) * goal_size])
     #############################################

@@ -332,8 +332,8 @@ if __name__ == '__main__':
     vg.add('reward_dist_threshold', lambda goal_size: [math.sqrt(goal_size) / math.sqrt(2) * 0.3])
     # vg.add('reward_dist_threshold', [0.5, 1])
     vg.add('goal_range', [5])  # this will be used also as bound of the state_space
-    vg.add('state_bounds', lambda reward_dist_threshold, goal_range, goal_size:
-    [(1, goal_range) + (reward_dist_threshold,) * (goal_size - 2) + (goal_range, ) * goal_size])
+    vg.add('state_bounds', lambda goal_range, goal_size, reward_dist_threshold:
+    [(1, goal_range) + (0.3,) * (goal_size - 2) + (goal_range, ) * goal_size])
     vg.add('distance_metric', ['L2'])
     vg.add('goal_weight', [1])
     #############################################
