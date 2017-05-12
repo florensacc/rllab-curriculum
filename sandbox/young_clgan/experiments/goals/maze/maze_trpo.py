@@ -134,7 +134,7 @@ if __name__ == '__main__':
                     'pip install --upgrade -I tensorflow',
                     'pip install git+https://github.com/tflearn/tflearn.git',
                     'pip install dominate',
-                    'pip install multiprocesssing_on_dill',
+                    'pip install multiprocessing_on_dill',
                     'pip install scikit-image',
                     'conda install numpy -n rllab3 -y',
                 ],

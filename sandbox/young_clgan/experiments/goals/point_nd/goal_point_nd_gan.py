@@ -1,4 +1,5 @@
 from sandbox.young_clgan.utils import set_env_no_gpu, format_experiment_prefix
+
 set_env_no_gpu()
 
 import argparse
@@ -37,9 +38,7 @@ from sandbox.young_clgan.logging.visualization import *
 from sandbox.young_clgan.logging.logger import ExperimentLogger
 from sandbox.young_clgan.goal.utils import GoalCollection
 
-
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
-
 
 
 def run_task(v):
@@ -52,9 +51,8 @@ def run_task(v):
     # inner_env = normalize(PendulumEnv())
 
     center = np.zeros(v['goal_size'])
-    fixed_goal_generator = FixedStateGenerator(center)
     uniform_goal_generator = UniformStateGenerator(state_size=v['goal_size'], bounds=v['goal_range'],
-                                                  center=center)
+                                                   center=center)
     feasible_goal_ub = np.array(v['state_bounds'])[:v['goal_size']]
     # print("the feasible_goal_ub is: ", feasible_goal_ub)
     uniform_feasible_goal_generator = UniformStateGenerator(
@@ -63,7 +61,7 @@ def run_task(v):
 
     env = GoalExplorationEnv(
         env=inner_env, goal_generator=uniform_goal_generator,
-        obs_transform=lambda x:x[:int(len(x) / 2)],
+        obs_transform=lambda x: x[:int(len(x) / 2)],
         dist_threshold=v['reward_dist_threshold'],
         distance_metric=v['distance_metric'],
         terminate_env=True, goal_weight=v['goal_weight'],
@@ -101,7 +99,7 @@ def run_task(v):
     logger.log("Instantiating the GAN...")
     tf_session = tf.Session()
     gan_configs = {key[4:]: value for key, value in v.items() if 'GAN_' in key}
-    
+
     gan = StateGAN(
         state_size=v['goal_size'],
         evaluater_size=v['num_labels'],
@@ -275,16 +273,6 @@ def run_task(v):
         filtered_raw_goals = [goal for goal, label in zip(goals, labels) if label[0] == 1]
         all_goals.append(filtered_raw_goals)
 
-    with logger.tabular_prefix('FINALUnifFeasGoalGen_'):
-        update_env_state_generator(env, uniform_feasible_goal_generator)
-        evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=5e3, fig_prefix='FINAL1UnifFeasGoalGen_',
-                          report=report, n_traj=n_traj)
-        evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=5e3, fig_prefix='FINAL2UnifFeasGoalGen_',
-                          report=report, n_traj=n_traj)
-    logger.dump_tabular(with_prefix=False)
-
-
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -324,7 +312,8 @@ if __name__ == '__main__':
         mode = 'local'
         n_parallel = cpu_count() if not args.debug else 1
 
-    exp_prefix = format_experiment_prefix('goal-point-nd-gan')
+    # exp_prefix = format_experiment_prefix('point-nd-goal-gan')
+    exp_prefix = 'point-nd-goal-gan'
 
     vg = VariantGenerator()
     # # GeneratorEnv params
@@ -333,19 +322,19 @@ if __name__ == '__main__':
     # vg.add('reward_dist_threshold', [0.5, 1])
     vg.add('goal_range', [5])  # this will be used also as bound of the state_space
     vg.add('state_bounds', lambda goal_range, goal_size, reward_dist_threshold:
-    [(1, goal_range) + (0.3,) * (goal_size - 2) + (goal_range, ) * goal_size])
+    [(1, goal_range) + (0.3,) * (goal_size - 2) + (goal_range,) * goal_size])
     vg.add('distance_metric', ['L2'])
     vg.add('goal_weight', [1])
     #############################################
     vg.add('min_reward', lambda goal_weight: [goal_weight * 0.1])  # now running it with only the terminal reward of 1!
     vg.add('max_reward', lambda goal_weight: [goal_weight * 0.9])
     vg.add('smart_init', [True])
-    vg.add('replay_buffer', [False])
-    vg.add('coll_eps', lambda reward_dist_threshold: [reward_dist_threshold])
+    vg.add('replay_buffer', [True])
+    vg.add('coll_eps', [0.3])  # lambda reward_dist_threshold: [reward_dist_threshold])
     # old hyperparams
     vg.add('num_new_goals', [200])
     vg.add('num_old_goals', [100])
-    vg.add('outer_iters', [400])
+    vg.add('outer_iters', [200])
     vg.add('inner_iters', [5])
     vg.add('horizon', [200])
     vg.add('pg_batch_size', [20000])
@@ -363,9 +352,9 @@ if __name__ == '__main__':
     vg.add('goal_noise_level', [0.5])
     vg.add('gan_outer_iters', [100])
 
-    print('Running {} inst. on type {}, with price {}, parallel {} on the subnets: '.format(vg.size, config.AWS_INSTANCE_TYPE,
-                                                                                   config.AWS_SPOT_PRICE, n_parallel),
-          *subnets)
+    print('\n****\nRunning {} inst. on type {}, with price {}, parallel {} on the subnets: '.format(
+        vg.size, config.AWS_INSTANCE_TYPE, config.AWS_SPOT_PRICE, n_parallel),
+        *subnets)
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
 
@@ -393,7 +382,7 @@ if __name__ == '__main__':
                     'pip install --upgrade -I tensorflow',
                     'pip install git+https://github.com/tflearn/tflearn.git',
                     'pip install dominate',
-                    'pip install multiprocesssing_on_dill',
+                    'pip install multiprocessing_on_dill',
                     'pip install scikit-image',
                     'conda install numpy -n rllab3 -y',
                 ],
