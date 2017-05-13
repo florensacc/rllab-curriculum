@@ -36,7 +36,7 @@ if __name__ == '__main__':
         # 'ap-south-1a', 'ap-northeast-1a', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'us-east-1b'
     ]
     ec2_instance = args.type if args.type else 'c4.4xlarge'
-    # configure instance
+    # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
     config.AWS_SPOT_PRICE = str(info["price"])
@@ -51,64 +51,56 @@ if __name__ == '__main__':
         n_parallel = 4
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'goalGAN-maze-singleLabel-test'
+    exp_prefix = 'new-goalGAN-maze-singleLabel-test'
 
     vg = VariantGenerator()
-    vg.add('horizon', [400])
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
+    vg.add('terminal_eps', [0.3])
     vg.add('goal_range', [5])  # this will be used also as bound of the state_space
-    vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
-    vg.add('goal_noise_level', [0.5])  # ???
-    vg.add('reward_dist_threshold', [0.3])
-    vg.add('indicator_reward', [True])
-    vg.add('min_reward', lambda indicator_reward: [5] if indicator_reward else [
-        10])  # now running it with only the terminal reward of 1!
-    vg.add('max_reward',
-           lambda indicator_reward, reward_dist_threshold: [900 * reward_dist_threshold] if indicator_reward else [6e3])
-    vg.add('improvement_threshold', lambda indicator_reward: [10] if indicator_reward else [
-        10])  # is this based on the reward, now discounted success rate --> push for fast
+    vg.add('goal_center', [(2, 2)])
+    # goal-algo params
+    vg.add('min_reward', [0])
+    vg.add('max_reward', [1])
+    vg.add('distance_metric', ['L2'])
+    vg.add('smart_init', [True])
+    # replay buffer
+    vg.add('replay_buffer', [True])
+    vg.add('coll_eps', [0.3])  #lambda terminal_eps: [terminal_eps, 0])
+    vg.add('num_new_goals', [200])
+    vg.add('num_old_goals', [100])
+    # sampling params
+    vg.add('horizon', [200])
     vg.add('outer_iters', [400])
     vg.add('inner_iters', [5])
     vg.add('pg_batch_size', [20000])
-    vg.add('discount', [0.998])
-    vg.add('gae_lambda', [0.995])
-    vg.add('gan_outer_iters', [5])
-    vg.add('gan_discriminator_iters', [200])
-    vg.add('gan_generator_iters', [10])
-    vg.add('gan_noise_size', [4])
-    vg.add('num_new_goals', [200])
-    vg.add('num_old_goals', [100])
-    vg.add('gan_generator_layers', [[256, 256]])
-    vg.add('gan_discriminator_layers', [[128, 128]])
-
-    vg.add('seed', range(100, 150, 10))
-    # mine
-    vg.add('distance_metric', ['L2'])
-    # vg.add('terminal_bonus', [0])
-    vg.add('terminal_eps', lambda reward_dist_threshold: [
-        reward_dist_threshold])  # if hte terminal bonus is 0 it doesn't kill it! Just count how many reached center
-    vg.add('smart_init', [True])
-    vg.add('replay_buffer', [True])
-    vg.add('coll_eps', [0.3])  #lambda reward_dist_threshold: [reward_dist_threshold, 0])
-    # old hyperparams
     # policy initialization
     vg.add('output_gain', [1])
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [True])
     vg.add('adaptive_std', [False])
-    # gan_configs
-    vg.add('GAN_batch_size', [128])  # proble with repeated name!!
-    vg.add('GAN_generator_activation', ['relu'])
-    vg.add('GAN_discriminator_activation', ['relu'])
-    vg.add('GAN_generator_optimizer', [tf.train.AdamOptimizer])
-    vg.add('GAN_generator_optimizer_stepSize', [0.001])
-    vg.add('GAN_discriminator_optimizer', [tf.train.AdamOptimizer])
-    vg.add('GAN_discriminator_optimizer_stepSize', [0.001])
-    vg.add('GAN_generator_weight_initializer', [tflearn.initializations.truncated_normal])
-    vg.add('GAN_generator_weight_initializer_stddev', [0.05])
-    vg.add('GAN_discriminator_weight_initializer', [tflearn.initializations.truncated_normal])
-    vg.add('GAN_discriminator_weight_initializer_stddev', [0.02])
-    vg.add('GAN_discriminator_batch_noise_stddev', [1e-2])
+    # gan configs
+    vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
+    vg.add('gan_generator_layers', [[256, 256]])
+    vg.add('gan_discriminator_layers', [[128, 128]])
+    vg.add('gan_noise_size', [4])
+    vg.add('goal_noise_level', [0.5])
+    vg.add('gan_outer_iters', [100])
+
+    vg.add('seed', range(100, 150, 10))
+
+    # # gan_configs
+    # vg.add('GAN_batch_size', [128])  # proble with repeated name!!
+    # vg.add('GAN_generator_activation', ['relu'])
+    # vg.add('GAN_discriminator_activation', ['relu'])
+    # vg.add('GAN_generator_optimizer', [tf.train.AdamOptimizer])
+    # vg.add('GAN_generator_optimizer_stepSize', [0.001])
+    # vg.add('GAN_discriminator_optimizer', [tf.train.AdamOptimizer])
+    # vg.add('GAN_discriminator_optimizer_stepSize', [0.001])
+    # vg.add('GAN_generator_weight_initializer', [tflearn.initializations.truncated_normal])
+    # vg.add('GAN_generator_weight_initializer_stddev', [0.05])
+    # vg.add('GAN_discriminator_weight_initializer', [tflearn.initializations.truncated_normal])
+    # vg.add('GAN_discriminator_weight_initializer_stddev', [0.02])
+    # vg.add('GAN_discriminator_batch_noise_stddev', [1e-2])
 
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
@@ -161,6 +153,7 @@ if __name__ == '__main__':
                     'pip install --upgrade -I tensorflow',
                     'pip install git+https://github.com/tflearn/tflearn.git',
                     'pip install dominate',
+                    'pip install multiprocessing_on_dill',
                     'pip install scikit-image',
                     'conda install numpy -n rllab3 -y',
                 ],

@@ -7,7 +7,7 @@ import numpy as np
 import math
 import random
 
-# from sandbox.young_clgan.envs.base import GoalEnv
+from sandbox.young_clgan.envs.base import StateGenerator
 from sandbox.young_clgan.envs.goal_env import GoalEnv
 from sandbox.young_clgan.envs.rewards import linear_threshold_reward
 
@@ -15,21 +15,23 @@ from sandbox.young_clgan.envs.rewards import linear_threshold_reward
 class PointEnv(GoalEnv, MujocoEnv, Serializable):
     FILE = 'point2.xml'
 
-    def __init__(self, goal_generator, reward_dist_threshold=0.3, indicator_reward=True, terminal_eps=None,
-                 control_mode='linear', append_goal=True, *args, **kwargs):
+    def __init__(self,
+                 goal_generator=None, reward_dist_threshold=0.1, indicator_reward=True, append_goal=False,
+                 control_mode='linear',
+                 *args, **kwargs):
         """
-        :param goal_generator: Proceedure to sample the and keep the goals
+        :param goal_generator: Proceedure to sample and keep the goals
         :param reward_dist_threshold:
         :param control_mode:
         """
         self.control_mode = control_mode
-        self.update_goal_generator(goal_generator)
+        if goal_generator is None:
+            self.update_goal_generator(StateGenerator())
+        else:
+            self.update_goal_generator(goal_generator)
         self.reward_dist_threshold = reward_dist_threshold
         self.indicator_reward = indicator_reward
-        self.terminal_eps = terminal_eps
         self.append_goal = append_goal
-        if self.terminal_eps is None:
-            self.terminal_eps = self.reward_dist_threshold
         MujocoEnv.__init__(self, *args, **kwargs)
         Serializable.quick_init(self, locals())
 
@@ -48,10 +50,10 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
             return np.concatenate([pos, vel])
 
     @overrides
-    def reset(self, init_state=None, *args, **kwargs):
-        # def reset(self, *args, **kwargs):
+    def reset(self, init_state=None, goal=(1, 0), *args, **kwargs):  # reset called when __init__, so needs goal!
+        # import pdb; pdb.set_trace()
         """This does both the reset of mujoco, the forward and reset goal"""
-        self.update_goal()
+        self.update_goal(goal=goal)
         qpos = np.zeros((self.model.nq, 1))
         qvel = np.zeros((self.model.nv, 1))  # 0 velocity
         if init_state is not None:
@@ -96,7 +98,7 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
         ob = self.get_current_obs()
         # print('current obs:', ob)
         done = False
-        if dist < self.terminal_eps and self.indicator_reward:
+        if dist < self.reward_dist_threshold and self.indicator_reward:
             # print("**DONE***")
             done = True
         return Step(

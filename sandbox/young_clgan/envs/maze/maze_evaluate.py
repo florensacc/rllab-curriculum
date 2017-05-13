@@ -12,7 +12,7 @@ import matplotlib.colorbar as cbar
 
 from rllab.sampler.utils import rollout
 from sandbox.young_clgan.envs.base import FixedStateGenerator
-from sandbox.young_clgan.state.selectors import FixedStateSelector
+# from sandbox.young_clgan.state.selectors import FixedStateSelector
 from sandbox.young_clgan.state.evaluator import evaluate_states
 
 quick_test = False
@@ -95,7 +95,7 @@ def plot_heatmap(rewards, goals, prefix='', max_reward=6000, spacing=1, show_hea
 def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1, n_traj=1, parallel=True):
     
     if parallel:
-        return test_policy_parallel(policy, train_env, as_goals, visualize, sampling_res, n_traj)
+        return test_policy_parallel(policy, train_env, as_goals, visualize, sampling_res, n_traj=n_traj)
     
     
     if hasattr(train_env.wrapped_env, 'find_empty_space'):
@@ -147,7 +147,7 @@ def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1
                 else:
                     init_state = (x, y)
                     states.append(init_state)
-                    train_env.update_init_selector(FixedStateSelector(init_state))
+                    train_env.update_init_selector(FixedStateGenerator(init_state))
                     # print("fixing init selector to: ", init_state)
                     # print("the goal is set to: ", train_env.current_goal)
                 for n in range(n_traj):
@@ -200,8 +200,6 @@ def test_policy_parallel(policy, train_env, as_goals=True, visualize=True, sampl
     empty_spaces = np.array(empty_spaces)
     empty_spaces = empty_spaces[sort_indices]
     
-    test_states = []
-
     for empty_space in empty_spaces:
         starting_x = empty_space[0] - size_scaling / 2 + starting_offset
         starting_y = empty_space[1] - size_scaling / 2 + starting_offset
@@ -210,8 +208,8 @@ def test_policy_parallel(policy, train_env, as_goals=True, visualize=True, sampl
                 x = starting_x + i * spacing
                 y = starting_y + j * spacing
                 states.append((x, y))
-                
-    paths = evaluate_states(states, train_env, policy, max_path_length, as_goals, n_traj, full_path=True)
+    # import pdb; pdb.set_trace()
+    paths = evaluate_states(states, train_env, policy, max_path_length, n_traj=n_traj, full_path=True)
    
     path_index = 0
     for empty_space in empty_spaces:

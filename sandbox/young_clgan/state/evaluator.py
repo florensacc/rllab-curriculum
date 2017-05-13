@@ -75,7 +75,6 @@ def parallel_map(func, iterable_object, num_processes=-1):
 
 def label_states(states, env, policy, horizon, min_reward, max_reward,
                  old_rewards=None, improvement_threshold=0, n_traj=1, n_processes=-1):
-    print("Evaluating states after training")
     mean_rewards = evaluate_states(
         states, env, policy, horizon,
         n_traj=n_traj, n_processes=n_processes
@@ -144,7 +143,8 @@ def evaluate_states(states, env, policy, horizon, n_traj=1, n_processes=-1, full
     result = parallel_map(
         evaluate_state_wrapper,
         states,
-        n_processes
+        n_processes # todo: rever this
+        # 1
     )
     if full_path:
         return [inner for outer in result for inner in outer]
@@ -154,8 +154,11 @@ def evaluate_states(states, env, policy, horizon, n_traj=1, n_processes=-1, full
 def evaluate_state(state, env, policy, horizon, n_traj=1, full_path=False, key='rewards'):
     total_rewards = []
     paths = []
+    # print("evaluating state: ", state)
     update_env_state_generator(env, FixedStateGenerator(state))
+    # print("updated the env to have goal: ", env.current_goal)
     for j in range(n_traj):
+        # print(j)
         paths.append(rollout(env, policy, horizon))
         total_rewards.append(
             np.sum(paths[-1][key])

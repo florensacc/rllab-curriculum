@@ -55,17 +55,17 @@ if __name__ == '__main__':
     vg.add('horizon', [400])
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('goal_range', [5])  # this will be used also as bound of the state_space
+    vg.add('goal_center', [(2, 2)])
     vg.add('unif_goals', [False])
     vg.add('final_goal', [(-0.8, 4)])
     vg.add('goal_noise_level', [0.5])  # ???
-    vg.add('reward_dist_threshold', [0.3])
+    vg.add('terminal_eps', [0.3])
     vg.add('indicator_reward', [True])
-    vg.add('terminal_eps', [0.3])  # if None, reward_dist_threshold is used
     vg.add('min_reward', lambda indicator_reward: [10] if indicator_reward else [
         5])  # now running it with only the terminal reward of 1!
     vg.add('max_reward',
-           lambda indicator_reward, reward_dist_threshold: [900 * reward_dist_threshold] if indicator_reward else [6e3])
-    vg.add('improvement_threshold', [10])  # is this based on the reward, now discounted success rate --> push for fast
+           lambda indicator_reward, terminal_eps: [900 * terminal_eps] if indicator_reward else [6e3])
+    # vg.add('improvement_threshold', [10])  # is this based on the reward, now discounted success rate --> push for fast
     vg.add('outer_iters', [400])
     vg.add('inner_iters', [5])
     vg.add('pg_batch_size', [20000])
@@ -73,11 +73,7 @@ if __name__ == '__main__':
     vg.add('gae_lambda', [0.995])
 
     vg.add('seed', range(50, 100, 20))
-    # mine
     vg.add('distance_metric', ['L2'])
-    # vg.add('terminal_bonus', [0])
-    # vg.add('terminal_eps', lambda reward_dist_threshold: [
-    #     reward_dist_threshold])  # if hte terminal bonus is 0 it doesn't kill it! Just count how many reached center
 
     # policy initialization
     vg.add('output_gain', [1])

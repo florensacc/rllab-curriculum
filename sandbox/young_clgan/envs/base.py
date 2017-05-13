@@ -25,7 +25,9 @@ class StateGenerator(object):
         self._state = None
         self.update()
 
-    def update(self):
+    def update(self, state=None, *args, **kwargs):
+        if state is not None:
+            self._state = state
         return self.state
 
     @property
@@ -43,7 +45,7 @@ class UniformListStateGenerator(StateGenerator, Serializable):
         random.seed()
         super(UniformListStateGenerator, self).__init__()
 
-    def update(self):
+    def update(self, *args, **kwargs):
         self._state = random.choice(self.state_list)
         return self.state
 
@@ -60,7 +62,7 @@ class UniformStateGenerator(StateGenerator, Serializable):
         self.center = center if len(center) else np.zeros(self.state_size)
         super(UniformStateGenerator, self).__init__()
 
-    def update(self):  # This should be centered around the initial position!!
+    def update(self, *args, **kwargs):  # This should be centered around the initial position!!
         sample = []
         for low, high in zip(*self.bounds):
             sample.append(np.random.uniform(low, high))
@@ -88,8 +90,8 @@ class StateAuxiliaryEnv(Serializable):
     def update_state_generator(self, state_generator):
         self._state_generator = state_generator
 
-    def update_aux_state(self):
-        return self.state_generator.update()
+    def update_aux_state(self, *args, **kwargs):
+        return self.state_generator.update(*args, **kwargs)
 
     @property
     def state_generator(self):

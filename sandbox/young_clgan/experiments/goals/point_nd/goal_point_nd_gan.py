@@ -62,7 +62,7 @@ def run_task(v):
     env = GoalExplorationEnv(
         env=inner_env, goal_generator=uniform_goal_generator,
         obs_transform=lambda x: x[:int(len(x) / 2)],
-        dist_threshold=v['reward_dist_threshold'],
+        terminal_eps=v['terminal_eps'],
         distance_metric=v['distance_metric'],
         terminate_env=True, goal_weight=v['goal_weight'],
     )  # this goal_generator will be updated by a uniform after
@@ -134,7 +134,7 @@ def run_task(v):
                 # initial_goals, outer_iters=30, generator_iters=10, discriminator_iters=200,
             )
             final_gen_loss = gen_loss
-            logger.log("error at the end of {}th trial: {}gen, {}disc".format(k, gen_loss, dis_loss))
+            logger.log("Loss at the end of {}th trial: {}gen, {}disc".format(k, gen_loss, dis_loss))
         else:
             gan.pretrain_uniform()
             final_gen_loss = 0
@@ -171,7 +171,7 @@ def run_task(v):
             rewards_before = evaluate_states(goals, env, policy, v['horizon'], n_traj=n_traj)
 
         logger.log("Perform TRPO with UniformListStateGenerator...")
-        with ExperimentLogger(inner_log_dir, outer_iter, snapshot_mode='last', hold_outter_log=True):
+        with ExperimentLogger(inner_log_dir, '_last', snapshot_mode='last', hold_outter_log=True):
             # set goal generator to uniformly sample from selected all_goals
             update_env_state_generator(
                 env,
@@ -212,7 +212,7 @@ def run_task(v):
             min_reward=v['min_reward'],
             max_reward=v['max_reward'],
             old_rewards=rewards_before,
-            improvement_threshold=0,
+            # improvement_threshold=0,
             n_traj=n_traj,
         )
         goal_classes, text_labels = convert_label(labels)
@@ -318,32 +318,32 @@ if __name__ == '__main__':
     vg = VariantGenerator()
     # # GeneratorEnv params
     vg.add('goal_size', [2, 3, 4, 5, 6])
-    vg.add('reward_dist_threshold', lambda goal_size: [math.sqrt(goal_size) / math.sqrt(2) * 0.3])
-    # vg.add('reward_dist_threshold', [0.5, 1])
+    vg.add('terminal_eps', lambda goal_size: [math.sqrt(goal_size) / math.sqrt(2) * 0.3])
     vg.add('goal_range', [5])  # this will be used also as bound of the state_space
-    vg.add('state_bounds', lambda goal_range, goal_size, reward_dist_threshold:
+    vg.add('state_bounds', lambda goal_range, goal_size, terminal_eps:
     [(1, goal_range) + (0.3,) * (goal_size - 2) + (goal_range,) * goal_size])
     vg.add('distance_metric', ['L2'])
     vg.add('goal_weight', [1])
     #############################################
+    # goal-algo params
     vg.add('min_reward', lambda goal_weight: [goal_weight * 0.1])  # now running it with only the terminal reward of 1!
     vg.add('max_reward', lambda goal_weight: [goal_weight * 0.9])
     vg.add('smart_init', [True])
+    # replay buffer
     vg.add('replay_buffer', [True])
-    vg.add('coll_eps', [0.3])  # lambda reward_dist_threshold: [reward_dist_threshold])
-    # old hyperparams
+    vg.add('coll_eps', [0.3])  # lambda terminal_eps: [terminal_eps])
     vg.add('num_new_goals', [200])
     vg.add('num_old_goals', [100])
+    # sampling params
+    vg.add('horizon', [200])
     vg.add('outer_iters', [200])
     vg.add('inner_iters', [5])
-    vg.add('horizon', [200])
     vg.add('pg_batch_size', [20000])
-    # policy initialization
+    # policy params
     vg.add('output_gain', [1])  # check here if it goes wrong! both were 0.1
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [True])
     vg.add('adaptive_std', [False])
-    vg.add('seed', range(100, 200, 20))
     # gan_configs
     vg.add('num_labels', [1])
     vg.add('gan_generator_layers', [[256, 256]])
@@ -351,6 +351,8 @@ if __name__ == '__main__':
     vg.add('gan_noise_size', [4])
     vg.add('goal_noise_level', [0.5])
     vg.add('gan_outer_iters', [100])
+
+    vg.add('seed', range(100, 200, 20))
 
     print('\n****\nRunning {} inst. on type {}, with price {}, parallel {} on the subnets: '.format(
         vg.size, config.AWS_INSTANCE_TYPE, config.AWS_SPOT_PRICE, n_parallel),

@@ -61,7 +61,7 @@ def run_task(v):
     env = GoalExplorationEnv(
         env=inner_env, goal_generator=uniform_goal_generator,
         obs_transform=lambda x:x[:int(len(x) / 2)],
-        dist_threshold=v['reward_dist_threshold'],
+        terminal_eps=v['reward_dist_threshold'],
         distance_metric=v['distance_metric'],
         terminate_env=True, goal_weight=v['goal_weight'],
     )  # this goal_generator will be updated by a uniform after

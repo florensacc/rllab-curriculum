@@ -14,10 +14,10 @@ from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides
 
 from rllab.misc import logger
-from sandbox.young_clgan.envs.base import GoalEnv
+from sandbox.young_clgan.envs.goal_env import GoalEnv, GoalExplorationEnv
 
 
-class MazeEnv(GoalEnv, ProxyEnv, Serializable):
+class MazeEnv(ProxyEnv, Serializable):
     MODEL_CLASS = None
     ORI_IND = None
 
@@ -36,7 +36,7 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
 
     def __init__(
             self,
-            goal_generator,
+            # goal_generator,
             n_bins=20,
             sensor_range=10.,
             sensor_span=math.pi,
@@ -45,7 +45,7 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
             maze_height=0.5,
             maze_size_scaling=2,
             coef_inner_rew=0.,  # a coef of 0 gives no reward to the maze from the wrapped env.
-            goal_rew=1.,  # reward obtained when reaching the goal
+            # goal_rew=1.,  # reward obtained when reaching the goal
             *args,
             **kwargs):
         Serializable.quick_init(self, locals())
@@ -55,7 +55,7 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
         self._maze_id = maze_id
         self.length = length
         self.coef_inner_rew = coef_inner_rew
-        self.goal_rew = goal_rew
+        # self.goal_rew = goal_rew
 
         model_cls = self.__class__.MODEL_CLASS
         if model_cls is None:
@@ -119,14 +119,14 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
         self._goal_range = self._find_goal_range()
         self._cached_segments = None
 
-        inner_env = model_cls(goal_generator=goal_generator, *args, file_path=file_path, **kwargs)  # file to the robot specifications
+        inner_env = model_cls(file_path=file_path, *args, **kwargs)  # file to the robot specifications
         ProxyEnv.__init__(self, inner_env)  # here is where the robot env will be initialized
-        self.update_goal_generator(goal_generator)
+        # self.update_goal_generator(goal_generator)
 
-    @overrides
-    def update_goal_generator(self, goal_generator):
-        self.wrapped_env.update_goal_generator(goal_generator)
-        self._goal_generator = goal_generator
+    # @overrides
+    # def update_goal_generator(self, goal_generator):
+    #     self.wrapped_env.update_goal_generator(goal_generator)
+    #     self._goal_generator = goal_generator
 
     def get_current_robot_obs(self):
         return self.wrapped_env.get_current_obs()
@@ -135,7 +135,7 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
         return np.concatenate([self.wrapped_env.get_current_obs(),
                                ])
 
-    @overrides
+    @overrides  # TODO: do we need this?
     @property
     def goal_observation(self):
         return self.wrapped_env.goal_observation
@@ -239,7 +239,7 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
             inner_next_obs, inner_rew, done, info = self.wrapped_env.step(action)
         next_obs = self.get_current_obs()
 
-        reward = inner_rew
+        reward = self.coef_inner_rew * inner_rew
 
         #x, y = self.wrapped_env.get_body_com("torso")[:2]
         # ref_x = x + self._init_torso_x
@@ -249,7 +249,7 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
         info['inner_rew'] = inner_rew
 
         goal = self.wrapped_env.current_goal
-        info['x_goal']= goal[0]
+        info['x_goal']= goal[0]  # Todo: is this used anywhere?
         info['y_goal']= goal[1]
 
         # reward = self.coef_inner_rew * inner_rew
@@ -266,7 +266,7 @@ class MazeEnv(GoalEnv, ProxyEnv, Serializable):
     @overrides
     def log_diagnostics(self, paths, *args, **kwargs):
         # we call here any logging related to the maze, strip the maze obs and call log_diag with the stripped paths
-        # we need to log the purely gather reward!!
+        # we need to log the purely maze reward!!
         # with logger.tabular_prefix('Maze_'):
         #     gather_undiscounted_returns = [sum(path['env_infos']['outer_rew']) for path in paths]
         #     logger.record_tabular_misc_stat('Return', gather_undiscounted_returns, placement='front')

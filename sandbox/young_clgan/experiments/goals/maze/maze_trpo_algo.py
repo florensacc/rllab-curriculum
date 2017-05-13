@@ -138,7 +138,7 @@ def run_task(v):
 
         goals = np.random.uniform(-v['goal_range'], v['goal_range'], size=(300, v['goal_size']))
 
-        with ExperimentLogger(log_dir, outer_iter, snapshot_mode='last', hold_outter_log=True):
+        with ExperimentLogger(log_dir, '_last', snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment goal generator")
             if v['unif_goals']:
                 update_env_state_generator(
@@ -219,6 +219,7 @@ def run_task(v):
 
         img = plot_labeled_samples(
             samples=goals, sample_classes=goal_classes, text_labels=text_labels, limit=v['goal_range'],
+            center=v['goal_center']
             # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
         )
         summary_string = ''

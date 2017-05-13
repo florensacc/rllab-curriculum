@@ -40,8 +40,8 @@ class GoalEnv(StateAuxiliaryEnv):
     def update_goal_generator(self, *args, **kwargs):
         return self.update_state_generator(*args, **kwargs)
         
-    def update_goal(self, *args, **kwargs):
-        return self.update_aux_state(*args, **kwargs)
+    def update_goal(self, goal=None, *args, **kwargs):
+        return self.update_aux_state(state=goal, *args, **kwargs)
         
     @property
     def goal_generator(self):
@@ -53,7 +53,7 @@ class GoalEnv(StateAuxiliaryEnv):
 
 
 class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
-    def __init__(self, env, goal_generator, obs_transform=None, dist_threshold=0.05,
+    def __init__(self, env, goal_generator, obs_transform=None, terminal_eps=0.05,
                  terminate_env=False, goal_bounds=None, distance_metric='L2', goal_weight=1,
                  inner_weight=0, append_transformed_obs=False, **kwargs):
         """
@@ -63,7 +63,7 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         :param env: wrapped env
         :param goal_generator: a StateGenerator object
         :param obs_transform: a callable that transforms an observation of the wrapped environment into goal space
-        :param dist_threshold: a threshold of distance that determines if a goal is reached
+        :param terminal_eps: a threshold of distance that determines if a goal is reached
         :param terminate_env: a boolean that controls if the environment is terminated with the goal is reached
         :param goal_bounds: array marking the UB of the rectangular limit of goals.
         :param distance_metric: L1 or L2 or a callable func
@@ -83,7 +83,7 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         
         self.terminate_env = terminate_env
         self.goal_bounds = goal_bounds
-        self.dist_threshold = dist_threshold
+        self.terminal_eps = terminal_eps
         
         self.distance_metric = distance_metric
         self.goal_weight = goal_weight
@@ -111,8 +111,9 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
     def reset(self, reset_goal=True):
         if reset_goal:
             self.update_goal()
-            
-        return self.append_goal_observation(ProxyEnv.reset(self))
+
+        # print("RESET GoalExplorationEnv, the current goal is: ", self.current_goal)
+        return self.append_goal_observation(ProxyEnv.reset(self, goal=self.current_goal))  # the wrapped env needs to use or ignore it
 
     def step(self, action):
         observation, reward, done, info = ProxyEnv.step(self, action)
@@ -120,7 +121,10 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         info['distance'] = dist = self.dist_to_goal(observation)
         info['reward_dist'] = reward_dist = self.compute_dist_reward(observation)
         info['goal_reached'] = 1.0 * self.is_goal_reached(observation)
-        if self.terminate_env and dist < self.dist_threshold:
+        info['goal'] = self.current_goal
+        # print("step: obs={}, dist={}".format(self.append_goal_observation(observation), dist))
+        if self.terminate_env and dist < self.terminal_eps:
+            # print("\n*******done**********\n")
             done = True
         return (
             self.append_goal_observation(observation),
@@ -131,7 +135,7 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         
     def is_goal_reached(self, observation):
         """ Return a boolean whether the (unaugmented) observation reached the goal. """
-        return self.dist_to_goal(observation) < self.dist_threshold
+        return self.dist_to_goal(observation) < self.terminal_eps
 
     def compute_dist_reward(self, observation):
         """ Compute the 0 or 1 reward for reaching the goal. """
@@ -245,12 +249,14 @@ def get_current_goal(env):
         raise NotImplementedError('Unsupported environment')
 
 
-def generate_initial_goals(env, policy, goal_range, horizon=500, size=10000):
+def generate_initial_goals(env, policy, goal_range, goal_center=None, horizon=500, size=10000):
     current_goal = get_current_goal(env)
     goal_dim = np.array(current_goal).shape
     done = False
     obs = env.reset()
     goals = [get_goal_observation(env)]
+    if goal_center is None:
+        goal_center = np.zeros(goal_dim)
     steps = 0
     while len(goals) < size:
         steps += 1
@@ -260,7 +266,7 @@ def generate_initial_goals(env, policy, goal_range, horizon=500, size=10000):
             update_env_state_generator(
                 env,
                 FixedStateGenerator(
-                    np.random.uniform(-goal_range, goal_range, goal_dim)
+                    goal_center + np.random.uniform(-goal_range, goal_range, goal_dim)
                 )
             )
             obs = env.reset()
