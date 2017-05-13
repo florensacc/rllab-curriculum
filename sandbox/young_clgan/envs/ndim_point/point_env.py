@@ -72,6 +72,9 @@ class PointEnv(Env, Serializable):
     def observation_space(self):
         return self._observation_space
 
+    def is_feasible(self, state):
+        return self.observation_space.contains(state)
+
     @overrides
     def get_current_obs(self):
         return np.concatenate([
