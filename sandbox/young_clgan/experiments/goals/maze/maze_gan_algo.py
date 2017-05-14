@@ -1,4 +1,5 @@
 import matplotlib
+
 matplotlib.use('Agg')
 import os
 import os.path as osp
@@ -33,10 +34,6 @@ from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, generate_initi
 from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy  # TODO: make this external to maze env
 from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
 
-# from sandbox.young_clgan.utils import initialize_parallel_sampler
-#
-# initialize_parallel_sampler()
-
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
 
@@ -54,15 +51,10 @@ def run_task(v):
 
     tf_session = tf.Session()
 
-    inner_env = normalize(PointMazeEnv(
-        # goal_generator=FixedStateGenerator([0.1, 0.1]),
-        # reward_dist_threshold=v['reward_dist_threshold'],
-        # terminal_eps=v['terminal_eps'],
-    ))
+    inner_env = normalize(PointMazeEnv())
 
-    center = np.zeros(v['goal_size'])
     uniform_goal_generator = UniformStateGenerator(state_size=v['goal_size'], bounds=v['goal_range'],
-                                                   center=center)
+                                                   center=v['goal_center'])
     env = GoalExplorationEnv(
         env=inner_env, goal_generator=uniform_goal_generator,
         obs_transform=lambda x: x[:int(len(x) / 2)],
@@ -86,35 +78,13 @@ def run_task(v):
     baseline = LinearFeatureBaseline(env_spec=env.spec)
 
     # initialize all logging arrays on itr0
-    all_mean_rewards = []
-    all_success = []
     outer_iter = 0
     n_traj = 3
     sampling_res = 2
-    # logger.log('Generating the Initial Heatmap...')
-    # avg_rewards, avg_success, heatmap = test_and_plot_policy(policy, env, max_reward=v['max_reward'],
-    #                                                          sampling_res=sampling_res, n_traj=n_traj)
-    # reward_img = save_image()
 
-    # mean_rewards = np.mean(avg_rewards)
-    # success = np.mean(avg_success)
-
-    # all_mean_rewards.append(mean_rewards)
-    # all_success.append(success)
-    #
-    # with logger.tabular_prefix('Outer_'):
-    #     logger.record_tabular('iter', outer_iter)
-    #     logger.record_tabular('MeanRewards', mean_rewards)
-    #     logger.record_tabular('Success', success)
-    # # logger.dump_tabular(with_prefix=False)
-    #
-    # report.add_image(
-    #     reward_img,
-    #     'policy performance\n itr: {} \nmean_rewards: {} \nsuccess: {}'.format(
-    #         outer_iter, all_mean_rewards[-1],
-    #         all_success[-1]
-    #     )
-    # )
+    logger.log('Generating the Initial Heatmap...')
+    test_and_plot_policy(policy, env, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=n_traj,
+                         itr=outer_iter, report=report)
 
     # GAN
     logger.log("Instantiating the GAN...")
@@ -238,36 +208,13 @@ def run_task(v):
                 n_itr=v['inner_iters'],
                 step_size=0.01,
                 plot=False,
-                # snapshot_mode='last'
-                )
+            )
 
             algo.train()
 
         logger.log('Generating the Heatmap...')
-        avg_rewards, avg_success, heatmap = test_and_plot_policy(policy, env, max_reward=v['max_reward'],
-                                                                 sampling_res=sampling_res, n_traj=n_traj)
-        reward_img = save_image()
-
-        mean_rewards = np.mean(avg_rewards)
-        success = np.mean(avg_success)
-
-        all_mean_rewards.append(mean_rewards)
-        all_success.append(success)
-
-        with logger.tabular_prefix('Outer_'):
-            logger.record_tabular('iter', outer_iter)
-            logger.record_tabular('MeanRewards', mean_rewards)
-            logger.record_tabular('Success', success)
-        # logger.dump_tabular(with_prefix=False)
-
-        report.add_image(
-            reward_img,
-            'policy performance\n itr: {} \nmean_rewards: {}\nsuccess: {}'.format(
-                outer_iter, all_mean_rewards[-1],
-                all_success[-1]
-            )
-        )
-        report.save()
+        test_and_plot_policy(policy, env, max_reward=v['max_reward'],
+                             sampling_res=sampling_res, n_traj=n_traj, itr=outer_iter, report=report)
 
         logger.log("Labeling the goals")
         labels = label_states(
@@ -329,15 +276,12 @@ def run_task(v):
         #     summary_string += key + ' frac: ' + str(value) + '\n'
         # report.add_image(img, 'itr: {}\nLabels of generated goals with DETERMINISTIC policy:\n{}'.format(outer_iter, summary_string), width=500)
 
-        ######  try single label for good goals
-        labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1,1))
+        labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
 
         logger.log("Training the GAN")
         gan.train(
             goals, labels,
             v['gan_outer_iters'],
-            # v['gan_generator_iters'],
-            # v['gan_discriminator_iters'],
         )
 
         logger.dump_tabular(with_prefix=False)
@@ -347,11 +291,3 @@ def run_task(v):
         # append new goals to list of all goals (replay buffer): Not the low reward ones!!
         filtered_raw_goals = [goal for goal, label in zip(goals, labels) if label[0] == 1]
         all_goals.append(filtered_raw_goals)
-
-    img = plot_line_graph(
-        osp.join(log_dir, 'mean_rewards.png'),
-        range(v['outer_iters']), all_mean_rewards
-    )
-    report.add_image(img, 'Mean rewards', width=500)
-
-    report.save()

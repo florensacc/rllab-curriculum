@@ -11,9 +11,11 @@ import pylab
 import matplotlib.colorbar as cbar
 
 from rllab.sampler.utils import rollout
+from rllab.misc import logger
 from sandbox.young_clgan.envs.base import FixedStateGenerator
 # from sandbox.young_clgan.state.selectors import FixedStateSelector
 from sandbox.young_clgan.state.evaluator import evaluate_states
+from sandbox.young_clgan.logging.visualization import save_image
 
 quick_test = False
 
@@ -226,13 +228,33 @@ def test_policy_parallel(policy, train_env, as_goals=True, visualize=True, sampl
 
 
 
-def test_and_plot_policy(policy, env, as_goals=True, visualize=True, sampling_res=1, n_traj=1, max_reward=1):
+def test_and_plot_policy(policy, env, as_goals=True, visualize=True, sampling_res=1,
+                         n_traj=1, max_reward=1, itr=0, report=None):
     avg_totRewards, avg_success, states, spacing = test_policy(policy, env, as_goals, visualize,
                                                                sampling_res=sampling_res, n_traj=n_traj)
+    plot_heatmap(avg_success, states, max_reward=max_reward, spacing=spacing, show_heatmap=False)
 
-    heatmap = plot_heatmap(avg_success, states, max_reward=max_reward, spacing=spacing, show_heatmap=False)
+    reward_img = save_image()
+    mean_rewards = np.mean(avg_totRewards)
+    success = np.mean(avg_success)
 
-    return avg_totRewards, avg_success, heatmap
+    with logger.tabular_prefix('Outer_'):
+        logger.record_tabular('iter', itr)
+        logger.record_tabular('MeanRewards', mean_rewards)
+        logger.record_tabular('Success', success)
+    # logger.dump_tabular(with_prefix=False)
+
+    if report is not None:
+        report.add_image(
+            reward_img,
+            'policy performance\n itr: {} \nmean_rewards: {} \nsuccess: {}'.format(
+                itr, mean_rewards, success
+            )
+        )
+    return mean_rewards, success
+
+
+
 
 
 def main():
