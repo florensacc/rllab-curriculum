@@ -38,35 +38,50 @@ class StateGenerator(object):
 class UniformListStateGenerator(StateGenerator, Serializable):
     """ Generating goals uniformly from a goal list. """
 
-    def __init__(self, state_list):
+    def __init__(self, state_list, with_replacement=True, persistence=1):
         Serializable.quick_init(self, locals())
         self.state_list = state_list
         self.state_size = np.size(self.state_list[0])  # assumes all goals have same dim as first in list
+        self.persistence = persistence
+        self.persist_count = 0
+        self.with_replacement = with_replacement
+        self.unused_states = [state for state in state_list]
         random.seed()
         super(UniformListStateGenerator, self).__init__()
 
     def update(self, *args, **kwargs):
-        self._state = random.choice(self.state_list)
+        if self.persist_count % 3 == 0:
+            if len(self.unused_states):
+                self._state = random.choice(self.unused_states)
+                if not self.with_replacement:
+                    self.unused_states.remove(self._state)
+            else:
+                self._state = random.choice(self.state_list)
+        self.persist_count += 1
         return self.state
 
 
 class UniformStateGenerator(StateGenerator, Serializable):
     """ Generating goals uniformly from a goal list. """
 
-    def __init__(self, state_size, bounds=2, center=()):
+    def __init__(self, state_size, bounds=2, center=(), persistence=1):
         Serializable.quick_init(self, locals())
         self.state_size = state_size
         self.bounds = bounds
         if np.array(self.bounds).size == 1:
             self.bounds = [-1 * bounds * np.ones(state_size), bounds * np.ones(state_size)]
         self.center = center if len(center) else np.zeros(self.state_size)
+        self.persistence = persistence
+        self.persist_count = 0
         super(UniformStateGenerator, self).__init__()
 
     def update(self, *args, **kwargs):  # This should be centered around the initial position!!
-        sample = []
-        for low, high in zip(*self.bounds):
-            sample.append(np.random.uniform(low, high))
-        self._state = self.center + np.array(sample)
+        if self.persist_count % 3 == 0:
+            sample = []
+            for low, high in zip(*self.bounds):
+                sample.append(np.random.uniform(low, high))
+            self._state = self.center + np.array(sample)
+        self.persist_count += 1
         return self.state
 
 
@@ -109,9 +124,8 @@ class StateAuxiliaryEnv(Serializable):
     def __setstate__(self, d):
         super(StateAuxiliaryEnv, self).__setstate__(d)
         self.update_state_generator(d['__state_generator'])
-        
-        
-        
+
+
 def update_env_state_generator(env, state_generator):
     """ Update the goal generator for normalized environment. """
     obj = env
@@ -121,4 +135,3 @@ def update_env_state_generator(env, state_generator):
         return obj.update_state_generator(state_generator)
     else:
         raise NotImplementedError('Unsupported environment')
-
