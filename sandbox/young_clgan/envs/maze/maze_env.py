@@ -222,6 +222,14 @@ class MazeEnv(ProxyEnv, Serializable):
                     #return j * size_scaling, i * size_scaling
         return empty_space
 
+    def is_feasible(self, pos):  # the arg is the goal, not the full space!!!
+        empty_space = self.find_empty_space()
+        for space in empty_space:
+            if np.size(np.where(np.abs(np.array(pos)-np.array(space)) < self.MAZE_SIZE_SCALING/2)[0]) == 2:
+                # print("Pos {} is in empty space: {}".format(pos, space))
+                return True
+        return False
+
     @overrides
     def reset(self, *args, **kwargs):
         # print("resetting maze, passing to the Point env:", args, kwargs)

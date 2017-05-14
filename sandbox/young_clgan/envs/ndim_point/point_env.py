@@ -72,8 +72,8 @@ class PointEnv(Env, Serializable):
     def observation_space(self):
         return self._observation_space
 
-    def is_feasible(self, state):
-        return self.observation_space.contains(state)
+    def is_feasible(self, goal):  # this is only for the position!!
+        return self.observation_space.contains(np.concatenate((goal, np.zeros_like(goal))))
 
     @overrides
     def get_current_obs(self):

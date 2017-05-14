@@ -53,7 +53,7 @@ class GoalEnv(StateAuxiliaryEnv):
 
 
 class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
-    def __init__(self, env, goal_generator, obs_transform=None, terminal_eps=0.05,
+    def __init__(self, env, goal_generator, obs_transform=None, terminal_eps=0.05, only_feasible=False,
                  terminate_env=False, goal_bounds=None, distance_metric='L2', goal_weight=1,
                  inner_weight=0, append_transformed_obs=False, **kwargs):
         """
@@ -71,9 +71,9 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         :param inner_weight: coef of the inner environment reward
         :param append_transformed_obs: append the transformation of the current observation to full observation
         """
-
         Serializable.quick_init(self, locals())
         ProxyEnv.__init__(self, env)
+        GoalEnv.__init__(self, **kwargs)
         self.update_goal_generator(goal_generator)
         
         if obs_transform is None:
@@ -84,6 +84,7 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         self.terminate_env = terminate_env
         self.goal_bounds = goal_bounds
         self.terminal_eps = terminal_eps
+        self.only_feasible = only_feasible
         
         self.distance_metric = distance_metric
         self.goal_weight = goal_weight
@@ -108,9 +109,19 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
     def feasible_goal_space(self):
         return self._feasible_goal_space
 
+    def is_feasible(self, goal):
+        obj = self.wrapped_env
+        while not hasattr(obj, 'is_feasible') and hasattr(obj, 'wrapped_env'):
+            obj = obj.wrapped_env
+        if hasattr(obj, 'is_feasible'):
+            return obj.is_feasible(np.array(goal))  # but the goal might not leave in the same space!
+        else:
+            return True
+
     def reset(self, reset_goal=True):
         if reset_goal:
             self.update_goal()
+        # print("reset with goal: ", self.current_goal)
 
         # print("RESET GoalExplorationEnv, the current goal is: ", self.current_goal)
         return self.append_goal_observation(ProxyEnv.reset(self, goal=self.current_goal))  # the wrapped env needs to use or ignore it
@@ -135,7 +146,10 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         
     def is_goal_reached(self, observation):
         """ Return a boolean whether the (unaugmented) observation reached the goal. """
-        return self.dist_to_goal(observation) < self.terminal_eps
+        if self.only_feasible:
+            return self.dist_to_goal(observation) < self.terminal_eps and self.is_feasible(self.current_goal)
+        else:
+            return self.dist_to_goal(observation) < self.terminal_eps
 
     def compute_dist_reward(self, observation):
         """ Compute the 0 or 1 reward for reaching the goal. """
