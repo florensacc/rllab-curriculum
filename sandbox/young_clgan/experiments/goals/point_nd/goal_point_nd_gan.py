@@ -63,6 +63,7 @@ def run_task(v):
         env=inner_env, goal_generator=uniform_goal_generator,
         obs_transform=lambda x: x[:int(len(x) / 2)],
         terminal_eps=v['terminal_eps'],
+        only_feasible=v['only_feasible'],
         distance_metric=v['distance_metric'],
         terminate_env=True, goal_weight=v['goal_weight'],
     )  # this goal_generator will be updated by a uniform after
@@ -319,6 +320,7 @@ if __name__ == '__main__':
     # # GeneratorEnv params
     vg.add('goal_size', [2, 3, 4, 5, 6])
     vg.add('terminal_eps', lambda goal_size: [math.sqrt(goal_size) / math.sqrt(2) * 0.3])
+    vg.add('only_feasible', [True])
     vg.add('goal_range', [5])  # this will be used also as bound of the state_space
     vg.add('state_bounds', lambda goal_range, goal_size, terminal_eps:
     [(1, goal_range) + (0.3,) * (goal_size - 2) + (goal_range,) * goal_size])

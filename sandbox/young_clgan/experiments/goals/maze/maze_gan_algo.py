@@ -33,9 +33,9 @@ from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, generate_initi
 from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy  # TODO: make this external to maze env
 from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
 
-from sandbox.young_clgan.utils import initialize_parallel_sampler
-
-initialize_parallel_sampler()
+# from sandbox.young_clgan.utils import initialize_parallel_sampler
+#
+# initialize_parallel_sampler()
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -65,9 +65,10 @@ def run_task(v):
                                                    center=center)
     env = GoalExplorationEnv(
         env=inner_env, goal_generator=uniform_goal_generator,
-        obs_transform=lambda x: x[:int(len(x) / 2)],  # TODO: our maze doesn't have extra observations!!
+        obs_transform=lambda x: x[:int(len(x) / 2)],
         terminal_eps=v['terminal_eps'],
         distance_metric=v['distance_metric'],
+        only_feasible=v['only_feasible'],
         terminate_env=True,
     )
 
@@ -223,7 +224,7 @@ def run_task(v):
             update_env_state_generator(
                 env,
                 UniformListStateGenerator(
-                    goals.tolist()
+                    goals.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
                 )
             )
 

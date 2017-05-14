@@ -60,6 +60,7 @@ if __name__ == '__main__':
     vg.add('final_goal', [(-0.8, 4)])
     vg.add('goal_noise_level', [0.5])  # ???
     vg.add('terminal_eps', [0.3])
+    vg.add('only_feasible', [True])
     vg.add('indicator_reward', [True])
     vg.add('min_reward', lambda indicator_reward: [10] if indicator_reward else [
         5])  # now running it with only the terminal reward of 1!
