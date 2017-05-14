@@ -73,7 +73,7 @@ def run_task(v):
     #     configs=gan_configs,
     # )
 
-    env = normalize(PointMazeEnv(
+    env = normalize(PointMazeEnv(  # TODO: this is not updated!! look at maze_gan.py (add only_feasible also)
         goal_generator=FixedStateGenerator(v['final_goal']),
         reward_dist_threshold=v['reward_dist_threshold'],
         indicator_reward=v['indicator_reward'],

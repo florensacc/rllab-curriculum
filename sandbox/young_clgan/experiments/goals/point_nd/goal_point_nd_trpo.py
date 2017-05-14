@@ -42,15 +42,12 @@ def run_task(v):
     random.seed(v['seed'])
     np.random.seed(v['seed'])
 
-    tf_session = tf.Session()
-
     # goal generators
     logger.log("Initializing the goal generators and the inner env...")
     inner_env = normalize(PointEnv(dim=v['goal_size'], state_bounds=v['state_bounds']))
     print("the state_bounds are: ", v['state_bounds'])
 
     center = np.zeros(v['goal_size'])
-    fixed_goal_generator = FixedStateGenerator(center)
     uniform_goal_generator = UniformStateGenerator(state_size=v['goal_size'], bounds=v['goal_range'],
                                                   center=center)
     feasible_goal_ub = np.array(v['state_bounds'])[:v['goal_size']]
@@ -61,7 +58,8 @@ def run_task(v):
     env = GoalExplorationEnv(
         env=inner_env, goal_generator=uniform_goal_generator,
         obs_transform=lambda x:x[:int(len(x) / 2)],
-        terminal_eps=v['reward_dist_threshold'],
+        terminal_eps=v['terminal_eps'],
+        only_feasible=v['only_feasible'],
         distance_metric=v['distance_metric'],
         terminate_env=True, goal_weight=v['goal_weight'],
     )  # this goal_generator will be updated by a uniform after
@@ -196,25 +194,26 @@ if __name__ == '__main__':
         mode = 'local'
         n_parallel = cpu_count() if not args.debug else 1
 
-    exp_prefix = format_experiment_prefix('goal-point-nd-trpo')
+    exp_prefix = 'goal-point-nd-trpo'
+    # exp_prefix = format_experiment_prefix('goal-point-nd-trpo')
     vg = VariantGenerator()
 
     vg.add('seed', range(30, 90, 20))
     # # GeneratorEnv params
     vg.add('goal_size', [6, 5, 4, 3, 2])  # this is the ultimate goal we care about: getting the pendulum upright
+    vg.add('terminal_eps', lambda goal_size: [math.sqrt(goal_size) / math.sqrt(2) * 0.3])
+    vg.add('only_feasible', [True])
     vg.add('goal_range', [5])  # this will be used also as bound of the state_space
+    vg.add('state_bounds', lambda goal_range, goal_size, terminal_eps:
+    [(1, goal_range) + (0.3,) * (goal_size - 2) + (goal_range, ) * goal_size])
     vg.add('sample_unif_feas', [True])
-    vg.add('reward_dist_threshold', lambda goal_size: [math.sqrt(goal_size) / math.sqrt(2) * 0.3])
-    # vg.add('angle_idxs', [((0, 1),)]) # these are the idx of the obs corresponding to angles (here the first 2)
     vg.add('distance_metric', ['L2'])
     vg.add('goal_weight', [1])
-    vg.add('state_bounds', lambda goal_range, goal_size, reward_dist_threshold:
-    [(1, goal_range) + (0.3,) * (goal_size - 2) + (goal_range, ) * goal_size])
     #############################################
     vg.add('min_reward', lambda goal_weight: [goal_weight * 0.1])  # now running it with only the terminal reward of 1!
     vg.add('max_reward', lambda goal_weight: [goal_weight * 0.9])
     vg.add('horizon', [200])
-    vg.add('outer_iters', [400])
+    vg.add('outer_iters', [200])
     vg.add('inner_iters', [5])
     vg.add('pg_batch_size', [20000])
     # policy initialization

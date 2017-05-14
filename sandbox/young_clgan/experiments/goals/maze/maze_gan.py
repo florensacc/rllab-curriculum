@@ -6,6 +6,7 @@ import tensorflow as tf
 import tflearn
 import argparse
 import sys
+from multiprocessing import cpu_count
 from rllab.misc.instrument import run_experiment_lite
 from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
@@ -25,6 +26,7 @@ if __name__ == '__main__':
     parser.add_argument('--price', '-p', type=str, default='', help='set betting price')
     parser.add_argument('--subnet', '-sn', type=str, default='', help='set subnet like us-west-1a')
     parser.add_argument('--name', '-n', type=str, default='', help='set exp prefix name and new file name')
+    parser.add_argument('--debug', action='store_true', default=False, help="run code without multiprocessing")
     args = parser.parse_args()
 
     if args.clone:
@@ -45,10 +47,10 @@ if __name__ == '__main__':
         mode = 'ec2'
     elif args.local_docker:
         mode = 'local_docker'
-        n_parallel = 4
+        n_parallel = cpu_count() if not args.debug else 1
     else:
         mode = 'local'
-        n_parallel = 4
+        n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
     exp_prefix = 'new-goalGAN-maze-singleLabel-test'
@@ -56,12 +58,15 @@ if __name__ == '__main__':
     vg = VariantGenerator()
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('terminal_eps', [0.3])
+    vg.add('only_feasible', [True])
     vg.add('goal_range', [5])  # this will be used also as bound of the state_space
     vg.add('goal_center', [(2, 2)])
     # goal-algo params
     vg.add('min_reward', [0])
     vg.add('max_reward', [1])
     vg.add('distance_metric', ['L2'])
+    vg.add('persistence', [3])
+    vg.add('with_replacement', [False])
     vg.add('smart_init', [True])
     # replay buffer
     vg.add('replay_buffer', [True])
@@ -86,7 +91,7 @@ if __name__ == '__main__':
     vg.add('goal_noise_level', [0.5])
     vg.add('gan_outer_iters', [100])
 
-    vg.add('seed', range(100, 150, 10))
+    vg.add('seed', range(100, 200, 10))
 
     # # gan_configs
     # vg.add('GAN_batch_size', [128])  # proble with repeated name!!
