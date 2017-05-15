@@ -65,18 +65,20 @@ if __name__ == '__main__':
     vg.add('min_reward', [0])
     vg.add('max_reward', [1])
     vg.add('distance_metric', ['L2'])
-    vg.add('persistence', [1, 3])
+    vg.add('persistence', [1])
+    vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('with_replacement', [False])
     vg.add('smart_init', [True])
     # replay buffer
     vg.add('replay_buffer', [True])
-    vg.add('coll_eps', [0.3])  #lambda terminal_eps: [terminal_eps, 0])
-    vg.add('num_new_goals', lambda persistence: [int(200/persistence)])
-    vg.add('num_old_goals', lambda persistence: [int(100/persistence)])
+    vg.add('coll_eps', [0.3])
+    vg.add('num_new_goals', [200])
+    vg.add('num_old_goals', [100])
     # sampling params
     vg.add('horizon', [200])
-    vg.add('outer_iters', [400])
-    vg.add('inner_iters', [3, 5])
+    # vg.add('outer_iters', [400])
+    vg.add('outer_iters', [4])
+    vg.add('inner_iters', [5])
     vg.add('pg_batch_size', [20000])
     # policy initialization
     vg.add('output_gain', [1])
@@ -89,7 +91,7 @@ if __name__ == '__main__':
     vg.add('gan_discriminator_layers', [[128, 128]])
     vg.add('gan_noise_size', [4])
     vg.add('goal_noise_level', [0.5])
-    vg.add('gan_outer_iters', [100])
+    vg.add('gan_outer_iters', [100, 150, 200, 250, 300])
 
     vg.add('seed', range(100, 170, 10))
 
