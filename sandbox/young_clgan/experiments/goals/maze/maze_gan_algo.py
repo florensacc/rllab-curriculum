@@ -14,8 +14,7 @@ from rllab.misc import logger
 from sandbox.young_clgan.logging import HTMLReport
 from sandbox.young_clgan.logging import format_dict
 from sandbox.young_clgan.logging.logger import ExperimentLogger
-from sandbox.young_clgan.logging.visualization import save_image, plot_labeled_samples, \
-    plot_line_graph
+from sandbox.young_clgan.logging.visualization import save_image, plot_labeled_samples, plot_labeled_states
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -35,6 +34,8 @@ from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy  # 
 from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
+
+sampling_res = 2
 
 
 def run_task(v):
@@ -79,11 +80,9 @@ def run_task(v):
 
     # initialize all logging arrays on itr0
     outer_iter = 0
-    n_traj = 3
-    sampling_res = 2
 
     logger.log('Generating the Initial Heatmap...')
-    test_and_plot_policy(policy, env, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=n_traj,
+    test_and_plot_policy(policy, env, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
                          itr=outer_iter, report=report)
 
     # GAN
@@ -99,6 +98,7 @@ def run_task(v):
         state_size=v['goal_size'],
         evaluater_size=v['num_labels'],
         state_range=v['goal_range'],
+        state_center=v['goal_center'],
         state_noise_level=v['goal_noise_level'],
         generator_layers=v['gan_generator_layers'],
         discriminator_layers=v['gan_discriminator_layers'],
@@ -108,64 +108,25 @@ def run_task(v):
     )
     logger.log("pretraining the GAN...")
     if v['smart_init']:
-        initial_goals = generate_initial_goals(env, policy, v['goal_range'], goal_center=v['goal_center'],
-                                               horizon=v['horizon'])
-        labels = np.ones((initial_goals.shape[0], 2)).astype(np.float32)
-        goal_classes, text_labels = convert_label(labels)
-        total_goals = labels.shape[0]
-        goal_class_frac = OrderedDict()  # this needs to be an ordered dict!! (for the log tabular)
-        for k in text_labels.keys():
-            frac = np.sum(goal_classes == k) / total_goals
-            logger.record_tabular('GenGoal_frac_' + text_labels[k], frac)
-            goal_class_frac[text_labels[k]] = frac
+        feasible_goals = generate_initial_goals(env, policy, v['goal_range'], goal_center=v['goal_center'],
+                                                horizon=v['horizon'])
+        labels = np.ones((feasible_goals.shape[0], 2)).astype(np.float32)  # make them all good goals
+        plot_labeled_states(feasible_goals, labels, report=report, itr=outer_iter,
+                            limit=v['goal_range'], center=v['goal_center'])
 
-        img = plot_labeled_samples(
-            samples=initial_goals, sample_classes=goal_classes, text_labels=text_labels, limit=v['goal_range'],
-            center=v['goal_center'],
-            # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
-        )
-        summary_string = ''
-        for key, value in goal_class_frac.items():
-            summary_string += key + ' frac: ' + str(value) + '\n'
-        report.add_image(img, 'itr: {}\nLabels of Initial Goals:\n{}'.format(outer_iter, summary_string), width=500)
-
-        dis_loss, gen_loss = gan.pretrain(states=initial_goals, outer_iters=30)
+        dis_loss, gen_loss = gan.pretrain(states=feasible_goals, outer_iters=v['gan_outer_iters'])
         print("Loss of Gen and Dis: ", gen_loss, dis_loss)
     else:
         gan.pretrain_uniform()
 
     # log first samples form the GAN
     initial_goals, _ = gan.sample_states_with_noise(v['num_new_goals'])
+
     logger.log("Labeling the goals")
-    labels = label_states(
-        initial_goals, env, policy, v['horizon'],
-        min_reward=v['min_reward'],
-        max_reward=v['max_reward'],
-        old_rewards=None,
-        # improvement_threshold=v['improvement_threshold'],
-        n_traj=n_traj)
+    labels = label_states(initial_goals, env, policy, v['horizon'], n_traj=v['n_traj'])
 
-    logger.log("Converting the labels")
-    goal_classes, text_labels = convert_label(labels)
-
-    logger.log("Plotting the labeled samples")
-    total_goals = labels.shape[0]
-    goal_class_frac = OrderedDict()  # this needs to be an ordered dict!! (for the log tabular)
-    for k in text_labels.keys():
-        frac = np.sum(goal_classes == k) / total_goals
-        logger.record_tabular('GenGoal_frac_' + text_labels[k], frac)
-        goal_class_frac[text_labels[k]] = frac
-
-    img = plot_labeled_samples(
-        samples=initial_goals, sample_classes=goal_classes, text_labels=text_labels, limit=v['goal_range'],
-        center=v['goal_center']
-        # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
-    )
-    summary_string = ''
-    for key, value in goal_class_frac.items():
-        summary_string += key + ' frac: ' + str(value) + '\n'
-    report.add_image(img, 'itr: {}\nLabels of generated goals:\n{}'.format(outer_iter, summary_string), width=500)
-    report.save()
+    plot_labeled_states(initial_goals, labels, report=report, itr=outer_iter,
+                        limit=v['goal_range'], center=v['goal_center'])
     report.new_row()
 
     all_goals = StateCollection(distance_threshold=v['coll_eps'])
@@ -182,12 +143,6 @@ def run_task(v):
             goals = np.vstack([raw_goals, old_goals])
         else:
             goals = raw_goals
-
-        logger.log("Evaluating goals before training")
-        rewards_before = None
-        if v['num_labels'] == 3:
-            rewards_before = evaluate_states(goals, env, policy, v['horizon'], n_traj=n_traj,
-                                             n_processes=multiprocessing.cpu_count())
 
         with ExperimentLogger(log_dir, '_last', snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment goal generator")
@@ -214,67 +169,19 @@ def run_task(v):
 
         logger.log('Generating the Heatmap...')
         test_and_plot_policy(policy, env, max_reward=v['max_reward'],
-                             sampling_res=sampling_res, n_traj=n_traj, itr=outer_iter, report=report)
+                             sampling_res=sampling_res, n_traj=v['n_traj'], itr=outer_iter, report=report)
 
         logger.log("Labeling the goals")
-        labels = label_states(
-            goals, env, policy, v['horizon'],
-            min_reward=v['min_reward'],
-            max_reward=v['max_reward'],
-            old_rewards=rewards_before,
-            n_traj=n_traj)
+        labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'])
 
-        logger.log("Converting the labels")
-        goal_classes, text_labels = convert_label(labels)
-
-        logger.log("Plotting the labeled samples")
-        total_goals = labels.shape[0]
-        goal_class_frac = OrderedDict()  # this needs to be an ordered dict!! (for the log tabular)
-        for k in text_labels.keys():
-            frac = np.sum(goal_classes == k) / total_goals
-            logger.record_tabular('GenGoal_frac_' + text_labels[k], frac)
-            goal_class_frac[text_labels[k]] = frac
-
-        img = plot_labeled_samples(
-            samples=goals, sample_classes=goal_classes, text_labels=text_labels, limit=v['goal_range'],
-            center=v['goal_center']
-            # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
-        )
-        summary_string = ''
-        for key, value in goal_class_frac.items():
-            summary_string += key + ' frac: ' + str(value) + '\n'
-        report.add_image(img, 'itr: {}\nLabels of generated goals:\n{}'.format(outer_iter, summary_string), width=500)
+        plot_labeled_states(goals, labels, report=report, itr=outer_iter, limit=v['goal_range'],
+                            center=v['goal_center'])
 
         # ###### extra for deterministic:
         # logger.log("Labeling the goals deterministic")
         # with policy.set_std_to_0():
-        #     labels_det = label_goals(
-        #         goals, env, policy, v['horizon'],
-        #         min_reward=v['min_reward'],
-        #         max_reward=v['max_reward'],
-        #         old_rewards=rewards_before,
-        #         improvement_threshold=v['improvement_threshold'],
-        #         n_traj=n_traj, n_processes=1)
-        #
-        # logger.log("Converting the labels")
-        # goal_classes, text_labels = convert_label(labels_det)
-        #
-        # logger.log("Plotting the labeled samples")
-        # total_goals = labels_det.shape[0]
-        # goal_class_frac = OrderedDict()  # this needs to be an ordered dict!! (for the log tabular)
-        # for k in text_labels.keys():
-        #     frac = np.sum(goal_classes == k) / total_goals
-        #     logger.record_tabular('GenGoal_frac_' + text_labels[k], frac)
-        #     goal_class_frac[text_labels[k]] = frac
-        #
-        # img = plot_labeled_samples(
-        #     samples=goals, sample_classes=goal_classes, text_labels=text_labels, limit=v['goal_range'] + 1,
-        #     # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
-        # )
-        # summary_string = ''
-        # for key, value in goal_class_frac.items():
-        #     summary_string += key + ' frac: ' + str(value) + '\n'
-        # report.add_image(img, 'itr: {}\nLabels of generated goals with DETERMINISTIC policy:\n{}'.format(outer_iter, summary_string), width=500)
+        #     labels_det = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], n_processes=1)
+        # plot_labeled_states(goals, labels_det, report=report, itr=outer_iter, limit=v['goal_range'], center=v['goal_center'])
 
         labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
 
@@ -285,7 +192,6 @@ def run_task(v):
         )
 
         logger.dump_tabular(with_prefix=False)
-        report.save()
         report.new_row()
 
         # append new goals to list of all goals (replay buffer): Not the low reward ones!!

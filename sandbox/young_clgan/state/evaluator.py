@@ -73,7 +73,7 @@ def parallel_map(func, iterable_object, num_processes=-1):
     return results
 
 
-def label_states(states, env, policy, horizon, min_reward, max_reward,
+def label_states(states, env, policy, horizon, min_reward=0, max_reward=1,
                  old_rewards=None, improvement_threshold=0, n_traj=1, n_processes=-1):
     mean_rewards = evaluate_states(
         states, env, policy, horizon,
@@ -145,8 +145,7 @@ def evaluate_states(states, env, policy, horizon, n_traj=1, n_processes=-1, full
     result = parallel_map(
         evaluate_state_wrapper,
         states,
-        n_processes # todo: rever this
-        # 1
+        n_processes,
     )
     if full_path:
         return [inner for outer in result for inner in outer]

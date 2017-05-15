@@ -227,7 +227,6 @@ def test_policy_parallel(policy, train_env, as_goals=True, visualize=True, sampl
     return avg_totRewards, avg_success, states, spacing
 
 
-
 def test_and_plot_policy(policy, env, as_goals=True, visualize=True, sampling_res=1,
                          n_traj=1, max_reward=1, itr=0, report=None):
     avg_totRewards, avg_success, states, spacing = test_policy(policy, env, as_goals, visualize,
@@ -252,9 +251,6 @@ def test_and_plot_policy(policy, env, as_goals=True, visualize=True, sampling_re
             )
         )
     return mean_rewards, success
-
-
-
 
 
 def main():

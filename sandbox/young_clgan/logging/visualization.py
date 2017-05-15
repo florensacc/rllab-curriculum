@@ -4,9 +4,11 @@ import gc
 
 import numpy as np
 import scipy.misc
+from collections import OrderedDict
 
-from sandbox.young_clgan.goal.evaluator import evaluate_goals, convert_label
+from sandbox.young_clgan.state.evaluator import evaluate_states, convert_label
 from sandbox.young_clgan.envs.base import FixedStateGenerator
+from rllab.misc import logger
 
 import matplotlib as mpl
 
@@ -37,7 +39,7 @@ def plot_policy_reward(policy, env, limit, horizon=200, max_reward=6000, fname=N
         x.flatten().reshape(-1, 1),
         y.flatten().reshape(-1, 1)
     ])
-    z = evaluate_goals(goals, env, policy, horizon, 1)  # try out every goal in the grid
+    z = evaluate_states(goals, env, policy, horizon, 1)  # try out every goal in the grid
     print("Min return: {}\nMax return: {}\nMean return: {}".format(np.min(z), np.max(z), np.mean(z)))
 
     z = z.reshape(grid_shape)
@@ -75,6 +77,26 @@ def save_image(fig=None, fname=None):
     img = scipy.misc.imread(fname)
     fname.close()
     return img
+
+
+def plot_labeled_states(states, labels, convert_labels=convert_label, report=None,
+                        itr=0, limit=None, center=None):
+    goal_classes, text_labels = convert_labels(labels)
+    total_goals = labels.shape[0]
+    goal_class_frac = OrderedDict()  # this needs to be an ordered dict!! (for the log tabular)
+    for k in text_labels.keys():
+        frac = np.sum(goal_classes == k) / total_goals
+        logger.record_tabular('GenGoal_frac_' + text_labels[k], frac)
+        goal_class_frac[text_labels[k]] = frac
+
+    img = plot_labeled_samples(
+        samples=states, sample_classes=goal_classes, text_labels=text_labels, limit=limit,
+        center=center,
+    )
+    summary_string = ''
+    for key, value in goal_class_frac.items():
+        summary_string += key + ' frac: ' + str(value) + '\n'
+    report.add_image(img, 'itr: {}\nLabels of goals:\n{}'.format(itr, summary_string), width=500)
 
 
 def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers=None, fname=None, limit=None,
