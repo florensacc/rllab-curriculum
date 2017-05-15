@@ -90,6 +90,7 @@ class HTMLReport:
         self.row_image_count += 1
 
     def new_row(self):
+        self.save()
         self.t = None
         self.row_image_count = 0
 
