@@ -130,7 +130,8 @@ def convert_label(labels):
     return new_labels, classes
 
 
-def evaluate_states(states, env, policy, horizon, n_traj=1, n_processes=-1, full_path=False, key='rewards'):
+def evaluate_states(states, env, policy, horizon, n_traj=1, n_processes=-1, full_path=False, key='rewards',
+                    aggregator=(np.sum, np.mean)):
     evaluate_state_wrapper = FunctionWrapper(
         evaluate_state,
         env=env,
@@ -139,6 +140,7 @@ def evaluate_states(states, env, policy, horizon, n_traj=1, n_processes=-1, full
         n_traj=n_traj,
         full_path=full_path,
         key=key,
+        aggregator=aggregator,
     )
     result = parallel_map(
         evaluate_state_wrapper,
@@ -151,8 +153,9 @@ def evaluate_states(states, env, policy, horizon, n_traj=1, n_processes=-1, full
     return np.array(result)
 
 
-def evaluate_state(state, env, policy, horizon, n_traj=1, full_path=False, key='rewards'):
-    total_rewards = []
+def evaluate_state(state, env, policy, horizon, n_traj=1, full_path=False, key='rewards',
+                   aggregator=(np.sum, np.mean)):
+    aggregated_data = []
     paths = []
     # print("evaluating state: ", state)
     update_env_state_generator(env, FixedStateGenerator(state))
@@ -160,12 +163,20 @@ def evaluate_state(state, env, policy, horizon, n_traj=1, full_path=False, key='
     for j in range(n_traj):
         # print(j)
         paths.append(rollout(env, policy, horizon))
-        total_rewards.append(
-            np.sum(paths[-1][key])
-        )
-    mean_reward = np.mean(total_rewards)
+        if not full_path:
+            if key in paths[-1]:
+                aggregated_data.append(
+                    aggregator[0](paths[-1][key])
+                )
+            else:
+                aggregated_data.append(
+                    aggregator[0](paths[-1]['env_infos'][key])
+                )
+        
     if full_path:
         return paths
+        
+    mean_reward = aggregator[1](aggregated_data)
     
     return mean_reward
 

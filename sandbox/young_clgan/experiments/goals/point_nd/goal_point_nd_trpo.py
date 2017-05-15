@@ -34,6 +34,7 @@ from sandbox.young_clgan.state.evaluator import *
 from sandbox.young_clgan.logging.html_report import format_dict, HTMLReport
 from sandbox.young_clgan.logging.visualization import *
 from sandbox.young_clgan.logging.logger import ExperimentLogger
+from sandbox.young_clgan.experiments.goals.point_nd.utils import plot_policy_performance
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -123,6 +124,11 @@ def run_task(v):
             )
 
             algo.train()
+            
+            
+        report.add_image(
+            plot_policy_performance(policy, env, v['horizon'])
+        )
 
         
 
@@ -172,6 +178,10 @@ if __name__ == '__main__':
     parser.add_argument('--subnet', '-sn', type=str, default='', help='set subnet like us-west-1a')
     parser.add_argument('--name', '-n', type=str, default='', help='set exp prefix name and new file name')
     parser.add_argument('--debug', action='store_true', default=False, help="run code without multiprocessing")
+    parser.add_argument(
+        '--prefix', type=str, default=None,
+        help='set the additional name for experiment prefix'
+    )
     args = parser.parse_args()
 
     if args.clone:
@@ -194,8 +204,15 @@ if __name__ == '__main__':
         mode = 'local'
         n_parallel = cpu_count() if not args.debug else 1
 
-    exp_prefix = 'goal-point-nd-trpo'
-    # exp_prefix = format_experiment_prefix('goal-point-nd-trpo')
+
+    default_prefix = 'goal-point-nd-trpo'
+    if args.prefix is None:
+        exp_prefix = format_experiment_prefix(default_prefix)
+    elif args.prefix == '':
+        exp_prefix = default_prefix
+    else:
+        exp_prefix = '{}_{}'.format(default_prefix, args.prefix)
+        
     vg = VariantGenerator()
 
     vg.add('seed', range(30, 90, 20))

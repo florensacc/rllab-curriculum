@@ -3,6 +3,7 @@ from .base import Env
 
 
 class ProxyEnv(Env, Serializable):
+    
     def __init__(self, wrapped_env):
         Serializable.quick_init(self, locals())
         self._wrapped_env = wrapped_env
@@ -43,3 +44,10 @@ class ProxyEnv(Env, Serializable):
 
     def set_param_values(self, params):
         self._wrapped_env.set_param_values(params)
+        
+    def __getattr__(self, name):
+        """ Relay unknown attribute access to the wrapped_env. """
+        if name == '_wrapped_env':
+            # Prevent recursive call on self._wrapped_env
+            raise AttributeError('_wrapped_env not initialized yet!')
+        return getattr(self._wrapped_env, name)
