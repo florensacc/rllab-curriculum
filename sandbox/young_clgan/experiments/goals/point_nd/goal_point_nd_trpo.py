@@ -217,7 +217,7 @@ if __name__ == '__main__':
 
     vg.add('seed', range(30, 90, 20))
     # # GeneratorEnv params
-    vg.add('goal_size', [6, 5, 4, 3, 2])  # this is the ultimate goal we care about: getting the pendulum upright
+    vg.add('goal_size', [2, 3, 4, 5, 6])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('terminal_eps', lambda goal_size: [math.sqrt(goal_size) / math.sqrt(2) * 0.3])
     vg.add('only_feasible', [True])
     vg.add('goal_range', [5])  # this will be used also as bound of the state_space
