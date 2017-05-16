@@ -2,8 +2,6 @@ import os
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
-import tensorflow as tf
-import tflearn
 import argparse
 import sys
 from multiprocessing import cpu_count
@@ -12,7 +10,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.goals.maze.maze_gan_algo import run_task
+from sandbox.young_clgan.experiments.goals.maze_swim.maze_swim_gan_algo import run_task
 
 if __name__ == '__main__':
 
@@ -37,7 +35,7 @@ if __name__ == '__main__':
         # 'ap-south-1b', 'ap-northeast-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'us-west-1b', 'us-west-1a',
         # 'ap-south-1a', 'ap-northeast-1a', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'us-east-1b'
     ]
-    ec2_instance = args.type if args.type else 'c4.2xlarge'
+    ec2_instance = args.type if args.type else 'c4.4xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -53,7 +51,7 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'new-goalGAN-maze'
+    exp_prefix = 'new-goalGAN-maze-swim2'
 
     vg = VariantGenerator()
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
@@ -65,20 +63,20 @@ if __name__ == '__main__':
     vg.add('min_reward', [0])
     vg.add('max_reward', [1])
     vg.add('distance_metric', ['L2'])
-    vg.add('persistence', [1])
+    vg.add('persistence', [1, 3])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('with_replacement', [False])
     vg.add('smart_init', [True])
     # replay buffer
-    vg.add('replay_buffer', [False])
+    vg.add('replay_buffer', [True])
     vg.add('coll_eps', [0.3])
     vg.add('num_new_goals', [200])
     vg.add('num_old_goals', [100])
     # sampling params
-    vg.add('horizon', [200])
-    vg.add('outer_iters', [400])
-    vg.add('inner_iters', [5])
-    vg.add('pg_batch_size', [20000])
+    vg.add('horizon', [500])
+    vg.add('outer_iters', [1000])
+    vg.add('inner_iters', [3])
+    vg.add('pg_batch_size', [600000])
     # policy initialization
     vg.add('output_gain', [1])
     vg.add('policy_init_std', [1])
@@ -92,7 +90,7 @@ if __name__ == '__main__':
     vg.add('goal_noise_level', [0.5])
     vg.add('gan_outer_iters', [200])
 
-    vg.add('seed', range(100, 170, 10))
+    vg.add('seed', range(200, 270, 10))
 
     # # gan_configs
     # vg.add('GAN_batch_size', [128])  # proble with repeated name!!

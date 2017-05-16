@@ -232,7 +232,6 @@ class MazeEnv(ProxyEnv, Serializable):
 
     @overrides
     def reset(self, *args, **kwargs):
-        # print("resetting maze, passing to the Point env:", args, kwargs)
         return self.wrapped_env.reset(*args, **kwargs)
 
     def step(self, action):
@@ -255,10 +254,6 @@ class MazeEnv(ProxyEnv, Serializable):
         #info['outer_rew'] = 0
 
         info['inner_rew'] = inner_rew
-
-        goal = self.wrapped_env.current_goal
-        info['x_goal']= goal[0]  # Todo: is this used anywhere?
-        info['y_goal']= goal[1]
 
         # reward = self.coef_inner_rew * inner_rew
         # minx, maxx, miny, maxy = self._goal_range
