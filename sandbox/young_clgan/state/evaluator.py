@@ -8,6 +8,7 @@ import cloudpickle
 from rllab.sampler.utils import rollout
 from rllab.misc import logger
 
+
 from sandbox.young_clgan.envs.base import FixedStateGenerator, update_env_state_generator
 
 
@@ -62,7 +63,8 @@ def parallel_map(func, iterable_object, num_processes=-1):
     if num_processes == 1:
         return [func(x) for x in iterable_object]
     if num_processes == -1:
-        num_processes = min(64, multiprocessing.cpu_count())
+        from rllab.sampler.stateful_pool import singleton_pool
+        num_processes = singleton_pool.n_parallel
     process_pool = multiprocessing.Pool(
         num_processes,
         initializer=disable_cuda_initializer

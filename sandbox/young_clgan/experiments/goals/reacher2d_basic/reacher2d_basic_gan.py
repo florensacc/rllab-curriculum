@@ -21,7 +21,7 @@ from rllab import config
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 
-from sandbox.young_clgan.envs.ndim_point.point_env import PointEnv
+from sandbox.young_clgan.envs.reacher.reacher2d_basic_env import Reacher2DEnv
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
@@ -37,7 +37,7 @@ from sandbox.young_clgan.logging.html_report import format_dict, HTMLReport
 from sandbox.young_clgan.logging.visualization import *
 from sandbox.young_clgan.logging.logger import ExperimentLogger
 from sandbox.young_clgan.goal.utils import GoalCollection
-from sandbox.young_clgan.experiments.goals.point_nd.utils import plot_policy_performance, plot_generator_samples
+from sandbox.young_clgan.experiments.goals.reacher2d_basic.utils import plot_policy_performance, plot_generator_samples
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -48,25 +48,27 @@ def run_task(v):
 
     # goal generators
     logger.log("Initializing the goal generators and the inner env...")
-    inner_env = normalize(PointEnv(dim=v['goal_size'], state_bounds=v['state_bounds']))
+    inner_env = normalize(Reacher2DEnv())
     # inner_env = normalize(PendulumEnv())
 
-    center = np.zeros(v['goal_size'])
-    uniform_goal_generator = UniformStateGenerator(state_size=v['goal_size'], bounds=v['goal_range'],
-                                                   center=center)
-    feasible_goal_ub = np.array(v['state_bounds'])[:v['goal_size']]
+    center = np.zeros(2)
+    uniform_goal_generator = UniformStateGenerator(
+        state_size=2, bounds=0.2, center=center
+    )
+    feasible_goal_ub = np.array(np.array([0.2, 0.2]))
     # print("the feasible_goal_ub is: ", feasible_goal_ub)
     uniform_feasible_goal_generator = UniformStateGenerator(
-        state_size=v['goal_size'], bounds=[-1 * feasible_goal_ub, feasible_goal_ub]
+        state_size=2, bounds=[-1 * feasible_goal_ub, feasible_goal_ub]
     )
 
     env = GoalExplorationEnv(
         env=inner_env, goal_generator=uniform_goal_generator,
-        obs_transform=lambda x: x[:int(len(x) / 2)],
+        obs_transform=lambda x: x[:2],
         terminal_eps=v['terminal_eps'],
-        only_feasible=v['only_feasible'],
+        only_feasible=False,
         distance_metric=v['distance_metric'],
         terminate_env=True, goal_weight=v['goal_weight'],
+        goal_bounds=np.array([0.2, 0.2])
     )  # this goal_generator will be updated by a uniform after
 
     policy = GaussianMLPPolicy(
@@ -103,9 +105,9 @@ def run_task(v):
     gan_configs = {key[4:]: value for key, value in v.items() if 'GAN_' in key}
 
     gan = StateGAN(
-        state_size=v['goal_size'],
+        state_size=2,
         evaluater_size=v['num_labels'],
-        state_range=v['goal_range'],
+        state_range=0.2,
         state_noise_level=v['goal_noise_level'],
         generator_layers=v['gan_generator_layers'],
         discriminator_layers=v['gan_discriminator_layers'],
@@ -119,16 +121,16 @@ def run_task(v):
     while final_gen_loss > 10:
         k += 1
         gan.gan.initialize()
-        img = plot_gan_samples(gan, v['goal_range'], '{}/start.png'.format(log_dir))
+        img = plot_gan_samples(gan, 0.2, '{}/start.png'.format(log_dir))
         report.add_image(img, 'GAN re-initialized %i' % k)
         logger.log("pretraining the GAN...")
         if v['smart_init']:
-            initial_goals = generate_initial_goals(env, policy, v['goal_range'], horizon=v['horizon'])
+            initial_goals = generate_initial_goals(env, policy, 0.2, horizon=v['horizon'])
             if np.size(initial_goals[0]) == 2:
                 plt.figure()
                 plt.scatter(initial_goals[:, 0], initial_goals[:, 1], marker='x')
-                plt.xlim(-v['goal_range'], v['goal_range'])
-                plt.ylim(-v['goal_range'], v['goal_range'])
+                plt.xlim(-0.2, 0.2)
+                plt.ylim(-0.2, 0.2)
                 img = save_image()
                 report.add_image(img, 'goals sampled to pretrain GAN: {}'.format(np.shape(initial_goals)))
             dis_loss, gen_loss = gan.pretrain(
@@ -141,7 +143,7 @@ def run_task(v):
             gan.pretrain_uniform()
             final_gen_loss = 0
         logger.log("Plotting GAN samples")
-        img = plot_gan_samples(gan, v['goal_range'], '{}/start.png'.format(log_dir))
+        img = plot_gan_samples(gan, 0.2, '{}/start.png'.format(log_dir))
         report.add_image(img, 'GAN pretrained %i: %i gen_itr, %i disc_itr' % (k, 10 + k, 200 - k * 10))
         # report.add_image(img, 'GAN pretrained %i: %i gen_itr, %i disc_itr' % (k, 10, 200))
         report.save()
@@ -198,7 +200,7 @@ def run_task(v):
 
         # logger.log("Plot performance policy on full grid...")
         # img = plot_policy_reward(
-        #     policy, env, v['goal_range'],
+        #     policy, env, 0.2,
         #     horizon=v['horizon'],
         #     max_reward=v['max_reward'],
         #     grid_size=10,
@@ -208,12 +210,12 @@ def run_task(v):
         # report.save()
         
         report.add_image(
-            plot_generator_samples(gan, env), 'policy_rewards_{}'.format(outer_iter)
+            plot_generator_samples(gan, env), 'gan_samples_{}'.format(outer_iter)
         )
         
         report.add_image(
             plot_policy_performance(policy, env, v['horizon']),
-            'gan_samples_{}'.format(outer_iter)
+            'policy_rewards_{}'.format(outer_iter)
         )
 
         # this re-evaluate the final policy in the collection of goals
@@ -327,7 +329,7 @@ if __name__ == '__main__':
         mode = 'local'
         n_parallel = cpu_count() if not args.debug else 1
 
-    default_prefix = 'point-nd-goal-gan'
+    default_prefix = 'reacher2d-basic-goal-gan'
     if args.prefix is None:
         exp_prefix = format_experiment_prefix(default_prefix)
     elif args.prefix == '':
@@ -337,19 +339,14 @@ if __name__ == '__main__':
 
     vg = VariantGenerator()
     # # GeneratorEnv params
-    vg.add('goal_size', [2, 3, 4, 5, 6])
-    vg.add('terminal_eps', lambda goal_size: [math.sqrt(goal_size) / math.sqrt(2) * 0.3])
-    vg.add('only_feasible', [True])
-    vg.add('goal_range', [5])  # this will be used also as bound of the state_space
-    vg.add('state_bounds', lambda goal_range, goal_size, terminal_eps:
-    [(1, goal_range) + (0.3,) * (goal_size - 2) + (goal_range,) * goal_size])
+    vg.add('terminal_eps', [0.01])
     vg.add('distance_metric', ['L2'])
     vg.add('goal_weight', [1])
     #############################################
     # goal-algo params
     vg.add('min_reward', lambda goal_weight: [goal_weight * 0.1])  # now running it with only the terminal reward of 1!
     vg.add('max_reward', lambda goal_weight: [goal_weight * 0.9])
-    vg.add('smart_init', [True])
+    vg.add('smart_init', [False])
     # replay buffer
     vg.add('replay_buffer', [True])
     vg.add('coll_eps', [0.3])  # lambda terminal_eps: [terminal_eps])
@@ -371,7 +368,7 @@ if __name__ == '__main__':
     vg.add('gan_discriminator_layers', [[128, 128]])
     vg.add('gan_noise_size', [4])
     vg.add('goal_noise_level', [0.5])
-    vg.add('gan_outer_iters', [100])
+    vg.add('gan_outer_iters', [20])
 
     vg.add('seed', range(100, 200, 20))
 
