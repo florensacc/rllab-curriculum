@@ -13,50 +13,45 @@ from sandbox.young_clgan.state.evaluator import evaluate_states
 from sandbox.young_clgan.logging.visualization import save_image
 
 
-def plot_policy_performance(policy, env, horizon, n_samples=400, n_traj=10, fname=None):
-    goals_dim = 2
-    goals_bound = env.goal_bounds[:len(env.goal_bounds) // 2]
-    
-    goals = np.random.uniform(-goals_bound, goals_bound, [n_samples, goals_dim])
-    
-    limit = np.max(goals_bound)
-    
-    success_rates = evaluate_states(
+
+def plot_policy_performance(policy, env, horizon, n_traj=5, grid_size=50, fname=None):
+    limit = 0.2
+    x, y = np.meshgrid(np.linspace(-limit, limit, grid_size), np.linspace(-limit, limit, grid_size))
+    grid_shape = x.shape
+    goals = np.hstack([
+        x.flatten().reshape(-1, 1),
+        y.flatten().reshape(-1, 1)
+    ])
+    z = evaluate_states(
         goals, env, policy, horizon, n_traj=n_traj, key='goal_reached',
         aggregator=(np.max, np.mean)
     )
-    
+
+    z = z.reshape(grid_shape)
+    plt.figure()
     plt.clf()
-    
-    plt.scatter(goals[:, 0], goals[:, 1], c=success_rates, s=10, cmap='plasma')
+    plt.pcolormesh(x, y, z, vmin=0.0, vmax=1.0)
     plt.colorbar()
-    plt.axis('equal')
-    plt.xlim(-limit, limit)
-    plt.ylim(-limit, limit)
-        
     
-    img = save_image(fname=fname)
-    
-    return img
+    return save_image(fname=fname)
     
     
-def plot_generator_samples(generator, env=None, size=100, fname=None):
+    
+def plot_generator_samples(generator, size=100, fname=None):
     
     goals, _ = generator.sample_states(size)
     
-    if env is None:
-        limit = np.max(np.abs(goals))
-    else:
-        goals_bound = env.goal_bounds[:len(env.goal_bounds) // 2]
-        limit = np.max(goals_bound)
+    limit = 0.2
     
     
     goals_dim = 2
     
+    plt.figure()
+    plt.clf()
     plt.scatter(goals[:, 0], goals[:, 1], s=10)
-    plt.axis('equal')
     plt.xlim(-limit, limit)
     plt.ylim(-limit, limit)
+    
         
     
     img = save_image(fname=fname)

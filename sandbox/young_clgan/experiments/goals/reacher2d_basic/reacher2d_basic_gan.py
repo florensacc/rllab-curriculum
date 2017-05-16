@@ -83,7 +83,7 @@ def run_task(v):
     )
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
-    n_traj = 3
+    n_traj = v['n_evaluation_traj']
 
     logger.log("Initializing report and plot_policy_reward...")
     log_dir = logger.get_snapshot_dir()
@@ -210,11 +210,11 @@ def run_task(v):
         # report.save()
         
         report.add_image(
-            plot_generator_samples(gan, env), 'gan_samples_{}'.format(outer_iter)
+            plot_generator_samples(gan), 'gan_samples_{}'.format(outer_iter)
         )
         
         report.add_image(
-            plot_policy_performance(policy, env, v['horizon']),
+            plot_policy_performance(policy, env, v['horizon'], n_traj=n_traj),
             'policy_rewards_{}'.format(outer_iter)
         )
 
@@ -369,6 +369,7 @@ if __name__ == '__main__':
     vg.add('gan_noise_size', [4])
     vg.add('goal_noise_level', [0.5])
     vg.add('gan_outer_iters', [20])
+    vg.add('n_evaluation_traj', [5])
 
     vg.add('seed', range(100, 200, 20))
 

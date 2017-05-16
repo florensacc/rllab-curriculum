@@ -81,7 +81,7 @@ def run_task(v):
     )
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
-    n_traj = 3
+    n_traj = v['n_evaluation_traj']
 
     # feasible_goals = generate_initial_goals(env, policy, v['goal_range'], horizon=v['horizon'], size=10000) #v['horizon'])
     # print(feasible_goals)
@@ -130,7 +130,8 @@ def run_task(v):
             
             
         report.add_image(
-            plot_policy_performance(policy, env, v['horizon'])
+            plot_policy_performance(policy, env, v['horizon'], n_traj=n_traj),
+            'policy_rewards_{}'.format(outer_iter)
         )
 
         
@@ -234,6 +235,7 @@ if __name__ == '__main__':
     # policy initialization
     vg.add('output_gain', [1])
     vg.add('policy_init_std', [1])
+    vg.add('n_evaluation_traj', [5])
 
     print('Running {} inst. on type {}, with price {}, parallel {}'.format(
         vg.size, config.AWS_INSTANCE_TYPE,
