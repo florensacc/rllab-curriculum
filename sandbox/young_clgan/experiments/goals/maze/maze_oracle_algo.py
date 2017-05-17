@@ -35,12 +35,11 @@ from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
-sampling_res = 2
-
 
 def run_task(v):
     random.seed(v['seed'])
     np.random.seed(v['seed'])
+    sampling_res = 2 if 'sampling_res' not in v.keys() else v['sampling_res']
 
     # Log performance of randomly initialized policy with FIXED goal [0.1, 0.1]
     logger.log("Initializing report and plot_policy_reward...")
@@ -59,6 +58,7 @@ def run_task(v):
         obs_transform=lambda x: x[:int(len(x) / 2)],
         terminal_eps=v['terminal_eps'],
         distance_metric=v['distance_metric'],
+        extend_dist_rew=v['extend_dist_rew'],
         only_feasible=v['only_feasible'],
         terminate_env=True,
     )
@@ -102,15 +102,12 @@ def run_task(v):
             logger.log("Converting the labels")
             init_classes, text_labels = convert_label(labels)
             goals = np.concatenate([goals, unif_goals[init_classes == 2]]).reshape((-1, v['goal_size']))
-        logger.record_tabular('LabelingRollouts', k * v['n_traj'])
-        total_rollouts += k * v['n_traj']
-        logger.record_tabular('TotalLabelingRollouts', total_rollouts)
 
         if v['replay_buffer'] and outer_iter > 0 and all_goals.size > 0:
             old_goals = all_goals.sample(v['num_old_goals'])  #todo: replay noise?
             goals = np.vstack([goals, old_goals])
 
-        with ExperimentLogger(log_dir, '_last', snapshot_mode='last', hold_outter_log=True):
+        with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment goal generator")
             update_env_state_generator(
                 env,
@@ -150,6 +147,11 @@ def run_task(v):
         # plot_labeled_states(goals, labels_det, report=report, itr=outer_iter, limit=v['goal_range'], center=v['goal_center'])
 
         labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
+
+        # rollouts used for labeling (before TRPO itrs):
+        logger.record_tabular('LabelingRollouts', k * v['n_traj'])
+        total_rollouts += k * v['n_traj']
+        logger.record_tabular('TotalLabelingRollouts', total_rollouts)
 
         logger.dump_tabular(with_prefix=False)
         report.new_row()

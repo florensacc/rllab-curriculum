@@ -35,12 +35,11 @@ from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
-sampling_res = 2
-
 
 def run_task(v):
     random.seed(v['seed'])
     np.random.seed(v['seed'])
+    sampling_res = 2 if 'sampling_res' not in v.keys() else v['sampling_res']
 
     # Log performance of randomly initialized policy with FIXED goal [0.1, 0.1]
     logger.log("Initializing report and plot_policy_reward...")
@@ -61,6 +60,7 @@ def run_task(v):
         obs_transform=lambda x: x[:int(len(x) / 2)],
         terminal_eps=v['terminal_eps'],
         distance_metric=v['distance_metric'],
+        extend_dist_rew=v['extend_dist_rew'],
         only_feasible=v['only_feasible'],
         terminate_env=True,
     )
@@ -144,7 +144,7 @@ def run_task(v):
         else:
             goals = raw_goals
 
-        with ExperimentLogger(log_dir, '_last', snapshot_mode='last', hold_outter_log=True):
+        with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment goal generator")
             update_env_state_generator(
                 env,

@@ -66,6 +66,7 @@ if __name__ == '__main__':
     vg.add('min_reward', [0])
     vg.add('max_reward', [1])
     vg.add('distance_metric', ['L2'])
+    vg.add('extend_dist_rew', [True])  # !!!!
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('with_replacement', [False])
@@ -77,7 +78,7 @@ if __name__ == '__main__':
     vg.add('num_old_goals', [100])
     # sampling params
     vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [400])
-    vg.add('outer_iters', [1000])
+    vg.add('outer_iters', lambda maze_id: [200] if maze_id == 0 else [1000])
     vg.add('inner_iters', [5])
     vg.add('pg_batch_size', [20000])
     # policy initialization

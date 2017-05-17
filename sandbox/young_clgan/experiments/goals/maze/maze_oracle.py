@@ -59,15 +59,18 @@ if __name__ == '__main__':
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('terminal_eps', [0.3])
     vg.add('only_feasible', [True])
-    vg.add('maze_id', [11])  # default is 0
-    vg.add('goal_range', lambda maze_id: [5] if maze_id==0 else [7])  # this will be used also as bound of the state_space
-    vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id==0 else [(0,0)])
+    vg.add('maze_id', [0, 11])  # default is 0
+    vg.add('goal_range',
+           lambda maze_id: [5] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
+    vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
     # goal-algo params
     vg.add('min_reward', [0])
     vg.add('max_reward', [1])
     vg.add('distance_metric', ['L2'])
+    vg.add('extend_dist_rew', [False])  # !!!!
     vg.add('persistence', [1, 3])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
+    vg.add('sampling_res', [1])
     vg.add('with_replacement', [False])
     # replay buffer
     vg.add('replay_buffer', [False])
@@ -75,9 +78,9 @@ if __name__ == '__main__':
     vg.add('num_new_goals', [40, 60])
     vg.add('num_old_goals', [0])
     # sampling params
-    vg.add('horizon', [200])
-    vg.add('outer_iters', [400])
-    vg.add('inner_iters', [3])
+    vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [400])
+    vg.add('outer_iters', lambda maze_id: [200] if maze_id == 0 else [1000])
+    vg.add('inner_iters', [3])  # again we will have to divide/adjust the
     vg.add('pg_batch_size', [20000])
     # policy initialization
     vg.add('output_gain', [1])
