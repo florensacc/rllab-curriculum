@@ -42,7 +42,7 @@ class StateCollection(object):
         return np.array(results)
 
     def append(self, states):
-        if states:
+        if len(states) > 0:
             states = np.array(states)
             if self.distance_threshold is not None and self.distance_threshold > 0:
                 states = self._process_states(states)
