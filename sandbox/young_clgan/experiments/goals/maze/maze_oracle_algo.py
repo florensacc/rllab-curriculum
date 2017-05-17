@@ -30,7 +30,7 @@ from sandbox.young_clgan.state.generator import StateGAN
 from sandbox.young_clgan.state.utils import StateCollection
 
 from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, generate_initial_goals
-from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy, sample_unif_feas
+from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy, sample_unif_feas, unwrap_maze
 from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
@@ -40,6 +40,7 @@ def run_task(v):
     random.seed(v['seed'])
     np.random.seed(v['seed'])
     sampling_res = 2 if 'sampling_res' not in v.keys() else v['sampling_res']
+    samples_per_cell = 10  # for the oracle rejection sampling
 
     # Log performance of randomly initialized policy with FIXED goal [0.1, 0.1]
     logger.log("Initializing report and plot_policy_reward...")
@@ -97,7 +98,7 @@ def run_task(v):
             print('good goals collected: ', goals.shape[0])
             logger.log("Sampling and labeling the goals: %d" % k)
             k += 1
-            unif_goals = sample_unif_feas(env, samples_per_cell=20)
+            unif_goals = sample_unif_feas(env, samples_per_cell=samples_per_cell)
             labels = label_states(unif_goals, env, policy, v['horizon'], n_traj=v['n_traj'])
             logger.log("Converting the labels")
             init_classes, text_labels = convert_label(labels)
@@ -149,8 +150,9 @@ def run_task(v):
         labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
 
         # rollouts used for labeling (before TRPO itrs):
-        logger.record_tabular('LabelingRollouts', k * v['n_traj'])
-        total_rollouts += k * v['n_traj']
+        num_empty_spaces = len(unwrap_maze(env).find_empty_space())
+        logger.record_tabular('LabelingRollouts', k * v['n_traj'] * samples_per_cell * num_empty_spaces)
+        total_rollouts += k * v['n_traj'] * samples_per_cell * num_empty_spaces
         logger.record_tabular('TotalLabelingRollouts', total_rollouts)
 
         logger.dump_tabular(with_prefix=False)

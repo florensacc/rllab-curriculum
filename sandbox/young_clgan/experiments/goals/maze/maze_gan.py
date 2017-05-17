@@ -53,7 +53,7 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'new-goalGAN-mazeL2'
+    exp_prefix = 'new-goalGAN-mazeL2-persist1'
 
     vg = VariantGenerator()
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
@@ -76,16 +76,16 @@ if __name__ == '__main__':
     vg.add('coll_eps', [0.3])
     vg.add('num_new_goals', [200])
     vg.add('num_old_goals', [100])
-    vg.add('add_on_policy', [100, 0])
+    vg.add('add_on_policy', [True, False])
     # sampling params
-    vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [400])
-    vg.add('outer_iters', lambda maze_id: [100] if maze_id == 0 else [500])
+    vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
+    vg.add('outer_iters', lambda maze_id: [400] if maze_id == 0 else [1000])
     vg.add('inner_iters', [5])
     vg.add('pg_batch_size', [20000])
     # policy initialization
     vg.add('output_gain', [1])
     vg.add('policy_init_std', [1])
-    vg.add('learn_std', [True])
+    vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
     # gan configs
     vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability

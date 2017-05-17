@@ -43,17 +43,21 @@ def get_policy(file):
     return policy, train_env
 
 
+def unwrap_maze(env):
+    obj = env
+    while not hasattr(obj, 'find_empty_space') and hasattr(obj, 'wrapped_env'):
+        obj = obj.wrapped_env
+    assert hasattr(obj, 'find_empty_space'), "Your train env has not find_empty_spaces!"
+    return obj
+
+
 def sample_unif_feas(train_env, samples_per_cell):
     """
     :param train_env: wrappers around maze
     :param samples_per_cell: how many samples per cell of the maze
     :return: 
     """
-    obj = train_env
-    while not hasattr(obj, 'find_empty_space') and hasattr(obj, 'wrapped_env'):
-        obj = obj.wrapped_env
-    assert hasattr(obj, 'find_empty_space'), "Your train env has not find_empty_spaces!"
-    maze_env = obj
+    maze_env = unwrap_maze(train_env)
     empty_spaces = maze_env.find_empty_space()
 
     size_scaling = maze_env.MAZE_SIZE_SCALING
@@ -65,6 +69,7 @@ def sample_unif_feas(train_env, samples_per_cell):
             states.append(state)
 
     return np.array(states)
+
 
 def my_square_scatter(axes, x_array, y_array, z_array, min_z=None, max_z=None, size=0.5, **kwargs):
     size = float(size)

@@ -248,24 +248,8 @@ class MazeEnv(ProxyEnv, Serializable):
         next_obs = self.get_current_obs()
 
         reward = self.coef_inner_rew * inner_rew
-
-        #x, y = self.wrapped_env.get_body_com("torso")[:2]
-        # ref_x = x + self._init_torso_x
-        # ref_y = y + self._init_torso_y
-        #info['outer_rew'] = 0
-
         info['inner_rew'] = inner_rew
 
-        goal = self.wrapped_env.current_goal
-        info['x_goal']= goal[0]  # Todo: is this used anywhere?
-        info['y_goal']= goal[1]
-
-        # reward = self.coef_inner_rew * inner_rew
-        # minx, maxx, miny, maxy = self._goal_range
-        # if minx <= x <= maxx and miny <= y <= maxy:
-        #     done = True
-        #     reward += self.goal_rew
-        #     info['rew_rew'] = 1  # we keep here the original one, so that the AvgReturn is directly the freq of success
         return Step(next_obs, reward, done, **info)
 
     def action_from_key(self, key):

@@ -37,7 +37,7 @@ if __name__ == '__main__':
         # 'ap-south-1b', 'ap-northeast-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'us-west-1b', 'us-west-1a',
         # 'ap-south-1a', 'ap-northeast-1a', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'us-east-1b'
     ]
-    ec2_instance = args.type if args.type else 'c4.2xlarge'
+    ec2_instance = args.type if args.type else 'c4.8xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -53,7 +53,7 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'new-oracle-maze'
+    exp_prefix = 'new-oracle-maze-persist1-L2'
 
     vg = VariantGenerator()
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
@@ -67,8 +67,8 @@ if __name__ == '__main__':
     vg.add('min_reward', [0])
     vg.add('max_reward', [1])
     vg.add('distance_metric', ['L2'])
-    vg.add('extend_dist_rew', [False])  # !!!!
-    vg.add('persistence', [1, 3])
+    vg.add('extend_dist_rew', [False, True])  # !!!!
+    vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('sampling_res', [2])
     vg.add('with_replacement', [False])
@@ -78,24 +78,17 @@ if __name__ == '__main__':
     vg.add('num_new_goals', [40, 60])
     vg.add('num_old_goals', [0])
     # sampling params
-    vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [400])
+    vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
     vg.add('outer_iters', lambda maze_id: [200] if maze_id == 0 else [1000])
     vg.add('inner_iters', [3])  # again we will have to divide/adjust the
     vg.add('pg_batch_size', [20000])
     # policy initialization
     vg.add('output_gain', [1])
     vg.add('policy_init_std', [1])
-    vg.add('learn_std', [True])
+    vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
-    # gan configs
-    vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
-    vg.add('gan_generator_layers', [[256, 256]])
-    vg.add('gan_discriminator_layers', [[128, 128]])
-    vg.add('gan_noise_size', [4])
-    vg.add('goal_noise_level', [0.5])
-    vg.add('gan_outer_iters', [200])
 
-    vg.add('seed', range(100, 170, 10))
+    vg.add('seed', range(100, 150, 10))
 
     # # gan_configs
     # vg.add('GAN_batch_size', [128])  # proble with repeated name!!

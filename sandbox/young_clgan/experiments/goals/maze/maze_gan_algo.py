@@ -198,7 +198,7 @@ def run_task(v):
         filtered_raw_goals = [goal for goal, label in zip(goals, labels) if label[0] == 1]
         all_goals.append(filtered_raw_goals)
 
-        if v['add_on_policy'] > 0:
+        if v['add_on_policy']:
             logger.log("sampling on policy")
             feasible_goals = generate_initial_goals(env, policy, v['goal_range'], goal_center=v['goal_center'],
                                                     horizon=v['horizon'])
