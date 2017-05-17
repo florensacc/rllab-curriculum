@@ -75,11 +75,11 @@ def parallel_map(func, iterable_object, num_processes=-1):
     return results
 
 
-def label_states(states, env, policy, horizon, min_reward=0, max_reward=1,
+def label_states(states, env, policy, horizon, min_reward=0, max_reward=1, key='rewards',
                  old_rewards=None, improvement_threshold=0, n_traj=1, n_processes=-1):
     mean_rewards = evaluate_states(
         states, env, policy, horizon,
-        n_traj=n_traj, n_processes=n_processes
+        n_traj=n_traj, n_processes=n_processes, key=key,
     )
     mean_rewards = mean_rewards.reshape(-1, 1)
 

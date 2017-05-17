@@ -144,7 +144,7 @@ def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1
     if parallel:
         return test_policy_parallel(policy, train_env, as_goals, visualize, sampling_res, n_traj=n_traj)
     
-    
+
     if hasattr(train_env.wrapped_env, 'find_empty_space'):
         maze_env = train_env.wrapped_env
     else:
@@ -195,16 +195,9 @@ def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1
                     init_state = (x, y)
                     states.append(init_state)
                     train_env.update_init_selector(FixedStateGenerator(init_state))
-                    # print("fixing init selector to: ", init_state)
-                    # print("the goal is set to: ", train_env.current_goal)
                 for n in range(n_traj):
                     path = rollout(train_env, policy, animated=visualize, max_path_length=max_path_length, speedup=100)
                     paths.append(path)
-                    # print("the first obs in the path is ", path['observations'][0])
-                    # print("total length: ", np.size(path['rewards']))
-                    # print("the goal is: ", train_env.current_goal)
-                    # print("the min dist is: ", np.min(path['env_infos']['distance']))
-                # print('goal: ', goal, ', the one in env_infos is: ', paths[-1]['env_infos']['x_goal'], paths[-1]['env_infos']['y_goal'])
                 avg_totRewards.append(np.mean([np.sum(path['rewards']) for path in paths]))
                 avg_success.append(np.mean([int(np.min(path['env_infos']['distance'])
                                                 <= train_env.terminal_eps) for path in paths]))

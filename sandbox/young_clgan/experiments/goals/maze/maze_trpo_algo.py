@@ -89,7 +89,8 @@ def run_task(v):
 
         logger.log("Outer itr # %i" % outer_iter)
         logger.log("Sampling goals from the GAN")
-        goals = np.random.uniform(-v['goal_range'], v['goal_range'], size=(300, v['goal_size']))
+        goals = np.random.uniform(np.array(v['goal_center']) - np.array(v['goal_range']),
+                                  np.array(v['goal_center']) + np.array(v['goal_range']), size=(300, v['goal_size']))
 
         with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment goal generator")
@@ -122,7 +123,7 @@ def run_task(v):
                              itr=outer_iter, report=report, limit=v['goal_range'], center=v['goal_center'])
 
         logger.log("Labeling the goals")
-        labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'])
+        labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
 
         plot_labeled_states(goals, labels, report=report, itr=outer_iter, limit=v['goal_range'],
                             center=v['goal_center'], maze_id=v['maze_id'])

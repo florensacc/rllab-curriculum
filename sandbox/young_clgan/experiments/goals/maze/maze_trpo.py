@@ -37,7 +37,7 @@ if __name__ == '__main__':
         # 'ap-south-1b', 'ap-northeast-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'us-west-1b', 'us-west-1a',
         # 'ap-south-1a', 'ap-northeast-1a', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'us-east-1b'
     ]
-    ec2_instance = args.type if args.type else 'c4.8xlarge'
+    ec2_instance = args.type if args.type else 'c4.4xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -53,13 +53,13 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'new-goalGAN-mazeBIG'
+    exp_prefix = 'new-trpo-maze'
 
     vg = VariantGenerator()
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('terminal_eps', [0.3])
     vg.add('only_feasible', [True])
-    vg.add('maze_id', [0])
+    vg.add('maze_id', [0, 11])
     vg.add('goal_range',
            lambda maze_id: [5] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
     vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
@@ -67,11 +67,10 @@ if __name__ == '__main__':
     vg.add('min_reward', [0])
     vg.add('max_reward', [1])
     vg.add('distance_metric', ['L2'])
-    vg.add('extend_dist_rew', [True])  # !!!!
+    vg.add('extend_dist_rew', [False, True])  # !!!!
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('with_replacement', [False])
-    vg.add('smart_init', [True])
 
     vg.add('unif_goals', [True])  # put False for fixing the goal below!
     vg.add('final_goal', [(0, 4)])
@@ -91,13 +90,6 @@ if __name__ == '__main__':
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [True])
     vg.add('adaptive_std', [False])
-    # gan configs
-    vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
-    vg.add('gan_generator_layers', [[256, 256]])
-    vg.add('gan_discriminator_layers', [[128, 128]])
-    vg.add('gan_noise_size', [4])
-    vg.add('goal_noise_level', [0.5])
-    vg.add('gan_outer_iters', [200, 400])
 
     vg.add('seed', range(200, 270, 10))
 
