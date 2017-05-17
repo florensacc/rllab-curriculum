@@ -9,6 +9,7 @@ import numpy as np
 from pylab import *
 import pylab
 import matplotlib.colorbar as cbar
+import matplotlib.patches as patches
 
 from rllab.sampler.utils import rollout
 from rllab.misc import logger
@@ -42,6 +43,29 @@ def get_policy(file):
     return policy, train_env
 
 
+def sample_unif_feas(train_env, samples_per_cell):
+    """
+    :param train_env: wrappers around maze
+    :param samples_per_cell: how many samples per cell of the maze
+    :return: 
+    """
+    obj = train_env
+    while not hasattr(obj, 'find_empty_space') and hasattr(obj, 'wrapped_env'):
+        obj = obj.wrapped_env
+    assert hasattr(obj, 'find_empty_space'), "Your train env has not find_empty_spaces!"
+    maze_env = obj
+    empty_spaces = maze_env.find_empty_space()
+
+    size_scaling = maze_env.MAZE_SIZE_SCALING
+
+    states = []
+    for empty_space in empty_spaces:
+        for i in range(samples_per_cell):
+            state = np.array(empty_space) + np.random.uniform(-size_scaling/2, size_scaling/2, 2)
+            states.append(state)
+
+    return np.array(states)
+
 def my_square_scatter(axes, x_array, y_array, z_array, min_z=None, max_z=None, size=0.5, **kwargs):
     size = float(size)
 
@@ -65,12 +89,33 @@ def my_square_scatter(axes, x_array, y_array, z_array, min_z=None, max_z=None, s
     return True
 
 
-def plot_heatmap(rewards, goals, prefix='', max_reward=6000, spacing=1, show_heatmap=True):
+def plot_heatmap(rewards, goals, prefix='', max_reward=6000, spacing=1, show_heatmap=True, maze_id=0,
+                 limit=None, center=None):
     fig, ax = plt.subplots()
 
     x_goal, y_goal = np.array(goals).T
 
     my_square_scatter(axes=ax, x_array=x_goal, y_array=y_goal, z_array=rewards, min_z=0, max_z=max_reward, size=spacing)
+
+    if maze_id == 0:
+        ax.add_patch(patches.Rectangle((-3, -3), 10, 2, fill=True, edgecolor="none", facecolor='0.4'))
+        ax.add_patch(patches.Rectangle((-3, -3), 2, 10, fill=True, edgecolor="none", facecolor='0.4'))
+        ax.add_patch(patches.Rectangle((-3, 5), 10, 2, fill=True, edgecolor="none", facecolor='0.4'))
+        ax.add_patch(patches.Rectangle((5, -3), 2, 10, fill=True, edgecolor="none", facecolor='0.4'))
+        ax.add_patch(patches.Rectangle((-1, 1), 4, 2, fill=True, edgecolor="none", facecolor='0.4'))
+    elif maze_id == 11:
+        ax.add_patch(patches.Rectangle((-7, 5), 14, 2, fill=True, edgecolor="none", facecolor='0.4'))
+        ax.add_patch(patches.Rectangle((5, -7), 2, 14, fill=True, edgecolor="none", facecolor='0.4'))
+        ax.add_patch(patches.Rectangle((-7, -7), 14, 2, fill=True, edgecolor="none", facecolor='0.4'))
+        ax.add_patch(patches.Rectangle((-7, -7), 2, 14, fill=True, edgecolor="none", facecolor='0.4'))
+        ax.add_patch(patches.Rectangle((-3, 1), 10, 2, fill=True, edgecolor="none", facecolor='0.4'))
+        ax.add_patch(patches.Rectangle((-3, -3), 2, 6, fill=True, edgecolor="none", facecolor='0.4'))
+        ax.add_patch(patches.Rectangle((-3, -3), 6, 2, fill=True, edgecolor="none", facecolor='0.4'))
+    if limit is not None:
+        if center is None:
+            center = np.zeros(2)
+        ax.set_ylim(center[0] - limit, center[0] + limit)
+        ax.set_xlim(center[1] - limit, center[1] + limit)
 
     # colmap = cm.ScalarMappable(cmap=cm.rainbow)
     # colmap.set_array(rewards)
@@ -228,10 +273,15 @@ def test_policy_parallel(policy, train_env, as_goals=True, visualize=True, sampl
 
 
 def test_and_plot_policy(policy, env, as_goals=True, visualize=True, sampling_res=1,
-                         n_traj=1, max_reward=1, itr=0, report=None):
+                         n_traj=1, max_reward=1, itr=0, report=None, center=None, limit=None):
     avg_totRewards, avg_success, states, spacing = test_policy(policy, env, as_goals, visualize,
                                                                sampling_res=sampling_res, n_traj=n_traj)
-    plot_heatmap(avg_success, states, max_reward=max_reward, spacing=spacing, show_heatmap=False)
+    obj = env
+    while not hasattr(obj, '_maze_id') and hasattr(obj, 'wrapped_env'):
+        obj = env.wrapped_env
+    maze_id = obj._maze_id
+    plot_heatmap(avg_success, states, max_reward=max_reward, spacing=spacing, show_heatmap=False, maze_id=maze_id,
+                 center=center, limit=limit)
 
     reward_img = save_image()
     mean_rewards = np.mean(avg_totRewards)

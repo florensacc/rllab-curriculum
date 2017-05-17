@@ -7,7 +7,8 @@ import numpy as np
 from rllab import spaces
 from rllab.envs.base import Step
 from rllab.envs.proxy_env import ProxyEnv
-from rllab.envs.mujoco.maze.maze_env_utils import construct_maze
+# from rllab.envs.mujoco.maze.maze_env_utils import construct_maze
+from sandbox.young_clgan.envs.maze.maze_env_utils import construct_maze
 from rllab.envs.mujoco.mujoco_env import MODEL_DIR, BIG
 from rllab.envs.mujoco.maze.maze_env_utils import ray_segment_intersect, point_distance
 from rllab.core.serializable import Serializable
@@ -254,6 +255,10 @@ class MazeEnv(ProxyEnv, Serializable):
         #info['outer_rew'] = 0
 
         info['inner_rew'] = inner_rew
+
+        goal = self.wrapped_env.current_goal
+        info['x_goal']= goal[0]  # Todo: is this used anywhere?
+        info['y_goal']= goal[1]
 
         # reward = self.coef_inner_rew * inner_rew
         # minx, maxx, miny, maxy = self._goal_range

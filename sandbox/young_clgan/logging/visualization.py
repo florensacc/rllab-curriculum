@@ -16,7 +16,6 @@ mpl.use('Agg')
 from matplotlib import rc
 import matplotlib.patches as patches
 
-
 # rc('text', usetex=True)
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
@@ -80,7 +79,7 @@ def save_image(fig=None, fname=None):
 
 
 def plot_labeled_states(states, labels, convert_labels=convert_label, report=None,
-                        itr=0, limit=None, center=None):
+                        itr=0, limit=None, center=None, maze_id=0):
     goal_classes, text_labels = convert_labels(labels)
     total_goals = labels.shape[0]
     goal_class_frac = OrderedDict()  # this needs to be an ordered dict!! (for the log tabular)
@@ -91,7 +90,7 @@ def plot_labeled_states(states, labels, convert_labels=convert_label, report=Non
 
     img = plot_labeled_samples(
         samples=states, sample_classes=goal_classes, text_labels=text_labels, limit=limit,
-        center=center,
+        center=center, maze_id=maze_id,
     )
     summary_string = ''
     for key, value in goal_class_frac.items():
@@ -100,7 +99,7 @@ def plot_labeled_states(states, labels, convert_labels=convert_label, report=Non
 
 
 def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers=None, fname=None, limit=None,
-                         center=None, size=1000, colors=('r', 'g', 'b'), bounds=None):
+                         center=None, size=1000, colors=('r', 'g', 'b'), bounds=None, maze_id=0):
     """
     :param samples: 
     :param sample_classes: numerical value of the class
@@ -122,6 +121,14 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
     if len(samples[0]) >= 3:
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
+        if bounds is not None:
+            plot_bounds(ax, bounds, dim=3)
+        if limit:
+            if center is None:
+                center = np.zeros(3)
+            ax.set_ylim3d(center[0] - limit, center[0] + limit)
+            ax.set_xlim3d(center[1] - limit, center[1] + limit)
+            ax.set_zlim3d(center[2] - limit, center[2] + limit)
         for i in unique_classes:
             ax.scatter(
                 samples[sample_classes == i, 0],
@@ -134,16 +141,28 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
                 lw=0,
                 label=text_labels[i]
             )
-        if bounds is not None:
-            plot_bounds(ax, bounds, dim=3)
-        if limit:
-            if center is None:
-                center = np.zeros(3)
-            ax.set_ylim3d(center[0] - limit, center[0] + limit)
-            ax.set_xlim3d(center[1] - limit, center[1] + limit)
-            ax.set_zlim3d(center[2] - limit, center[2] + limit)
     else:
         fig, ax = plt.subplots()
+        if bounds is not None:
+            plot_bounds(ax, bounds, 2, label='state_bound')
+        elif maze_id == 0:
+            ax.add_patch(patches.Rectangle((-3, -3), 10, 2, fill=True, edgecolor="none", facecolor='0.4'))
+            ax.add_patch(patches.Rectangle((-3, -3), 2, 10, fill=True, edgecolor="none", facecolor='0.4'))
+            ax.add_patch(patches.Rectangle((-3, 5), 10, 2, fill=True, edgecolor="none", facecolor='0.4'))
+            ax.add_patch(patches.Rectangle((5, -3), 2, 10, fill=True, edgecolor="none", facecolor='0.4'))
+            ax.add_patch(patches.Rectangle((-1, 1), 4, 2, fill=True, edgecolor="none", facecolor='0.4'))
+            # bounds_ext = [[-1, -1], [5, 5]]
+            # plot_bounds(ax, bounds_ext, 2, label='maze_walls', color='k')
+            # bounds_int = [[-1, 1], [3, 3]]
+            # plot_bounds(ax, bounds_int, 2, color='k')
+        elif maze_id == 11:
+            ax.add_patch(patches.Rectangle((-7, 5), 14, 2, fill=True, edgecolor="none", facecolor='0.4'))
+            ax.add_patch(patches.Rectangle((5, -7), 2, 14, fill=True, edgecolor="none", facecolor='0.4'))
+            ax.add_patch(patches.Rectangle((-7, -7), 14, 2, fill=True, edgecolor="none", facecolor='0.4'))
+            ax.add_patch(patches.Rectangle((-7, -7), 2, 14, fill=True, edgecolor="none", facecolor='0.4'))
+            ax.add_patch(patches.Rectangle((-3, 1), 10, 2, fill=True, edgecolor="none", facecolor='0.4'))
+            ax.add_patch(patches.Rectangle((-3, -3), 2, 6, fill=True, edgecolor="none", facecolor='0.4'))
+            ax.add_patch(patches.Rectangle((-3, -3), 6, 2, fill=True, edgecolor="none", facecolor='0.4'))
         for i in unique_classes:
             ax.scatter(
                 samples[sample_classes == i, 0],
@@ -154,15 +173,10 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
                 alpha=0.8,
                 lw=0,
                 marker=markers[i],
-                label=text_labels[i]
+                label=text_labels[i],
+                zorder=100
             )
-        if bounds is not None:
-            plot_bounds(ax, bounds, 2, label='state_bound')
-        if True:
-            bounds_ext = [[-1, -1], [5,5]]
-            plot_bounds(ax, bounds_ext, 2, label='maze_walls', color='k')
-            bounds_int = [[-1,1], [3,3]]
-            plot_bounds(ax, bounds_int, 2, color='k')
+
         if limit is not None:
             if center is None:
                 center = np.zeros(2)

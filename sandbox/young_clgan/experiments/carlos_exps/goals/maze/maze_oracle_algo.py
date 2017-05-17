@@ -7,13 +7,6 @@ import random
 import numpy as np
 from collections import OrderedDict
 
-from sandbox.young_clgan.envs.maze.maze_evaluate_old import test_and_plot_policy, \
-    sample_unif_feas  # TODO: unify interface w/ Init
-from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
-from sandbox.young_clgan.logging import HTMLReport
-from sandbox.young_clgan.logging import format_dict
-from sandbox.young_clgan.logging.visualization import save_image, plot_labeled_samples, \
-    plot_line_graph
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -23,8 +16,12 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.envs.base import UniformListGoalGenerator, FixedGoalGenerator, update_env_goal_generator, \
-    generate_onpolicy_goals
+from sandbox.young_clgan.logging import HTMLReport
+from sandbox.young_clgan.logging import format_dict
+from sandbox.young_clgan.logging.visualization import save_image, plot_labeled_samples
+from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
+from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy, sample_unif_feas
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator, update_env_state_generator
 
 from sandbox.young_clgan.logging.logger import ExperimentLogger
 from sandbox.young_clgan.goal.evaluator import convert_label, label_goals, evaluate_goals

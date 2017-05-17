@@ -55,6 +55,7 @@ if __name__ == '__main__':
     vg.add('horizon', [400])
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('goal_range', [5])  # this will be used also as bound of the state_space
+    vg.add('maze_id', [11])
     vg.add('goal_center', [(2, 2)])
     vg.add('unif_goals', [False])
     vg.add('final_goal', [(-0.8, 4)])

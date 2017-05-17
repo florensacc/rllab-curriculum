@@ -14,7 +14,7 @@ from rllab.misc import logger
 from sandbox.young_clgan.logging import HTMLReport
 from sandbox.young_clgan.logging import format_dict
 from sandbox.young_clgan.logging.logger import ExperimentLogger
-from sandbox.young_clgan.logging.visualization import save_image, plot_labeled_samples, plot_labeled_states
+from sandbox.young_clgan.logging.visualization import plot_labeled_states
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -24,7 +24,7 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states
+from sandbox.young_clgan.state.evaluator import label_states
 from sandbox.young_clgan.envs.base import UniformListStateGenerator, update_env_state_generator, UniformStateGenerator
 from sandbox.young_clgan.state.generator import StateGAN
 from sandbox.young_clgan.state.utils import StateCollection
@@ -52,7 +52,7 @@ def run_task(v):
 
     tf_session = tf.Session()
 
-    inner_env = normalize(PointMazeEnv())
+    inner_env = normalize(PointMazeEnv(maze_id=v['maze_id']))
 
     uniform_goal_generator = UniformStateGenerator(state_size=v['goal_size'], bounds=v['goal_range'],
                                                    center=v['goal_center'])
@@ -83,7 +83,7 @@ def run_task(v):
 
     logger.log('Generating the Initial Heatmap...')
     test_and_plot_policy(policy, env, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
-                         itr=outer_iter, report=report)
+                         itr=outer_iter, report=report, limit=v['goal_range'], center=v['goal_center'])
 
     # GAN
     logger.log("Instantiating the GAN...")
@@ -112,7 +112,7 @@ def run_task(v):
                                                 horizon=v['horizon'])
         labels = np.ones((feasible_goals.shape[0], 2)).astype(np.float32)  # make them all good goals
         plot_labeled_states(feasible_goals, labels, report=report, itr=outer_iter,
-                            limit=v['goal_range'], center=v['goal_center'])
+                            limit=v['goal_range'], center=v['goal_center'], maze_id=v['maze_id'])
 
         dis_loss, gen_loss = gan.pretrain(states=feasible_goals, outer_iters=v['gan_outer_iters'])
         print("Loss of Gen and Dis: ", gen_loss, dis_loss)
@@ -126,7 +126,7 @@ def run_task(v):
     labels = label_states(initial_goals, env, policy, v['horizon'], n_traj=v['n_traj'])
 
     plot_labeled_states(initial_goals, labels, report=report, itr=outer_iter,
-                        limit=v['goal_range'], center=v['goal_center'])
+                        limit=v['goal_range'], center=v['goal_center'], maze_id=v['maze_id'])
     report.new_row()
 
     all_goals = StateCollection(distance_threshold=v['coll_eps'])
@@ -168,14 +168,14 @@ def run_task(v):
             algo.train()
 
         logger.log('Generating the Heatmap...')
-        test_and_plot_policy(policy, env, max_reward=v['max_reward'],
-                             sampling_res=sampling_res, n_traj=v['n_traj'], itr=outer_iter, report=report)
+        test_and_plot_policy(policy, env, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
+                             itr=outer_iter, report=report, limit=v['goal_range'], center=v['goal_center'])
 
         logger.log("Labeling the goals")
         labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'])
 
         plot_labeled_states(goals, labels, report=report, itr=outer_iter, limit=v['goal_range'],
-                            center=v['goal_center'])
+                            center=v['goal_center'], maze_id=v['maze_id'])
 
         # ###### extra for deterministic:
         # logger.log("Labeling the goals deterministic")
