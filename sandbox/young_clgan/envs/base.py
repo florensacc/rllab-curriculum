@@ -50,7 +50,7 @@ class UniformListStateGenerator(StateGenerator, Serializable):
         super(UniformListStateGenerator, self).__init__()
 
     def update(self, *args, **kwargs):
-        if self.persist_count % 3 == 0:
+        if self.persist_count % self.persistence == 0:
             if len(self.unused_states):
                 self._state = random.choice(self.unused_states)
                 if not self.with_replacement:
@@ -76,7 +76,7 @@ class UniformStateGenerator(StateGenerator, Serializable):
         super(UniformStateGenerator, self).__init__()
 
     def update(self, *args, **kwargs):  # This should be centered around the initial position!!
-        if self.persist_count % 3 == 0:
+        if self.persist_count % self.persistence == 0:
             sample = []
             for low, high in zip(*self.bounds):
                 sample.append(np.random.uniform(low, high))
