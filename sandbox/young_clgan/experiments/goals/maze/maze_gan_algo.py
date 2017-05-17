@@ -123,7 +123,7 @@ def run_task(v):
     initial_goals, _ = gan.sample_states_with_noise(v['num_new_goals'])
 
     logger.log("Labeling the goals")
-    labels = label_states(initial_goals, env, policy, v['horizon'], n_traj=v['n_traj'])
+    labels = label_states(initial_goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
 
     plot_labeled_states(initial_goals, labels, report=report, itr=outer_iter,
                         limit=v['goal_range'], center=v['goal_center'], maze_id=v['maze_id'])
@@ -172,7 +172,7 @@ def run_task(v):
                              itr=outer_iter, report=report, limit=v['goal_range'], center=v['goal_center'])
 
         logger.log("Labeling the goals")
-        labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'])
+        labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
 
         plot_labeled_states(goals, labels, report=report, itr=outer_iter, limit=v['goal_range'],
                             center=v['goal_center'], maze_id=v['maze_id'])
@@ -197,3 +197,10 @@ def run_task(v):
         # append new goals to list of all goals (replay buffer): Not the low reward ones!!
         filtered_raw_goals = [goal for goal, label in zip(goals, labels) if label[0] == 1]
         all_goals.append(filtered_raw_goals)
+
+        if v['add_on_policy'] > 0:
+            logger.log("sampling on policy")
+            feasible_goals = generate_initial_goals(env, policy, v['goal_range'], goal_center=v['goal_center'],
+                                                    horizon=v['horizon'])
+            # downsampled_feasible_goals = feasible_goals[np.random.choice(feasible_goals.shape[0], v['add_on_policy']),:]
+            all_goals.append(feasible_goals)
