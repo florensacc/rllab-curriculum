@@ -70,7 +70,7 @@ if __name__ == '__main__':
     vg.add('extend_dist_rew', [False])  # !!!!
     vg.add('persistence', [1, 3])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
-    vg.add('sampling_res', [1])
+    vg.add('sampling_res', [2])
     vg.add('with_replacement', [False])
     # replay buffer
     vg.add('replay_buffer', [False])

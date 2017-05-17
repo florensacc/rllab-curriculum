@@ -37,7 +37,7 @@ if __name__ == '__main__':
         # 'ap-south-1b', 'ap-northeast-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'us-west-1b', 'us-west-1a',
         # 'ap-south-1a', 'ap-northeast-1a', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'us-east-1b'
     ]
-    ec2_instance = args.type if args.type else 'c4.8xlarge'
+    ec2_instance = args.type if args.type else 'm4.4xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -53,13 +53,13 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'new-goalGAN-mazeBIG'
+    exp_prefix = 'new-goalGAN-mazeL2'
 
     vg = VariantGenerator()
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('terminal_eps', [0.3])
     vg.add('only_feasible', [True])
-    vg.add('maze_id', [0])
+    vg.add('maze_id', [0, 11])
     vg.add('goal_range', lambda maze_id: [5] if maze_id==0 else [7])  # this will be used also as bound of the state_space
     vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id==0 else [(0,0)])
     # goal-algo params
@@ -76,9 +76,10 @@ if __name__ == '__main__':
     vg.add('coll_eps', [0.3])
     vg.add('num_new_goals', [200])
     vg.add('num_old_goals', [100])
+    vg.add('add_on_policy', [100, 0])
     # sampling params
     vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [400])
-    vg.add('outer_iters', lambda maze_id: [200] if maze_id == 0 else [1000])
+    vg.add('outer_iters', lambda maze_id: [100] if maze_id == 0 else [500])
     vg.add('inner_iters', [5])
     vg.add('pg_batch_size', [20000])
     # policy initialization
@@ -92,7 +93,7 @@ if __name__ == '__main__':
     vg.add('gan_discriminator_layers', [[128, 128]])
     vg.add('gan_noise_size', [4])
     vg.add('goal_noise_level', [0.5])
-    vg.add('gan_outer_iters', [200, 400])
+    vg.add('gan_outer_iters', [200])
 
     vg.add('seed', range(200, 270, 10))
 
