@@ -16,6 +16,7 @@ class BlockInsertionEnvBase(MujocoEnv, Serializable):
     FILE = None
     goal_lb = None
     goal_ub = None
+    goal_dim = None
 
     def __init__(self, *args, **kwargs):
         MujocoEnv.__init__(self, *args, **kwargs)
@@ -23,6 +24,7 @@ class BlockInsertionEnvBase(MujocoEnv, Serializable):
         self.file = self.__class__.FILE
         self.goal_lb = self.__class__.goal_lb
         self.goal_ub = self.__class__.goal_ub
+        self.goal_dim = self.__class__.goal_dim
 
     @overrides
     def get_current_obs(self):
