@@ -14,11 +14,19 @@ from rllab.misc.overrides import overrides
 class BlockInsertionEnvBase(MujocoEnv, Serializable):
     
     FILE = None
+<<<<<<< HEAD
+=======
+
+>>>>>>> temp_merge
 
     def __init__(self, *args, **kwargs):
         MujocoEnv.__init__(self, *args, **kwargs)
         Serializable.quick_init(self, locals())
         self.file = self.__class__.FILE
+<<<<<<< HEAD
+=======
+
+>>>>>>> temp_merge
 
     @overrides
     def get_current_obs(self):

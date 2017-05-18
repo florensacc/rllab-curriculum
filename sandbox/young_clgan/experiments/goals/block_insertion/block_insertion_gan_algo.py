@@ -191,6 +191,19 @@ def run_task(v):
             v['gan_outer_iters'],
         )
 
+        logger.log("Evaluate Unif")
+        reward_img, mean_success = plot_policy_performance(policy, env, horizon=v['horizon'], n_traj=3, key='goal_reached')
+
+        with logger.tabular_prefix('Outer_'):
+            logger.record_tabular('iter', outer_iter)
+            # logger.record_tabular('MeanRewards', mean_rewards)
+            logger.record_tabular('Success', mean_success)
+
+        report.add_image(
+            reward_img,
+            'policy performance\n itr: {} \nsuccess: {}'.format(outer_iter,  mean_success)
+        )
+
         logger.dump_tabular(with_prefix=False)
         report.new_row()
 

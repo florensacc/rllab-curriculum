@@ -37,7 +37,7 @@ if __name__ == '__main__':
         # 'ap-south-1b', 'ap-northeast-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'us-west-1b', 'us-west-1a',
         # 'ap-south-1a', 'ap-northeast-1a', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'us-east-1b'
     ]
-    ec2_instance = args.type if args.type else 'm4.4xlarge'
+    ec2_instance = args.type if args.type else 'm4.2xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -56,7 +56,7 @@ if __name__ == '__main__':
     exp_prefix = 'new-goalGAN-block'
 
     vg = VariantGenerator()
-    vg.add('env_idx', [3, 1, 2, 3])
+    vg.add('env_idx', [3, 1, 2])
     vg.add('terminal_eps', [0.05])
     # goal-algo params
     vg.add('min_reward', [0])
@@ -69,26 +69,26 @@ if __name__ == '__main__':
     vg.add('smart_init', [True])
     # replay buffer
     vg.add('replay_buffer', [True])
-    vg.add('coll_eps', [0.3])
+    vg.add('coll_eps', [0.05])
     vg.add('num_new_goals', [200])
     vg.add('num_old_goals', [100])
-    vg.add('add_on_policy', [True, False])
+    vg.add('add_on_policy', [True])
     # sampling params
     vg.add('horizon', [200])
-    vg.add('outer_iters', [200])
+    vg.add('outer_iters', [500])
     vg.add('inner_iters', [5])
     vg.add('pg_batch_size', [20000])
     # policy initialization
     vg.add('output_gain', [1])
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [False])
-    vg.add('adaptive_std', [False])
+    vg.add('adaptive_std', [True, False])
     # gan configs
     vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
     vg.add('gan_generator_layers', [[256, 256]])
     vg.add('gan_discriminator_layers', [[128, 128]])
     vg.add('gan_noise_size', [4])
-    vg.add('goal_noise_level', [0.5])
+    vg.add('goal_noise_level', [0.05])
     vg.add('gan_outer_iters', [200])
 
     vg.add('seed', range(200, 270, 10))

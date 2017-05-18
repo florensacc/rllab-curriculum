@@ -4,9 +4,11 @@ import numpy as np
 
 import matplotlib
 matplotlib.use('Agg')
+from pylab import *
 import pylab
 
 from matplotlib import pyplot as plt
+import matplotlib.colorbar as cbar
 from mpl_toolkits.mplot3d import Axes3D
 
 
@@ -14,25 +16,23 @@ from sandbox.young_clgan.state.evaluator import evaluate_states
 from sandbox.young_clgan.logging.visualization import save_image
 
 
-
-def plot_policy_performance(policy, env, horizon, n_samples=200, n_traj=5, fname=None):
-    goals_dim = 3
+def plot_policy_performance(policy, env, horizon, n_samples=200, n_traj=5, fname=None, key='goal_reached'):
+    goals_dim = env.goal_dim
     goal_lb = env.goal_lb
     goal_ub = env.goal_ub
     
     goals = np.random.uniform(goal_lb, goal_ub, [n_samples, goals_dim])
     
     success_rates = evaluate_states(
-        goals, env, policy, horizon, n_traj=n_traj, key='goal_reached',
+        goals, env, policy, horizon, n_traj=n_traj, key=key,
         aggregator=(np.max, np.mean)
     )
     
     plt.clf()
-    
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     
-    p = ax.scatter(goals[:, 0], goals[:, 1], goals[:, 2], c=success_rates, s=10, cmap=pylab.cm.jet)  # 'plasma')
+    p = ax.scatter(goals[:, 0], goals[:, 1], goals[:, 2], c=success_rates, s=10, cmap=pylab.cm.jet, vmin=0, vmax=1)  # 'plasma')
     fig.colorbar(p)
     ax.set_xlim(goal_lb[0], goal_ub[0])
     ax.set_ylim(goal_lb[1], goal_ub[1])
