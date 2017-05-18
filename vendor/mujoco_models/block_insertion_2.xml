@@ -9,32 +9,31 @@
 
     <worldbody>
 
-        <body name="block" pos="0 0 0.3">
+        <body name="block" pos="0 -0.3 0.3">
             <geom name="block_geom" rgba="1 1 0 1" type="box" size="0.06 0.05 0.02" contype="1" conaffinity="1" />
             <joint name="block_x" type="slide" pos="0 0 0" axis="1 0 0" limited="true" range="-0.36 0.36" damping="1" />
-            <joint name="block_y" type="slide" pos="0 0 0" axis="0 1 0" limited="true" range="-0.7 0" damping="1" />
+            <joint name="block_y" type="slide" pos="0 0 0" axis="0 1 0" limited="true" range="0 0.6" />
             <joint name="block_z" type="slide" pos="0 0 0" axis="0 0 1" limited="true" range="-0.3 0.3" damping="1" />
-            <joint name="block_rotate_1" type="hinge" pos="0 0 0" axis="0 1 0" limited="true" range="-3.14 3.14" />
+            <joint name="block_rotate_1" type="hinge" pos="0 0 0" axis="0 1 0" limited="true" range="-3.1416 3.1416" />
         </body>
         
-        <!--<body name="w0" pos="0 -0.45 0.3">-->
+        <!--<body name="w0" pos="0 0 0.3">-->
         <!--    <geom name="w0" rgba="1 0 0 1" type="box" size="0.02 0.05 0.06" contype="1" conaffinity="1" />-->
         <!--</body>-->
-
-
-        <body name="w1" pos="0.32 -0.45 0.3">
+        
+        <body name="w1" pos="0.32 0 0.3">
             <geom name="w1" rgba="0.9 0.9 0.9 1" type="box" size="0.29 0.05 0.6" contype="1" conaffinity="1" />
         </body>
 
-        <body name="w2" pos="-0.32 -0.45 0.3">
+        <body name="w2" pos="-0.32 0 0.3">
             <geom name="w2" rgba="0.9 0.9 0.9 1" type="box" size="0.29 0.05 0.6" contype="1" conaffinity="1" />
         </body>
 
-        <body name="w3" pos="0.0 -0.45 0.64">
+        <body name="w3" pos="0.0 0 0.64">
             <geom name="w3" rgba="0.9 0.9 0.9 1" type="box" size="0.032 0.05 0.26" contype="1" conaffinity="1" />
         </body>
 
-        <body name="w4" pos="0.0 -0.45 -0.04">
+        <body name="w4" pos="0.0 0 -0.04">
             <geom name="w4" rgba="0.9 0.9 0.9 1" type="box" size="0.032 0.05 0.26" contype="1" conaffinity="1" />
         </body>
     </worldbody>
