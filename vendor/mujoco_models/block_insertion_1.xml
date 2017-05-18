@@ -16,9 +16,9 @@
             <joint name="block_z" type="slide" pos="0 0 0" axis="0 0 1" limited="true" range="-0.3 0.3" />
         </body>
         
-        <!--<body name="w0" pos="0 -0.45 0.3">-->
-        <!--    <geom name="w0" rgba="1 0 0 1" type="box" size="0.02 0.05 0.06" contype="1" conaffinity="1" />-->
-        <!--</body>-->
+        <body name="w0" pos="0 -0.45 0.3">
+            <geom name="w0" rgba="1 0 0 1" type="box" size="0.02 0.05 0.06" contype="1" conaffinity="1" />
+        </body>
 
 
         <body name="w1" pos="0.32 -0.45 0.3">
@@ -39,9 +39,9 @@
     </worldbody>
 
     <actuator>
-        <motor joint="block_x" ctrlrange="-100.0 100.0" ctrllimited="true" />
-        <motor joint="block_y" ctrlrange="-100.0 100.0" ctrllimited="true" />
-        <motor joint="block_z" ctrlrange="-100.0 100.0" ctrllimited="true" />
+        <motor joint="block_x" ctrlrange="-50.0 50.0" ctrllimited="true" />
+        <motor joint="block_y" ctrlrange="-50.0 50.0" ctrllimited="true" />
+        <motor joint="block_z" ctrlrange="-50.0 50.0" ctrllimited="true" />
     </actuator>
 
 </mujoco>

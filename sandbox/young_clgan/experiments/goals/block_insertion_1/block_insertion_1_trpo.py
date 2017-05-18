@@ -110,7 +110,7 @@ def run_task(v):
         
 
         logger.log("Perform TRPO with UniformListStateGenerator...")
-        with ExperimentLogger(inner_log_dir, outer_iter, snapshot_mode='last', hold_outter_log=True):
+        with ExperimentLogger(inner_log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
             # set goal generator to uniformly sample from selected all_goals
             # update_env_state_generator(
             #     env,
@@ -226,7 +226,7 @@ if __name__ == '__main__':
 
     vg.add('seed', range(30, 90, 20))
     # # GeneratorEnv params
-    vg.add('terminal_eps', [0.01])
+    vg.add('terminal_eps', [0.05])
     vg.add('sample_unif_feas', [True])
     vg.add('distance_metric', ['L2'])
     vg.add('goal_weight', [1])
