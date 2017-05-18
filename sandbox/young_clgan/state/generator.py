@@ -92,7 +92,7 @@ class StateGAN(StateGenerator):
         :param outer_iters: of the GAN
         """
         states = self.state_center + np.random.uniform(
-            -self.state_range, self.state_range, size=(size, self.state_size)
+            self.state_center - self.state_range, self.state_center + self.state_range, size=(size, self.state_size)
         )
         return self.pretrain(states, outer_iters, generator_iters, discriminator_iters)
 
