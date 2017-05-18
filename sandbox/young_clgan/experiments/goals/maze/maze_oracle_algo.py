@@ -99,7 +99,7 @@ def run_task(v):
             logger.log("Sampling and labeling the goals: %d" % k)
             k += 1
             unif_goals = sample_unif_feas(env, samples_per_cell=samples_per_cell)
-            labels = label_states(unif_goals, env, policy, v['horizon'], n_traj=v['n_traj'])
+            labels = label_states(unif_goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
             logger.log("Converting the labels")
             init_classes, text_labels = convert_label(labels)
             goals = np.concatenate([goals, unif_goals[init_classes == 2]]).reshape((-1, v['goal_size']))
@@ -136,7 +136,7 @@ def run_task(v):
                              itr=outer_iter, report=report, center=v['goal_center'], limit=v['goal_range'])
 
         logger.log("Labeling the goals")
-        labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'])
+        labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
 
         plot_labeled_states(goals, labels, report=report, itr=outer_iter, limit=v['goal_range'],
                             center=v['goal_center'], maze_id=v['maze_id'])

@@ -67,7 +67,7 @@ if __name__ == '__main__':
     vg.add('min_reward', [0])
     vg.add('max_reward', [1])
     vg.add('distance_metric', ['L2'])
-    vg.add('extend_dist_rew', [False, True])  # !!!!
+    vg.add('extend_dist_rew', [True, False])  # !!!!
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('sampling_res', [2])
