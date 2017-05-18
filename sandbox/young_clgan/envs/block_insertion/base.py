@@ -11,14 +11,11 @@ from rllab.spaces.box import Box
 from rllab.misc.overrides import overrides
 
 
-
-
-
-class BlockInsertionEnv1(MujocoEnv, Serializable):
-
-    FILE = 'block_insertion_1.xml'
-    goal_lb = np.array([-0.36, -0.7, -0.25])
-    goal_ub = np.array([0.36, 0, 0.25])
+class BlockInsertionEnvBase(MujocoEnv, Serializable):
+    
+    FILE = None
+    goal_lb = None
+    goal_ub = None
 
     def __init__(self, *args, **kwargs):
         MujocoEnv.__init__(self, *args, **kwargs)

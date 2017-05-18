@@ -26,6 +26,7 @@ class Reacher2DEnv(MujocoEnv, Serializable):
     def get_current_obs(self):
         theta = self.model.data.qpos.flat[:2]
         return np.concatenate([
+            self.model.data.geom_xpos[8, :2],
             self.model.data.qpos.flat[:2],
             np.cos(theta),
             np.sin(theta),
@@ -33,15 +34,20 @@ class Reacher2DEnv(MujocoEnv, Serializable):
         ])
 
     @overrides
-    def reset(self, *args, **kwargs):
+    def reset(self, **kwargs):
+        if 'goal' in kwargs:
+            goal = np.array(kwargs['goal']).flatten()
+        else:
+            goal = np.array([0, 0])
         qpos = np.random.uniform(low=-0.005, high=0.005, size=(self.model.nq, 1)) + self.init_qpos
-        qpos[2:, :] = 0
+        qpos[2:, 0] = goal
         qvel = self.init_qvel + np.random.uniform(low=-0.005, high=0.005, size=(self.model.nv, 1))
-        qvel[2:, :] = 0
+        qvel[2:, 0] = 0
         # import pdb; pdb.set_trace()
         self.set_state(qpos, qvel)
         self.current_com = self.model.data.com_subtree[0]
         self.dcom = np.zeros_like(self.current_com)
+        
         return self.get_current_obs()
 
     def step(self, action):
