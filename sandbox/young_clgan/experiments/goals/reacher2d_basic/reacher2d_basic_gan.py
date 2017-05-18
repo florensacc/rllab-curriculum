@@ -319,7 +319,7 @@ if __name__ == '__main__':
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
     config.AWS_SPOT_PRICE = str(info["price"])
-    n_parallel = int(info["vCPU"] / 2)  # make the default 4 if not using ec2
+    n_parallel = int(info["vCPU"])  # make the default 4 if not using ec2
     if args.ec2:
         mode = 'ec2'
     elif args.local_docker:
@@ -355,7 +355,7 @@ if __name__ == '__main__':
     # sampling params
     vg.add('horizon', [200])
     vg.add('outer_iters', [200])
-    vg.add('inner_iters', [5])
+    vg.add('inner_iters', [10])
     vg.add('pg_batch_size', [20000])
     # policy params
     vg.add('output_gain', [1])  # check here if it goes wrong! both were 0.1
@@ -368,10 +368,10 @@ if __name__ == '__main__':
     vg.add('gan_discriminator_layers', [[128, 128]])
     vg.add('gan_noise_size', [4])
     vg.add('goal_noise_level', [0.5])
-    vg.add('gan_outer_iters', [20])
+    vg.add('gan_outer_iters', [100])
     vg.add('n_evaluation_traj', [5])
 
-    vg.add('seed', range(100, 200, 20))
+    vg.add('seed', range(30, 90, 20))
 
     print('\n****\nRunning {} inst. on type {}, with price {}, parallel {} on the subnets: '.format(
         vg.size, config.AWS_INSTANCE_TYPE, config.AWS_SPOT_PRICE, n_parallel),

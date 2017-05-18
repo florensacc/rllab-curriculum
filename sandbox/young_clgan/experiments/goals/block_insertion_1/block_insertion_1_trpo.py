@@ -21,7 +21,7 @@ from sandbox.carlos_snn.autoclone import autoclone
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 
-from sandbox.young_clgan.envs.reacher.reacher2d_basic_env import Reacher2DEnv
+from sandbox.young_clgan.envs.block_insertion.block_insertion_env_1 import BlockInsertionEnv1
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
@@ -34,9 +34,10 @@ from sandbox.young_clgan.state.evaluator import *
 from sandbox.young_clgan.logging.html_report import format_dict, HTMLReport
 from sandbox.young_clgan.logging.visualization import *
 from sandbox.young_clgan.logging.logger import ExperimentLogger
-from sandbox.young_clgan.experiments.goals.reacher2d_basic.utils import plot_policy_performance
+from sandbox.young_clgan.experiments.goals.block_insertion_1.utils import plot_policy_performance
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
+
 
 
 def run_task(v):
@@ -45,27 +46,31 @@ def run_task(v):
 
     # goal generators
     logger.log("Initializing the goal generators and the inner env...")
-    inner_env = normalize(Reacher2DEnv())
-    print("the state_bounds are: ", np.array([0.2, 0.2]))
+    inner_env = normalize(BlockInsertionEnv1())
+    
+    goal_center = (BlockInsertionEnv1.goal_ub + BlockInsertionEnv1.goal_lb) / 2
+    goal_bounds = (BlockInsertionEnv1.goal_ub - BlockInsertionEnv1.goal_lb) / 2
+    goal_lb = BlockInsertionEnv1.goal_lb
+    goal_ub = BlockInsertionEnv1.goal_ub
+    goal_dim = 3
 
-    center = np.zeros(2)
     uniform_goal_generator = UniformStateGenerator(
-        state_size=2, bounds=0.2, center=center
+        state_size=goal_dim, bounds=[goal_lb, goal_ub], 
     )
-    feasible_goal_ub = np.array(np.array([0.2, 0.2]))
+    feasible_goal_ub = goal_bounds
     print("the feasible_goal_ub is: ", feasible_goal_ub)
     uniform_feasible_goal_generator = UniformStateGenerator(
-        state_size=2, bounds=[-1 * feasible_goal_ub, feasible_goal_ub]
+        state_size=goal_dim, bounds=[goal_lb, goal_ub]
     )
 
     env = GoalExplorationEnv(
         env=inner_env, goal_generator=uniform_goal_generator,
-        obs_transform=lambda x: x[:2],
+        obs_transform=lambda x: x[:3],
         terminal_eps=v['terminal_eps'],
         only_feasible=False,
         distance_metric=v['distance_metric'],
         terminate_env=True, goal_weight=v['goal_weight'],
-        goal_bounds=np.array([0.2, 0.2])
+        goal_bounds=goal_bounds
     )  # this goal_generator will be updated by a uniform after
     
     if v['sample_unif_feas']:
@@ -209,7 +214,7 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
 
 
-    default_prefix = 'reacher2d-basic-goal-trpo'
+    default_prefix = 'block-insertion-1-goal-trpo'
     if args.prefix is None:
         exp_prefix = format_experiment_prefix(default_prefix)
     elif args.prefix == '':
@@ -230,7 +235,7 @@ if __name__ == '__main__':
     vg.add('max_reward', lambda goal_weight: [goal_weight * 0.9])
     vg.add('horizon', [200])
     vg.add('outer_iters', [200])
-    vg.add('inner_iters', [10])
+    vg.add('inner_iters', [5])
     vg.add('pg_batch_size', [20000])
     # policy initialization
     vg.add('output_gain', [1])

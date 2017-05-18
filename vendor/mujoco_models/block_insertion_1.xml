@@ -1,0 +1,43 @@
+<mujoco model="block_insertion">
+
+    <compiler inertiafromgeom="true" angle="radian" coordinate="local" />
+    <option timestep="0.01" gravity="0 0 0" iterations="20" integrator="Euler" />
+    <default>
+        <joint armature="0.04" damping="1" limited="false" />
+        <geom friction=".5 .1 .1" margin="0.002" condim="1" contype="0" conaffinity="0" />
+    </default>
+
+    <worldbody>
+
+        <body name="block" pos="0 0 0.3">
+            <geom name="block_geom" rgba="0.2 0.2 0.2 1" type="box" size="0.02 0.05 0.06" contype="1" conaffinity="1" />
+            <joint name="block_x" type="slide" pos="0 0 0" axis="1 0 0" limited="true" range="-0.36 0.36" />
+            <joint name="block_y" type="slide" pos="0 0 0" axis="0 1 0" limited="true" range="-0.7 0" />
+            <joint name="block_z" type="slide" pos="0 0 0" axis="0 0 1" limited="true" range="-0.25 0.25" />
+        </body>
+
+
+        <body name="w1" pos="0.216 -0.45 0.3">
+            <geom name="w1" rgba="0.2 0.2 0.2 1" type="box" size="0.183 0.05 0.4" contype="1" conaffinity="1" />
+        </body>
+
+        <body name="w2" pos="-0.216 -0.45 0.3">
+            <geom name="w2" rgba="0.2 0.2 0.2 1" type="box" size="0.183 0.05 0.4" contype="1" conaffinity="1" />
+        </body>
+
+        <body name="w3" pos="0.0 -0.45 0.566">
+            <geom name="w3" rgba="0.2 0.2 0.2 1" type="box" size="0.032 0.05 0.183" contype="1" conaffinity="1" />
+        </body>
+
+        <body name="w4" pos="0.0 -0.45 0.034">
+            <geom name="w4" rgba="0.2 0.2 0.2 1" type="box" size="0.032 0.05 0.183" contype="1" conaffinity="1" />
+        </body>
+    </worldbody>
+
+    <actuator>
+        <motor joint="block_x" ctrlrange="-100.0 100.0" ctrllimited="true" />
+        <motor joint="block_y" ctrlrange="-100.0 100.0" ctrllimited="true" />
+        <motor joint="block_z" ctrlrange="-100.0 100.0" ctrllimited="true" />
+    </actuator>
+
+</mujoco>
