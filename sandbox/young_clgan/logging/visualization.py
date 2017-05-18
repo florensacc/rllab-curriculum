@@ -99,7 +99,7 @@ def plot_labeled_states(states, labels, convert_labels=convert_label, report=Non
 
 
 def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers=None, fname=None, limit=None,
-                         center=None, size=1000, colors=('r', 'g', 'b'), bounds=None, maze_id=0):
+                         center=None, size=1000, colors=('r', 'g', 'b'), bounds=None, maze_id=None):
     """
     :param samples: 
     :param sample_classes: numerical value of the class
@@ -123,7 +123,7 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
         ax = fig.add_subplot(111, projection='3d')
         if bounds is not None:
             plot_bounds(ax, bounds, dim=3)
-        if limit:
+        if limit is not None:
             if center is None:
                 center = np.zeros(3)
             ax.set_ylim3d(center[0] - limit, center[0] + limit)

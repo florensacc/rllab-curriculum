@@ -2,15 +2,10 @@ from sandbox.young_clgan.utils import set_env_no_gpu, format_experiment_prefix
 set_env_no_gpu()
 
 import argparse
-import math
-import os
 import os.path as osp
 import sys
 import random
 from multiprocessing import cpu_count
-
-import numpy as np
-import tensorflow as tf
 
 from rllab.misc.instrument import run_experiment_lite
 from rllab import config
@@ -21,23 +16,21 @@ from sandbox.carlos_snn.autoclone import autoclone
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 
-from sandbox.young_clgan.envs.block_insertion.block_insertion_env_1 import BlockInsertionEnv1
+from sandbox.young_clgan.envs.block_insertion.block_insertion_env import BlockInsertionEnv1, BlockInsertionEnv2, \
+    BlockInsertionEnv3
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, update_env_goal_generator, \
-    evaluate_goal_env
-from sandbox.young_clgan.envs.base import FixedStateGenerator, UniformStateGenerator, \
-    update_env_state_generator
+from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, evaluate_goal_env
+from sandbox.young_clgan.envs.base import UniformStateGenerator
 
 from sandbox.young_clgan.state.evaluator import *
 from sandbox.young_clgan.logging.html_report import format_dict, HTMLReport
 from sandbox.young_clgan.logging.visualization import *
 from sandbox.young_clgan.logging.logger import ExperimentLogger
-from sandbox.young_clgan.experiments.goals.block_insertion_1.utils import plot_policy_performance
+from sandbox.young_clgan.envs.block_insertion.utils import plot_policy_performance
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
-
 
 
 def run_task(v):
@@ -46,13 +39,18 @@ def run_task(v):
 
     # goal generators
     logger.log("Initializing the goal generators and the inner env...")
-    inner_env = normalize(BlockInsertionEnv1())
-    
-    goal_center = (BlockInsertionEnv1.goal_ub + BlockInsertionEnv1.goal_lb) / 2
-    goal_bounds = (BlockInsertionEnv1.goal_ub - BlockInsertionEnv1.goal_lb) / 2
-    goal_lb = BlockInsertionEnv1.goal_lb
-    goal_ub = BlockInsertionEnv1.goal_ub
-    goal_dim = 3
+    if v['env_idx'] == 1:
+        inner_env = normalize(BlockInsertionEnv1())
+    elif v['env_idx'] == 2:
+        inner_env = normalize(BlockInsertionEnv2())
+    else:
+        inner_env = normalize(BlockInsertionEnv3())
+
+    goal_center = (inner_env.goal_ub + inner_env.goal_lb) / 2
+    goal_bounds = (inner_env.goal_ub - inner_env.goal_lb) / 2
+    goal_lb = inner_env.goal_lb
+    goal_ub = inner_env.goal_ub
+    goal_dim = inner_env.goal_dim
 
     uniform_goal_generator = UniformStateGenerator(
         state_size=goal_dim, bounds=[goal_lb, goal_ub], 
@@ -65,7 +63,7 @@ def run_task(v):
 
     env = GoalExplorationEnv(
         env=inner_env, goal_generator=uniform_goal_generator,
-        obs_transform=lambda x: x[:3],
+        obs_transform=lambda x: x[:goal_dim],
         terminal_eps=v['terminal_eps'],
         only_feasible=False,
         distance_metric=v['distance_metric'],
@@ -132,14 +130,9 @@ def run_task(v):
             )
 
             algo.train()
-            
-            
-        report.add_image(
-            plot_policy_performance(policy, env, v['horizon'], n_traj=n_traj),
-            'policy_rewards_{}'.format(outer_iter)
-        )
 
-        
+        img, avg_success = plot_policy_performance(policy, env, v['horizon'], n_traj=n_traj)
+        report.add_image(img, 'policy_rewards_{}\nAvg_success: {}'.format(outer_iter, avg_success))
 
         # log some more on how the pendulum performs the upright and general task
         old_goal_generator = env.goal_generator
@@ -225,6 +218,7 @@ if __name__ == '__main__':
     vg = VariantGenerator()
 
     vg.add('seed', range(30, 90, 20))
+    vg.add('env_idx', [1, 2, 3])
     # # GeneratorEnv params
     vg.add('terminal_eps', [0.05])
     vg.add('sample_unif_feas', [True])

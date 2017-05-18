@@ -20,6 +20,9 @@ class BlockInsertionEnvBase(MujocoEnv, Serializable):
     def __init__(self, *args, **kwargs):
         MujocoEnv.__init__(self, *args, **kwargs)
         Serializable.quick_init(self, locals())
+        self.file = self.__class__.FILE
+        self.goal_lb = self.__class__.goal_lb
+        self.goal_ub = self.__class__.goal_ub
 
     @overrides
     def get_current_obs(self):

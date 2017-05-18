@@ -4,6 +4,7 @@ import numpy as np
 
 import matplotlib
 matplotlib.use('Agg')
+import pylab
 
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -31,7 +32,7 @@ def plot_policy_performance(policy, env, horizon, n_samples=200, n_traj=5, fname
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     
-    p = ax.scatter(goals[:, 0], goals[:, 1], goals[:, 2], c=success_rates, s=10, cmap='plasma')
+    p = ax.scatter(goals[:, 0], goals[:, 1], goals[:, 2], c=success_rates, s=10, cmap=pylab.cm.jet)  # 'plasma')
     fig.colorbar(p)
     ax.set_xlim(goal_lb[0], goal_ub[0])
     ax.set_ylim(goal_lb[1], goal_ub[1])
@@ -39,7 +40,7 @@ def plot_policy_performance(policy, env, horizon, n_samples=200, n_traj=5, fname
     
     img = save_image(fname=fname)
     
-    return img
+    return img, np.mean(success_rates)
     
     
     
