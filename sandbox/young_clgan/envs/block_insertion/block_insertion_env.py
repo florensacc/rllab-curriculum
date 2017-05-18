@@ -14,24 +14,12 @@ from sandbox.young_clgan.envs.block_insertion.base import BlockInsertionEnvBase
 
 
 class BlockInsertionEnv1(BlockInsertionEnvBase):
-
     FILE = 'block_insertion_1.xml'
-    goal_lb = np.array([-0.36, 0, -0.3])
-    goal_ub = np.array([0.36, 0.6, 0.3])
-    goal_dim = 3
 
 
 class BlockInsertionEnv2(BlockInsertionEnvBase):
-    
     FILE = 'block_insertion_2.xml'
-    goal_lb = np.array([-0.36, 0, -0.3, -3.14])
-    goal_ub = np.array([0.36, 0.6, 0.3, 3.14])
-    goal_dim = 4
     
     
 class BlockInsertionEnv3(BlockInsertionEnvBase):
-    
     FILE = 'block_insertion_3.xml'
-    goal_lb = np.array([-0.36, 0, -0.3, -3.14])
-    goal_ub = np.array([0.36, 1.0, 0.3, 3.14])
-    goal_dim = 4

@@ -14,15 +14,11 @@ from rllab.misc.overrides import overrides
 class BlockInsertionEnvBase(MujocoEnv, Serializable):
     
     FILE = None
-    goal_lb = None
-    goal_ub = None
 
     def __init__(self, *args, **kwargs):
         MujocoEnv.__init__(self, *args, **kwargs)
         Serializable.quick_init(self, locals())
         self.file = self.__class__.FILE
-        self.goal_lb = self.__class__.goal_lb
-        self.goal_ub = self.__class__.goal_ub
 
     @overrides
     def get_current_obs(self):
@@ -62,3 +58,15 @@ class BlockInsertionEnvBase(MujocoEnv, Serializable):
         
     def is_feasible(self, goal):
         return np.all(np.logical_and(self.goal_lb <= goal, goal <= self.goal_ub))
+        
+    @property
+    def goal_lb(self):
+        return self.model.jnt_range[:, 0]
+        
+    @property
+    def goal_ub(self):
+        return self.model.jnt_range[:, 1]
+        
+    @property
+    def goal_dim(self):
+        return self.model.njnt
