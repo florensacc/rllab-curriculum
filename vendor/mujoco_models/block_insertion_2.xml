@@ -14,8 +14,7 @@
             <joint name="block_x" type="slide" pos="0 0 0" axis="1 0 0" limited="true" range="-0.25 0.25" />
             <joint name="block_y" type="slide" pos="0 0 0" axis="0 1 0" limited="true" range="0 0.8" />
             <joint name="block_z" type="slide" pos="0 0 0" axis="0 0 1" limited="true" range="-0.25 0.25" />
-            <!--<joint name="block_rotate_1" type="hinge" pos="0 0 0" axis="0 1 0" limited="true" range="-3.1416 3.1416" />-->
-            <joint name="block_rotate_1" type="hinge" pos="0 0 0" axis="0 1 0" limited="true" range="-0.1 0.1" />
+            <joint name="block_rotate_1" type="hinge" pos="0 0 0" axis="0 1 0" limited="true" range="-3.1416 3.1416" />
         </body>
         
         <!--<body name="w0" pos="0 0 0.3">-->
