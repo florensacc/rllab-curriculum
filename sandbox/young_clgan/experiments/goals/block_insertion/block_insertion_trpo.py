@@ -16,10 +16,11 @@ from sandbox.carlos_snn.autoclone import autoclone
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 
-from sandbox.young_clgan.envs.block_insertion.block_insertion_env import BlockInsertionEnv1, BlockInsertionEnv2, \
-    BlockInsertionEnv3
+from sandbox.young_clgan.envs.block_insertion.block_insertion_env import BLOCK_INSERTION_ENVS
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
+
+from sandbox.young_clgan.utils import split_list
 
 from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, evaluate_goal_env
 from sandbox.young_clgan.envs.base import UniformStateGenerator
@@ -39,12 +40,7 @@ def run_task(v):
 
     # goal generators
     logger.log("Initializing the goal generators and the inner env...")
-    if v['env_idx'] == 1:
-        inner_env = normalize(BlockInsertionEnv1())
-    elif v['env_idx'] == 2:
-        inner_env = normalize(BlockInsertionEnv2())
-    else:
-        inner_env = normalize(BlockInsertionEnv3())
+    inner_env = BLOCK_INSERTION_ENVS[v['env_idx'] - 1]()
 
     goal_center = (inner_env.goal_ub + inner_env.goal_lb) / 2
     goal_bounds = (inner_env.goal_ub - inner_env.goal_lb) / 2
@@ -64,7 +60,7 @@ def run_task(v):
     env = GoalExplorationEnv(
         env=inner_env, goal_generator=uniform_goal_generator,
         obs_transform=lambda x: x[:goal_dim],
-        terminal_eps=v['terminal_eps'],
+        terminal_eps=np.sqrt(goal_dim) * v['terminal_eps'],
         only_feasible=False,
         distance_metric=v['distance_metric'],
         terminate_env=True, goal_weight=v['goal_weight'],
@@ -179,6 +175,7 @@ if __name__ == '__main__':
     parser.add_argument('--price', '-p', type=str, default='', help='set betting price')
     parser.add_argument('--subnet', '-sn', type=str, default='', help='set subnet like us-west-1a')
     parser.add_argument('--name', '-n', type=str, default='', help='set exp prefix name and new file name')
+    parser.add_argument('--n_seed', type=int, default=5, help='number of random seeds')
     parser.add_argument('--debug', action='store_true', default=False, help="run code without multiprocessing")
     parser.add_argument(
         '--prefix', type=str, default=None,
@@ -190,7 +187,7 @@ if __name__ == '__main__':
         autoclone.autoclone(__file__, args)
 
     # setup ec2
-    ec2_instance = args.type if args.type else 'm4.4xlarge'
+    ec2_instance = args.type if args.type else 'c4.8xlarge'
 
     # configure instance
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
@@ -207,7 +204,7 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
 
 
-    default_prefix = 'block-insertion-1-goal-trpo'
+    default_prefix = 'block-insertion-goal-trpo'
     if args.prefix is None:
         exp_prefix = format_experiment_prefix(default_prefix)
     elif args.prefix == '':
@@ -217,10 +214,10 @@ if __name__ == '__main__':
         
     vg = VariantGenerator()
 
-    vg.add('seed', range(30, 90, 20))
+    vg.add('seed', [s * 10 + 200 for s in range(args.n_seed)])
     vg.add('env_idx', [1, 2, 3])
     # # GeneratorEnv params
-    vg.add('terminal_eps', [0.05])
+    vg.add('terminal_eps', [0.02])
     vg.add('sample_unif_feas', [True])
     vg.add('distance_metric', ['L2'])
     vg.add('goal_weight', [1])
@@ -229,21 +226,38 @@ if __name__ == '__main__':
     vg.add('max_reward', lambda goal_weight: [goal_weight * 0.9])
     vg.add('horizon', [200])
     vg.add('outer_iters', [200])
-    vg.add('inner_iters', [5])
+    vg.add('inner_iters', [20])
     vg.add('pg_batch_size', [20000])
     # policy initialization
     vg.add('output_gain', [1])
     vg.add('policy_init_std', [1])
     vg.add('n_evaluation_traj', [5])
 
-    print('Running {} inst. on type {}, with price {}, parallel {}'.format(
+    print('Running {} tasks. on type {}, with price {}, parallel {}'.format(
         vg.size, config.AWS_INSTANCE_TYPE,
         config.AWS_SPOT_PRICE, n_parallel
     ))
 
     for vv in vg.variants():
-
         if mode in ['ec2', 'local_docker']:
+            # # choose subnet
+            # subnet = random.choice(subnets)
+            # config.AWS_REGION_NAME = subnet[:-1]
+            # config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
+            #     config.AWS_REGION_NAME]
+            # config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
+            #     config.AWS_REGION_NAME]
+            # config.AWS_SECURITY_GROUP_IDS = \
+            #     config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
+            #         config.AWS_REGION_NAME]
+            # config.AWS_NETWORK_INTERFACES = [
+            #     dict(
+            #         SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
+            #         Groups=config.AWS_SECURITY_GROUP_IDS,
+            #         DeviceIndex=0,
+            #         AssociatePublicIpAddress=True,
+            #     )
+            # ]
 
             run_experiment_lite(
                 # use_cloudpickle=False,
@@ -258,9 +272,9 @@ if __name__ == '__main__':
                 # plot=True,
                 exp_prefix=exp_prefix,
                 # exp_name=exp_name,
-                sync_s3_pkl=True,
                 # for sync the pkl file also during the training
-                sync_s3_png=True,
+                sync_s3_pkl=True,
+                # sync_s3_png=True,
                 sync_s3_html=True,
                 # # use this ONLY with ec2 or local_docker!!!
                 pre_commands=[
@@ -287,7 +301,5 @@ if __name__ == '__main__':
                 snapshot_mode="last",
                 seed=vv['seed'],
                 exp_prefix=exp_prefix,
-                print_command=False,
+                # exp_name=exp_name,
             )
-            if args.debug:
-                sys.exit()

@@ -13,6 +13,7 @@ from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
 from sandbox.young_clgan.experiments.goals.block_insertion.block_insertion_gan_algo import run_task
+from sandbox.young_clgan.utils import format_experiment_prefix
 
 if __name__ == '__main__':
 
@@ -27,6 +28,11 @@ if __name__ == '__main__':
     parser.add_argument('--subnet', '-sn', type=str, default='', help='set subnet like us-west-1a')
     parser.add_argument('--name', '-n', type=str, default='', help='set exp prefix name and new file name')
     parser.add_argument('--debug', action='store_true', default=False, help="run code without multiprocessing")
+    parser.add_argument('--n_seed', type=int, default=5, help='number of random seeds')
+    parser.add_argument(
+        '--prefix', type=str, default=None,
+        help='set the additional name for experiment prefix'
+    )
     args = parser.parse_args()
 
     if args.clone:
@@ -37,7 +43,7 @@ if __name__ == '__main__':
         # 'ap-south-1b', 'ap-northeast-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'us-west-1b', 'us-west-1a',
         # 'ap-south-1a', 'ap-northeast-1a', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'us-east-1b'
     ]
-    ec2_instance = args.type if args.type else 'm4.2xlarge'
+    ec2_instance = args.type if args.type else 'm4.4xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -53,11 +59,17 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'new-goalGAN-block'
+    default_prefix = 'block-insertion-goal-gan'
+    if args.prefix is None:
+        exp_prefix = format_experiment_prefix(default_prefix)
+    elif args.prefix == '':
+        exp_prefix = default_prefix
+    else:
+        exp_prefix = '{}_{}'.format(default_prefix, args.prefix)
 
     vg = VariantGenerator()
-    vg.add('env_idx', [3, 1, 2])
-    vg.add('terminal_eps', [0.05])
+    vg.add('env_idx', [1, 2, 3])
+    vg.add('terminal_eps', [0.02])
     # goal-algo params
     vg.add('min_reward', [0])
     vg.add('max_reward', [1])
@@ -74,9 +86,9 @@ if __name__ == '__main__':
     vg.add('num_old_goals', [100])
     vg.add('add_on_policy', [True])
     # sampling params
-    vg.add('horizon', [200])
+    vg.add('horizon', [400])
     vg.add('outer_iters', [500])
-    vg.add('inner_iters', [5])
+    vg.add('inner_iters', [20])
     vg.add('pg_batch_size', [20000])
     # policy initialization
     vg.add('output_gain', [1])
@@ -91,7 +103,7 @@ if __name__ == '__main__':
     vg.add('goal_noise_level', [0.05])
     vg.add('gan_outer_iters', [200])
 
-    vg.add('seed', range(200, 270, 10))
+    vg.add('seed', [s * 10 + 200 for s in range(args.n_seed)])
 
     # # gan_configs
     # vg.add('GAN_batch_size', [128])  # proble with repeated name!!

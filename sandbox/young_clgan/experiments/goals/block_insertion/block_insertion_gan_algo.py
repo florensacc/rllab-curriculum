@@ -31,8 +31,7 @@ from sandbox.young_clgan.state.generator import StateGAN
 from sandbox.young_clgan.state.utils import StateCollection
 
 from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, generate_initial_goals
-from sandbox.young_clgan.envs.block_insertion.block_insertion_env import BlockInsertionEnv1, BlockInsertionEnv2, \
-    BlockInsertionEnv3
+from sandbox.young_clgan.envs.block_insertion.block_insertion_env import BLOCK_INSERTION_ENVS
 from sandbox.young_clgan.envs.block_insertion.utils import plot_policy_performance
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
@@ -44,12 +43,7 @@ def run_task(v):
 
     # goal generators
     logger.log("Initializing the goal generators and the inner env...")
-    if v['env_idx'] == 1:
-        inner_env = normalize(BlockInsertionEnv1())
-    elif v['env_idx'] == 2:
-        inner_env = normalize(BlockInsertionEnv2())
-    else:
-        inner_env = normalize(BlockInsertionEnv3())
+    inner_env = BLOCK_INSERTION_ENVS[v['env_idx'] - 1]()
 
     goal_center = (inner_env.goal_ub + inner_env.goal_lb) / 2
     goal_bounds = (inner_env.goal_ub - inner_env.goal_lb) / 2
@@ -72,11 +66,12 @@ def run_task(v):
     env = GoalExplorationEnv(
         env=inner_env, goal_generator=uniform_goal_generator,
         obs_transform=lambda x: x[:goal_dim],
-        terminal_eps=v['terminal_eps'],
+        terminal_eps=np.sqrt(goal_dim) * v['terminal_eps'],
         distance_metric=v['distance_metric'],
         extend_dist_rew=v['extend_dist_rew'],
         terminate_env=True,
         goal_bounds=goal_bounds,
+        only_feasible=True,
     )
 
     policy = GaussianMLPPolicy(

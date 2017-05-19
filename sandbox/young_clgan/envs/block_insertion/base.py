@@ -47,6 +47,7 @@ class BlockInsertionEnvBase(MujocoEnv, Serializable):
 
         ob = self.get_current_obs()
         done = False
+        
         return Step(
             ob, reward, done,
         )
