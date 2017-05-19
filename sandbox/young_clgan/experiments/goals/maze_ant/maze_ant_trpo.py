@@ -12,7 +12,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.goals.maze.maze_trpo_algo import run_task
+from sandbox.young_clgan.experiments.goals.maze_ant.maze_ant_trpo_algo import run_task
 
 if __name__ == '__main__':
 
@@ -37,7 +37,7 @@ if __name__ == '__main__':
         # 'ap-south-1b', 'ap-northeast-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'us-west-1b', 'us-west-1a',
         # 'ap-south-1a', 'ap-northeast-1a', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'us-east-1b'
     ]
-    ec2_instance = args.type if args.type else 'm4.10xlarge'
+    ec2_instance = args.type if args.type else 'c4.8xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -53,13 +53,13 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'new-trpo-maze-persist1'
+    exp_prefix = 'new-trpo-maze-ant'
 
     vg = VariantGenerator()
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
-    vg.add('terminal_eps', [0.3])
+    vg.add('terminal_eps', [0.5, 1])
     vg.add('only_feasible', [True])
-    vg.add('maze_id', [11])
+    vg.add('maze_id', [0])
     vg.add('goal_range',
            lambda maze_id: [5] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
     vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
@@ -67,7 +67,7 @@ if __name__ == '__main__':
     vg.add('min_reward', [0])
     vg.add('max_reward', [1])
     vg.add('distance_metric', ['L2'])
-    vg.add('extend_dist_rew', [False, True])  # !!!!
+    vg.add('extend_dist_rew', [True, False])  # !!!!
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('with_replacement', [False])
@@ -81,17 +81,17 @@ if __name__ == '__main__':
     vg.add('num_new_goals', [200])
     vg.add('num_old_goals', [100])
     # sampling params
-    vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
-    vg.add('outer_iters', lambda maze_id: [200] if maze_id == 0 else [10000])
+    vg.add('horizon', lambda maze_id: [500])
+    vg.add('outer_iters', lambda maze_id: [1000])
     vg.add('inner_iters', [5])
-    vg.add('pg_batch_size', [20000])
+    vg.add('pg_batch_size', [100000])
     # policy initialization
     vg.add('output_gain', [1])
     vg.add('policy_init_std', [1])
-    vg.add('learn_std', [False])
+    vg.add('learn_std', [True])
     vg.add('adaptive_std', [False])
 
-    vg.add('seed', range(0, 700, 100))
+    vg.add('seed', range(200, 340, 20))
 
     # # gan_configs
     # vg.add('GAN_batch_size', [128])  # proble with repeated name!!

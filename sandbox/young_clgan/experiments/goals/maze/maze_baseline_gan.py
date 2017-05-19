@@ -12,7 +12,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.goals.maze.maze_trpo_algo import run_task
+from sandbox.young_clgan.experiments.goals.maze.maze_baseline_gan_algo import run_task
 
 if __name__ == '__main__':
 
@@ -37,7 +37,7 @@ if __name__ == '__main__':
         # 'ap-south-1b', 'ap-northeast-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'us-west-1b', 'us-west-1a',
         # 'ap-south-1a', 'ap-northeast-1a', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'us-east-1b'
     ]
-    ec2_instance = args.type if args.type else 'm4.10xlarge'
+    ec2_instance = args.type if args.type else 'c4.8xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -53,36 +53,34 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'new-trpo-maze-persist1'
+    exp_prefix = 'new-baselineGAN-maze'
 
     vg = VariantGenerator()
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('terminal_eps', [0.3])
     vg.add('only_feasible', [True])
     vg.add('maze_id', [11])
-    vg.add('goal_range',
-           lambda maze_id: [5] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
-    vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
+    vg.add('goal_range', lambda maze_id: [5] if maze_id==0 else [7])  # this will be used also as bound of the state_space
+    vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id==0 else [(0,0)])
     # goal-algo params
     vg.add('min_reward', [0])
     vg.add('max_reward', [1])
     vg.add('distance_metric', ['L2'])
-    vg.add('extend_dist_rew', [False, True])  # !!!!
+    vg.add('extend_dist_rew', [False])
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('with_replacement', [False])
-
-    vg.add('unif_goals', [True])  # put False for fixing the goal below!
-    vg.add('final_goal', [(0, 4)])
-
+    vg.add('smart_init', [False])
     # replay buffer
-    vg.add('replay_buffer', [True])
+    vg.add('replay_buffer', [False])
     vg.add('coll_eps', [0.3])
     vg.add('num_new_goals', [200])
     vg.add('num_old_goals', [100])
+    vg.add('add_on_policy', [False])
+    vg.add('only_on_policy', [True, False])
     # sampling params
     vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
-    vg.add('outer_iters', lambda maze_id: [200] if maze_id == 0 else [10000])
+    vg.add('outer_iters', lambda maze_id: [400] if maze_id == 0 else [10000])
     vg.add('inner_iters', [5])
     vg.add('pg_batch_size', [20000])
     # policy initialization
@@ -90,8 +88,15 @@ if __name__ == '__main__':
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
+    # gan configs
+    vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
+    vg.add('gan_generator_layers', [[256, 256]])
+    vg.add('gan_discriminator_layers', [[128, 128]])
+    vg.add('gan_noise_size', [4])
+    vg.add('goal_noise_level', [0.5])
+    vg.add('gan_outer_iters', [300])
 
-    vg.add('seed', range(0, 700, 100))
+    vg.add('seed', range(0, 800, 100))
 
     # # gan_configs
     # vg.add('GAN_batch_size', [128])  # proble with repeated name!!

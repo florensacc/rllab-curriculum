@@ -79,7 +79,7 @@ def save_image(fig=None, fname=None):
 
 
 def plot_labeled_states(states, labels, convert_labels=convert_label, report=None,
-                        itr=0, limit=None, center=None, maze_id=0):
+                        itr=0, limit=None, center=None, maze_id=0, summary_string_base=''):
     goal_classes, text_labels = convert_labels(labels)
     total_goals = labels.shape[0]
     goal_class_frac = OrderedDict()  # this needs to be an ordered dict!! (for the log tabular)
@@ -92,7 +92,7 @@ def plot_labeled_states(states, labels, convert_labels=convert_label, report=Non
         samples=states, sample_classes=goal_classes, text_labels=text_labels, limit=limit,
         center=center, maze_id=maze_id,
     )
-    summary_string = ''
+    summary_string = summary_string_base
     for key, value in goal_class_frac.items():
         summary_string += key + ' frac: ' + str(value) + '\n'
     report.add_image(img, 'itr: {}\nLabels of goals:\n{}'.format(itr, summary_string), width=500)

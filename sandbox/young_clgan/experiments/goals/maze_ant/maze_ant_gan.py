@@ -51,11 +51,11 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'new-goalGAN-maze-ant4'
+    exp_prefix = 'new-goalGAN-maze-ant-largeEps'
 
     vg = VariantGenerator()
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
-    vg.add('terminal_eps', [0.3])
+    vg.add('terminal_eps', [0.5, 1])
     vg.add('only_feasible', [True])
     vg.add('goal_range', [5])  # this will be used also as bound of the state_space
     vg.add('goal_center', [(2, 2)])
@@ -63,7 +63,7 @@ if __name__ == '__main__':
     vg.add('min_reward', [0])
     vg.add('max_reward', [1])
     vg.add('distance_metric', ['L2'])
-    vg.add('extend_dist_rew', [True, False])
+    vg.add('extend_dist_rew', [False])
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('with_replacement', [False])
@@ -82,7 +82,7 @@ if __name__ == '__main__':
     # policy initialization
     vg.add('output_gain', [1])
     vg.add('policy_init_std', [1])
-    vg.add('learn_std', [False])
+    vg.add('learn_std', [True])
     vg.add('adaptive_std', [False])
     # gan configs
     vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
@@ -90,9 +90,9 @@ if __name__ == '__main__':
     vg.add('gan_discriminator_layers', [[128, 128]])
     vg.add('gan_noise_size', [4])
     vg.add('goal_noise_level', [0.5])
-    vg.add('gan_outer_iters', [200])
+    vg.add('gan_outer_iters', [250])
 
-    vg.add('seed', range(100, 170, 10))
+    vg.add('seed', range(100, 700, 100))
 
     # # gan_configs
     # vg.add('GAN_batch_size', [128])  # proble with repeated name!!
