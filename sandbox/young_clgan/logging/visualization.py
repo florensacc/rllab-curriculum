@@ -79,7 +79,7 @@ def save_image(fig=None, fname=None):
 
 
 def plot_labeled_states(states, labels, convert_labels=convert_label, report=None,
-                        itr=0, limit=None, center=None, maze_id=0, summary_string_base=''):
+                        itr=0, limit=None, center=None, maze_id=None, summary_string_base=''):
     goal_classes, text_labels = convert_labels(labels)
     total_goals = labels.shape[0]
     goal_class_frac = OrderedDict()  # this needs to be an ordered dict!! (for the log tabular)
@@ -144,7 +144,7 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
     else:
         fig, ax = plt.subplots()
         if bounds is not None:
-            plot_bounds(ax, bounds, 2, label='state_bound')
+            plot_bounds(ax, bounds, 2, label='state bound')
         elif maze_id == 0:
             ax.add_patch(patches.Rectangle((-3, -3), 10, 2, fill=True, edgecolor="none", facecolor='0.4'))
             ax.add_patch(patches.Rectangle((-3, -3), 2, 10, fill=True, edgecolor="none", facecolor='0.4'))
@@ -209,7 +209,8 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
 
 def plot_bounds(ax, bounds, dim=2, label='', color='b'):
     if dim == 2:
-        low, high = bounds
+        low = bounds[0][:2]
+        high = bounds[1][:2]
         i = 0
         a = np.copy(high)
         a[i] = low[i]

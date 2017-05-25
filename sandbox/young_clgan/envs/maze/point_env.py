@@ -110,7 +110,7 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
 
     @overrides
     @property
-    def goal_observation(self):
+    def goal_observation(self):  # transforms a state into a goal (projection, for example)
         return self.get_body_com("torso")[:2]
 
     def _compute_dist_reward(self):

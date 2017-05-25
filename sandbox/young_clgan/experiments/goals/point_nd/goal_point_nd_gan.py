@@ -234,26 +234,27 @@ def run_task(v):
             logger.record_tabular('GenGoal_frac_' + text_labels[k], frac)
             goal_class_frac[text_labels[k]] = frac
 
-        # img = plot_labeled_samples(
-        #     samples=goals, sample_classes=goal_classes, text_labels=text_labels, limit=v['goal_range'] + 1,
-        #     # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
-        # )
-        # summary_string = ''
-        # for key, value in goal_class_frac.items():
-        #     summary_string += key + ' frac: ' + str(value) + '\n'
-        # report.add_image(img, 'itr: {}\nLabels of generated goals:\n{}'.format(outer_iter, summary_string), width=500)
+        img = plot_labeled_samples(
+            samples=goals, sample_classes=goal_classes, text_labels=text_labels, limit=v['goal_range'] + 1,
+            bounds=env.feasible_goal_space.bounds,
+            # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
+        )
+        summary_string = ''
+        for key, value in goal_class_frac.items():
+            summary_string += key + ' frac: ' + str(value) + '\n'
+        report.add_image(img, 'itr: {}\nLabels of generated goals:\n{}'.format(outer_iter, summary_string), width=500)
 
         # log feasibility of generated goals
         feasible = np.array([1 if env.feasible_goal_space.contains(goal) else 0 for goal in goals], dtype=int)
         feasibility_rate = np.mean(feasible)
         logger.record_tabular('GenGoalFeasibilityRate', feasibility_rate)
-        # img = plot_labeled_samples(
-        #     samples=goals, sample_classes=feasible, text_labels={0: 'Infeasible', 1: "Feasible"},
-        #     markers={0: 'v', 1: 'o'}, limit=v['goal_range'] + 1, bounds=env.feasible_goal_space.bounds,
-        #     # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
-        # )
-        # report.add_image(img, 'feasibility of generated goals: {}\n itr: {}'.format(feasibility_rate, outer_iter),
-        #                  width=500)
+        img = plot_labeled_samples(
+            samples=goals, sample_classes=feasible, text_labels={0: 'Infeasible', 1: "Feasible"},
+            markers={0: 'v', 1: 'o'}, limit=v['goal_range'] + 1, bounds=env.feasible_goal_space.bounds,
+            # '{}/sampled_goals_{}.png'.format(log_dir, outer_iter),  # if i don't give the file it doesn't save
+        )
+        report.add_image(img, 'feasibility of generated goals: {}\n itr: {}'.format(feasibility_rate, outer_iter),
+                         width=500)
 
         ######  try single label for good goals
         if v['num_labels'] == 1:
