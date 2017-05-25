@@ -20,8 +20,6 @@ from sandbox.young_clgan.envs.block_insertion.block_insertion_env import BLOCK_I
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.utils import split_list
-
 from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, evaluate_goal_env
 from sandbox.young_clgan.envs.base import UniformStateGenerator
 
