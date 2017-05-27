@@ -185,7 +185,7 @@ if __name__ == '__main__':
         autoclone.autoclone(__file__, args)
 
     # setup ec2
-    ec2_instance = args.type if args.type else 'c4.8xlarge'
+    ec2_instance = args.type if args.type else 'c4.4xlarge'
 
     # configure instance
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
@@ -213,7 +213,7 @@ if __name__ == '__main__':
     vg = VariantGenerator()
 
     vg.add('seed', [s * 10 + 200 for s in range(args.n_seed)])
-    vg.add('env_idx', [1, 2, 3])
+    vg.add('env_idx', [1, 2, 3, 4])
     # # GeneratorEnv params
     vg.add('terminal_eps', [0.02])
     vg.add('sample_unif_feas', [True])
@@ -222,8 +222,8 @@ if __name__ == '__main__':
     #############################################
     vg.add('min_reward', lambda goal_weight: [goal_weight * 0.1])  # now running it with only the terminal reward of 1!
     vg.add('max_reward', lambda goal_weight: [goal_weight * 0.9])
-    vg.add('horizon', [200])
-    vg.add('outer_iters', [200])
+    vg.add('horizon', [400])
+    vg.add('outer_iters', [500])
     vg.add('inner_iters', [20])
     vg.add('pg_batch_size', [20000])
     # policy initialization

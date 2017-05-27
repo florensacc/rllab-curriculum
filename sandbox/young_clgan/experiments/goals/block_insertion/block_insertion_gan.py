@@ -43,7 +43,7 @@ if __name__ == '__main__':
         # 'ap-south-1b', 'ap-northeast-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'us-west-1b', 'us-west-1a',
         # 'ap-south-1a', 'ap-northeast-1a', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'us-east-1b'
     ]
-    ec2_instance = args.type if args.type else 'm4.4xlarge'
+    ec2_instance = args.type if args.type else 'c4.4xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -68,11 +68,11 @@ if __name__ == '__main__':
         exp_prefix = '{}_{}'.format(default_prefix, args.prefix)
 
     vg = VariantGenerator()
-    vg.add('env_idx', [1, 2, 3])
+    vg.add('env_idx', [4])
     vg.add('terminal_eps', [0.02])
     # goal-algo params
-    vg.add('min_reward', [0])
-    vg.add('max_reward', [1])
+    vg.add('min_reward', [0.1])
+    vg.add('max_reward', [0.9])
     vg.add('distance_metric', ['L2'])
     vg.add('extend_dist_rew', [False])  # !!!!
     vg.add('persistence', [1])
@@ -94,7 +94,7 @@ if __name__ == '__main__':
     vg.add('output_gain', [1])
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [False])
-    vg.add('adaptive_std', [True, False])
+    vg.add('adaptive_std', [True])
     # gan configs
     vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
     vg.add('gan_generator_layers', [[256, 256]])
