@@ -1,8 +1,0 @@
-python scripts/sync_s3.py new-goalGAN-maze-ant2
-python scripts/sync_s3.py new-trpo-maze-ant
-python scripts/sync_s3.py new-goalGAN-maze-ant-largeEps
-python scripts/sync_s3.py new-goalGAN-maze-persist1 
-python scripts/sync_s3.py new-trpo-maze-persist1
-python scripts/sync_s3.py new-baselineGAN-maze
-python scripts/sync_s3.py new-baselineGAN-maze-ant
-python scripts/sync_s3.py new-oracle-maze-ant
