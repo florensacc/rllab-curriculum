@@ -316,16 +316,16 @@ def pop_prefix():
     _prefix_str = ''.join(_prefixes)
 
 
-def save_itr_params(itr, params, use_cloudpickle=True):
+def save_itr_params(itr, params, use_cloudpickle=True, pkl_prefix=''):
     if _snapshot_dir:
         if _snapshot_mode == 'all':
-            file_name = osp.join(get_snapshot_dir(), 'itr_%d.pkl' % itr)
+            file_name = osp.join(get_snapshot_dir(), pkl_prefix + 'itr_%d.pkl' % itr)
         elif _snapshot_mode == 'last':
             # override previous params
-            file_name = osp.join(get_snapshot_dir(), 'params.pkl')
+            file_name = osp.join(get_snapshot_dir(), pkl_prefix + 'params.pkl')
         elif _snapshot_mode == "gap":
             if itr == 0 or (itr + 1) % _snapshot_gap == 0:
-                file_name = osp.join(get_snapshot_dir(), 'itr_%d.pkl' % itr)
+                file_name = osp.join(get_snapshot_dir(), pkl_prefix + 'itr_%d.pkl' % itr)
             else:
                 return
         elif _snapshot_mode == 'none':

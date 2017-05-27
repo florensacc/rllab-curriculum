@@ -143,7 +143,8 @@ def run_task(v):
         else:
             goals = raw_goals
 
-        with ExperimentLogger(log_dir, '_last', snapshot_mode='last', hold_outter_log=True):
+        itr_label = outer_iter  # use outer_iter to log everything or "last" to log only the last
+        with ExperimentLogger(log_dir, itr_label, snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment goal generator")
             update_env_state_generator(
                 env,
@@ -165,6 +166,10 @@ def run_task(v):
             )
 
             algo.train()
+            # save a pkl with uniform
+            update_env_state_generator(env, UniformStateGenerator(state_size=v['goal_size'], bounds=v['goal_range'],
+                                                                  center=v['goal_center'], persistence=1))
+            logger.save_itr_params(itr_label, {"algo": algo}, pkl_prefix='unifGen_')
 
         logger.log('Generating the Heatmap...')
         test_and_plot_policy(policy, env, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],

@@ -51,7 +51,7 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'new-goalGAN-maze-ant-largeEps'
+    exp_prefix = 'new-goalGAN-maze-ant-largeEps-redo'
 
     vg = VariantGenerator()
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
@@ -92,7 +92,7 @@ if __name__ == '__main__':
     vg.add('goal_noise_level', [0.5])
     vg.add('gan_outer_iters', [250])
 
-    vg.add('seed', range(100, 700, 100))
+    vg.add('seed', range(100, 300, 100))
 
     # # gan_configs
     # vg.add('GAN_batch_size', [128])  # proble with repeated name!!
