@@ -36,7 +36,7 @@ from sandbox.young_clgan.state.generator import StateGAN
 from sandbox.young_clgan.logging.html_report import format_dict, HTMLReport
 from sandbox.young_clgan.logging.visualization import *
 from sandbox.young_clgan.logging.logger import ExperimentLogger
-from sandbox.young_clgan.goal.utils import GoalCollection
+from sandbox.young_clgan.state.utils import StateCollection
 from sandbox.young_clgan.experiments.goals.point_nd.utils import plot_policy_performance, plot_generator_samples
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
@@ -147,7 +147,7 @@ def run_task(v):
         report.save()
         report.new_row()
 
-    all_goals = GoalCollection(v['coll_eps'])
+    all_goals = StateCollection(v['coll_eps'])
 
     logger.log("Starting the outer iterations")
     for outer_iter in range(v['outer_iters']):
