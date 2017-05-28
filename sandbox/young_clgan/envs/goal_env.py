@@ -119,13 +119,10 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         else:
             return True
 
-    def reset(self, reset_goal=True):
+    def reset(self, reset_goal=True, **kwargs):  # allows to pass init_state if needed
         if reset_goal:
             self.update_goal()
-        # print("reset with goal: ", self.current_goal)
-
-        # print("RESET GoalExplorationEnv, the current goal is: ", self.current_goal)
-        return self.append_goal_observation(ProxyEnv.reset(self, goal=self.current_goal))  # the wrapped env needs to use or ignore it
+        return self.append_goal_observation(ProxyEnv.reset(self, goal=self.current_goal, **kwargs))  # the wrapped env needs to use or ignore it
 
     def step(self, action):
         observation, reward, done, info = ProxyEnv.step(self, action)
