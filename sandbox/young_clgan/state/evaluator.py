@@ -113,7 +113,7 @@ def convert_label(labels):
         0: 'Low rewards',
         # 1: r'High rewards: $\bar{R}>R_{\max}$',
         1: 'High rewards',
-        2: 'Good states',
+        2: 'Good goals',
         3: 'Unlearnable',
         4: 'Other',
     })
