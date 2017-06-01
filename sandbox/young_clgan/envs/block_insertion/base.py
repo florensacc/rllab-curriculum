@@ -25,8 +25,8 @@ class BlockInsertionEnvBase(MujocoEnv, Serializable):
     @overrides
     def get_current_obs(self):
         return np.concatenate([
-            self.model.data.qpos.flat,
-            self.model.data.qvel.flat,
+            self.model.data.qpos.flat[:self.model.nq // 2],
+            self.model.data.qvel.flat[:self.model.nq // 2],
         ])
 
     @overrides
@@ -35,7 +35,14 @@ class BlockInsertionEnvBase(MujocoEnv, Serializable):
         #     goal = np.array(kwargs['goal']).flatten()
         # else:
         #     goal = np.array([0, 0])
-        self.set_state(self.init_qpos, self.init_qvel)
+        init_qpos = np.copy(self.init_qpos)
+        init_qvel = np.copy(self.init_qvel)
+        init_qvel[:] = 0
+        
+        if 'goal' in kwargs and kwargs['goal'] is not None:
+            init_qpos[self.model.nq // 2:, 0] = kwargs['goal']
+        
+        self.set_state(init_qpos, init_qvel)
         self.current_com = self.model.data.com_subtree[0]
         self.dcom = np.zeros_like(self.current_com)
         
@@ -64,12 +71,12 @@ class BlockInsertionEnvBase(MujocoEnv, Serializable):
         
     @property
     def goal_lb(self):
-        return self.model.jnt_range[:, 0]
+        return self.model.jnt_range[:self.model.nq // 2, 0]
         
     @property
     def goal_ub(self):
-        return self.model.jnt_range[:, 1]
+        return self.model.jnt_range[:self.model.nq // 2, 1]
         
     @property
     def goal_dim(self):
-        return self.model.njnt
+        return self.model.njnt // 2

@@ -68,7 +68,7 @@ if __name__ == '__main__':
         exp_prefix = '{}_{}'.format(default_prefix, args.prefix)
 
     vg = VariantGenerator()
-    vg.add('env_idx', [4])
+    vg.add('env_idx', [1, 2, 3, 4])
     vg.add('terminal_eps', [0.02])
     # goal-algo params
     vg.add('min_reward', [0.1])
