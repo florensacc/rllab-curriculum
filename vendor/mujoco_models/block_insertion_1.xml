@@ -1,7 +1,7 @@
 <mujoco model="block_insertion">
 
     <compiler inertiafromgeom="true" angle="radian" coordinate="local" />
-    <option timestep="0.01" gravity="1 0 1" iterations="20" integrator="Euler" />
+    <option timestep="0.01" gravity="0 0 0" iterations="20" integrator="Euler" />
     <default>
         <joint armature="0.1" damping="1" limited="false" />
         <geom friction=".5 .1 .1" margin="0" condim="3" contype="0" conaffinity="0" />
@@ -19,9 +19,9 @@
         
         <body name="block_target" pos="0 -0.4 0">
             <geom name="block_target_geom" rgba="0 1 0 1" type="box" size="0.01 0.05 0.15" contype="0" conaffinity="0" />
-            <joint name="block_target_x" type="slide" pos="0 0 0" axis="1 0 0" limited="true" range="-0.25 0.25" />
-            <joint name="block_target_y" type="slide" pos="0 0 0" axis="0 1 0" limited="true" range="0 0.8" />
-            <joint name="block_target_z" type="slide" pos="0 0 0" axis="0 0 1" limited="true" range="-0.25 0.25" />
+            <joint name="block_target_x" armature="0" damping="0" type="slide" pos="0 0 0" axis="1 0 0" limited="true" range="-0.25 0.25" />
+            <joint name="block_target_y" armature="0" damping="0" type="slide" pos="0 0 0" axis="0 1 0" limited="true" range="0 0.8" />
+            <joint name="block_target_z" armature="0" damping="0" type="slide" pos="0 0 0" axis="0 0 1" limited="true" range="-0.25 0.25" />
         </body>
         
         <!--<body name="w0" pos="0 0 0.3">-->
