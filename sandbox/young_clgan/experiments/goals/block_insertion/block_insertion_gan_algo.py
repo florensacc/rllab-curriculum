@@ -76,11 +76,11 @@ def run_task(v):
 
     policy = GaussianMLPPolicy(
         env_spec=env.spec,
-        hidden_sizes=(32, 32),
+        hidden_sizes=(128, 128),
         # Fix the variance since different goals will require different variances, making this parameter hard to learn.
         learn_std=v['learn_std'],
         adaptive_std=v['adaptive_std'],
-        std_hidden_sizes=(16, 16),  # this is only used if adaptive_std is true!
+        std_hidden_sizes=(64, 64),  # this is only used if adaptive_std is true!
         output_gain=v['output_gain'],
         init_std=v['policy_init_std'],
     )
