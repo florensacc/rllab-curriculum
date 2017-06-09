@@ -24,6 +24,8 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
         :param reward_dist_threshold:
         :param control_mode:
         """
+        Serializable.quick_init(self, locals())
+        GoalEnv.__init__(self, goal_generator=goal_generator)
         self.control_mode = control_mode
         if goal_generator is None:
             self.update_goal_generator(StateGenerator())
@@ -33,7 +35,6 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
         self.indicator_reward = indicator_reward
         self.append_goal = append_goal
         MujocoEnv.__init__(self, *args, **kwargs)
-        Serializable.quick_init(self, locals())
 
     @overrides
     def get_current_obs(self):
@@ -56,9 +57,9 @@ class PointEnv(GoalEnv, MujocoEnv, Serializable):
         self.update_goal(goal=goal)
         qpos = np.zeros((self.model.nq, 1))
         qvel = np.zeros((self.model.nv, 1))  # 0 velocity
-        if init_state is not None:
+        if init_state is not None:  # you can reset only the com position!
             qpos[:2] = np.array(init_state[:2]).reshape((2, 1))
-            if init_state.size == 4:
+            if np.array(init_state).size == 4:
                 qvel[:2] = np.array(init_state[2:]).reshape((2, 1))
         qpos[2:, :] = np.array(self.current_goal).reshape((2, 1))  # the goal is part of the mujoco!!
         self.set_state(qpos, qvel)

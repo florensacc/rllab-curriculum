@@ -10,6 +10,8 @@ from rllab.misc import logger
 
 
 from sandbox.young_clgan.envs.base import FixedStateGenerator, update_env_state_generator
+from sandbox.young_clgan.envs.goal_env import update_env_goal_generator
+from sandbox.young_clgan.envs.start_env import update_env_start_generator
 
 
 class FunctionWrapper(object):
@@ -75,10 +77,10 @@ def parallel_map(func, iterable_object, num_processes=-1):
     return results
 
 
-def label_states(states, env, policy, horizon, min_reward=0, max_reward=1, key='rewards',
+def label_states(states, env, policy, horizon, as_goals=True, min_reward=0, max_reward=1, key='rewards',
                  old_rewards=None, improvement_threshold=0, n_traj=1, n_processes=-1):
     mean_rewards = evaluate_states(
-        states, env, policy, horizon,
+        states, env, policy, horizon, as_goals=as_goals,
         n_traj=n_traj, n_processes=n_processes, key=key,
     )
     mean_rewards = mean_rewards.reshape(-1, 1)
@@ -132,7 +134,7 @@ def convert_label(labels):
     return new_labels, classes
 
 
-def evaluate_states(states, env, policy, horizon, n_traj=1, n_processes=-1, full_path=False, key='rewards',
+def evaluate_states(states, env, policy, horizon, n_traj=1, n_processes=-1, full_path=False, key='rewards', as_goals=True,
                     aggregator=(np.sum, np.mean)):
     evaluate_state_wrapper = FunctionWrapper(
         evaluate_state,
@@ -142,6 +144,7 @@ def evaluate_states(states, env, policy, horizon, n_traj=1, n_processes=-1, full
         n_traj=n_traj,
         full_path=full_path,
         key=key,
+        as_goals=as_goals,
         aggregator=aggregator,
     )
     result = parallel_map(
@@ -154,12 +157,16 @@ def evaluate_states(states, env, policy, horizon, n_traj=1, n_processes=-1, full
     return np.array(result)
 
 
-def evaluate_state(state, env, policy, horizon, n_traj=1, full_path=False, key='rewards',
+def evaluate_state(state, env, policy, horizon, n_traj=1, full_path=False, key='rewards', as_goals=True,
                    aggregator=(np.sum, np.mean)):
     aggregated_data = []
     paths = []
     # print("evaluating state: ", state)
-    update_env_state_generator(env, FixedStateGenerator(state))
+    if as_goals:
+        env.update_goal_generator(FixedStateGenerator(state))
+    else:
+        env.update_start_generator(FixedStateGenerator(state))
+
     # print("updated the env to have goal: ", env.current_goal)
     for j in range(n_traj):
         # print(j)
