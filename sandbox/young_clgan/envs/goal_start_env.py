@@ -28,10 +28,10 @@ from sandbox.young_clgan.envs.base import StateGenerator, UniformListStateGenera
     UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv, update_env_state_generator
 
 from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv
-from sandbox.young_clgan.envs.start_env import StartExplorationEnv
+from sandbox.young_clgan.envs.start_env import StartEnv, StartExplorationEnv
 
 
-class GoalStartExplorationEnv(StartExplorationEnv, GoalExplorationEnv, Serializable):
+class GoalStartExplorationEnv(StartEnv, GoalExplorationEnv, Serializable):
     def __init__(self, *args, **kwargs):
         """
         This environment wraps around a normal environment to facilitate goal based exploration.
@@ -49,12 +49,14 @@ class GoalStartExplorationEnv(StartExplorationEnv, GoalExplorationEnv, Serializa
         :param append_transformed_obs: append the transformation of the current observation to full observation
         """
         Serializable.quick_init(self, locals())
-        super(GoalStartExplorationEnv, self).__init__(*args, **kwargs)
+        StartEnv.__init__(self, *args, **kwargs)
+        GoalExplorationEnv.__init__(self, *args, **kwargs)
+        # import pdb; pdb.set_trace()
 
     @overrides
     def reset(self, *args, **kwargs): # this does NOT call the full reset of StartEnvExploration!
-        StartExplorationEnv.update_start(*args, **kwargs)
-        return GoalExplorationEnv.reset(init_state=self.current_start, *args, **kwargs)
+        self.update_start(*args, **kwargs)
+        return GoalExplorationEnv.reset(self, init_state=self.current_start, *args, **kwargs)
 
 
 # def generate_initial_starts(env, policy, start_range, start_center=None, horizon=500, size=10000):  # TODO: get starts

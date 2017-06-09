@@ -28,31 +28,30 @@ from sandbox.young_clgan.envs.base import StateGenerator, UniformListStateGenera
     UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv, update_env_state_generator
 
 
-class StartEnv(StateAuxiliaryEnv):
+class StartEnv(Serializable):
     """ A wrapper of StateAuxiliaryEnv to make it compatible with the old goal env."""
 
     def __init__(self, start_generator=None, *args, **kwargs):
-        if start_generator is not None:
-            kwargs['state_generator'] = start_generator
-        super(StartEnv, self).__init__(*args, **kwargs)
+        Serializable.quick_init(self, locals())
+        self._start_holder = StateAuxiliaryEnv(state_generator=start_generator, *args, **kwargs)
 
     def update_start_generator(self, *args, **kwargs):
-        return self.update_state_generator(*args, **kwargs)
+        return self._start_holder.update_state_generator(*args, **kwargs)
         
     def update_start(self, start=None, *args, **kwargs):
-        return self.update_aux_state(state=start, *args, **kwargs)
+        return self._start_holder.update_aux_state(state=start, *args, **kwargs)
         
     @property
     def start_generator(self):
-        return self.state_generator
+        return self._start_holder.state_generator
     
     @property
     def current_start(self):
-        return self.current_aux_state
+        return self._start_holder.current_aux_state
 
 
 class StartExplorationEnv(StartEnv, ProxyEnv, Serializable):
-    def __init__(self, env, start_generator, only_feasible=False, start_bounds=None, **kwargs):
+    def __init__(self, env, start_generator, only_feasible=False, start_bounds=None, *args, **kwargs):
         """
         This environment wraps around a normal environment to facilitate goal based exploration.
         Initial position based experiments should not use this class.
@@ -70,7 +69,7 @@ class StartExplorationEnv(StartEnv, ProxyEnv, Serializable):
         """
         Serializable.quick_init(self, locals())
         ProxyEnv.__init__(self, env)
-        StartEnv.__init__(self, **kwargs)
+        StartEnv.__init__(self, *args, **kwargs)
         self.update_start_generator(start_generator)
         
         self.start_bounds = start_bounds
@@ -131,8 +130,8 @@ class StartExplorationEnv(StartEnv, ProxyEnv, Serializable):
 #     return np.array(starts)
 #
 #
-# def update_env_start_generator(env, start_generator):
-#     return update_env_state_generator(env, start_generator)
+def update_env_start_generator(env, start_generator):
+    return update_env_state_generator(env, start_generator)
 #
 #
 # def evaluate_start_env(env, policy, horizon, n_starts=10, n_traj=1, **kwargs):
