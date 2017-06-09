@@ -28,28 +28,26 @@ from sandbox.young_clgan.envs.base import StateGenerator, UniformListStateGenera
     UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv, update_env_state_generator
 
 
-
-class GoalEnv(StateAuxiliaryEnv):
+class GoalEnv(Serializable):
     """ A wrapper of StateAuxiliaryEnv to make it compatible with the old goal env."""
 
     def __init__(self, goal_generator=None, *args, **kwargs):
-        if goal_generator is not None:
-            kwargs['state_generator'] = goal_generator
-        super(GoalEnv, self).__init__(*args, **kwargs)
+        Serializable.quick_init(self, locals())
+        self._goal_holder = StateAuxiliaryEnv(state_generator=goal_generator, *args, **kwargs)
 
     def update_goal_generator(self, *args, **kwargs):
-        return self.update_state_generator(*args, **kwargs)
+        return self._goal_holder.update_state_generator(*args, **kwargs)
         
     def update_goal(self, goal=None, *args, **kwargs):
-        return self.update_aux_state(state=goal, *args, **kwargs)
+        return self._goal_holder.update_aux_state(state=goal, *args, **kwargs)
         
     @property
     def goal_generator(self):
-        return self.state_generator
+        return self._goal_holder.state_generator
     
     @property
     def current_goal(self):
-        return self.current_aux_state
+        return self._goal_holder.current_aux_state
 
 
 class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
