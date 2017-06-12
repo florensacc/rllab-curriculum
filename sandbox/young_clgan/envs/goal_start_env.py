@@ -51,12 +51,27 @@ class GoalStartExplorationEnv(StartEnv, GoalExplorationEnv, Serializable):
         Serializable.quick_init(self, locals())
         StartEnv.__init__(self, *args, **kwargs)
         GoalExplorationEnv.__init__(self, *args, **kwargs)
-        # import pdb; pdb.set_trace()
 
     @overrides
-    def reset(self, *args, **kwargs): # this does NOT call the full reset of StartEnvExploration!
+    def reset(self, init_state=None, *args, **kwargs): # this does NOT call the full reset of StartEnvExploration!
         self.update_start(*args, **kwargs)
-        return GoalExplorationEnv.reset(self, init_state=self.current_start, *args, **kwargs)
+        if init_state is None:
+            GoalExplorationEnv.reset(self, init_state=self.current_start, *args, **kwargs)
+        else:
+            GoalExplorationEnv.reset(self, init_state=init_state, *args, **kwargs)
+        return self.get_current_obs()
+
+    @overrides
+    def step(self, action):
+        obs, r, d, info = GoalExplorationEnv.step(self, action)
+        return (
+            StartEnv.append_start_observation(self, obs), r, d, info
+        )
+
+    @overrides
+    def get_current_obs(self):
+        goal_obs = GoalExplorationEnv.get_current_obs(self)
+        return StartEnv.append_start_observation(self, goal_obs)
 
 
 # def generate_initial_starts(env, policy, start_range, start_center=None, horizon=500, size=10000):  # TODO: get starts

@@ -31,11 +31,23 @@ from sandbox.young_clgan.envs.base import StateGenerator, UniformListStateGenera
 class StartEnv(Serializable):
     """ A wrapper of StateAuxiliaryEnv to make it compatible with the old goal env."""
 
-    def __init__(self, start_generator=None, *args, **kwargs):
+    def __init__(self, start_generator=None, append_start=False, obs2start_transform=None, *args, **kwargs):
         Serializable.quick_init(self, locals())
         self._start_holder = StateAuxiliaryEnv(state_generator=start_generator, *args, **kwargs)
+        self.append_start = append_start
+        if obs2start_transform is None:
+            self._obs2start_transform = lambda x: x
+        else:
+            self._obs2start_transform = obs2start_transform
+
+    def transform_to_start_space(self, obs):
+        """ Apply the start space transformation to the given observation. """
+        return self._obs2start_transform(obs)
 
     def update_start_generator(self, *args, **kwargs):
+
+        # print("updating start generator with ", *args, **kwargs)
+
         return self._start_holder.update_state_generator(*args, **kwargs)
         
     def update_start(self, start=None, *args, **kwargs):
@@ -48,6 +60,30 @@ class StartEnv(Serializable):
     @property
     def current_start(self):
         return self._start_holder.current_aux_state
+
+    @property
+    def start_observation(self):
+        """ Get the start space part of the current observation. """
+        obj = self
+        while hasattr(obj, "wrapped_env"):  # try to go through "Normalize and Proxy and whatever wrapper"
+            obj = obj.wrapped_env
+        return self.transform_to_start_space(obj.get_current_obs())
+
+    def append_start_observation(self, obs):
+        """ Append current start to the given original observation """
+        if self.append_start:
+            return np.concatenate([obs, np.array(self.current_start)])
+        else:
+            return obs
+
+    def __getstate__(self):
+        d = super(StartEnv, self).__getstate__()
+        d['__start_holder'] = self._start_holder
+        return d
+
+    def __setstate__(self, d):
+        super(StartEnv, self).__setstate__(d)
+        self._start_holder = d['__start_holder']
 
 
 class StartExplorationEnv(StartEnv, ProxyEnv, Serializable):
@@ -101,35 +137,40 @@ class StartExplorationEnv(StartEnv, ProxyEnv, Serializable):
         return self.wrapped_env.reset(init_state=self.current_start)
 
 
-# def generate_initial_starts(env, policy, start_range, start_center=None, horizon=500, size=10000):  # TODO: get starts
-#     done = False
-#     obs = env.reset()
-#     starts = [env.get_current_obs()]
-#     start_dim = np.array(starts[0]).shape
-#     if start_center is None:
-#         start_center = np.zeros(start_dim)
-#     steps = 0
-#     while len(starts) < size:
-#         steps += 1
-#         if done or steps >= horizon:
-#             steps = 0
-#             done = False
-#             update_env_state_generator(
-#                 env,
-#                 FixedStateGenerator(
-#                     start_center + np.random.uniform(-start_range, start_range, start_dim)
-#                 )
-#             )
-#             obs = env.reset()
-#             starts.append(env.get_current_obs())
-#         else:
-#             action, _ = policy.get_action(obs)
-#             obs, _, done, _ = env.step(action)
-#             starts.append(env.get_current_obs())
-#
-#     return np.array(starts)
-#
-#
+def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsample=None, variance=1):
+    """ If policy is None, brownian motion applied """
+    if starts is None or len(starts) == 0:
+        starts = [env.current_start]
+    n_starts = len(starts)
+    i = 0
+    done = False
+    obs = env.reset(init_state=starts[i % n_starts])
+    states = [env.start_observation]
+    steps = 0
+    noise = 0
+    while len(states) < size:
+        steps += 1
+        if done or steps >= horizon:
+            steps = 0
+            i += 1
+            done = False
+            obs = env.reset(init_state=starts[i % n_starts])
+            states.append(env.start_observation)
+        else:
+            noise += np.random.randn(env.action_space.flat_dim) * variance
+            if policy:
+                action, _ = policy.get_action(obs)
+            else:
+                action = noise
+            obs, _, _, _ = env.step(action)  # we don't care about done, otherwise will never advance!
+            states.append(env.start_observation)
+
+    if subsample is None:
+        return np.array(states)
+    else:
+        return np.array(states)[np.random.choice(np.shape(states)[0], size=subsample)]
+
+
 def update_env_start_generator(env, start_generator):
     return update_env_state_generator(env, start_generator)
 #
