@@ -77,7 +77,7 @@ def parallel_map(func, iterable_object, num_processes=-1):
     return results
 
 
-def label_states(states, env, policy, horizon, as_goals=True, min_reward=0, max_reward=1, key='rewards',
+def label_states(states, env, policy, horizon, as_goals=True, min_reward=0.1, max_reward=0.9, key='rewards',
                  old_rewards=None, improvement_threshold=0, n_traj=1, n_processes=-1):
     mean_rewards = evaluate_states(
         states, env, policy, horizon, as_goals=as_goals,
@@ -167,7 +167,6 @@ def evaluate_state(state, env, policy, horizon, n_traj=1, full_path=False, key='
     else:
         env.update_start_generator(FixedStateGenerator(state))
 
-    # print("updated the env to have goal: ", env.current_goal)
     for j in range(n_traj):
         # print(j)
         paths.append(rollout(env, policy, horizon))
