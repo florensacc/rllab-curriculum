@@ -132,8 +132,10 @@ def update_env_state_generator(env, state_generator):
     """ Update the goal generator for normalized environment. """
     obj = env
     while not hasattr(obj, 'update_state_generator') and hasattr(obj, 'wrapped_env'):
+        print("current obj: ", obj)
         obj = obj.wrapped_env
     if hasattr(obj, 'update_state_generator'):
+        print("current obj: ", obj)
         return obj.update_state_generator(state_generator)
     else:
         raise NotImplementedError('Unsupported environment')

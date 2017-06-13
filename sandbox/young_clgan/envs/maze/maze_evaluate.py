@@ -94,13 +94,14 @@ def my_square_scatter(axes, x_array, y_array, z_array, min_z=None, max_z=None, s
     return True
 
 
-def plot_heatmap(rewards, goals, prefix='', max_reward=6000, spacing=1, show_heatmap=True, maze_id=0,
+def plot_heatmap(rewards, goals, prefix='', spacing=1, show_heatmap=True, maze_id=0,
                  limit=None, center=None):
     fig, ax = plt.subplots()
 
-    x_goal, y_goal = np.array(goals).T
+    x_goal, y_goal = np.array(goals)[:, :2].T
 
-    my_square_scatter(axes=ax, x_array=x_goal, y_array=y_goal, z_array=rewards, min_z=0, max_z=max_reward, size=spacing)
+    # THIS IS FOR BINARY REWARD!!!
+    my_square_scatter(axes=ax, x_array=x_goal, y_array=y_goal, z_array=rewards, min_z=0, max_z=1, size=spacing)
 
     if maze_id == 0:
         ax.add_patch(patches.Rectangle((-3, -3), 10, 2, fill=True, edgecolor="none", facecolor='0.4'))
@@ -150,7 +151,7 @@ def plot_heatmap(rewards, goals, prefix='', max_reward=6000, spacing=1, show_hea
 
 
 def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1, n_traj=1, parallel=True):
-    
+
     if parallel:
         return test_policy_parallel(policy, train_env, as_goals, visualize, sampling_res, n_traj=n_traj)
     
@@ -159,6 +160,9 @@ def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1
     else:
         maze_env = train_env.wrapped_env.wrapped_env
     empty_spaces = maze_env.find_empty_space()
+
+    old_goal_generator = train_env.goal_generator if hasattr(train_env, 'goal_generator') else None
+    old_start_generator = train_env.start_generator if hasattr(train_env, 'start_generator') else None
 
     if quick_test:
         sampling_res = 0
@@ -201,9 +205,11 @@ def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1
                     states.append(goal)
                     train_env.update_goal_selector(FixedStateGenerator(goal))
                 else:
-                    init_state = (x, y)
+                    init_state = np.zeros_like(old_start_generator.state)
+                    init_state[:2] = (x, y)
                     states.append(init_state)
                     train_env.update_init_selector(FixedStateGenerator(init_state))
+                    print(init_state)
                 for n in range(n_traj):
                     path = rollout(train_env, policy, animated=visualize, max_path_length=max_path_length, speedup=100)
                     paths.append(path)
@@ -260,13 +266,19 @@ def test_policy_parallel(policy, train_env, as_goals=True, visualize=True, sampl
     else:
         max_path_length = 400
 
+    old_goal_generator = train_env.goal_generator if hasattr(train_env, 'goal_generator') else None
+    old_start_generator = train_env.start_generator if hasattr(train_env, 'start_generator') else None
+
     avg_totRewards = []
     avg_success = []
     num_samples = 2 ** sampling_res
     states, empty_spaces, spacing = find_empty_spaces(train_env, sampling_res=sampling_res)
 
+    # hack to adjust dim of starts in case of doing velocity also
+    states = [np.pad(s, (0, np.size(old_start_generator.state) - np.size(s)), 'constant') for s in states]
+
     paths = evaluate_states(states, train_env, policy, max_path_length, as_goals=as_goals, n_traj=n_traj, full_path=True)
-   
+
     path_index = 0
     for empty_space in empty_spaces:
         for i in range(num_samples):
@@ -288,7 +300,7 @@ def test_and_plot_policy(policy, env, as_goals=True, visualize=True, sampling_re
     while not hasattr(obj, '_maze_id') and hasattr(obj, 'wrapped_env'):
         obj = env.wrapped_env
     maze_id = obj._maze_id
-    plot_heatmap(avg_success, states, max_reward=max_reward, spacing=spacing, show_heatmap=False, maze_id=maze_id,
+    plot_heatmap(avg_success, states, spacing=spacing, show_heatmap=False, maze_id=maze_id,
                  center=center, limit=limit)
 
     reward_img = save_image()
@@ -314,7 +326,7 @@ def test_and_plot_policy(policy, env, as_goals=True, visualize=True, sampling_re
 def plot_policy_means(policy, env, sampling_res=2, report=None, center=None, limit=None):  # only for start envs!
     states, empty_spaces, spacing = find_empty_spaces(env, sampling_res=sampling_res)
     goal = env.current_goal
-    observations = [np.concatenate([state, [0, 0], goal]) for state in states]
+    observations = [np.concatenate([state, [0, ] * (env.observation_space.flat_dim - len(state) - len(goal)), goal]) for state in states]
     actions, agent_infos = policy.get_actions(observations)
     vecs = agent_infos['mean']
     vars = [np.exp(log_std) * 0.25 for log_std in agent_infos['log_std']]

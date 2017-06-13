@@ -189,7 +189,7 @@ def construct_maze(maze_id=0, length=1):
             [1, 1, 1, 1, 1],
         ]
 
-    elif maze_id == 11:  # for goalGAN paper
+    elif maze_id == 11:  # for goalGAN paper: SPIRAL
         structure = [
             [1, 1, 1, 1, 1, 1, 1],
             [1, 0, 0, 0, 0, 0, 1],
