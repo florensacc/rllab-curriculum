@@ -27,7 +27,7 @@ from sandbox.young_clgan.state.evaluator import *
 from sandbox.young_clgan.logging.html_report import format_dict, HTMLReport
 from sandbox.young_clgan.logging.visualization import *
 from sandbox.young_clgan.logging.logger import ExperimentLogger
-from sandbox.young_clgan.envs.block_insertion.utils import plot_policy_performance
+from sandbox.young_clgan.envs.block_insertion.utils import plot_policy_performance, plot_policy_performance_sliced
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -70,7 +70,7 @@ def run_task(v):
 
     policy = GaussianMLPPolicy(
         env_spec=env.spec,
-        hidden_sizes=(32, 32),
+        hidden_sizes=(128, 128),
         # Fix the variance since different goals will require different variances, making this parameter hard to learn.
         learn_std=False,
         output_gain=v['output_gain'],
@@ -127,6 +127,12 @@ def run_task(v):
 
         img, avg_success = plot_policy_performance(policy, env, v['horizon'], n_traj=n_traj)
         report.add_image(img, 'policy_rewards_{}\nAvg_success: {}'.format(outer_iter, avg_success))
+        
+        if v['env_idx'] == 5:
+            img, avg_success = plot_policy_performance_sliced(
+                policy, env, v['horizon'], slices=(0, None, None), n_traj=n_traj
+            )
+            report.add_image(img, 'policy_rewards_sliced_{}\nAvg_success: {}'.format(outer_iter, avg_success))
 
         # log some more on how the pendulum performs the upright and general task
         old_goal_generator = env.goal_generator
@@ -213,7 +219,7 @@ if __name__ == '__main__':
     vg = VariantGenerator()
 
     vg.add('seed', [s * 10 + 200 for s in range(args.n_seed)])
-    vg.add('env_idx', [1, 2, 3, 4])
+    vg.add('env_idx', [5])
     # # GeneratorEnv params
     vg.add('terminal_eps', [0.02])
     vg.add('sample_unif_feas', [True])

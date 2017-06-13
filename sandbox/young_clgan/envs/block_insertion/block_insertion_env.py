@@ -31,6 +31,11 @@ class BlockInsertionEnv3(BlockInsertionEnvBase):
 class BlockInsertionEnv4(BlockInsertionEnvBase):
     """ 2 DOF block with two walls """
     FILE = 'block_insertion_4.xml'
+    
+    
+class BlockInsertionEnv5(BlockInsertionEnvBase):
+    """ 2 DOF block with two walls """
+    FILE = 'block_insertion_5.xml'
 
 
 
@@ -39,4 +44,5 @@ BLOCK_INSERTION_ENVS = [
     BlockInsertionEnv2,
     BlockInsertionEnv3,
     BlockInsertionEnv4,
+    BlockInsertionEnv5,
 ]

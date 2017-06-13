@@ -51,6 +51,51 @@ def plot_policy_performance(policy, env, horizon, n_samples=200, n_traj=5, fname
     return img, np.mean(success_rates)
     
     
+def plot_policy_performance_sliced(policy, env, horizon, slices=None, n_samples=200, n_traj=5, fname=None, key='goal_reached'):
+    goals_dim = env.goal_dim
+    goal_lb = env.goal_lb
+    goal_ub = env.goal_ub
+    
+    if slices is None:
+        slices = [None] * goals_dim
+        
+    assert len(slices) == goals_dim
+    
+    goals = np.random.uniform(goal_lb, goal_ub, [n_samples, goals_dim])
+    free_dims = []
+    for i, x in enumerate(slices):
+        if x is None:
+            free_dims.append(i)
+            continue
+        goals[:, i] = x
+    
+    success_rates = evaluate_states(
+        goals, env, policy, horizon, n_traj=n_traj, key=key,
+        aggregator=(np.max, np.mean)
+    )
+    
+    plt.clf()
+    fig = plt.figure()
+    
+    if len(free_dims) >= 3:
+        ax = fig.add_subplot(111, projection='3d')
+        p = ax.scatter(goals[:, free_dims[0]], goals[:, free_dims[1]], goals[:, free_dims[2]], c=success_rates, s=10, cmap=pylab.cm.jet, vmin=0, vmax=1)
+        fig.colorbar(p)
+        ax.set_xlim(goal_lb[free_dims[0]], goal_ub[free_dims[0]])
+        ax.set_ylim(goal_lb[free_dims[1]], goal_ub[free_dims[1]])
+        ax.set_zlim(goal_lb[free_dims[2]], goal_ub[free_dims[2]])
+    elif len(free_dims) == 2:
+        plt.scatter(goals[:, free_dims[0]], goals[:, free_dims[1]], c=success_rates, s=10, cmap=pylab.cm.jet, vmin=0, vmax=1)
+        plt.colorbar()
+        plt.xlim(goal_lb[free_dims[0]], goal_ub[free_dims[0]])
+        plt.ylim(goal_lb[free_dims[1]], goal_ub[free_dims[1]])
+    
+    
+    img = save_image(fname=fname)
+    
+    return img, np.mean(success_rates)
+    
+    
     
 def plot_generator_samples(generator, env=None, size=100, fname=None):
     

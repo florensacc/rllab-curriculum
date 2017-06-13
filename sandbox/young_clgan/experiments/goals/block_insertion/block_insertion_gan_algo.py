@@ -198,6 +198,12 @@ def run_task(v):
             reward_img,
             'policy performance\n itr: {} \nsuccess: {}'.format(outer_iter,  mean_success)
         )
+        
+        if v['env_idx'] == 5:
+            img, avg_success = plot_policy_performance_sliced(
+                policy, env, v['horizon'], slices=(0, None, None), n_traj=3
+            )
+            report.add_image(img, 'policy_rewards_sliced_{}\nAvg_success: {}'.format(outer_iter, avg_success))
 
         logger.dump_tabular(with_prefix=False)
         report.new_row()
