@@ -53,18 +53,24 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-trpo-maze'
+    exp_prefix = 'start-maze-trpo-onlyFeas-debugged'
 
     vg = VariantGenerator()
     vg.add('maze_id', [0])
-    vg.add('start_size', [2])  # this is the ultimate start we care about: getting the pendulum upright
+    vg.add('start_size', [2, 4])  # this is the ultimate start we care about: getting the pendulum upright
     vg.add('start_range',
            lambda maze_id: [4] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
-    vg.add('start_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
-    vg.add('ultimate_goal', lambda maze_id: [(0, 4)] if maze_id == 0 else [(4, 4)])
+    vg.add('start_center', lambda maze_id, start_size: [(2, 2)] if maze_id == 0 and start_size == 2
+                                                  else [(2, 2, 0, 0)] if maze_id == 0 and start_size == 4
+                                                  else [(0, 0)] if start_size == 2
+                                                  else [(0, 0, 0, 0)])
+    vg.add('append_start', [False])
+    vg.add('ultimate_goal', lambda maze_id, append_start: [(0, 0)] if append_start
+                                                     else [(0, 4)] if maze_id == 0 else [(4, 4)])
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('terminal_eps', [0.3])
     vg.add('only_feasible', [True])
+    vg.add('only_feasible_sampling', [True])
     vg.add('goal_range',
            lambda maze_id: [4] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
     vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
@@ -77,27 +83,22 @@ if __name__ == '__main__':
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('with_replacement', [True])
 
-    vg.add('unif_goals', [True])  # put False for fixing the goal below!
-    vg.add('final_goal', [(0, 4)])
-
     # replay buffer
-    vg.add('replay_buffer', [True])
-    vg.add('coll_eps', [0.3])
-    vg.add('num_new_goals', [200])
-    vg.add('num_old_goals', [100])
+    vg.add('num_new_starts', [300])
     # sampling params
-    vg.add('horizon', lambda maze_id: [400] if maze_id == 0 else [500])
+    vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
     vg.add('outer_iters', lambda maze_id: [200] if maze_id == 0 else [10000])
     vg.add('inner_iters', [5])
     vg.add('pg_batch_size', [20000])
     # policy initialization
-    vg.add('output_gain', [1, 0.1])
+    vg.add('policy_layers', lambda append_start: [(64, 64)])
+    vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
 
-    vg.add('seed', range(0, 500, 100))
+    vg.add('seed', range(0, 700, 100))
 
     # # gan_configs
     # vg.add('GAN_batch_size', [128])  # proble with repeated name!!

@@ -26,10 +26,8 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
 from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states
 from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator
-from sandbox.young_clgan.state.generator import StateGAN
 from sandbox.young_clgan.state.utils import StateCollection
 
-from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, generate_initial_goals
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
 from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy, sample_unif_feas, unwrap_maze, plot_policy_means
 from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
@@ -43,7 +41,6 @@ def run_task(v):
     sampling_res = 2 if 'sampling_res' not in v.keys() else v['sampling_res']
     samples_per_cell = 10  # for the oracle rejection sampling
 
-    # Log performance of randomly initialized policy with FIXED goal [0.1, 0.1]
     logger.log("Initializing report and plot_policy_reward...")
     log_dir = logger.get_snapshot_dir()  # problem with logger module here!!
     report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=3)
@@ -61,7 +58,8 @@ def run_task(v):
         env=inner_env,
         start_generator=uniform_start_generator,
         goal_generator=fixed_goal_generator,
-        obs_transform=lambda x: x[:int(len(x) / 2)],
+        obs2start_transform=lambda x: x[:v['start_size']],
+        obs2goal_transform=lambda x: x[:v['goal_size']],
         terminal_eps=v['terminal_eps'],
         distance_metric=v['distance_metric'],
         extend_dist_rew=v['extend_dist_rew'],
@@ -101,26 +99,29 @@ def run_task(v):
 
         starts = np.array([]).reshape((-1, v['start_size']))
         k = 0
-        while starts.shape[0] < v['num_new_goals']:  # todo: change to starts
+        while starts.shape[0] < v['num_new_starts']:
             print('good starts collected: ', starts.shape[0])
             logger.log("Sampling and labeling the starts: %d" % k)
             k += 1
-            unif_goals = sample_unif_feas(env, samples_per_cell=samples_per_cell)
-            labels = label_states(unif_goals, env, policy, v['horizon'],
+            unif_starts = sample_unif_feas(env, samples_per_cell=samples_per_cell)
+            if v['start_size'] > 2:
+                unif_starts = np.array([np.concatenate([start, np.random.uniform(-v['start_range'], v['start_range'], 2)])
+                               for start in unif_starts])
+            labels = label_states(unif_starts, env, policy, v['horizon'],
                                   as_goals=False, n_traj=v['n_traj'], key='goal_reached')
-            # plot_labeled_states(unif_goals, labels, report=report, itr=outer_iter, limit=v['start_range'],
+            # plot_labeled_states(unif_starts, labels, report=report, itr=outer_iter, limit=v['start_range'],
             #                     center=v['start_center'], maze_id=v['maze_id'])
             logger.log("Converting the labels")
             init_classes, text_labels = convert_label(labels)
-            starts = np.concatenate([starts, unif_goals[init_classes == 2]]).reshape((-1, v['goal_size']))
+            starts = np.concatenate([starts, unif_starts[init_classes == 2]]).reshape((-1, v['start_size']))
 
         if v['replay_buffer'] and outer_iter > 0 and all_starts.size > 0:
-            old_goals = all_starts.sample(v['num_old_goals'])  #todo: replay noise? // replace old_goals by starts
-            starts = np.vstack([starts, old_goals])
+            old_starts = all_starts.sample(v['num_old_starts'])
+            starts = np.vstack([starts, old_starts])
         # report.new_row()
 
         with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
-            logger.log("Updating the environment goal generator")
+            logger.log("Updating the environment start generator")
             env.update_start_generator(
                 UniformListStateGenerator(
                     starts.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
@@ -137,6 +138,7 @@ def run_task(v):
                 n_itr=v['inner_iters'],
                 step_size=0.01,
                 discount=v['discount'],
+                gae_lambda=v['gae_lambda'],
                 plot=False,
             )
 
@@ -147,7 +149,7 @@ def run_task(v):
         test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
                              itr=outer_iter, report=report, center=v['goal_center'], limit=v['goal_range'])
 
-        logger.log("Labeling the goals")
+        logger.log("Labeling the starts")
         labels = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
 
         plot_labeled_states(starts, labels, report=report, itr=outer_iter, limit=v['goal_range'],

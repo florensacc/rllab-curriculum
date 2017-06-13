@@ -53,14 +53,17 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-oracle-maze'
+    exp_prefix = 'start-oracle-maze-debugged'
 
     vg = VariantGenerator()
-    vg.add('maze_id', [0])  # default is 0
-    vg.add('start_size', [2])  # this is the ultimate start we care about: getting the pendulum upright
+    vg.add('maze_id', [11, 0])  # default is 0, spiral is 11
+    vg.add('start_size', [4])  # this is the ultimate start we care about: getting the pendulum upright
     vg.add('start_range',
            lambda maze_id: [4] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
-    vg.add('start_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
+    vg.add('start_center', lambda maze_id, start_size: [(2, 2)] if maze_id == 0 and start_size == 2
+                                                else [(2, 2, 0, 0)] if maze_id == 0 and start_size == 4
+                                                else [(0, 0)] if start_size == 2
+                                                else [(0, 0, 0, 0)])
     vg.add('ultimate_goal', lambda maze_id: [(0, 4)] if maze_id == 0 else [(2, 4), (0, 0)] if maze_id == 12 else [(4, 4)])
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('terminal_eps', [0.3])
@@ -80,21 +83,22 @@ if __name__ == '__main__':
     # replay buffer
     vg.add('replay_buffer', [True])
     vg.add('coll_eps', [0.3])
-    vg.add('num_new_goals', [50])
-    vg.add('num_old_goals', [20])
+    vg.add('num_new_starts', [50])
+    vg.add('num_old_starts', [20])
     # sampling params
-    vg.add('horizon', lambda maze_id: [400] if maze_id == 0 else [500])
-    vg.add('outer_iters', lambda maze_id: [200] if maze_id == 0 else [1000])
+    vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
+    vg.add('outer_iters', lambda maze_id: [100] if maze_id == 0 else [300])
     vg.add('inner_iters', [2])  # again we will have to divide/adjust the
     vg.add('pg_batch_size', [20000])
     # policy initialization
-    vg.add('output_gain', [0.1, 1])
+    vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
-    vg.add('learn_std', [True, False])
+    vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
+    vg.add('gae_lambda', [1])
 
-    vg.add('seed', range(10, 50, 10))
+    vg.add('seed', range(10, 70, 10))
 
     # # gan_configs
     # vg.add('GAN_batch_size', [128])  # proble with repeated name!!

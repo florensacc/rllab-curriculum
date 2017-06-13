@@ -76,15 +76,14 @@ if __name__ == '__main__':
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('with_replacement', [True])
-    vg.add('smart_init', [False])  # TODO: implement initial position smart init
+    vg.add('smart_init', [False])
     # replay buffer
     vg.add('replay_buffer', [True])
     vg.add('coll_eps', [0.3])
-    vg.add('num_new_goals', [200])
-    vg.add('num_old_goals', [100])
-    vg.add('add_on_policy', [False])  # Todo: same as above
+    vg.add('num_new_starts', [200])
+    vg.add('num_old_starts', [100])
     # sampling params
-    vg.add('horizon', lambda maze_id: [400] if maze_id == 0 else [500])
+    vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
     vg.add('outer_iters', lambda maze_id: [200] if maze_id == 0 else [10000])
     vg.add('inner_iters', [5])
     vg.add('pg_batch_size', [20000])
@@ -96,13 +95,13 @@ if __name__ == '__main__':
     vg.add('discount', [0.995])
     # gan configs
     vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
-    vg.add('gan_generator_layers', [[256, 256]])
+    vg.add('gan_generator_layers', [[200, 200]])
     vg.add('gan_discriminator_layers', [[128, 128]])
-    vg.add('gan_noise_size', [4])
-    vg.add('goal_noise_level', [0.5])
-    vg.add('gan_outer_iters', [300])
+    vg.add('gan_noise_size', [5])
+    vg.add('start_noise_level', [0.5])
+    vg.add('gan_outer_iters', [500])
 
-    vg.add('seed', range(10, 510, 100))
+    vg.add('seed', range(110, 510, 100))
 
     # # gan_configs
     # vg.add('GAN_batch_size', [128])  # proble with repeated name!!
