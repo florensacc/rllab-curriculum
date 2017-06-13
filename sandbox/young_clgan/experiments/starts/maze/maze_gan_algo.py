@@ -23,41 +23,46 @@ from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
 from sandbox.young_clgan.state.evaluator import label_states
-from sandbox.young_clgan.envs.base import UniformListStateGenerator, update_env_state_generator, UniformStateGenerator
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator
 from sandbox.young_clgan.state.generator import StateGAN
 from sandbox.young_clgan.state.utils import StateCollection
 
-from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, generate_initial_goals
-from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy  # TODO: make this external to maze env
-from sandbox.young_clgan.envs.maze.maze_swim.swim_maze_env import SwimmerMazeEnv  # we need to use our maze with is_feas
-# from rllab.envs.mujoco.maze.swimmer_maze_env import SwimmerMazeEnv
+from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, generate_initial_goals, generate_brownian_goals
+from sandbox.young_clgan.envs.start_env import generate_starts
+from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
+from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy, plot_policy_means
+from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
-
-sampling_res = 2
 
 
 def run_task(v):
     random.seed(v['seed'])
     np.random.seed(v['seed'])
+    sampling_res = 2 if 'sampling_res' not in v.keys() else v['sampling_res']
 
     # Log performance of randomly initialized policy with FIXED goal [0.1, 0.1]
     logger.log("Initializing report and plot_policy_reward...")
     log_dir = logger.get_snapshot_dir()  # problem with logger module here!!
-    report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=3)
+    report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=4)
 
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
 
     tf_session = tf.Session()
 
-    inner_env = normalize(SwimmerMazeEnv())
+    inner_env = normalize(PointMazeEnv(maze_id=v['maze_id']))
 
-    uniform_goal_generator = UniformStateGenerator(state_size=v['goal_size'], bounds=v['goal_range'],
-                                                   center=v['goal_center'])
-    env = GoalExplorationEnv(
-        env=inner_env, goal_generator=uniform_goal_generator,
-        obs2goal_transform=lambda x: x[-3:-1],
+    fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
+    uniform_start_generator = UniformStateGenerator(state_size=v['start_size'], bounds=v['start_range'],
+                                                    center=v['start_center'])
+
+    env = GoalStartExplorationEnv(
+        env=inner_env,
+        start_generator=uniform_start_generator,
+        obs2start_transform=lambda x: x[:v['start_size']],
+        goal_generator=fixed_goal_generator,
+        obs2goal_transform=lambda x: x[:v['goal_size']],
         terminal_eps=v['terminal_eps'],
         distance_metric=v['distance_metric'],
         extend_dist_rew=v['extend_dist_rew'],
@@ -82,8 +87,9 @@ def run_task(v):
     outer_iter = 0
 
     logger.log('Generating the Initial Heatmap...')
-    test_and_plot_policy(policy, env, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
-                         itr=outer_iter, report=report, limit=v['goal_range'], center=v['goal_center'])
+    plot_policy_means(policy, env, sampling_res=2, report=report, limit=v['start_range'], center=v['start_center'])
+    # test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
+    #                      itr=outer_iter, report=report, limit=v['goal_range'], center=v['goal_center'])
 
     # GAN
     logger.log("Instantiating the GAN...")
@@ -95,11 +101,11 @@ def run_task(v):
             gan_configs[key] = tflearn.initializations.truncated_normal(stddev=gan_configs[key + '_stddev'])
 
     gan = StateGAN(
-        state_size=v['goal_size'],
+        state_size=v['start_size'],
         evaluater_size=v['num_labels'],
-        state_range=v['goal_range'],
-        state_center=v['goal_center'],
-        state_noise_level=v['goal_noise_level'],
+        state_range=v['start_range'],
+        state_center=v['start_center'],
+        state_noise_level=v['start_noise_level'],
         generator_layers=v['gan_generator_layers'],
         discriminator_layers=v['gan_discriminator_layers'],
         noise_size=v['gan_noise_size'],
@@ -108,48 +114,46 @@ def run_task(v):
     )
     logger.log("pretraining the GAN...")
     if v['smart_init']:
-        feasible_goals = generate_initial_goals(env, policy, v['goal_range'], goal_center=v['goal_center'],
-                                                horizon=v['horizon'])
-        labels = np.ones((feasible_goals.shape[0], 2)).astype(np.float32)  # make them all good goals
-        plot_labeled_states(feasible_goals, labels, report=report, itr=outer_iter,
-                            limit=v['goal_range'], center=v['goal_center'])
+        feasible_starts = generate_starts(env, starts=[v['ultimate_goal']], horizon=50)  # without giving the policy it does brownian mo.
+        labels = np.ones((feasible_starts.shape[0], 2)).astype(np.float32)  # make them all good goals
+        plot_labeled_states(feasible_starts, labels, report=report, itr=outer_iter,
+                            limit=v['goal_range'], center=v['goal_center'], maze_id=v['maze_id'])
 
-        dis_loss, gen_loss = gan.pretrain(states=feasible_goals, outer_iters=v['gan_outer_iters'])
+        dis_loss, gen_loss = gan.pretrain(states=feasible_starts, outer_iters=v['gan_outer_iters'])
         print("Loss of Gen and Dis: ", gen_loss, dis_loss)
     else:
-        gan.pretrain_uniform()
+        gan.pretrain_uniform(outer_iters=500, report=report)  # v['gan_outer_iters'])
 
     # log first samples form the GAN
-    initial_goals, _ = gan.sample_states_with_noise(v['num_new_goals'])
+    initial_starts, _ = gan.sample_states_with_noise(v['num_new_starts'])
 
-    logger.log("Labeling the goals")
-    labels = label_states(initial_goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
+    logger.log("Labeling the starts")
+    labels = label_states(initial_starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
 
-    plot_labeled_states(initial_goals, labels, report=report, itr=outer_iter,
-                        limit=v['goal_range'], center=v['goal_center'])
+    plot_labeled_states(initial_starts, labels, report=report, itr=outer_iter,
+                        limit=v['goal_range'], center=v['goal_center'], maze_id=v['maze_id'])
     report.new_row()
 
-    all_goals = StateCollection(distance_threshold=v['coll_eps'])
+    all_starts = StateCollection(distance_threshold=v['coll_eps'])
 
     for outer_iter in range(1, v['outer_iters']):
 
         logger.log("Outer itr # %i" % outer_iter)
         # Sample GAN
-        logger.log("Sampling goals from the GAN")
-        raw_goals, _ = gan.sample_states_with_noise(v['num_new_goals'])
+        logger.log("Sampling starts from the GAN")
+        raw_starts, _ = gan.sample_states_with_noise(v['num_new_starts'])
 
-        if v['replay_buffer'] and outer_iter > 0 and all_goals.size > 0:
-            old_goals = all_goals.sample(v['num_old_goals'])
-            goals = np.vstack([raw_goals, old_goals])
+        if v['replay_buffer'] and outer_iter > 0 and all_starts.size > 0:
+            old_starts = all_starts.sample(v['num_old_starts'])
+            starts = np.vstack([raw_starts, old_starts])
         else:
-            goals = raw_goals
+            starts = raw_starts
 
-        with ExperimentLogger(log_dir, '_last', snapshot_mode='last', hold_outter_log=True):
-            logger.log("Updating the environment goal generator")
-            update_env_state_generator(
-                env,
+        with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
+            logger.log("Updating the environment start generator")
+            env.update_start_generator(
                 UniformListStateGenerator(
-                    goals.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
+                    starts.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
                 )
             )
 
@@ -162,20 +166,22 @@ def run_task(v):
                 max_path_length=v['horizon'],
                 n_itr=v['inner_iters'],
                 step_size=0.01,
+                discount=v['discount'],
                 plot=False,
             )
 
             algo.train()
 
         logger.log('Generating the Heatmap...')
-        test_and_plot_policy(policy, env, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
+        plot_policy_means(policy, env, sampling_res=2, report=report, limit=v['start_range'], center=v['start_center'])
+        test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
                              itr=outer_iter, report=report, limit=v['goal_range'], center=v['goal_center'])
 
-        logger.log("Labeling the goals")
-        labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
+        logger.log("Labeling the starts")
+        labels = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
 
-        plot_labeled_states(goals, labels, report=report, itr=outer_iter, limit=v['goal_range'],
-                            center=v['goal_center'])
+        plot_labeled_states(starts, labels, report=report, itr=outer_iter, limit=v['goal_range'],
+                            center=v['goal_center'], maze_id=v['maze_id'])
 
         # ###### extra for deterministic:
         # logger.log("Labeling the goals deterministic")
@@ -186,21 +192,16 @@ def run_task(v):
         labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
 
         logger.log("Training the GAN")
-        gan.train(
-            goals, labels,
-            v['gan_outer_iters'],
-        )
+        if np.any(labels):
+            gan.train(
+                starts, labels,
+                v['gan_outer_iters'],
+            )
 
         logger.dump_tabular(with_prefix=False)
         report.new_row()
 
         # append new goals to list of all goals (replay buffer): Not the low reward ones!!
-        filtered_raw_goals = [goal for goal, label in zip(goals, labels) if label[0] == 1]
-        all_goals.append(filtered_raw_goals)
+        filtered_raw_start = [start for start, label in zip(starts, labels) if label[0] == 1]
+        all_starts.append(filtered_raw_start)
 
-        if v['add_on_policy']:
-            logger.log("sampling on policy")
-            feasible_goals = generate_initial_goals(env, policy, v['goal_range'], goal_center=v['goal_center'],
-                                                    horizon=v['horizon'])
-            # downsampled_feasible_goals = feasible_goals[np.random.choice(feasible_goals.shape[0], v['add_on_policy']),:]
-            all_goals.append(feasible_goals)

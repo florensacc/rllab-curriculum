@@ -25,13 +25,12 @@ from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
 from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states
-from sandbox.young_clgan.envs.base import UniformListStateGenerator, update_env_state_generator, UniformStateGenerator
-from sandbox.young_clgan.state.generator import StateGAN
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator
 from sandbox.young_clgan.state.utils import StateCollection
 
-from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, generate_initial_goals
-from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy, sample_unif_feas, unwrap_maze
-from sandbox.young_clgan.envs.maze.maze_ant.ant_maze_env import AntMazeEnv
+from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
+from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy, sample_unif_feas, unwrap_maze, plot_policy_means
+from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -42,7 +41,6 @@ def run_task(v):
     sampling_res = 2 if 'sampling_res' not in v.keys() else v['sampling_res']
     samples_per_cell = 10  # for the oracle rejection sampling
 
-    # Log performance of randomly initialized policy with FIXED goal [0.1, 0.1]
     logger.log("Initializing report and plot_policy_reward...")
     log_dir = logger.get_snapshot_dir()  # problem with logger module here!!
     report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=3)
@@ -50,13 +48,18 @@ def run_task(v):
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
 
-    inner_env = normalize(AntMazeEnv(maze_id=v['maze_id']))
+    inner_env = normalize(PointMazeEnv(maze_id=v['maze_id']))
 
-    uniform_goal_generator = UniformStateGenerator(state_size=v['goal_size'], bounds=v['goal_range'],
-                                                   center=v['goal_center'])
-    env = GoalExplorationEnv(
-        env=inner_env, goal_generator=uniform_goal_generator,
-        obs2goal_transform=lambda x: x[-3:-1],
+    fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
+    uniform_start_generator = UniformStateGenerator(state_size=v['start_size'], bounds=v['start_range'],
+                                                    center=v['start_center'])
+
+    env = GoalStartExplorationEnv(
+        env=inner_env,
+        start_generator=uniform_start_generator,
+        goal_generator=fixed_goal_generator,
+        obs2start_transform=lambda x: x[:v['start_size']],
+        obs2goal_transform=lambda x: x[:v['goal_size']],
         terminal_eps=v['terminal_eps'],
         distance_metric=v['distance_metric'],
         extend_dist_rew=v['extend_dist_rew'],
@@ -81,39 +84,47 @@ def run_task(v):
     outer_iter = 0
 
     logger.log('Generating the Initial Heatmap...')
-    test_and_plot_policy(policy, env, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
-                         itr=outer_iter, report=report, center=v['goal_center'], limit=v['goal_range'])
+    plot_policy_means(policy, env, sampling_res=2, report=report, limit=v['start_range'], center=v['start_center'])
+    test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
+                         itr=outer_iter, report=report, center=v['start_center'], limit=v['start_range'])
     report.new_row()
 
-    all_goals = StateCollection(distance_threshold=v['coll_eps'])
+    all_starts = StateCollection(distance_threshold=v['coll_eps'])
     total_rollouts = 0
 
     for outer_iter in range(1, v['outer_iters']):
-        logger.log("Outer itr # %i" % outer_iter)
-        logger.log("Sampling goals")
 
-        goals = np.array([]).reshape((-1, v['goal_size']))
+        logger.log("Outer itr # %i" % outer_iter)
+        logger.log("Sampling starts")
+
+        starts = np.array([]).reshape((-1, v['start_size']))
         k = 0
-        while goals.shape[0] < v['num_new_goals']:
-            print('good goals collected: ', goals.shape[0])
-            logger.log("Sampling and labeling the goals: %d" % k)
+        while starts.shape[0] < v['num_new_starts']:
+            print('good starts collected: ', starts.shape[0])
+            logger.log("Sampling and labeling the starts: %d" % k)
             k += 1
-            unif_goals = sample_unif_feas(env, samples_per_cell=samples_per_cell)
-            labels = label_states(unif_goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
+            unif_starts = sample_unif_feas(env, samples_per_cell=samples_per_cell)
+            if v['start_size'] > 2:
+                unif_starts = np.array([np.concatenate([start, np.random.uniform(-v['start_range'], v['start_range'], 2)])
+                               for start in unif_starts])
+            labels = label_states(unif_starts, env, policy, v['horizon'],
+                                  as_goals=False, n_traj=v['n_traj'], key='goal_reached')
+            # plot_labeled_states(unif_starts, labels, report=report, itr=outer_iter, limit=v['start_range'],
+            #                     center=v['start_center'], maze_id=v['maze_id'])
             logger.log("Converting the labels")
             init_classes, text_labels = convert_label(labels)
-            goals = np.concatenate([goals, unif_goals[init_classes == 2]]).reshape((-1, v['goal_size']))
+            starts = np.concatenate([starts, unif_starts[init_classes == 2]]).reshape((-1, v['start_size']))
 
-        if v['replay_buffer'] and outer_iter > 0 and all_goals.size > 0:
-            old_goals = all_goals.sample(v['num_old_goals'])  #todo: replay noise?
-            goals = np.vstack([goals, old_goals])
+        if v['replay_buffer'] and outer_iter > 0 and all_starts.size > 0:
+            old_starts = all_starts.sample(v['num_old_starts'])
+            starts = np.vstack([starts, old_starts])
+        # report.new_row()
 
         with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
-            logger.log("Updating the environment goal generator")
-            update_env_state_generator(
-                env,
+            logger.log("Updating the environment start generator")
+            env.update_start_generator(
                 UniformListStateGenerator(
-                    goals.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
+                    starts.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
                 )
             )
 
@@ -126,19 +137,22 @@ def run_task(v):
                 max_path_length=v['horizon'],
                 n_itr=v['inner_iters'],
                 step_size=0.01,
+                discount=v['discount'],
+                gae_lambda=v['gae_lambda'],
                 plot=False,
             )
 
             algo.train()
 
         logger.log('Generating the Heatmap...')
-        test_and_plot_policy(policy, env, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
+        plot_policy_means(policy, env, sampling_res=2, report=report, limit=v['start_range'], center=v['start_center'])
+        test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
                              itr=outer_iter, report=report, center=v['goal_center'], limit=v['goal_range'])
 
-        logger.log("Labeling the goals")
-        labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
+        logger.log("Labeling the starts")
+        labels = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
 
-        plot_labeled_states(goals, labels, report=report, itr=outer_iter, limit=v['goal_range'],
+        plot_labeled_states(starts, labels, report=report, itr=outer_iter, limit=v['goal_range'],
                             center=v['goal_center'], maze_id=v['maze_id'])
 
         # ###### extra for deterministic:
@@ -159,5 +173,5 @@ def run_task(v):
         report.new_row()
 
         # append new goals to list of all goals (replay buffer): Not the low reward ones!!
-        filtered_raw_goals = [goal for goal, label in zip(goals, labels) if label[0] == 1]
-        all_goals.append(filtered_raw_goals)
+        filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1]
+        all_starts.append(filtered_raw_starts)

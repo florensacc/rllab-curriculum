@@ -28,32 +28,39 @@ from sandbox.young_clgan.envs.base import StateGenerator, UniformListStateGenera
     UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv, update_env_state_generator
 
 
-
-class GoalEnv(StateAuxiliaryEnv):
+class GoalEnv(Serializable):
     """ A wrapper of StateAuxiliaryEnv to make it compatible with the old goal env."""
 
     def __init__(self, goal_generator=None, *args, **kwargs):
-        if goal_generator is not None:
-            kwargs['state_generator'] = goal_generator
-        super(GoalEnv, self).__init__(*args, **kwargs)
+        Serializable.quick_init(self, locals())
+        self._goal_holder = StateAuxiliaryEnv(state_generator=goal_generator, *args, **kwargs)
 
     def update_goal_generator(self, *args, **kwargs):
-        return self.update_state_generator(*args, **kwargs)
+        return self._goal_holder.update_state_generator(*args, **kwargs)
         
     def update_goal(self, goal=None, *args, **kwargs):
-        return self.update_aux_state(state=goal, *args, **kwargs)
+        return self._goal_holder.update_aux_state(state=goal, *args, **kwargs)
         
     @property
     def goal_generator(self):
-        return self.state_generator
+        return self._goal_holder.state_generator
     
     @property
     def current_goal(self):
-        return self.current_aux_state
+        return self._goal_holder.current_aux_state
+
+    def __getstate__(self):
+        d = super(GoalEnv, self).__getstate__()
+        d['__goal_holder'] = self._goal_holder
+        return d
+
+    def __setstate__(self, d):
+        super(GoalEnv, self).__setstate__(d)
+        self._goal_holder = d['__goal_holder']
 
 
 class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
-    def __init__(self, env, goal_generator, obs_transform=None, terminal_eps=0.05, only_feasible=False,
+    def __init__(self, env, goal_generator, obs2goal_transform=None, terminal_eps=0.05, only_feasible=False,
                  terminate_env=False, goal_bounds=None, distance_metric='L2', extend_dist_rew=False, goal_weight=1,
                  inner_weight=0, append_transformed_obs=False, **kwargs):
         """
@@ -62,7 +69,7 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         
         :param env: wrapped env
         :param goal_generator: a StateGenerator object
-        :param obs_transform: a callable that transforms an observation of the wrapped environment into goal space
+        :param obs2goal_transform: a callable that transforms an observation of the wrapped environment into goal space
         :param terminal_eps: a threshold of distance that determines if a goal is reached
         :param terminate_env: a boolean that controls if the environment is terminated with the goal is reached
         :param goal_bounds: array marking the UB of the rectangular limit of goals.
@@ -76,10 +83,10 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         GoalEnv.__init__(self, **kwargs)
         self.update_goal_generator(goal_generator)
         
-        if obs_transform is None:
-            self._obs_transform = lambda x: x
+        if obs2goal_transform is None:
+            self._obs2goal_transform = lambda x: x   # needed for replay old policies [:2]
         else:
-            self._obs_transform = obs_transform
+            self._obs2goal_transform = obs2goal_transform
         
         self.terminate_env = terminate_env
         self.goal_bounds = goal_bounds
@@ -119,13 +126,10 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         else:
             return True
 
-    def reset(self, reset_goal=True):
+    def reset(self, reset_goal=True, **kwargs):  # allows to pass init_state if needed
         if reset_goal:
             self.update_goal()
-        # print("reset with goal: ", self.current_goal)
-
-        # print("RESET GoalExplorationEnv, the current goal is: ", self.current_goal)
-        return self.append_goal_observation(ProxyEnv.reset(self, goal=self.current_goal))  # the wrapped env needs to use or ignore it
+        return self.append_goal_observation(ProxyEnv.reset(self, goal=self.current_goal, **kwargs))  # the wrapped env needs to use or ignore it
 
     def step(self, action):
         observation, reward, done, info = ProxyEnv.step(self, action)
@@ -174,7 +178,7 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         
     def transform_to_goal_space(self, obs):
         """ Apply the goal space transformation to the given observation. """
-        return self._obs_transform(obs)    
+        return self._obs2goal_transform(obs)
     
     def get_current_obs(self):
         """ Get the full current observation. The observation should be identical to the one used by policy. """
@@ -238,6 +242,7 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
 
         print('the succes is: ', success)
         print('the feasible is: ', feasible)
+        # import pdb; pdb.set_trace()
 
         # Process by trajectories
         logger.record_tabular('InitGoalDistance', np.mean(initial_goal_distances))
@@ -295,8 +300,34 @@ def generate_initial_goals(env, policy, goal_range, goal_center=None, horizon=50
             goals.append(get_goal_observation(env))
 
     return np.array(goals)
-    
-    
+
+
+def generate_brownian_goals(env, starts=None, horizon=100, size=1000):
+    current_goal = get_current_goal(env)
+    if starts is None:
+        starts = [current_goal]
+    n_starts = len(starts)
+    i = 0
+    done = False
+    env.reset(init_state=starts[i])
+    goals = [get_goal_observation(env)]
+    steps = 0
+    while len(goals) < size:
+        steps += 1
+        if done or steps >= horizon:
+            steps = 0
+            i += 1
+            done = False
+            env.reset(init_state=starts[i % n_starts])
+            goals.append(get_goal_observation(env))
+        else:
+            action = np.random.randn(env.action_space.flat_dim)
+            obs, _, done, _ = env.step(action)
+            goals.append(get_goal_observation(env))
+
+    return np.array(goals)
+
+
 def update_env_goal_generator(env, goal_generator):
     return update_env_state_generator(env, goal_generator)
 

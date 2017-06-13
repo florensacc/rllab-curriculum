@@ -79,7 +79,7 @@ def save_image(fig=None, fname=None):
 
 
 def plot_labeled_states(states, labels, convert_labels=convert_label, report=None,
-                        itr=0, limit=None, center=None, maze_id=None, summary_string_base=''):
+                        itr=0, limit=None, center=None, maze_id=None, summary_string_base='Labels of goals:\n '):
     goal_classes, text_labels = convert_labels(labels)
     total_goals = labels.shape[0]
     goal_class_frac = OrderedDict()  # this needs to be an ordered dict!! (for the log tabular)
@@ -95,7 +95,7 @@ def plot_labeled_states(states, labels, convert_labels=convert_label, report=Non
     summary_string = summary_string_base
     for key, value in goal_class_frac.items():
         summary_string += key + ' frac: ' + str(value) + '\n'
-    report.add_image(img, 'itr: {}\nLabels of goals:\n{}'.format(itr, summary_string), width=500)
+    report.add_image(img, 'itr: {}\n{}'.format(itr, summary_string), width=500)
 
 
 def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers=None, fname=None, limit=None,
@@ -117,15 +117,15 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
 
     unique_classes = list(set(sample_classes))
     assert (len(colors) > max(unique_classes))
+    if center is None:
+        center = np.zeros(samples.shape[1])
 
-    if len(samples[0]) >= 3:
+    if np.size(center) >= 3:
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         if bounds is not None:
             plot_bounds(ax, bounds, dim=3)
         if limit is not None:
-            if center is None:
-                center = np.zeros(3)
             ax.set_ylim3d(center[0] - limit, center[0] + limit)
             ax.set_xlim3d(center[1] - limit, center[1] + limit)
             ax.set_zlim3d(center[2] - limit, center[2] + limit)
@@ -178,8 +178,6 @@ def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers
             )
 
         if limit is not None:
-            if center is None:
-                center = np.zeros(2)
             ax.set_ylim(center[0] - limit, center[0] + limit)
             ax.set_xlim(center[1] - limit, center[1] + limit)
     # Place the legend to the right of the plot.

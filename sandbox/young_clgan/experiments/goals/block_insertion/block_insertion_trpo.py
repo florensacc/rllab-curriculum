@@ -57,7 +57,7 @@ def run_task(v):
 
     env = GoalExplorationEnv(
         env=inner_env, goal_generator=uniform_goal_generator,
-        obs_transform=lambda x: x[:goal_dim],
+        obs2goal_transform=lambda x: x[:goal_dim],
         terminal_eps=np.sqrt(goal_dim) * v['terminal_eps'],
         only_feasible=False,
         distance_metric=v['distance_metric'],

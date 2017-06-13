@@ -226,7 +226,7 @@ class MazeEnv(ProxyEnv, Serializable):
     def is_feasible(self, pos):  # the arg is the goal, not the full space!!!
         empty_space = self.find_empty_space()
         for space in empty_space:
-            if np.size(np.where(np.abs(np.array(pos)-np.array(space)) < self.MAZE_SIZE_SCALING/2)[0]) == 2:
+            if np.size(np.where(np.abs(np.array(np.array(pos).reshape(-1)[:2])-np.array(space)) < self.MAZE_SIZE_SCALING/2)[0]) == 2:
                 # print("Pos {} is in empty space: {}".format(pos, space))
                 return True
         return False

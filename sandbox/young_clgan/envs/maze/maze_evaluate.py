@@ -94,13 +94,14 @@ def my_square_scatter(axes, x_array, y_array, z_array, min_z=None, max_z=None, s
     return True
 
 
-def plot_heatmap(rewards, goals, prefix='', max_reward=6000, spacing=1, show_heatmap=True, maze_id=0,
+def plot_heatmap(rewards, goals, prefix='', spacing=1, show_heatmap=True, maze_id=0,
                  limit=None, center=None):
     fig, ax = plt.subplots()
 
-    x_goal, y_goal = np.array(goals).T
+    x_goal, y_goal = np.array(goals)[:, :2].T
 
-    my_square_scatter(axes=ax, x_array=x_goal, y_array=y_goal, z_array=rewards, min_z=0, max_z=max_reward, size=spacing)
+    # THIS IS FOR BINARY REWARD!!!
+    my_square_scatter(axes=ax, x_array=x_goal, y_array=y_goal, z_array=rewards, min_z=0, max_z=1, size=spacing)
 
     if maze_id == 0:
         ax.add_patch(patches.Rectangle((-3, -3), 10, 2, fill=True, edgecolor="none", facecolor='0.4'))
@@ -116,6 +117,11 @@ def plot_heatmap(rewards, goals, prefix='', max_reward=6000, spacing=1, show_hea
         ax.add_patch(patches.Rectangle((-3, 1), 10, 2, fill=True, edgecolor="none", facecolor='0.4'))
         ax.add_patch(patches.Rectangle((-3, -3), 2, 6, fill=True, edgecolor="none", facecolor='0.4'))
         ax.add_patch(patches.Rectangle((-3, -3), 6, 2, fill=True, edgecolor="none", facecolor='0.4'))
+    elif maze_id == 12:
+        ax.add_patch(patches.Rectangle((-7, 5), 14, 2, fill=True, edgecolor="none", facecolor='0.4'))
+        ax.add_patch(patches.Rectangle((5, -7), 2, 14, fill=True, edgecolor="none", facecolor='0.4'))
+        ax.add_patch(patches.Rectangle((-7, -7), 14, 2, fill=True, edgecolor="none", facecolor='0.4'))
+        ax.add_patch(patches.Rectangle((-7, -7), 2, 14, fill=True, edgecolor="none", facecolor='0.4'))
     if limit is not None:
         if center is None:
             center = np.zeros(2)
@@ -145,16 +151,18 @@ def plot_heatmap(rewards, goals, prefix='', max_reward=6000, spacing=1, show_hea
 
 
 def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1, n_traj=1, parallel=True):
-    
+
     if parallel:
         return test_policy_parallel(policy, train_env, as_goals, visualize, sampling_res, n_traj=n_traj)
     
-
     if hasattr(train_env.wrapped_env, 'find_empty_space'):
         maze_env = train_env.wrapped_env
     else:
         maze_env = train_env.wrapped_env.wrapped_env
     empty_spaces = maze_env.find_empty_space()
+
+    old_goal_generator = train_env.goal_generator if hasattr(train_env, 'goal_generator') else None
+    old_start_generator = train_env.start_generator if hasattr(train_env, 'start_generator') else None
 
     if quick_test:
         sampling_res = 0
@@ -197,9 +205,11 @@ def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1
                     states.append(goal)
                     train_env.update_goal_selector(FixedStateGenerator(goal))
                 else:
-                    init_state = (x, y)
+                    init_state = np.zeros_like(old_start_generator.state)
+                    init_state[:2] = (x, y)
                     states.append(init_state)
                     train_env.update_init_selector(FixedStateGenerator(init_state))
+                    print(init_state)
                 for n in range(n_traj):
                     path = rollout(train_env, policy, animated=visualize, max_path_length=max_path_length, speedup=100)
                     paths.append(path)
@@ -208,31 +218,21 @@ def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1
                                                 <= train_env.terminal_eps) for path in paths]))
 
     return avg_totRewards, avg_success, states, spacing
-    
-    
-def test_policy_parallel(policy, train_env, as_goals=True, visualize=True, sampling_res=1, n_traj=1):
+
+
+def find_empty_spaces(train_env, sampling_res=1):
     if hasattr(train_env.wrapped_env, 'find_empty_space'):
         maze_env = train_env.wrapped_env
     else:
         maze_env = train_env.wrapped_env.wrapped_env
     empty_spaces = maze_env.find_empty_space()
 
-    if quick_test:
-        sampling_res = 0
-        empty_spaces = empty_spaces[:3]
-        max_path_length = 100
-    else:
-        max_path_length = 400
-
     size_scaling = maze_env.MAZE_SIZE_SCALING
     num_samples = 2 ** sampling_res
     spacing = size_scaling / num_samples
     starting_offset = spacing / 2
 
-    avg_totRewards = []
-    avg_success = []
     states = []
-
     distances = []
     for empty_space in empty_spaces:
         delta_x = empty_space[0]  # - train_env.wrapped_env._init_torso_x
@@ -244,7 +244,9 @@ def test_policy_parallel(policy, train_env, as_goals=True, visualize=True, sampl
 
     empty_spaces = np.array(empty_spaces)
     empty_spaces = empty_spaces[sort_indices]
-    
+    if quick_test:
+        empty_spaces = empty_spaces[:3]
+
     for empty_space in empty_spaces:
         starting_x = empty_space[0] - size_scaling / 2 + starting_offset
         starting_y = empty_space[1] - size_scaling / 2 + starting_offset
@@ -253,9 +255,30 @@ def test_policy_parallel(policy, train_env, as_goals=True, visualize=True, sampl
                 x = starting_x + i * spacing
                 y = starting_y + j * spacing
                 states.append((x, y))
-    # import pdb; pdb.set_trace()
-    paths = evaluate_states(states, train_env, policy, max_path_length, n_traj=n_traj, full_path=True)
-   
+    return np.array(states), empty_spaces, spacing
+
+
+def test_policy_parallel(policy, train_env, as_goals=True, visualize=True, sampling_res=1, n_traj=1):
+
+    if quick_test:
+        sampling_res = 0
+        max_path_length = 100
+    else:
+        max_path_length = 400
+
+    old_goal_generator = train_env.goal_generator if hasattr(train_env, 'goal_generator') else None
+    old_start_generator = train_env.start_generator if hasattr(train_env, 'start_generator') else None
+
+    avg_totRewards = []
+    avg_success = []
+    num_samples = 2 ** sampling_res
+    states, empty_spaces, spacing = find_empty_spaces(train_env, sampling_res=sampling_res)
+
+    # hack to adjust dim of starts in case of doing velocity also
+    states = [np.pad(s, (0, np.size(old_start_generator.state) - np.size(s)), 'constant') for s in states]
+
+    paths = evaluate_states(states, train_env, policy, max_path_length, as_goals=as_goals, n_traj=n_traj, full_path=True)
+
     path_index = 0
     for empty_space in empty_spaces:
         for i in range(num_samples):
@@ -264,21 +287,20 @@ def test_policy_parallel(policy, train_env, as_goals=True, visualize=True, sampl
                 avg_totRewards.append(np.mean([np.sum(path['rewards']) for path in state_paths]))
                 avg_success.append(np.mean([int(np.min(path['env_infos']['distance'])
                                                 <= train_env.terminal_eps) for path in state_paths]))
-                
                 path_index += n_traj
-
     return avg_totRewards, avg_success, states, spacing
 
 
 def test_and_plot_policy(policy, env, as_goals=True, visualize=True, sampling_res=1,
                          n_traj=1, max_reward=1, itr=0, report=None, center=None, limit=None):
+
     avg_totRewards, avg_success, states, spacing = test_policy(policy, env, as_goals, visualize,
                                                                sampling_res=sampling_res, n_traj=n_traj)
     obj = env
     while not hasattr(obj, '_maze_id') and hasattr(obj, 'wrapped_env'):
         obj = env.wrapped_env
     maze_id = obj._maze_id
-    plot_heatmap(avg_success, states, max_reward=max_reward, spacing=spacing, show_heatmap=False, maze_id=maze_id,
+    plot_heatmap(avg_success, states, spacing=spacing, show_heatmap=False, maze_id=maze_id,
                  center=center, limit=limit)
 
     reward_img = save_image()
@@ -299,6 +321,38 @@ def test_and_plot_policy(policy, env, as_goals=True, visualize=True, sampling_re
             )
         )
     return mean_rewards, success
+
+
+def plot_policy_means(policy, env, sampling_res=2, report=None, center=None, limit=None):  # only for start envs!
+    states, empty_spaces, spacing = find_empty_spaces(env, sampling_res=sampling_res)
+    goal = env.current_goal
+    observations = [np.concatenate([state, [0, ] * (env.observation_space.flat_dim - len(state) - len(goal)), goal]) for state in states]
+    actions, agent_infos = policy.get_actions(observations)
+    vecs = agent_infos['mean']
+    vars = [np.exp(log_std) * 0.25 for log_std in agent_infos['log_std']]
+    ells = [patches.Ellipse(state, width=vars[i][0], height=vars[i][1], angle=0) for i, state in enumerate(states)]
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    for e in ells:
+        ax.add_artist(e)
+        e.set_alpha(0.2)
+    plt.scatter(*goal, color='r', s=100)
+    Q = plt.quiver(states[:,0], states[:,1], vecs[:, 0], vecs[:, 1], units='xy', angles='xy', scale_units='xy', scale=1)  # , np.linalg.norm(vars * 4)
+    qk = plt.quiverkey(Q, 0.8, 0.85, 1, r'1 Nkg', labelpos='E', coordinates='figure')
+    # cb = plt.colorbar(Q)
+    vec_img = save_image()
+    if report is not None:
+        report.add_image(vec_img, 'policy mean')
+
+
+def plot_policy_values(env, baseline, sampling_res=2, report=None, center=None, limit=None):  # TODO: try other baseline
+    states, empty_spaces, spacing = find_empty_spaces(env, sampling_res=sampling_res)
+    goal = env.current_goal
+    observations = [np.concatenate([state, [0, 0], goal]) for state in states]
+    return
+
+
 
 
 def main():

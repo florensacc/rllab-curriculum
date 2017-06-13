@@ -2,6 +2,7 @@ import numpy as np
 from rllab.misc.overrides import overrides
 from sandbox.young_clgan.gan.gan import FCGAN
 from sandbox.young_clgan.state.utils import sample_matrix_row
+from sandbox.young_clgan.logging.visualization import plot_labeled_states
 
 
 class StateGenerator(object):
@@ -85,19 +86,21 @@ class StateGAN(StateGenerator):
         self.state_noise_level = state_noise_level
         print('state_center is : ', self.state_center, 'state_range: ', self.state_range)
 
-    def pretrain_uniform(self, size=10000, outer_iters=100, generator_iters=None,
-                         discriminator_iters=None):
+    def pretrain_uniform(self, size=10000, report=None, *args, **kwargs):
         """
         :param size: number of uniformly sampled states (that we will try to fit as output of the GAN)
         :param outer_iters: of the GAN
         """
-        states = self.state_center + np.random.uniform(
+        states = np.random.uniform(
             self.state_center - self.state_range, self.state_center + self.state_range, size=(size, self.state_size)
         )
-        return self.pretrain(states, outer_iters, generator_iters, discriminator_iters)
+        # labels = np.ones((states.shape[0], 2)).astype(np.float32)  # make them all good goals
+        # plot_labeled_states(states, labels, report=report, limit=4, center=(2, 2), maze_id=0,
+        #                     summary_string_base='states used to pretrain uniform the GAN')
+        # report.new_row()
+        return self.pretrain(states, *args, **kwargs)
 
-    def pretrain(self, states, outer_iters=100, generator_iters=None,
-                 discriminator_iters=None):
+    def pretrain(self, states, outer_iters=500, generator_iters=None, discriminator_iters=None):
         """
         Pretrain the state GAN to match the distribution of given states.
         :param states: the state distribution to match
@@ -124,8 +127,7 @@ class StateGAN(StateGenerator):
         return states, noise
 
     @overrides
-    def train(self, states, labels, outer_iters, generator_iters=None,
-              discriminator_iters=None):
+    def train(self, states, labels, outer_iters, generator_iters=None, discriminator_iters=None):
         normalized_states = (states - self.state_center) / self.state_range
         return self.gan.train(
             normalized_states, labels, outer_iters, generator_iters, discriminator_iters
