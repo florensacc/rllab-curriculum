@@ -115,6 +115,7 @@ class BatchPolopt(RLAlgorithm):
     def train(self):
         self.start_worker()
         self.init_opt()
+        all_paths = []
         for itr in range(self.current_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):
                 paths = self.sampler.obtain_samples(itr)
@@ -127,6 +128,7 @@ class BatchPolopt(RLAlgorithm):
                 params["algo"] = self
                 if self.store_paths:
                     params["paths"] = samples_data["paths"]
+                all_paths.append(paths)
                 logger.save_itr_params(itr, params)
                 logger.log("saved")
                 logger.dump_tabular(with_prefix=False)
@@ -137,6 +139,7 @@ class BatchPolopt(RLAlgorithm):
                                   "continue...")
 
         self.shutdown_worker()
+        return all_paths
 
     def log_diagnostics(self, paths):
         self.env.log_diagnostics(paths)
