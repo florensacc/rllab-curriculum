@@ -32,7 +32,7 @@ from sandbox.young_clgan.state.utils import StateCollection
 
 from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, generate_initial_goals
 from sandbox.young_clgan.envs.block_insertion.block_insertion_env import BLOCK_INSERTION_ENVS
-from sandbox.young_clgan.envs.block_insertion.utils import plot_policy_performance
+from sandbox.young_clgan.envs.block_insertion.utils import plot_policy_performance, plot_policy_performance_sliced
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -152,8 +152,7 @@ def run_task(v):
 
         with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment goal generator")
-            update_env_state_generator(
-                env,
+            env.update_goal_generator(
                 UniformListStateGenerator(
                     goals.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
                 )
