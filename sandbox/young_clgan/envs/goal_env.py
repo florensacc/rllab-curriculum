@@ -286,8 +286,7 @@ def generate_initial_goals(env, policy, goal_range, goal_center=None, horizon=50
         if done or steps >= horizon:
             steps = 0
             done = False
-            update_env_state_generator(
-                env,
+            env.update_goal_generator(
                 FixedStateGenerator(
                     goal_center + np.random.uniform(-goal_range, goal_range, goal_dim)
                 )
