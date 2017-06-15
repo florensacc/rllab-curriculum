@@ -14,21 +14,17 @@ class PR2KeyEnv(MujocoEnv, Serializable):
                   help='cost coefficient for controls')
     def __init__(
             self,
-            ctrl_cost_coeff=1e-0,
-            goal_dist=1e-0,
+            ctrl_cost_coeff=1e1,
+            goal_dist=3e-2,
             *args, **kwargs):
         self.ctrl_cost_coeff = ctrl_cost_coeff
         super(PR2KeyEnv, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
         self.goal_dist = goal_dist
         self.ee_indices = [14,23]
-        self.frame_skip = 5
+        self.frame_skip = 1
         self.init_qpos = np.array([0.1, 0.1, -1.54, -1.7, 1.54, -0.2, 0])
 
-        # todo information from hyperparams to add
-        # initial psition
-        # 'x0': [np.concatenate([np.array([0.1, 0.1, -1.54, -1.7, 1.54, -0.2, 0]),
-        #                        np.zeros(7)])]
         theta = -np.pi / 2
         d = 0.15
         self.goal_position = np.array(
@@ -65,5 +61,8 @@ class PR2KeyEnv(MujocoEnv, Serializable):
         # else:
         #     dist_cost = - 1.  # self.goal_dist
         reward = - dist_cost - ctrl_cost
-        done = True if dist < self.goal_dist else False
+        done = True if np.sqrt(dist) < self.goal_dist else False
+#        if done:
+#            print('MADE IT!')
+#            print(next_obs)
         return Step(next_obs, reward, done)
