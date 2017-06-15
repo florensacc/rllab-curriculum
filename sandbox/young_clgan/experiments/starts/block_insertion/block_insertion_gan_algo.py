@@ -27,9 +27,9 @@ from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
 from sandbox.young_clgan.state.evaluator import label_states
-from sandbox.young_clgan.envs.base import UniformListStateGenerator, update_env_state_generator, \
-    UniformStateGenerator, FixedStateGenerator
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator
 from sandbox.young_clgan.state.generator import StateGAN
+from sandbox.young_clgan.envs.start_env import generate_starts
 from sandbox.young_clgan.state.utils import StateCollection
 
 from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, generate_initial_goals
@@ -44,9 +44,7 @@ def run_task(v):
     random.seed(v['seed'])
     np.random.seed(v['seed'])
 
-    # goal generators
-    logger.log("Initializing the goal generators and the inner env...")
-    inner_env = BLOCK_INSERTION_ENVS[v['env_idx'] - 1]()
+    inner_env = BLOCK_INSERTION_ENVS[v['env_idx'] - 1]() # TODO: why is this not normalized in goal version?
 
     goal_center = (inner_env.goal_ub + inner_env.goal_lb) / 2
     goal_bounds = (inner_env.goal_ub - inner_env.goal_lb) / 2
@@ -64,29 +62,31 @@ def run_task(v):
 
     tf_session = tf.Session()
 
-    uniform_goal_generator = UniformStateGenerator(state_size=goal_dim, bounds=[goal_lb, goal_ub])
-
-    # env = GoalExplorationEnv(
-    #     env=inner_env, goal_generator=uniform_goal_generator,
-    #     obs2goal_transform=lambda x: x[:goal_dim],
-    #     terminal_eps=np.sqrt(goal_dim) * v['terminal_eps'],
-    #     distance_metric=v['distance_metric'],
-    #     extend_dist_rew=v['extend_dist_rew'],
-    #     terminate_env=True,
-    #     goal_bounds=goal_bounds,
-    #     only_feasible=True,
-    # )
-
-    fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
+    # TODO: fix all these
+    if 'ultimate_goal' not in v:
+        v['ultimate_goal'] = goal_center
+    if 'goal_center' not in v:
+        v['goal_center'] = goal_center
+    if 'start_size' not in v:
+        v['start_size'] = goal_dim
+    if 'start_range' not in v:
+        v['start_range'] = 2
+    if 'start_center' not in v:
+        v['start_center'] = goal_center
+    if 'goal_size' not in v:
+        v['goal_size'] = v['start_size']
+    # TODO: what is v['goal range']? turn on plotting code
+    fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal']) #TODO: not sure if this is correct center
     uniform_start_generator = UniformStateGenerator(state_size=v['start_size'], bounds=v['start_range'],
                                                     center=v['start_center'])
+    # uniform_start_generator = UniformStateGenerator(state_size=goal_dim, center=goal_center)
 
     env = GoalStartExplorationEnv(
         env=inner_env,
         start_generator=uniform_start_generator,
-        obs2start_transform=lambda x: x[:v['start_size']],
+        obs2start_transform=lambda x: x[:goal_dim], #TODO: are transforms right?
         goal_generator=fixed_goal_generator,
-        obs2goal_transform=lambda x: x[:v['goal_size']],
+        obs2goal_transform=lambda x: x[:goal_dim],
         terminal_eps=v['terminal_eps'],
         distance_metric=v['distance_metric'],
         extend_dist_rew=v['extend_dist_rew'],
@@ -120,11 +120,11 @@ def run_task(v):
             gan_configs[key] = tflearn.initializations.truncated_normal(stddev=gan_configs[key + '_stddev'])
 
     gan = StateGAN(
-        state_size=goal_dim,
+        state_size=v['start_size'],
         evaluater_size=v['num_labels'],
-        state_range=goal_bounds,
-        state_center=goal_center,
-        state_noise_level=v['goal_noise_level'],
+        state_range=v['start_range'],
+        state_center=v['start_center'],
+        state_noise_level=v['start_noise_level'],
         generator_layers=v['gan_generator_layers'],
         discriminator_layers=v['gan_discriminator_layers'],
         noise_size=v['gan_noise_size'],
@@ -133,49 +133,46 @@ def run_task(v):
     )
     logger.log("pretraining the GAN...")
     if v['smart_init']:
-        feasible_goals = generate_initial_goals(env, policy, goal_bounds, goal_center=goal_center,
-                                                horizon=v['horizon'])
-        labels = np.ones((feasible_goals.shape[0], 2)).astype(np.float32)  # make them all good goals
+        feasible_starts = generate_starts(env, starts=[v['ultimate_goal']], horizon=50)  # without giving the policy it does brownian mo.
+        labels = np.ones((feasible_starts.shape[0], 2)).astype(np.float32)  # make them all good goals
+        # plot_labeled_states(feasible_starts, labels, report=report, itr=outer_iter,
+        #                     limit=v['goal_range'], center=v['goal_center'], maze_id=v['maze_id'])
 
-        plot_labeled_states(feasible_goals, labels, report=report, itr=outer_iter,
-                            center=goal_center)
-
-        dis_loss, gen_loss = gan.pretrain(states=feasible_goals, outer_iters=v['gan_outer_iters'])
+        dis_loss, gen_loss = gan.pretrain(states=feasible_starts, outer_iters=v['gan_outer_iters'])
         print("Loss of Gen and Dis: ", gen_loss, dis_loss)
     else:
-        gan.pretrain_uniform()
+        gan.pretrain_uniform(outer_iters=500, report=report)  # v['gan_outer_iters'])
 
     # log first samples form the GAN
-    initial_goals, _ = gan.sample_states_with_noise(v['num_new_goals'])
+    initial_starts, _ = gan.sample_states_with_noise(v['num_new_starts'])
 
-    logger.log("Labeling the goals")
-    labels = label_states(initial_goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
+    logger.log("Labeling the starts")
+    labels = label_states(initial_starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
 
-    plot_labeled_states(initial_goals, labels, report=report, itr=outer_iter,
-                        center=goal_center)
+    # plot_labeled_states(initial_starts, labels, report=report, itr=outer_iter,
+    #                     limit=v['goal_range'], center=v['goal_center'], maze_id=v['maze_id'])
     report.new_row()
 
-    all_goals = StateCollection(distance_threshold=v['coll_eps'])
+    all_starts = StateCollection(distance_threshold=v['coll_eps'])
 
     for outer_iter in range(1, v['outer_iters']):
 
         logger.log("Outer itr # %i" % outer_iter)
         # Sample GAN
-        logger.log("Sampling goals from the GAN")
-        raw_goals, _ = gan.sample_states_with_noise(v['num_new_goals'])
+        logger.log("Sampling starts from the GAN")
+        raw_starts, _ = gan.sample_states_with_noise(v['num_new_starts'])
 
-        if v['replay_buffer'] and outer_iter > 0 and all_goals.size > 0:
-            old_goals = all_goals.sample(v['num_old_goals'])
-            goals = np.vstack([raw_goals, old_goals])
+        if v['replay_buffer'] and outer_iter > 0 and all_starts.size > 0:
+            old_starts = all_starts.sample(v['num_old_starts'])
+            starts = np.vstack([raw_starts, old_starts])
         else:
-            goals = raw_goals
+            starts = raw_starts
 
         with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
-            logger.log("Updating the environment goal generator")
-            update_env_state_generator(
-                env,
+            logger.log("Updating the environment start generator")
+            env.update_start_generator(
                 UniformListStateGenerator(
-                    goals.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
+                    starts.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
                 )
             )
 
@@ -188,23 +185,32 @@ def run_task(v):
                 max_path_length=v['horizon'],
                 n_itr=v['inner_iters'],
                 step_size=0.01,
+                discount=v['discount'],
                 plot=False,
             )
 
             algo.train()
 
         logger.log("Labeling the starts")
-        labels = label_states(starts, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
+        labels = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
 
-        plot_labeled_states(starts, labels, report=report, itr=outer_iter, center=goal_center)
+        # plot_labeled_states(starts, labels, report=report, itr=outer_iter, limit=v['goal_range'],
+        #                     center=v['goal_center'], maze_id=v['maze_id'])
+
+        # ###### extra for deterministic:
+        # logger.log("Labeling the goals deterministic")
+        # with policy.set_std_to_0():
+        #     labels_det = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], n_processes=1)
+        # plot_labeled_states(goals, labels_det, report=report, itr=outer_iter, limit=v['goal_range'], center=v['goal_center'])
 
         labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
 
         logger.log("Training the GAN")
-        gan.train(
-            goals, labels,
-            v['gan_outer_iters'],
-        )
+        if np.any(labels):
+            gan.train(
+                starts, labels,
+                v['gan_outer_iters'],
+            )
 
         logger.log("Evaluate Unif")
         reward_img, mean_success = plot_policy_performance(policy, env, horizon=v['horizon'], n_traj=3,
@@ -230,11 +236,11 @@ def run_task(v):
         report.new_row()
 
         # append new goals to list of all goals (replay buffer): Not the low reward ones!!
-        filtered_raw_goals = [goal for goal, label in zip(goals, labels) if label[0] == 1]
-        all_goals.append(filtered_raw_goals)
+        filtered_raw_start = [start for start, label in zip(starts, labels) if label[0] == 1]
+        all_starts.append(filtered_raw_start)
 
         if v['add_on_policy']:
             logger.log("sampling on policy")
             feasible_goals = generate_initial_goals(env, policy, goal_bounds, goal_center, horizon=v['horizon'])
             # downsampled_feasible_goals = feasible_goals[np.random.choice(feasible_goals.shape[0], v['add_on_policy']),:]
-            all_goals.append(feasible_goals)
+            all_starts.append(feasible_goals)

@@ -12,7 +12,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.goals.block_insertion.block_insertion_gan_algo import run_task
+from sandbox.young_clgan.experiments.starts.block_insertion.block_insertion_gan_algo import run_task
 from sandbox.young_clgan.utils import format_experiment_prefix
 
 if __name__ == '__main__':
@@ -28,7 +28,6 @@ if __name__ == '__main__':
     parser.add_argument('--subnet', '-sn', type=str, default='', help='set subnet like us-west-1a')
     parser.add_argument('--name', '-n', type=str, default='', help='set exp prefix name and new file name')
     parser.add_argument('--debug', action='store_true', default=False, help="run code without multiprocessing")
-    parser.add_argument('--n_seed', type=int, default=5, help='number of random seeds')
     parser.add_argument(
         '--prefix', type=str, default=None,
         help='set the additional name for experiment prefix'
@@ -72,6 +71,7 @@ if __name__ == '__main__':
     # goal-algo params
     vg.add('min_reward', [0.1])
     vg.add('max_reward', [0.9])
+    vg.add('only_feasible', [True])
     vg.add('distance_metric', ['L2'])
     vg.add('extend_dist_rew', [False])  # !!!!
     vg.add('persistence', [1])
@@ -81,8 +81,8 @@ if __name__ == '__main__':
     # replay buffer
     vg.add('replay_buffer', [True])
     vg.add('coll_eps', [0.05])
-    vg.add('num_new_goals', [200])
-    vg.add('num_old_goals', [100])
+    vg.add('num_new_starts', [200])
+    vg.add('num_old_starts', [100])
     vg.add('add_on_policy', [True])
     # sampling params
     vg.add('horizon', [400])
@@ -93,17 +93,19 @@ if __name__ == '__main__':
     vg.add('output_gain', [1])
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [False])
-    vg.add('adaptive_std', [True])
+    vg.add('adaptive_std', [False])
+    vg.add('discount', [0.995])
     # gan configs
     vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
     vg.add('gan_generator_layers', [[256, 256]])
     vg.add('gan_discriminator_layers', [[128, 128]])
     vg.add('gan_noise_size', [4])
+    vg.add('start_noise_level', [0.5])
     vg.add('goal_noise_level', [0.05])
     vg.add('gan_outer_iters', [200])
 
-    vg.add('seed', [s * 10 + 200 for s in range(args.n_seed)])
-    # vg.add('seed', [1])
+    # vg.add('seed', range(110, 510, 100))
+    vg.add('seed', [1])
     # # gan_configs
     # vg.add('GAN_batch_size', [128])  # proble with repeated name!!
     # vg.add('GAN_generator_activation', ['relu'])
@@ -144,7 +146,7 @@ if __name__ == '__main__':
             #         AssociatePublicIpAddress=True,
             #     )
             # ]
-
+            # print("go")
             run_experiment_lite(
                 # use_cloudpickle=False,
                 stub_method_call=run_task,
