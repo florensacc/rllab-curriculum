@@ -3,6 +3,7 @@ from sandbox.young_clgan.utils import set_env_no_gpu
 set_env_no_gpu()
 
 import matplotlib
+
 matplotlib.use('Agg')
 import os
 import os.path as osp
@@ -26,13 +27,15 @@ from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
 from sandbox.young_clgan.state.evaluator import label_states
-from sandbox.young_clgan.envs.base import UniformListStateGenerator, update_env_state_generator, UniformStateGenerator
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, update_env_state_generator, \
+    UniformStateGenerator, FixedStateGenerator
 from sandbox.young_clgan.state.generator import StateGAN
 from sandbox.young_clgan.state.utils import StateCollection
 
 from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, generate_initial_goals
+from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
 from sandbox.young_clgan.envs.block_insertion.block_insertion_env import BLOCK_INSERTION_ENVS
-from sandbox.young_clgan.envs.block_insertion.utils import plot_policy_performance, plot_policy_performance_sliced
+from sandbox.young_clgan.envs.block_insertion.utils import plot_policy_performance
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -63,15 +66,32 @@ def run_task(v):
 
     uniform_goal_generator = UniformStateGenerator(state_size=goal_dim, bounds=[goal_lb, goal_ub])
 
-    env = GoalExplorationEnv(
-        env=inner_env, goal_generator=uniform_goal_generator,
-        obs2goal_transform=lambda x: x[:goal_dim],
-        terminal_eps=np.sqrt(goal_dim) * v['terminal_eps'],
+    # env = GoalExplorationEnv(
+    #     env=inner_env, goal_generator=uniform_goal_generator,
+    #     obs2goal_transform=lambda x: x[:goal_dim],
+    #     terminal_eps=np.sqrt(goal_dim) * v['terminal_eps'],
+    #     distance_metric=v['distance_metric'],
+    #     extend_dist_rew=v['extend_dist_rew'],
+    #     terminate_env=True,
+    #     goal_bounds=goal_bounds,
+    #     only_feasible=True,
+    # )
+
+    fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
+    uniform_start_generator = UniformStateGenerator(state_size=v['start_size'], bounds=v['start_range'],
+                                                    center=v['start_center'])
+
+    env = GoalStartExplorationEnv(
+        env=inner_env,
+        start_generator=uniform_start_generator,
+        obs2start_transform=lambda x: x[:v['start_size']],
+        goal_generator=fixed_goal_generator,
+        obs2goal_transform=lambda x: x[:v['goal_size']],
+        terminal_eps=v['terminal_eps'],
         distance_metric=v['distance_metric'],
         extend_dist_rew=v['extend_dist_rew'],
+        only_feasible=v['only_feasible'],
         terminate_env=True,
-        goal_bounds=goal_bounds,
-        only_feasible=True,
     )
 
     policy = GaussianMLPPolicy(
@@ -152,7 +172,8 @@ def run_task(v):
 
         with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment goal generator")
-            env.update_goal_generator(
+            update_env_state_generator(
+                env,
                 UniformListStateGenerator(
                     goals.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
                 )
@@ -172,10 +193,10 @@ def run_task(v):
 
             algo.train()
 
-        logger.log("Labeling the goals")
-        labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
+        logger.log("Labeling the starts")
+        labels = label_states(starts, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
 
-        plot_labeled_states(goals, labels, report=report, itr=outer_iter, center=goal_center)
+        plot_labeled_states(starts, labels, report=report, itr=outer_iter, center=goal_center)
 
         labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
 
@@ -186,7 +207,8 @@ def run_task(v):
         )
 
         logger.log("Evaluate Unif")
-        reward_img, mean_success = plot_policy_performance(policy, env, horizon=v['horizon'], n_traj=3, key='goal_reached')
+        reward_img, mean_success = plot_policy_performance(policy, env, horizon=v['horizon'], n_traj=3,
+                                                           key='goal_reached')
 
         with logger.tabular_prefix('Outer_'):
             logger.record_tabular('iter', outer_iter)
@@ -195,9 +217,9 @@ def run_task(v):
 
         report.add_image(
             reward_img,
-            'policy performance\n itr: {} \nsuccess: {}'.format(outer_iter,  mean_success)
+            'policy performance\n itr: {} \nsuccess: {}'.format(outer_iter, mean_success)
         )
-        
+
         if v['env_idx'] == 5:
             img, avg_success = plot_policy_performance_sliced(
                 policy, env, v['horizon'], slices=(0, None, None), n_traj=3
