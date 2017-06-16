@@ -13,6 +13,7 @@ import numpy as np
 import scipy.misc
 import tempfile
 import math
+import time
 
 from rllab.envs.mujoco.mujoco_env import MODEL_DIR, BIG
 from rllab.core.serializable import Serializable
@@ -137,10 +138,11 @@ class StartExplorationEnv(StartEnv, ProxyEnv, Serializable):
         return self.wrapped_env.reset(init_state=self.current_start)
 
 
-def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsample=None, variance=1):
+def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsample=None, variance=1,
+                    animated=False, speedup=1):
     """ If policy is None, brownian motion applied """
     if starts is None or len(starts) == 0:
-        starts = [env.current_start]
+        starts = [env.reset()]
     n_starts = len(starts)
     i = 0
     done = False
@@ -148,6 +150,8 @@ def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsa
     states = [env.start_observation]
     steps = 0
     noise = 0
+    if animated:
+        env.render()
     while len(states) < size:
         steps += 1
         if done or steps >= horizon:
@@ -164,6 +168,10 @@ def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsa
                 action = noise
             obs, _, _, _ = env.step(action)  # we don't care about done, otherwise will never advance!
             states.append(env.start_observation)
+        if animated:
+            env.render()
+            timestep = 0.05
+            time.sleep(timestep / speedup)
 
     if subsample is None:
         return np.array(states)
