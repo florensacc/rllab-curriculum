@@ -62,7 +62,9 @@ class PR2KeyEnv(MujocoEnv, Serializable):
         #     dist_cost = - 1.  # self.goal_dist
         reward = - dist_cost - ctrl_cost
         done = True if np.sqrt(dist) < self.goal_dist else False
-#        if done:
-#            print('MADE IT!')
-#            print(next_obs)
+        if done:
+            print('MADE IT!')
+            print(next_obs)
+        if np.isnan(reward):
+            reward = -100
         return Step(next_obs, reward, done)
