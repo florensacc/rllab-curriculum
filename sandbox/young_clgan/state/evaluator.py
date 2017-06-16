@@ -8,7 +8,6 @@ import cloudpickle
 from rllab.sampler.utils import rollout
 from rllab.misc import logger
 
-
 from sandbox.young_clgan.envs.base import FixedStateGenerator, update_env_state_generator
 from sandbox.young_clgan.envs.goal_env import update_env_goal_generator
 from sandbox.young_clgan.envs.start_env import update_env_start_generator
@@ -30,8 +29,7 @@ class FunctionWrapper(object):
 
     def __call__(self, obj):
         return self.func(obj, *self.args, **self.kwargs)
-        
-        
+
     def __getstate__(self):
         """ Here we overwrite the default pickle protocol to use cloudpickle. """
         return dict(
@@ -39,7 +37,7 @@ class FunctionWrapper(object):
             args=cloudpickle.dumps(self.args),
             kwargs=cloudpickle.dumps(self.kwargs)
         )
-        
+
     def __setstate__(self, d):
         self.func = cloudpickle.loads(d['func'])
         self.args = cloudpickle.loads(d['args'])
@@ -78,21 +76,26 @@ def parallel_map(func, iterable_object, num_processes=-1):
 
 
 def label_states(states, env, policy, horizon, as_goals=True, min_reward=0.1, max_reward=0.9, key='rewards',
-                 old_rewards=None, improvement_threshold=0, n_traj=1, n_processes=-1):
-    mean_rewards = evaluate_states(
+                 old_rewards=None, improvement_threshold=0, n_traj=1, n_processes=-1, full_path=False):
+    result = evaluate_states(
         states, env, policy, horizon, as_goals=as_goals,
-        n_traj=n_traj, n_processes=n_processes, key=key,
+        n_traj=n_traj, n_processes=n_processes, key=key, full_path=full_path
     )
+    if full_path:
+        mean_rewards, paths = result
+    else:
+        mean_rewards = result
+
     mean_rewards = mean_rewards.reshape(-1, 1)
 
     print("Computing state labels")
     if old_rewards is not None:
         old_rewards = old_rewards.reshape(-1, 1)
         labels = np.hstack(
-            [mean_rewards > min_reward, #np.zeros_like(mean_rewards > min_reward, dtype=float), #
-             mean_rewards < max_reward,  #np.zeros_like(mean_rewards < max_reward, dtype=float),  #
+            [mean_rewards > min_reward,  # np.zeros_like(mean_rewards > min_reward, dtype=float), #
+             mean_rewards < max_reward,  # np.zeros_like(mean_rewards < max_reward, dtype=float),  #
              mean_rewards - old_rewards >= improvement_threshold
-             #np.zeros_like(mean_rewards - old_rewards >= improvement_threshold, dtype=float),
+             # np.zeros_like(mean_rewards - old_rewards >= improvement_threshold, dtype=float),
              #
              ]
         ).astype(np.float32)
@@ -100,6 +103,9 @@ def label_states(states, env, policy, horizon, as_goals=True, min_reward=0.1, ma
         labels = np.hstack(
             [mean_rewards > min_reward, mean_rewards < max_reward]
         ).astype(np.float32)
+
+    if full_path:
+        return labels, paths
     return labels
 
 
@@ -134,7 +140,8 @@ def convert_label(labels):
     return new_labels, classes
 
 
-def evaluate_states(states, env, policy, horizon, n_traj=1, n_processes=-1, full_path=False, key='rewards', as_goals=True,
+def evaluate_states(states, env, policy, horizon, n_traj=1, n_processes=-1, full_path=False, key='rewards',
+                    as_goals=True,
                     aggregator=(np.sum, np.mean)):
     evaluate_state_wrapper = FunctionWrapper(
         evaluate_state,
@@ -147,13 +154,15 @@ def evaluate_states(states, env, policy, horizon, n_traj=1, n_processes=-1, full
         as_goals=as_goals,
         aggregator=aggregator,
     )
-    result = parallel_map(
+    result = parallel_map(  # if full_path this is a list of tuples
         evaluate_state_wrapper,
         states,
         n_processes,
     )
+
     if full_path:
-        return [inner for outer in result for inner in outer]
+        return np.array([state[0] for state in result]), \
+               [path for state in result for path in state[1]]
     return np.array(result)
 
 
@@ -161,30 +170,28 @@ def evaluate_state(state, env, policy, horizon, n_traj=1, full_path=False, key='
                    aggregator=(np.sum, np.mean)):
     aggregated_data = []
     paths = []
-    # print("evaluating state: ", state)
     if as_goals:
         env.update_goal_generator(FixedStateGenerator(state))
     else:
         env.update_start_generator(FixedStateGenerator(state))
 
     for j in range(n_traj):
-        # print(j)
         paths.append(rollout(env, policy, horizon))
-        if not full_path:
-            if key in paths[-1]:
-                aggregated_data.append(
-                    aggregator[0](paths[-1][key])
-                )
-            else:
-                aggregated_data.append(
-                    aggregator[0](paths[-1]['env_infos'][key])
-                )
-        
-    if full_path:
-        return paths
-        
+
+        if key in paths[-1]:
+            aggregated_data.append(
+                aggregator[0](paths[-1][key])
+            )
+        else:
+            aggregated_data.append(
+                aggregator[0](paths[-1]['env_infos'][key])
+            )
+
     mean_reward = aggregator[1](aggregated_data)
-    
+
+    if full_path:
+        return mean_reward, paths
+
     return mean_reward
 
 
