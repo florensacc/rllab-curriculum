@@ -63,28 +63,31 @@ def run_task(v):
     tf_session = tf.Session()
 
     # TODO: fix all these
+    goal_center = np.array((0, 1, 0))
     if 'ultimate_goal' not in v:
         v['ultimate_goal'] = goal_center
     if 'goal_center' not in v:
         v['goal_center'] = goal_center
+        # import pdb; pdb.set_trace()
     if 'start_size' not in v:
         v['start_size'] = goal_dim
     if 'start_range' not in v:
         v['start_range'] = 2
+    if 'goal_range' not in v:
+        v['goal_range'] = 2
     if 'start_center' not in v:
         v['start_center'] = goal_center
     if 'goal_size' not in v:
         v['goal_size'] = v['start_size']
     # TODO: what is v['goal range']? turn on plotting code
-    fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal']) #TODO: not sure if this is correct center
+    fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
     uniform_start_generator = UniformStateGenerator(state_size=v['start_size'], bounds=v['start_range'],
                                                     center=v['start_center'])
-    # uniform_start_generator = UniformStateGenerator(state_size=goal_dim, center=goal_center)
 
     env = GoalStartExplorationEnv(
         env=inner_env,
         start_generator=uniform_start_generator,
-        obs2start_transform=lambda x: x[:goal_dim], #TODO: are transforms right?
+        obs2start_transform=lambda x: x[:goal_dim],
         goal_generator=fixed_goal_generator,
         obs2goal_transform=lambda x: x[:goal_dim],
         terminal_eps=v['terminal_eps'],
@@ -135,8 +138,8 @@ def run_task(v):
     if v['smart_init']:
         feasible_starts = generate_starts(env, starts=[v['ultimate_goal']], horizon=50)  # without giving the policy it does brownian mo.
         labels = np.ones((feasible_starts.shape[0], 2)).astype(np.float32)  # make them all good goals
-        # plot_labeled_states(feasible_starts, labels, report=report, itr=outer_iter,
-        #                     limit=v['goal_range'], center=v['goal_center'], maze_id=v['maze_id'])
+        plot_labeled_states(feasible_starts, labels, report=report, itr=outer_iter,
+                            limit=v['goal_range'], center=v['goal_center'])
 
         dis_loss, gen_loss = gan.pretrain(states=feasible_starts, outer_iters=v['gan_outer_iters'])
         print("Loss of Gen and Dis: ", gen_loss, dis_loss)
@@ -149,8 +152,8 @@ def run_task(v):
     logger.log("Labeling the starts")
     labels = label_states(initial_starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
 
-    # plot_labeled_states(initial_starts, labels, report=report, itr=outer_iter,
-    #                     limit=v['goal_range'], center=v['goal_center'], maze_id=v['maze_id'])
+    plot_labeled_states(initial_starts, labels, report=report, itr=outer_iter,
+                        limit=v['goal_range'], center=v['goal_center'])
     report.new_row()
 
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
@@ -194,8 +197,8 @@ def run_task(v):
         logger.log("Labeling the starts")
         labels = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
 
-        # plot_labeled_states(starts, labels, report=report, itr=outer_iter, limit=v['goal_range'],
-        #                     center=v['goal_center'], maze_id=v['maze_id'])
+        plot_labeled_states(starts, labels, report=report, itr=outer_iter, limit=v['goal_range'],
+                            center=v['goal_center'])
 
         # ###### extra for deterministic:
         # logger.log("Labeling the goals deterministic")
