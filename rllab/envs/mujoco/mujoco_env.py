@@ -131,11 +131,13 @@ class MujocoEnv(Env):
                 datum = getattr(self.model.data, datum_name)
                 datum_dim = datum.shape[0]
                 datum = init_state[start: start + datum_dim]
+                if len(datum) == 0:
+                    datum = getattr(self, 'init_' + datum_name)
                 setattr(self.model.data, datum_name, datum)
                 start += datum_dim
 
     @overrides
-    def reset(self, init_state=None):
+    def reset(self, init_state=None, *args, **kwargs):
         self.reset_mujoco(init_state)
         self.model.forward()
         self.current_com = self.model.data.com_subtree[0]

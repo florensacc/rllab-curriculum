@@ -240,9 +240,8 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
                 avg_success.append(np.mean(success[3 * i: 3 * i + 3]))
             success = avg_success  # here the success can be non-int
 
-        print('the succes is: ', success)
-        print('the feasible is: ', feasible)
-        # import pdb; pdb.set_trace()
+        # print('the succes is: ', success)
+        # print('the feasible is: ', feasible)
 
         # Process by trajectories
         logger.record_tabular('InitGoalDistance', np.mean(initial_goal_distances))
@@ -311,7 +310,7 @@ def generate_brownian_goals(env, starts=None, horizon=100, size=1000):
     env.reset(init_state=starts[i])
     goals = [get_goal_observation(env)]
     steps = 0
-    while len(goals) < size:
+    while len(goals) < size:  # we ignore if it's done or not: the brownian motion around the goal will be short!
         steps += 1
         if done or steps >= horizon:
             steps = 0
