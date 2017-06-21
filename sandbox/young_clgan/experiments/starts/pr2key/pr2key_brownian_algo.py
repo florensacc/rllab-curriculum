@@ -39,8 +39,6 @@ EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 def run_task(v):
     random.seed(v['seed'])
     np.random.seed(v['seed'])
-    sampling_res = 2 if 'sampling_res' not in v.keys() else v['sampling_res']
-    samples_per_cell = 10  # for the oracle rejection sampling
 
     # Log performance of randomly initialized policy with FIXED goal [0.1, 0.1]
     logger.log("Initializing report and plot_policy_reward...")
@@ -89,8 +87,8 @@ def run_task(v):
     # report.new_row()
 
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
-    seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=v['brownian_horizon'],
-                                  variance=v['brownian_variance'], subsample=v['num_new_starts'], animated=True, speedup=0.1)
+    seed_starts = generate_starts(env, starts=[v['start_goal']], horizon= 50,  #v['brownian_horizon'],
+                                  variance=v['brownian_variance'], subsample=v['num_new_starts'], animated=True, speedup=1)
     # env.update_start_generator(StateGenerator())
     # seed_starts = generate_starts(env, starts=[None], horizon=v['brownian_horizon'],
     #                               variance=v['brownian_variance'], subsample=v['num_new_starts'])
