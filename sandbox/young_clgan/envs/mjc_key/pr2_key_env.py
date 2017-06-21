@@ -8,7 +8,7 @@ from rllab.misc import autoargs
 
 
 class PR2KeyEnv(MujocoEnv, Serializable):
-    FILE = 'pr2_arm3d_key.xml'
+    FILE = 'pr2_arm3d_key_tight.xml'
 
     @autoargs.arg('ctrl_cost_coeff', type=float,
                   help='cost coefficient for controls')
