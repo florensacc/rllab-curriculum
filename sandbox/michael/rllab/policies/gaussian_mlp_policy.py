@@ -1,8 +1,9 @@
-
 import lasagne
 import lasagne.layers as L
+import lasagne.init as LI
 import lasagne.nonlinearities as NL
 import numpy as np
+from contextlib import contextmanager
 
 from rllab.core.lasagne_layers import ParamLayer
 from rllab.core.lasagne_powered import LasagnePowered
@@ -16,7 +17,6 @@ from rllab.misc import logger
 from rllab.misc import ext
 from rllab.distributions.diagonal_gaussian import DiagonalGaussian
 import theano.tensor as TT
-from rllab.core.alexnet import AlexNet
 
 
 class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
@@ -36,6 +36,7 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
             mean_network=None,
             std_network=None,
             dist_cls=DiagonalGaussian,
+            output_gain=1,
     ):
         """
         :param env_spec:
@@ -58,24 +59,21 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
 
         obs_dim = env_spec.observation_space.flat_dim
         action_dim = env_spec.action_space.flat_dim
-        print(obs_dim)
-        input_layer = L.InputLayer(shape=(1,obs_dim), name="input_layer")
-        image_layer = L.ReshapeLayer(input_layer, (-1,3,227,227))
+
         # create network
         if mean_network is None:
-            # mean_network = MLP(
-            #     input_shape=(obs_dim,),
-            #     output_dim=action_dim,
-            #     hidden_sizes=hidden_sizes,
-            #     hidden_nonlinearity=hidden_nonlinearity,
-            #     output_nonlinearity=output_nonlinearity,
-            # )
-            mean_network = AlexNet(input_layer=image_layer)
+            mean_network = MLP(
+                input_shape=(obs_dim,),
+                output_dim=action_dim,
+                hidden_sizes=hidden_sizes,
+                hidden_nonlinearity=hidden_nonlinearity,
+                output_nonlinearity=output_nonlinearity,
+                output_W_init=LI.GlorotUniform(gain=output_gain)
+            )
         self._mean_network = mean_network
 
         l_mean = mean_network.output_layer
-        # obs_var = mean_network.input_layer.input_var
-        obs_var = input_layer.input_var
+        obs_var = mean_network.input_layer.input_var
 
         if std_network is not None:
             l_log_std = std_network.output_layer
@@ -92,8 +90,7 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 l_log_std = std_network.output_layer
             else:
                 l_log_std = ParamLayer(
-                    # mean_network.input_layer,     #TODO:CHANDGE TO mean_network.input_layer
-                    input_layer,
+                    mean_network.input_layer,
                     num_units=action_dim,
                     param=lasagne.init.Constant(np.log(init_std)),
                     name="output_log_std",
@@ -101,6 +98,7 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
                 )
 
         self.min_std = min_std
+        self._set_std_to_0 = False
 
         mean_var, log_std_var = L.get_output([l_mean, l_log_std])
 
@@ -132,16 +130,30 @@ class GaussianMLPPolicy(StochasticPolicy, LasagnePowered, Serializable):
     def get_action(self, observation):
         flat_obs = self.observation_space.flatten(observation)
         mean, log_std = [x[0] for x in self._f_dist([flat_obs])]
-        rnd = np.random.normal(size=mean.shape)
-        action = rnd * np.exp(log_std) + mean
+        if self._set_std_to_0:
+            action = mean
+            log_std = -1e6 * np.ones_like(log_std)
+        else:
+            rnd = np.random.normal(size=mean.shape)
+            action = rnd * np.exp(log_std) + mean
         return action, dict(mean=mean, log_std=log_std)
 
     def get_actions(self, observations):
         flat_obs = self.observation_space.flatten_n(observations)
         means, log_stds = self._f_dist(flat_obs)
-        rnd = np.random.normal(size=means.shape)
-        actions = rnd * np.exp(log_stds) + means
+        if self._set_std_to_0:
+            actions = means
+            log_stds = -1e6 * np.ones_like(log_stds)
+        else:
+            rnd = np.random.normal(size=means.shape)
+            actions = rnd * np.exp(log_stds) + means
         return actions, dict(mean=means, log_std=log_stds)
+
+    @contextmanager
+    def set_std_to_0(self):
+        self._set_std_to_0 = True
+        yield
+        self._set_std_to_0 = False
 
     def get_reparam_action_sym(self, obs_var, action_var, old_dist_info_vars):
         """

@@ -176,6 +176,17 @@ class PR2BoxGoalGenerator(BoxGoalGenerator):
             low_goal_bounds, high_goal_bounds,
             max_episodes_with_goal=max_episodes_with_goal)
 
+class PR2BoxGoalGeneratorFixedSmall(BoxGoalGenerator):
+    """ Generate goals randomly from within a box that defines the goal space """
+    def __init__(self, max_episodes_with_goal=1):
+        goal_range = PR2SmallRange()
+
+        low_goal_bounds = goal_range.low_goal_bounds
+        high_goal_bounds = goal_range.high_goal_bounds
+
+        super(PR2BoxGoalGeneratorSmall, self).__init__(
+            low_goal_bounds, high_goal_bounds,
+            max_episodes_with_goal=max_episodes_with_goal)
 
 class PR2BoxGoalGeneratorSmall(BoxGoalGenerator):
     """ Generate goals randomly from within a box that defines the goal space """

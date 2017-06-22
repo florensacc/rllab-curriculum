@@ -112,6 +112,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         return obs
 
     def get_tip_position(self):
+        sites = self.model.data.site_xpos
         return self.model.data.site_xpos[0]
 
     def get_lego_position(self):
@@ -138,8 +139,9 @@ class Pr2EnvLego(MujocoEnv, Serializable):
 
     def step(self, action):
 
-        if self.use_baseline:
+        #action = np.zeros_like(action)
 
+        if self.use_baseline:
             if not self.stop:
                 self.t += 0.05
                 lg = self.goal - self.lego_pos
@@ -157,9 +159,16 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         vec_to_goal = self.get_vec_to_goal()
         distance_to_goal = np.linalg.norm(vec_to_goal)
         distance_tip_to_lego = np.linalg.norm(vec_tip_to_lego)
+
+
+        tip_position = self.get_tip_position()
+        lego_position = self.get_lego_position()
+        vec_tip_to_lego2 = lego_position - tip_position
+        # logger.log("Tip position: " + str(tip_position))
+        # logger.log("lego position: " + str(lego_position))
+        # logger.log("Tip to lego: " + str(vec_tip_to_lego2))
+        # logger.log("distance_tip_to_lego: " + str(distance_tip_to_lego))
         #
-        # if distance_to_goal > distance_tip_to_goal_previous:
-        #     self.stop = True
 
         if self.t >= 1.4:
             self.stop = True
@@ -169,14 +178,14 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         # Penalize the robot for being far from the goal and for having the arm far from the lego.
         reward_dist = - distance_to_goal
         reward_tip = - self.distance_tip_lego_penalty_weight * distance_tip_to_lego
+        #logger.log("reward_tip: " + str(reward_tip))
 
         cos_angle = self.get_cos_vecs()
         reward_angle = - self.angle_penalty_weight * cos_angle
 
-        # Penalize the robot for large actions.f
-        # reward_occlusion = self.occlusion_weight * self.get_reward_occlusion()
-        # reward_ctrl = - self.action_penalty_weight * np.square(action).sum()
-        reward = reward_dist
+        reward = reward_dist + reward_angle + reward_tip
+        # reward = reward_tip
+        # reward = reward_tip + 2
         state = self._state
         notdone = np.isfinite(state).all()
         done = not notdone
@@ -213,40 +222,43 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         # print(self.error/100)
         # self.error = np.zeros((7,))
         qpos = copy.copy(self.model.data.qpos)
-        if self.allow_random_restarts or self.first_time:
 
+        # Generate block position with fixed orientation.
+        if self.allow_random_restarts or self.first_time:
             lego_position = self.get_lego_position()
 
             if self._lego_generator is not None:
                 self.lego = self._lego_generator.generate_goal(lego_position)
                 qpos[-goal_dims - lego_dims - 1:-goal_dims] = self.lego[:, None]
             else:
-                # print("No l
-                # ego generator!")
+                # print("No lego generator!")
                 qpos[-goal_dims - lego_dims - 1:-goal_dims] = np.array((0.6, 0.2, 0.5025, 1, 0, 0, 0))[:, None]
-
         else:
             # Use current position as new position.
             qpos = copy.copy(self.model.data.qpos)  # [:-goal_dims]
             lego_position = self.get_lego_position()
-        if self._lego_generator is not None:
-            self.lego = self._lego_generator.generate_goal(lego_position)
-            theta = np.random.uniform(0, 2 * np.pi)
-            quat = np.array([np.cos(theta / 2), 0, 0, np.sin(theta / 2)]) +\
-                   np.random.multivariate_normal(np.zeros((4,)), np.eye(4) * 0.001)
-            qpos[-goal_dims - lego_dims - 1:-goal_dims, 0] = np.concatenate([self.lego[:3], quat])
-        else:
-            # print("No lego generator!")
-            qpos[-goal_dims - lego_dims - 1:-goal_dims] = np.array((0.6, 0.2, 0.5025, 1, 0, 0, 0))[:, None]
+
+        # Generate block position + uniform random orientation.
+        # if self._lego_generator is not None:
+        #     self.lego = self._lego_generator.generate_goal(lego_position)
+        #     # Randomly select block orientation.
+        #     theta = np.random.uniform(0, 2 * np.pi)
+        #     # Convert orientation to quaternion + noise.
+        #     quat = np.array([np.cos(theta / 2), 0, 0, np.sin(theta / 2)]) +\
+        #            np.random.multivariate_normal(np.zeros((4,)), np.eye(4) * 0.001)
+        #     qpos[-goal_dims - lego_dims - 1:-goal_dims, 0] = np.concatenate([self.lego[:3], quat])
+        # else:
+        #     # print("No lego generator!")
+        #     qpos[-goal_dims - lego_dims - 1:-goal_dims] = np.array((0.6, 0.2, 0.5025, 1, 0, 0, 0))[:, None]
+
         # Generate a new goal.
-
-
         if self._goal_generator is not None:
             self.goal = self._goal_generator.generate_goal(self.lego[:3])
             qpos[-goal_dims:] = self.goal[:goal_dims, None]
         else:
             print("No goal generator!")
 
+        # Manually initialize the hand to be on the opposite side of the lego from the goal.
         self.lego_pos = self.lego[:3]
         lg = (self.goal - self.lego_pos)
         init_hand = self.lego_pos + lg * (self.t - 0.25 / np.linalg.norm(lg))
@@ -309,15 +321,6 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.viewer.cam.lookat[2] = self.model.stat.center[2]
         # self.viewer.cam.distance = self.model.stat.extent * 1.5
 
-    #     if self.use_vision:
-    #         self.viewer.cam.camid = -1
-    #     else:
-    #         self.viewer.cam.camid = -1
-    #     #self.viewer.cam.trackbodyid = -1   # 39
-    #     #self.viewer.cam.elevation = 0
-    #     #self.viewer.cam.azimuth = 0
-    #     #self.viewer.cam.VR = 1
-
 
     def get_mean_failure_rate(self):
         return self.mean_failure_rate
@@ -331,18 +334,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         logger.record_tabular('StdActions', np.std(actions))
         logger.record_tabular('MeanActions', np.mean(actions))
 
-        # distances_to_goal_x = [path["env_infos"]["distance_to_goal_x"] for path in paths]
-        # distances_to_goal_y = [path["env_infos"]["distance_to_goal_y"] for path in paths]
-        # distances_to_goal_z = [path["env_infos"]["distance_to_goal_z"] for path in paths]
 
-        # logger.record_tabular('FinalDistanceToGoalX', np.mean([d[-1] for d in distances_to_goal_x]))
-        # logger.record_tabular('FinalDistanceToGoalY', np.mean([d[-1] for d in distances_to_goal_y]))
-        # logger.record_tabular('FinalDistanceToGoalZ', np.mean([d[-1] for d in distances_to_goal_z]))
-
-
-        # logger.record_tabular('MaxFinalDistanceToGoalX', np.max([d[-1] for d in distances_to_goal_x]))
-        # logger.record_tabular('MaxFinalDistanceToGoalY', np.max([d[-1] for d in distances_to_goal_y]))
-        # logger.record_tabular('MaxFinalDistanceToGoalZ', np.max([d[-1] for d in distances_to_goal_z]))
         distances_tip_to_lego = [path["env_infos"]["distance_tip_to_lego"] for path in paths]
         logger.record_tabular('MinFinalDistanceTipLego', np.min([d[-1] for d in distances_tip_to_lego]))
         logger.record_tabular('MinDistanceTipLego', np.mean([np.min(d) for d in distances_tip_to_lego]))

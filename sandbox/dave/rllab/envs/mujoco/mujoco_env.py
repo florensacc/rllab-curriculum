@@ -204,10 +204,16 @@ class MujocoEnv(Env):
             self.viewer = MjViewer(is_bot=is_bot)
             self.viewer.start()
             self.viewer.set_model(self.model)
-            self.viewer_setup(is_bot=is_bot)
+            self.viewer_setup()
+            # self.viewer_setup(is_bot=is_bot)
         return self.viewer
 
-    def render(self):
+    def render(self, close=False):
+        # if close:
+        #     if self.viewer is not None:
+        #         self.viewer.finish()
+        #         self.viewer = None
+
         viewer = self.get_viewer()
         viewer.loop_once()
 
