@@ -45,7 +45,7 @@ def run_task(v):
         pos_normal_sample=True,
         qvel_init_std=0, #0.01,
         pos_normal_sample_std=.01,  #0.5
-
+        fixed_target = v['fixed_target'],
         # use_depth=True,
         # use_vision=True,
         allow_random_restarts=True,
@@ -73,7 +73,7 @@ def run_task(v):
         baseline=baseline,
         batch_size=5000,
         max_path_length=150,  #100
-        n_itr=15000, #50000
+        n_itr=500, #50000
         discount=0.95,
         gae_lambda=0.98,
         step_size=0.01,
@@ -98,6 +98,7 @@ def run_task(v):
 
 vg = VariantGenerator()
 vg.add('seed', [1])
+vg.add('fixed_target', [1,2])
 
 #exp_name = "exp4"
 for vv in vg.variants():
@@ -131,8 +132,8 @@ for vv in vg.variants():
         # exp_name="trial",
         # exp_prefix="train-Lego/RSS/torque-control",
         # exp_name="random_0001_param_torque_eve_fixed" + str(s),
-        exp_prefix="hand_env4",
-        exp_name="dist_angle_tip",
+        exp_prefix="hand_env7",
+        # exp_name="dist_lessmass_noforcelimit",
         # exp_name= "decaying-decaying-gamma" + str(t),
         #exp_name=exp_name,
         # plot=True,

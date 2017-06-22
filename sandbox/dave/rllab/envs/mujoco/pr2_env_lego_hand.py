@@ -41,6 +41,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             number_actions=1,
             dilate_time=1,
             crop=True,
+            fixed_target = 2,
             *args, **kwargs):
 
         self.action_penalty_weight = action_penalty_weight
@@ -89,6 +90,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.t = 0
         self.stop = False
         self.use_baseline = False
+        self.fixed_target = fixed_target
 
         super(Pr2EnvLego, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
@@ -183,7 +185,8 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         cos_angle = self.get_cos_vecs()
         reward_angle = - self.angle_penalty_weight * cos_angle
 
-        reward = reward_dist + reward_angle + reward_tip
+        reward = reward_dist
+        # reward = reward_dist + reward_angle + reward_tip
         # reward = reward_tip
         # reward = reward_tip + 2
         state = self._state
@@ -224,19 +227,23 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         qpos = copy.copy(self.model.data.qpos)
 
         # Generate block position with fixed orientation.
-        if self.allow_random_restarts or self.first_time:
-            lego_position = self.get_lego_position()
+        # if self.allow_random_restarts or self.first_time:
 
-            if self._lego_generator is not None:
-                self.lego = self._lego_generator.generate_goal(lego_position)
-                qpos[-goal_dims - lego_dims - 1:-goal_dims] = self.lego[:, None]
-            else:
-                # print("No lego generator!")
-                qpos[-goal_dims - lego_dims - 1:-goal_dims] = np.array((0.6, 0.2, 0.5025, 1, 0, 0, 0))[:, None]
+        # always restart to fix start location
+        lego_position = self.get_lego_position()
+
+        if self._lego_generator is not None:
+            self.lego = self._lego_generator.generate_goal(lego_position)
+            qpos[-goal_dims - lego_dims - 1:-goal_dims] = self.lego[:, None]
         else:
-            # Use current position as new position.
-            qpos = copy.copy(self.model.data.qpos)  # [:-goal_dims]
-            lego_position = self.get_lego_position()
+            # print("No lego generator!")
+            qpos[-goal_dims - lego_dims - 1:-goal_dims] = np.array((0.6, 0.2, 0.5025, 1, 0, 0, 0))[:, None]
+
+
+        # else:
+        #     # Use current position as new position.
+        #     qpos = copy.copy(self.model.data.qpos)  # [:-goal_dims]
+        #     lego_position = self.get_lego_position()
 
         # Generate block position + uniform random orientation.
         # if self._lego_generator is not None:
@@ -259,9 +266,14 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             print("No goal generator!")
 
         # Manually initialize the hand to be on the opposite side of the lego from the goal.
-        self.lego_pos = self.lego[:3]
-        lg = (self.goal - self.lego_pos)
-        init_hand = self.lego_pos + lg * (self.t - 0.25 / np.linalg.norm(lg))
+        # import pdb; pdb.set_trace()
+        # self.lego_pos = self.lego[:3]
+        # lg = (self.goal - self.lego_pos)
+        # init_hand = self.lego_pos + lg * (self.t - 0.25 / np.linalg.norm(lg))
+        if self.fixed_target == 2:
+            init_hand = np.array([0.66063391,  0.44253563,  0.5025]) # hard
+        else:
+            init_hand = np.array([0.65,  0.25,  0.5025])
         qpos[:2, 0] = init_hand[:2]
 
         if self.allow_random_vel_restarts or self.first_time:
