@@ -140,7 +140,7 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         info['goal'] = self.current_goal
         # print("step: obs={}, dist={}".format(self.append_goal_observation(observation), dist))
         if self.terminate_env and dist < self.terminal_eps:
-            # print("\n*******done**********\n")
+            print("\n*******done**********\n")
             done = True
         return (
             self.append_goal_observation(observation),

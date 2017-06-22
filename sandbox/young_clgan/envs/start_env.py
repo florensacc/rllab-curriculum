@@ -154,8 +154,10 @@ def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsa
         env.render()
     while len(states) < size:
         steps += 1
+        print(steps)
         if done or steps >= horizon:
             steps = 0
+            noise = 0
             i += 1
             done = False
             obs = env.reset(init_state=starts[i % n_starts])
@@ -166,6 +168,7 @@ def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsa
                 action, _ = policy.get_action(obs)
             else:
                 action = noise
+            # action = np.zeros_like(action)
             obs, _, _, _ = env.step(action)  # we don't care about done, otherwise will never advance!
             states.append(env.start_observation)
         if animated:
