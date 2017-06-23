@@ -1,4 +1,6 @@
 import matplotlib
+import cloudpickle
+import pickle
 
 matplotlib.use('Agg')
 import os
@@ -17,6 +19,7 @@ from sandbox.young_clgan.logging.visualization import save_image, plot_labeled_s
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
+from rllab import config
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
@@ -41,27 +44,29 @@ def run_task(v):
     np.random.seed(v['seed'])
 
     # Log performance of randomly initialized policy with FIXED goal [0.1, 0.1]
-    logger.log("Initializing report and plot_policy_reward...")
+    logger.log("Initializing report...")
     log_dir = logger.get_snapshot_dir()  # problem with logger module here!!
     report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=4)
 
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
 
-    inner_env = normalize(PR2KeyEnv())
+    inner_env = normalize(PR2KeyEnv(ctrl_cost_coeff=v['ctrl_cost_coeff']))
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
-    uniform_start_generator = UniformStateGenerator(state_size=v['start_size'], bounds=v['start_bounds'])
+    fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
 
     env = GoalStartExplorationEnv(
         env=inner_env,
-        start_generator=uniform_start_generator,
+        start_generator=fixed_start_generator,
         obs2start_transform=lambda x: x[:v['start_size']],
         goal_generator=fixed_goal_generator,
         obs2goal_transform=lambda x: x[-1 * v['goal_size']:],  # the goal are the last 9 coords
         terminal_eps=v['terminal_eps'],
         distance_metric=v['distance_metric'],
         extend_dist_rew=v['extend_dist_rew'],
+        inner_weight=v['inner_weight'],
+        goal_weight=v['goal_weight'],
         terminate_env=True,
     )
 
@@ -77,21 +82,27 @@ def run_task(v):
     )
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
-# outer_iter = 0
-    # logger.log('Generating the Initial Heatmap...')
-    # plot_policy_means(policy, env, sampling_res=2, report=report, limit=v['goal_range'], center=v['goal_center'])
-    # test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=sampling_res,
-    #                      n_traj=v['n_traj'],
-    #                      itr=outer_iter, report=report, center=v['goal_center'],
-    #                      limit=v['goal_range'])  # use goal for plot
-    # report.new_row()
+
+
+
+    # load the state collection from data_upload
+    load_dir = 'data_upload/state_collections/'
+    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states.pkl'), 'rb'))
+    print("we have %d feasible starts" % all_feasible_starts.size)
+    uniform_start_generator = UniformListStateGenerator(state_list=all_feasible_starts.state_list)
+
 
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
-    seed_starts = generate_starts(env, starts=[v['start_goal']], horizon= 50,  #v['brownian_horizon'],
-                                  variance=v['brownian_variance'], subsample=v['num_new_starts'], animated=True, speedup=1)
-    # env.update_start_generator(StateGenerator())
-    # seed_starts = generate_starts(env, starts=[None], horizon=v['brownian_horizon'],
-    #                               variance=v['brownian_variance'], subsample=v['num_new_starts'])
+    brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
+    seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=10,  # this is smaller as they are seeds!
+                                  variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=10)
+
+
+
+
+    # show where these states are:
+    # seed_starts = generate_starts(env, starts=all_feasible_starts.state_list, horizon=100,  # this is smaller as they are seeds!
+    #                               variance=v['brownian_variance'], animated=True, speedup=10)
 
     logger.log("Labeling the seed_starts")
     labels, paths = label_states(seed_starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'],
@@ -107,21 +118,22 @@ def run_task(v):
         logger.record_tabular('GenGoal_frac_' + text_labels[k], frac)
         goal_class_frac[text_labels[k]] = frac
 
-
-
     for outer_iter in range(1, v['outer_iters']):
 
         logger.log("Outer itr # %i" % outer_iter)
         logger.log("Sampling starts")
 
-        starts = generate_starts(env, starts=seed_starts, subsample=v['num_new_starts'],
-                                 horizon=v['brownian_horizon'], variance=v['brownian_variance'])
+        starts = generate_starts(env, starts=seed_starts, horizon=v['brownian_horizon'], variance=v['brownian_variance'])
+        # regularization of the brownian starts
+        brownian_starts.empty()
+        brownian_starts.append(starts)
+        starts = brownian_starts.sample(size=v['num_new_starts'])
 
         if v['replay_buffer'] and outer_iter > 0 and all_starts.size > 0:
             old_starts = all_starts.sample(v['num_old_starts'])
             starts = np.vstack([starts, old_starts])
 
-        with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
+        with ExperimentLogger(log_dir, outer_iter, snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment start generator")
             env.update_start_generator(
                 UniformListStateGenerator(
@@ -145,14 +157,16 @@ def run_task(v):
             algo.train()
 
         with logger.tabular_prefix("Uniform_"):
+            logger.log("Computing Unifrom coverage on 1000 states")
             env.update_start_generator(uniform_start_generator)
-            evaluate_state_env(env, policy, horizon=v['horizon'], n_traj=v['n_traj'], n_states=1000)
+            evaluate_state_env(env, policy, horizon=v['horizon'], n_traj=1, n_states=1000)
 
         logger.log("Labeling the starts")
         labels, paths = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'],
                                      key='goal_reached', full_path=True)
         with logger.tabular_prefix("OnStarts_"):
             env.log_diagnostics(paths)
+        logger.record_tabular('brownian_starts', brownian_starts.size)
 
         goal_classes, text_labels = convert_label(labels)
         total_goals = labels.shape[0]
@@ -174,7 +188,9 @@ def run_task(v):
         filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1]
         if len(filtered_raw_starts) > 0:  # add a tone of noise if all the states I had ended up being high_reward!
             seed_starts = filtered_raw_starts
+        elif np.sum(goal_classes == 0) > np.sum(goal_classes == 1):  # if more low reward than high reward
+            seed_starts = all_starts.sample(300)  # sample them from the replay
         else:
-            seed_starts = generate_starts(env, starts=starts, horizon=v['horizon'] * 2, subsample=v['num_new_starts'],
+            seed_starts = generate_starts(env, starts=starts, horizon=int(v['horizon'] * 10), subsample=v['num_new_starts'],
                                           variance=v['brownian_variance'] * 10)
         all_starts.append(filtered_raw_starts)

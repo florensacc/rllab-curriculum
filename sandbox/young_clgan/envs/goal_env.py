@@ -139,8 +139,8 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         info['goal_reached'] = 1.0 * self.is_goal_reached(observation)
         info['goal'] = self.current_goal
         # print("step: obs={}, dist={}".format(self.append_goal_observation(observation), dist))
-        if self.terminate_env and dist < self.terminal_eps:
-            print("\n*******done**********\n")
+        if self.terminate_env and dist < self.terminal_eps:  # if the inner env is done it will stay done.
+            # print("\n*******done**********\n")
             done = True
         return (
             self.append_goal_observation(observation),
@@ -223,6 +223,9 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         initial_goal_distances = [
             path['env_infos']['distance'][0] for path in paths
             ]
+        final_goal_distances = [
+            path['env_infos']['distance'][-1] for path in paths
+        ]
         reward_dist = [
             np.sum(path['env_infos']['reward_dist'])
             for path in paths
@@ -244,7 +247,9 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         # print('the feasible is: ', feasible)
 
         # Process by trajectories
-        logger.record_tabular('InitGoalDistance', np.mean(initial_goal_distances))
+        logger.record_tabular('AvgInitGoalDistance', np.mean(initial_goal_distances))
+        logger.record_tabular('AvgFinalGoalDistance', np.mean(final_goal_distances))
+        logger.record_tabular('MinFinalGoalDistance', np.min(final_goal_distances))
         logger.record_tabular('MeanPathDistance', np.mean(distances))
         logger.record_tabular('AvgTotalRewardDist', np.mean(reward_dist))
         logger.record_tabular('AvgTotalRewardInner', np.mean(reward_inner))
