@@ -63,5 +63,5 @@ def sample_matrix_row(M, size, replace=False):
     if replace:
         indices = np.random.randint(0, M.shape[0], size)
     else:
-        indices = np.random.choice(M.shape[0], size)
+        indices = np.random.choice(M.shape[0], size, replace=replace)
     return M[indices, :]
