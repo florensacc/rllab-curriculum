@@ -38,7 +38,7 @@ if __name__ == '__main__':
         # 'ap-south-1b', 'ap-northeast-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'us-west-1b', 'us-west-1a',
         # 'ap-south-1a', 'ap-northeast-1a', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'us-east-1b'
     ]
-    ec2_instance = args.type if args.type else 'm4.16xlarge'
+    ec2_instance = args.type if args.type else 'm4.4xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance

@@ -230,12 +230,13 @@ def evaluate_state(state, env, policy, horizon, n_traj=1, full_path=False, key='
     return mean_reward
 
 def evaluate_state_env(env, policy, horizon, n_states=10, n_traj=1, n_processes=-1, **kwargs):
-    # evaluate_env_wrapper = FunctionWrapper(
-    #     rollout,
-    #     env=env, agent=policy, max_path_length=horizon,
-    # )
-    # paths = parallel_map(evaluate_env_wrapper, [None] * n_states, n_processes)
-    paths = [rollout(env=env, agent=policy, max_path_length=horizon) for _ in range(n_states)]
+    evaluate_env_wrapper = FunctionWrapper(
+        rollout,
+        env=env, agent=policy, max_path_length=horizon,
+    )
+    paths = parallel_map(evaluate_env_wrapper, [None] * n_states, n_processes)
+
+    # paths = [rollout(env=env, agent=policy, max_path_length=horizon) for _ in range(n_states)]
     env.log_diagnostics(paths, n_traj=n_traj, **kwargs)
 
 def evaluate_path(path, full_path=False, key='rewards', aggregator=np.sum):

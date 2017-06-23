@@ -91,6 +91,20 @@ def run_task(v):
     print("we have %d feasible starts" % all_feasible_starts.size)
     uniform_start_generator = UniformListStateGenerator(state_list=all_feasible_starts.state_list)
 
+    with logger.tabular_prefix("Uniform_"):
+        logger.log("Computing Uniform coverage on 32 states")
+        env.update_start_generator(uniform_start_generator)
+        t = time.time()
+        evaluate_state_env(env, policy, horizon=v['horizon'], n_traj=1, n_states=32)
+        logger.log("Time to evaluate unif with UniformSGEN: " + str(t - time.time()))
+        logger.log("Computing Uniform coverage on 32 states")
+        unif_starts = all_feasible_starts.sample(32)
+        t = time.time()
+        mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=1, key='goal_reached',
+                                             as_goals=False, full_path=True)
+        env.log_diagnostics(paths)
+        logger.log("Time to evaluate unif with UnifStates: ", str(t - time.time()))
+
 
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
     brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
@@ -159,7 +173,18 @@ def run_task(v):
         with logger.tabular_prefix("Uniform_"):
             logger.log("Computing Unifrom coverage on 1000 states")
             env.update_start_generator(uniform_start_generator)
+            t = time.time()
             evaluate_state_env(env, policy, horizon=v['horizon'], n_traj=1, n_states=1000)
+            logger.log("Time to evaluate unif with UniformSGEN: ", t - time.time())
+            unif_starts = all_feasible_starts.sample(1000)
+            t = time.time()
+            mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=1, key='goal_reached',
+                                                 as_goals=False, full_path=True)
+            env.log_diagnostics(paths)
+            logger.log("Time to evaluate unif with UnifStates: ", t - time.time())
+
+
+
 
         logger.log("Labeling the starts")
         labels, paths = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'],
