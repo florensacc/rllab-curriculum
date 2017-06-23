@@ -1,5 +1,5 @@
 from __future__ import print_function
-from sandbox.dave.rllab.envs.mujoco.mujoco_env import MujocoEnv
+from sandbox.young_clgan.envs.block_pushing.mujoco_env import MujocoEnv
 import numpy as np
 from sandbox.dave.pr2.action_limiter import FixedActionLimiter
 from scipy.misc import imsave
@@ -104,17 +104,16 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.__class__.FILE = model
 
     def get_current_obs(self):
-        vec_to_goal = self.get_vec_to_goal()
-        dim = self.model.data.qpos.shape[0]
+        # vec_to_goal = self.get_vec_to_goal()
+        # dim = self.model.data.qpos.shape[0]
         obs = np.concatenate([
             self.model.data.qpos.flat,
             # We do not need to explicitly include the goal                                  # since we already have the vec to the goal.
             self.model.data.qvel.flat,  # Do not include the velocity of the target (should be 0).
             self.get_vec_tip_to_lego(),
-            vec_to_goal,
-            #added, can delete later
-            self.get_lego_position(),
-            self.goal,
+            self.get_vec_to_goal(),
+
+            self.get_lego_position(), # include this otherwise resetting would be very challenging
         ]).reshape(-1)
         return obs
 
@@ -222,7 +221,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
                     )
 
     @overrides
-    def reset_mujoco(self, qpos=None, qvel=None):
+    def reset_mujoco(self, goal, qpos=None, qvel=None):
         goal_dims = 3  # self.goal_dims
         lego_dims = 6
         self.t = 0
@@ -235,14 +234,21 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         # if self.allow_random_restarts or self.first_time:
 
         # always restart to fix start location
-        lego_position = self.get_lego_position()
-
-        if self._lego_generator is not None:
-            self.lego = self._lego_generator.generate_goal(lego_position)
+        if goal is not None:
+            if goal.shape == 3:
+                goal.extend((0.5025, 1, 0, 0, 0))
+            else:
+                raise Exception
             qpos[-goal_dims - lego_dims - 1:-goal_dims] = self.lego[:, None]
+            import pdb;pdb.set_trace() # should hit
         else:
-            # print("No lego generator!")
-            qpos[-goal_dims - lego_dims - 1:-goal_dims] = np.array((0.6, 0.2, 0.5025, 1, 0, 0, 0))[:, None]
+            lego_position = self.get_lego_position()
+            if self._lego_generator is not None:
+                self.lego = self._lego_generator.generate_goal(lego_position)
+                qpos[-goal_dims - lego_dims - 1:-goal_dims] = self.lego[:, None]
+            else:
+                # print("No lego generator!")
+                qpos[-goal_dims - lego_dims - 1:-goal_dims] = np.array((0.6, 0.2, 0.5025, 1, 0, 0, 0))[:, None]
 
 
         # else:

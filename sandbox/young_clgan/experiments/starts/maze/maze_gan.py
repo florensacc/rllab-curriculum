@@ -81,6 +81,7 @@ if __name__ == '__main__':
     vg.add('replay_buffer', [True])
     vg.add('coll_eps', [0.3])
     vg.add('num_new_starts', [200])
+    vg.add('num_new_starts', [200])
     vg.add('num_old_starts', [100])
     # sampling params
     vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
