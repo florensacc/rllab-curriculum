@@ -78,6 +78,35 @@ def parallel_map(func, iterable_object, num_processes=-1):
     process_pool.join()
     return results
 
+def label_states_from_paths(all_paths, min_reward=0, max_reward=1, key='rewards',
+                 old_rewards=None, improvement_threshold=0, n_traj=1):
+    goal_dict = {}
+    for paths in all_paths:
+        for path in paths:
+            reward = evaluate_path(path, key=key)
+            goal = tuple(path['env_infos']['goal'][0])
+            if goal in goal_dict:
+                goal_dict[goal].append(reward)
+            else:
+                goal_dict[goal] = [reward]
+
+    goals = []
+    mean_rewards = []
+    for goal, rewards in goal_dict.items():
+        if len(rewards) >= n_traj:
+            goals.append(list(goal))
+            mean_rewards.append(np.mean(rewards))
+
+    # Make this a vertical list.
+    mean_rewards = np.array(mean_rewards).reshape(-1, 1)
+
+    labels = compute_labels(mean_rewards, old_rewards=old_rewards, min_reward=min_reward, max_reward=max_reward,
+                          improvement_threshold=improvement_threshold)
+
+    goals = np.array(goals)
+
+    return [goals, labels]
+
 
 def label_states(states, env, policy, horizon, as_goals=True, min_reward=0.1, max_reward=0.9, key='rewards',
                  old_rewards=None, improvement_threshold=0, n_traj=1, n_processes=-1, full_path=False):
@@ -91,7 +120,15 @@ def label_states(states, env, policy, horizon, as_goals=True, min_reward=0.1, ma
         mean_rewards = result
 
     mean_rewards = mean_rewards.reshape(-1, 1)
+    labels = compute_labels(mean_rewards, old_rewards=old_rewards, min_reward=min_reward, max_reward=max_reward,
+                          improvement_threshold=improvement_threshold)
 
+    if full_path:
+        return labels, paths
+    return labels
+
+
+def compute_labels(mean_rewards, old_rewards=None, min_reward=0, max_reward=1, improvement_threshold=0):
     print("Computing state labels")
     if old_rewards is not None:
         old_rewards = old_rewards.reshape(-1, 1)
@@ -108,8 +145,6 @@ def label_states(states, env, policy, horizon, as_goals=True, min_reward=0.1, ma
             [mean_rewards > min_reward, mean_rewards < max_reward]
         ).astype(np.float32)
 
-    if full_path:
-        return labels, paths
     return labels
 
 
@@ -198,7 +233,6 @@ def evaluate_state(state, env, policy, horizon, n_traj=1, full_path=False, key='
 
     return mean_reward
 
-
 def evaluate_state_env(env, policy, horizon, n_states=10, n_traj=1, n_processes=-1, **kwargs):
     # evaluate_env_wrapper = FunctionWrapper(
     #     rollout,
@@ -207,3 +241,16 @@ def evaluate_state_env(env, policy, horizon, n_states=10, n_traj=1, n_processes=
     # paths = parallel_map(evaluate_env_wrapper, [None] * n_states, n_processes)
     paths = [rollout(env=env, agent=policy, max_path_length=horizon) for _ in range(n_states)]
     env.log_diagnostics(paths, n_traj=n_traj, **kwargs)
+
+def evaluate_path(path, full_path=False, key='rewards', aggregator=np.sum):
+    if not full_path:
+        if key in path:
+            total_reward = aggregator(path[key])
+        else:
+            total_reward = aggregator(path['env_infos'][key])
+        return total_reward
+
+    if full_path:
+        return path
+
+

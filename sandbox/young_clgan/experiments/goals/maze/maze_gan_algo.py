@@ -24,7 +24,7 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.state.evaluator import label_states
+from sandbox.young_clgan.state.evaluator import label_states, label_states_from_paths
 from sandbox.young_clgan.envs.base import UniformListStateGenerator, update_env_state_generator, UniformStateGenerator
 from sandbox.young_clgan.state.generator import StateGAN
 from sandbox.young_clgan.state.utils import StateCollection
@@ -120,13 +120,13 @@ def run_task(v):
         gan.pretrain_uniform()
 
     # log first samples form the GAN
-    initial_goals, _ = gan.sample_states_with_noise(v['num_new_goals'])
+    #initial_goals, _ = gan.sample_states_with_noise(v['num_new_goals'])
 
-    logger.log("Labeling the goals")
-    labels = label_states(initial_goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
-
-    plot_labeled_states(initial_goals, labels, report=report, itr=outer_iter,
-                        limit=v['goal_range'], center=v['goal_center'], maze_id=v['maze_id'])
+    # logger.log("Labeling the initial goals")
+    # labels = label_states(initial_goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
+    #
+    # plot_labeled_states(initial_goals, labels, report=report, itr=outer_iter,
+    #                     limit=v['goal_range'], center=v['goal_center'], maze_id=v['maze_id'])
     report.new_row()
 
     all_goals = StateCollection(distance_threshold=v['coll_eps'])
@@ -165,14 +165,16 @@ def run_task(v):
                 plot=False,
             )
 
-            algo.train()
+            all_paths = algo.train()
+
+        [goals, labels] = label_states_from_paths(all_paths, n_traj=v['n_traj'], key='goal_reached')
 
         logger.log('Generating the Heatmap...')
         test_and_plot_policy(policy, env, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
                              itr=outer_iter, report=report, limit=v['goal_range'], center=v['goal_center'])
 
-        logger.log("Labeling the goals")
-        labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
+        #logger.log("Labeling the goals")
+        #labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
 
         plot_labeled_states(goals, labels, report=report, itr=outer_iter, limit=v['goal_range'],
                             center=v['goal_center'], maze_id=v['maze_id'])
