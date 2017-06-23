@@ -4,6 +4,7 @@ import tempfile
 import numpy as np
 from collections import OrderedDict
 import cloudpickle
+import time
 
 from rllab.sampler.utils import rollout
 from rllab.misc import logger
@@ -28,7 +29,10 @@ class FunctionWrapper(object):
         self.kwargs = kwargs
 
     def __call__(self, obj):
-        return self.func(obj, *self.args, **self.kwargs)
+        if obj is None:
+            return self.func(*self.args, **self.kwargs)
+        else:
+            return self.func(obj, *self.args, **self.kwargs)
 
     def __getstate__(self):
         """ Here we overwrite the default pickle protocol to use cloudpickle. """
@@ -195,6 +199,11 @@ def evaluate_state(state, env, policy, horizon, n_traj=1, full_path=False, key='
     return mean_reward
 
 
-def evaluate_state_env(env, policy, horizon, n_states=10, n_traj=1, **kwargs):
+def evaluate_state_env(env, policy, horizon, n_states=10, n_traj=1, n_processes=-1, **kwargs):
+    # evaluate_env_wrapper = FunctionWrapper(
+    #     rollout,
+    #     env=env, agent=policy, max_path_length=horizon,
+    # )
+    # paths = parallel_map(evaluate_env_wrapper, [None] * n_states, n_processes)
     paths = [rollout(env=env, agent=policy, max_path_length=horizon) for _ in range(n_states)]
     env.log_diagnostics(paths, n_traj=n_traj, **kwargs)
