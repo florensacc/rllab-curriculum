@@ -9,10 +9,7 @@ import time
 from rllab.sampler.utils import rollout
 from rllab.misc import logger
 
-from sandbox.young_clgan.envs.base import FixedStateGenerator, update_env_state_generator
-from sandbox.young_clgan.envs.goal_env import update_env_goal_generator
-from sandbox.young_clgan.envs.start_env import update_env_start_generator
-
+from sandbox.young_clgan.envs.base import FixedStateGenerator
 
 class FunctionWrapper(object):
     """Wrap a function for use with parallelized map.
@@ -200,8 +197,7 @@ def evaluate_states(states, env, policy, horizon, n_traj=1, n_processes=-1, full
     )
 
     if full_path:
-        return np.array([state[0] for state in result]), \
-               [path for state in result for path in state[1]]
+        return np.array([state[0] for state in result]), [path for state in result for path in state[1]]
     return np.array(result)
 
 

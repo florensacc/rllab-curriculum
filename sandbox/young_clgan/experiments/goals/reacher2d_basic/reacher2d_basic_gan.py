@@ -25,10 +25,8 @@ from sandbox.young_clgan.envs.reacher.reacher2d_basic_env import Reacher2DEnv
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, update_env_goal_generator, \
-    evaluate_goal_env, generate_initial_goals
-from sandbox.young_clgan.envs.base import FixedStateGenerator, UniformStateGenerator, \
-    update_env_state_generator, UniformListStateGenerator
+from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, evaluate_goal_env, generate_initial_goals
+from sandbox.young_clgan.envs.base import FixedStateGenerator, UniformStateGenerator, UniformListStateGenerator
 
 from sandbox.young_clgan.state.evaluator import *
 from sandbox.young_clgan.state.generator import StateGAN
@@ -36,8 +34,8 @@ from sandbox.young_clgan.state.generator import StateGAN
 from sandbox.young_clgan.logging.html_report import format_dict, HTMLReport
 from sandbox.young_clgan.logging.visualization import *
 from sandbox.young_clgan.logging.logger import ExperimentLogger
-from sandbox.young_clgan.goal.utils import GoalCollection
 from sandbox.young_clgan.experiments.goals.reacher2d_basic.utils import plot_policy_performance, plot_generator_samples
+from sandbox.young_clgan.state.utils import StateCollection
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -149,7 +147,7 @@ def run_task(v):
         report.save()
         report.new_row()
 
-    all_goals = GoalCollection(v['coll_eps'])
+    all_goals = StateCollection(v['coll_eps'])
 
     logger.log("Starting the outer iterations")
     for outer_iter in range(v['outer_iters']):
@@ -177,8 +175,7 @@ def run_task(v):
         logger.log("Perform TRPO with UniformListStateGenerator...")
         with ExperimentLogger(inner_log_dir, '_last', snapshot_mode='last', hold_outter_log=True):
             # set goal generator to uniformly sample from selected all_goals
-            update_env_state_generator(
-                env,
+            env.update_goal_generator(
                 UniformListStateGenerator(
                     goals.tolist()
                 )
@@ -269,13 +266,9 @@ def run_task(v):
 
         logger.log("Evaluating performance on Unif and Fix Goal Gen...")
         with logger.tabular_prefix('UnifFeasGoalGen_'):
-            update_env_state_generator(env, uniform_feasible_goal_generator)
+            env.update_goal_generator(uniform_feasible_goal_generator)
             evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=50, fig_prefix='UnifFeasGoalGen_',
                               report=report, n_traj=n_traj)
-        # with logger.tabular_prefix('FixGoalGen_'):
-        #     update_env_state_generator(env, goal_generator=fixed_goal_generator)
-        #     evaluate_goal_env(env, policy=policy, horizon=v['horizon'], n_goals=5, fig_prefix='FixGoalGen',
-        #                       report=report)
 
         logger.dump_tabular(with_prefix=False)
 

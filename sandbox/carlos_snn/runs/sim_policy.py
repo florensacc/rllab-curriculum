@@ -6,8 +6,7 @@ import os
 import random
 import numpy as np
 
-from sandbox.young_clgan.lib.envs.base import update_env_goal_generator
-from sandbox.young_clgan.lib.envs.base import FixedGoalGenerator
+from sandbox.young_clgan.envs.base import FixedStateGenerator
 
 filename = str(uuid.uuid4())
 
@@ -59,7 +58,7 @@ if __name__ == "__main__":
             if args.goal:
                 print(args.goal.split(' '))
                 goal = [float(i) for i in args.goal.split(' ')]
-                update_env_goal_generator(env, FixedGoalGenerator(goal))
+                env.update_goal_generator(FixedStateGenerator(goal))
             path = rollout(env, policy, max_path_length=args.max_length,
                            animated=True, speedup=args.speedup)
         # print 'Total reward: ', sum(path["rewards"])

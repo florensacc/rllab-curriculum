@@ -28,7 +28,7 @@ from rllab.spaces.box import Box
 from rllab.misc.overrides import overrides
 
 from sandbox.young_clgan.envs.base import StateGenerator, UniformListStateGenerator, \
-    UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv, update_env_state_generator
+    UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv
 from sandbox.young_clgan.state.utils import StateCollection
 
 
@@ -232,9 +232,6 @@ def find_all_feasible_reject_states(env, distance_threshold=0.1,):
             print("any_starts: ", any_starts.size, " out of ", k)
         k += 1
 
-
-def update_env_start_generator(env, start_generator):
-    return update_env_state_generator(env, start_generator)
 #
 #
 # def evaluate_start_env(env, policy, horizon, n_starts=10, n_traj=1, **kwargs):

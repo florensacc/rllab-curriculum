@@ -25,7 +25,7 @@ from rllab.spaces.box import Box
 from rllab.misc.overrides import overrides
 
 from sandbox.young_clgan.envs.base import StateGenerator, UniformListStateGenerator, \
-    UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv, update_env_state_generator
+    UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv
 
 
 class GoalEnv(Serializable):
@@ -329,11 +329,6 @@ def generate_brownian_goals(env, starts=None, horizon=100, size=1000):
             goals.append(get_goal_observation(env))
 
     return np.array(goals)
-
-
-def update_env_goal_generator(env, goal_generator):
-    return update_env_state_generator(env, goal_generator)
-
 
 def evaluate_goal_env(env, policy, horizon, n_goals=10, n_traj=1, **kwargs):
     paths = [rollout(env=env, agent=policy, max_path_length=horizon) for _ in range(int(n_goals))]

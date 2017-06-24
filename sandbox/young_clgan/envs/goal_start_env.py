@@ -25,7 +25,7 @@ from rllab.spaces.box import Box
 from rllab.misc.overrides import overrides
 
 from sandbox.young_clgan.envs.base import StateGenerator, UniformListStateGenerator, \
-    UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv, update_env_state_generator
+    UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv
 
 from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv
 from sandbox.young_clgan.envs.start_env import StartEnv, StartExplorationEnv
@@ -73,41 +73,4 @@ class GoalStartExplorationEnv(StartEnv, GoalExplorationEnv, Serializable):
         goal_obs = GoalExplorationEnv.get_current_obs(self)
         return StartEnv.append_start_observation(self, goal_obs)
 
-
-# def generate_initial_starts(env, policy, start_range, start_center=None, horizon=500, size=10000):  # TODO: get starts
-#     done = False
-#     obs = env.reset()
-#     starts = [env.get_current_obs()]
-#     start_dim = np.array(starts[0]).shape
-#     if start_center is None:
-#         start_center = np.zeros(start_dim)
-#     steps = 0
-#     while len(starts) < size:
-#         steps += 1
-#         if done or steps >= horizon:
-#             steps = 0
-#             done = False
-#             update_env_state_generator(
-#                 env,
-#                 FixedStateGenerator(
-#                     start_center + np.random.uniform(-start_range, start_range, start_dim)
-#                 )
-#             )
-#             obs = env.reset()
-#             starts.append(env.get_current_obs())
-#         else:
-#             action, _ = policy.get_action(obs)
-#             obs, _, done, _ = env.step(action)
-#             starts.append(env.get_current_obs())
-#
-#     return np.array(starts)
-#
-#
-# def update_env_start_generator(env, start_generator):
-#     return update_env_state_generator(env, start_generator)
-#
-#
-# def evaluate_start_env(env, policy, horizon, n_starts=10, n_traj=1, **kwargs):
-#     paths = [rollout(env=env, agent=policy, max_path_length=horizon) for _ in range(int(n_starts))]
-#     env.log_diagnostics(paths, n_traj=n_traj, **kwargs)
 
