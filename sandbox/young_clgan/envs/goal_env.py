@@ -25,7 +25,7 @@ from rllab.spaces.box import Box
 from rllab.misc.overrides import overrides
 
 from sandbox.young_clgan.envs.base import StateGenerator, UniformListStateGenerator, \
-    UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv, update_env_state_generator
+    UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv
 
 
 class GoalEnv(Serializable):
@@ -139,8 +139,8 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         info['goal_reached'] = 1.0 * self.is_goal_reached(observation)
         info['goal'] = self.current_goal
         # print("step: obs={}, dist={}".format(self.append_goal_observation(observation), dist))
-        if self.terminate_env and dist < self.terminal_eps:
-            print("\n*******done**********\n")
+        if self.terminate_env and dist < self.terminal_eps:  # if the inner env is done it will stay done.
+            # print("\n*******done**********\n")
             done = True
         return (
             self.append_goal_observation(observation),
@@ -223,6 +223,9 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         initial_goal_distances = [
             path['env_infos']['distance'][0] for path in paths
             ]
+        final_goal_distances = [
+            path['env_infos']['distance'][-1] for path in paths
+        ]
         reward_dist = [
             np.sum(path['env_infos']['reward_dist'])
             for path in paths
@@ -240,11 +243,13 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
                 avg_success.append(np.mean(success[3 * i: 3 * i + 3]))
             success = avg_success  # here the success can be non-int
 
-        # print('the succes is: ', success)
-        # print('the feasible is: ', feasible)
+        print('the success is: ', success)
+        print('the feasible is: ', feasible)
 
         # Process by trajectories
-        logger.record_tabular('InitGoalDistance', np.mean(initial_goal_distances))
+        logger.record_tabular('AvgInitGoalDistance', np.mean(initial_goal_distances))
+        logger.record_tabular('AvgFinalGoalDistance', np.mean(final_goal_distances))
+        logger.record_tabular('MinFinalGoalDistance', np.min(final_goal_distances))
         logger.record_tabular('MeanPathDistance', np.mean(distances))
         logger.record_tabular('AvgTotalRewardDist', np.mean(reward_dist))
         logger.record_tabular('AvgTotalRewardInner', np.mean(reward_inner))
@@ -324,11 +329,6 @@ def generate_brownian_goals(env, starts=None, horizon=100, size=1000):
             goals.append(get_goal_observation(env))
 
     return np.array(goals)
-
-
-def update_env_goal_generator(env, goal_generator):
-    return update_env_state_generator(env, goal_generator)
-
 
 def evaluate_goal_env(env, policy, horizon, n_goals=10, n_traj=1, **kwargs):
     paths = [rollout(env=env, agent=policy, max_path_length=horizon) for _ in range(int(n_goals))]

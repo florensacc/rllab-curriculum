@@ -13,7 +13,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.starts.pr2key.pr2key_brownian_algo import run_task
+from sandbox.young_clgan.experiments.starts.pr2key.pr2key_trpo_algo import run_task
 
 if __name__ == '__main__':
 
@@ -38,7 +38,7 @@ if __name__ == '__main__':
         # 'ap-south-1b', 'ap-northeast-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'us-west-1b', 'us-west-1a',
         # 'ap-south-1a', 'ap-northeast-1a', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'us-east-1b'
     ]
-    ec2_instance = args.type if args.type else 'm4.16xlarge'
+    ec2_instance = args.type if args.type else 'm4.4xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -54,15 +54,19 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-brownian-pr2key'
+    exp_prefix = 'start-trpo-unif-pr2key'
 
     vg = VariantGenerator()
     vg.add('start_size', [7])  # this is the ultimate start we care about: getting the pendulum upright
-    vg.add('start_bounds',
+    vg.add('start_bounds',  #TODO: get this from the env
            [[(-2.2854, -.05236, -3.9, -2.3213, -3.15, -2.094, -3.15),
              (1.714602, 1.3963, 0.0, 0.0, 3.15, 0.0, 3.15)]])
-    # vg.add('start_goal', [(1.55, 0.4, -3.75, -1.15, -10.75, -2.09, 0.05)])
     vg.add('start_goal', [(1.55, 0.4, -3.75, -1.15, 1.81, -2.09, 0.05)])
+    vg.add('start_out', [
+        # (1.55, 0.4, -3.75, -1.15, 1.81, -2.09, 0.05),
+        # (0.57986085, 0.24922906, -2.09131438, -1.69772732, -0.00931115, -0.69625297, 1.0060919),
+        # (0.68199678,  0.22109899, -2.21208568, -2.09289934, -0.16548432, - 0.05642514, 0.09468899),
+        (0.36443675, 0.75535443, -1.88521387, -2.10336795, 2.56779867, -0.44073149, -1.70834555)])
     vg.add('ultimate_goal',
            [(0.0, 0.3, -0.7,  # first point
              0.0, 0.3, -0.4,  # second point
@@ -70,28 +74,19 @@ if __name__ == '__main__':
     vg.add('goal_size', [9])
     vg.add('terminal_eps', [0.03])
     vg.add('ctrl_cost_coeff', [0])
-    # brownian params
-    vg.add('brownian_variance', [1])
-    vg.add('brownian_horizon', [50, 200])
-    vg.add('regularize_starts', [0.1, 0])
     # goal-algo params
     vg.add('min_reward', [0.1])
     vg.add('max_reward', [0.9])
     vg.add('distance_metric', ['L2'])
     vg.add('extend_dist_rew', [False])
-    vg.add('inner_weight', [0, 1])
-    vg.add('goal_weight', lambda inner_weight: [1000] if inner_weight > 0 else [1])
+    vg.add('inner_weight', [1, 0])
+    vg.add('goal_weight', [1000])
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('with_replacement', [True])
-    # replay buffer
-    vg.add('replay_buffer', [True])
-    vg.add('coll_eps', lambda terminal_eps: [terminal_eps])
-    vg.add('num_new_starts', [200])
-    vg.add('num_old_starts', [100])
     # sampling params
     vg.add('horizon', [500])
-    vg.add('outer_iters', [1000])
+    vg.add('outer_iters', [500])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
     vg.add('pg_batch_size', [20000])
     # policy initialization

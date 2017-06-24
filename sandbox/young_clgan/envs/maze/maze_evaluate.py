@@ -275,12 +275,15 @@ def test_policy_parallel(policy, train_env, as_goals=True, visualize=True, sampl
     states, empty_spaces, spacing = find_empty_spaces(train_env, sampling_res=sampling_res)
 
     # hack to adjust dim of starts in case of doing velocity also
-    states = [np.pad(s, (0, np.size(old_start_generator.state) - np.size(s)), 'constant') for s in states]
+    if as_goals:
+        states = [np.pad(s, (0, np.size(old_goal_generator.state) - np.size(s)), 'constant') for s in states]
+    else:
+        states = [np.pad(s, (0, np.size(old_start_generator.state) - np.size(s)), 'constant') for s in states]
 
-    paths = evaluate_states(states, train_env, policy, max_path_length, as_goals=as_goals, n_traj=n_traj, full_path=True)
+    rewards, paths = evaluate_states(states, train_env, policy, max_path_length, as_goals=as_goals, n_traj=n_traj, full_path=True)
 
     path_index = 0
-    for empty_space in empty_spaces:
+    for _ in empty_spaces:
         for i in range(num_samples):
             for j in range(num_samples):
                 state_paths = paths[path_index:path_index + n_traj]

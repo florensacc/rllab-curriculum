@@ -25,6 +25,9 @@ class StateCollection(object):
     def size(self):
         return len(self.state_list)
 
+    def empty(self):
+        self.state_list = []
+
     def sample(self, size, replace=False, replay_noise=0):
         states = sample_matrix_row(np.array(self.state_list), size, replace)
         if replay_noise > 0:
@@ -63,5 +66,7 @@ def sample_matrix_row(M, size, replace=False):
     if replace:
         indices = np.random.randint(0, M.shape[0], size)
     else:
-        indices = np.random.choice(M.shape[0], size)
+        indices = np.random.choice(M.shape[0], size, replace=replace)
     return M[indices, :]
+
+

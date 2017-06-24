@@ -25,7 +25,7 @@ from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
 from sandbox.young_clgan.state.evaluator import label_states
-from sandbox.young_clgan.envs.base import UniformListStateGenerator, update_env_state_generator, UniformStateGenerator
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator
 from sandbox.young_clgan.state.generator import StateGAN
 from sandbox.young_clgan.state.utils import StateCollection
 
@@ -144,8 +144,7 @@ def run_task(v):
 
         with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment goal generator")
-            update_env_state_generator(
-                env,
+            env.update_goal_generator(
                 UniformListStateGenerator(
                     goals.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
                 )

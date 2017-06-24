@@ -23,7 +23,7 @@ from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
 from sandbox.young_clgan.state.evaluator import label_states
-from sandbox.young_clgan.envs.base import UniformListStateGenerator, update_env_state_generator, UniformStateGenerator
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator
 from sandbox.young_clgan.state.generator import StateGAN
 from sandbox.young_clgan.state.utils import StateCollection
 
@@ -146,8 +146,7 @@ def run_task(v):
         itr_label = outer_iter  # use outer_iter to log everything or "last" to log only the last
         with ExperimentLogger(log_dir, itr_label, snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment goal generator")
-            update_env_state_generator(
-                env,
+            env.update_goal_generator(
                 UniformListStateGenerator(
                     goals.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
                 )
@@ -167,7 +166,7 @@ def run_task(v):
 
             algo.train()
             # save a pkl with uniform
-            update_env_state_generator(env, UniformStateGenerator(state_size=v['goal_size'], bounds=v['goal_range'],
+            env.update_goal_generator(UniformStateGenerator(state_size=v['goal_size'], bounds=v['goal_range'],
                                                                   center=v['goal_center'], persistence=1))
             logger.save_itr_params(itr_label, {"algo": algo}, pkl_prefix='unifGen_')
 

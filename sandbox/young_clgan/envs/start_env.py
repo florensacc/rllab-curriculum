@@ -8,6 +8,8 @@ import random
 from rllab import spaces
 import sys
 import os.path as osp
+import cloudpickle
+import pickle
 
 import numpy as np
 import scipy.misc
@@ -26,7 +28,8 @@ from rllab.spaces.box import Box
 from rllab.misc.overrides import overrides
 
 from sandbox.young_clgan.envs.base import StateGenerator, UniformListStateGenerator, \
-    UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv, update_env_state_generator
+    UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv
+from sandbox.young_clgan.state.utils import StateCollection
 
 
 class StartEnv(Serializable):
@@ -46,9 +49,7 @@ class StartEnv(Serializable):
         return self._obs2start_transform(obs)
 
     def update_start_generator(self, *args, **kwargs):
-
         # print("updating start generator with ", *args, **kwargs)
-
         return self._start_holder.update_state_generator(*args, **kwargs)
         
     def update_start(self, start=None, *args, **kwargs):
@@ -150,11 +151,14 @@ def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsa
     states = [env.start_observation]
     steps = 0
     noise = 0
+    num_roll_reached_goal = 0
+    num_roll = 0
+    goal_reached = False
     if animated:
         env.render()
     while len(states) < size:
         steps += 1
-        print(steps)
+        # print(steps)
         if done or steps >= horizon:
             steps = 0
             noise = 0
@@ -162,6 +166,9 @@ def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsa
             done = False
             obs = env.reset(init_state=starts[i % n_starts])
             states.append(env.start_observation)
+            num_roll += 1
+            if goal_reached:
+                num_roll_reached_goal += 1
         else:
             noise += np.random.randn(env.action_space.flat_dim) * variance
             if policy:
@@ -169,21 +176,62 @@ def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsa
             else:
                 action = noise
             # action = np.zeros_like(action)
-            obs, _, _, _ = env.step(action)  # we don't care about done, otherwise will never advance!
+            obs, _, done, env_info = env.step(action)
             states.append(env.start_observation)
+            if done and env_info['goal_reached']:  # we don't care about done, otherwise will never advance!
+                goal_reached = True
+                done = False
         if animated:
             env.render()
             timestep = 0.05
             time.sleep(timestep / speedup)
 
+    logger.log("Generating starts, rollouts that reached goal: " + str(num_roll_reached_goal) + " out of " + str(num_roll))
     if subsample is None:
         return np.array(states)
     else:
         return np.array(states)[np.random.choice(np.shape(states)[0], size=subsample)]
 
 
-def update_env_start_generator(env, start_generator):
-    return update_env_state_generator(env, start_generator)
+def find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_variance=1, animate=False):
+    log_dir = logger.get_snapshot_dir()
+    all_feasible_starts = StateCollection(distance_threshold=distance_threshold)
+    all_feasible_starts.append(seed_starts)
+    no_new_states = 0
+    with env.set_kill_outside():  # this is only in the pr2 env so far..
+        while no_new_states < 5:
+            total_num_starts = all_feasible_starts.size
+            starts = all_feasible_starts.sample(100)
+            new_starts = generate_starts(env, starts=starts, horizon=1000, size=100000, variance=brownian_variance,
+                                         animated=animate, speedup=10)
+            all_feasible_starts.append(new_starts)
+            num_new_starts = all_feasible_starts.size - total_num_starts
+            logger.log("number of new states: " + str(num_new_starts))
+            if num_new_starts < 10:
+                no_new_states += 1
+            with open(osp.join(log_dir, 'all_feasible_states.pkl'), 'wb') as f:
+                cloudpickle.dump(all_feasible_starts, f, protocol=3)
+
+
+def find_all_feasible_reject_states(env, distance_threshold=0.1,):
+    # test reject see how many are feasible
+    uniform_state_generator = UniformStateGenerator(state_size=len(env.current_start), bounds=env.start_generator.bounds)
+    any_starts = StateCollection(distance_threshold=distance_threshold)
+    k = 0
+    while any_starts.size < 1e6:
+        state = uniform_state_generator.update()
+        obs = env.reset(init_state=state)
+        action = np.zeros(env.action_dim)
+        next_obs, _, done, env_info = env.step(action)
+        if not np.linalg.norm(next_obs - obs) == 0:
+            print("CONTACT! obs changed:", obs, next_obs)
+        elif done and not env_info['gaol_reached']:
+            print("outside range")
+        else:
+            any_starts.append(state)
+            print("any_starts: ", any_starts.size, " out of ", k)
+        k += 1
+
 #
 #
 # def evaluate_start_env(env, policy, horizon, n_starts=10, n_traj=1, **kwargs):

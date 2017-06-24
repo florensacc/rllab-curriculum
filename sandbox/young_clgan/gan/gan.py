@@ -30,9 +30,9 @@ DEFAULT_GAN_CONFIGS = lambda: {
 
 def batch_feed_array(array, batch_size):
     data_size = array.shape[0]
-    assert data_size >= batch_size
+    #assert data_size >= batch_size
     
-    if data_size == batch_size:
+    if data_size <= batch_size:
         while True:
             yield array
     else:
