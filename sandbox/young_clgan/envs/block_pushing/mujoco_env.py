@@ -119,7 +119,7 @@ class MujocoEnv(Env):
 
     @overrides
     def reset(self, init_state = None, *args, **kwargs):
-        self.reset_mujoco(init_state)
+        self.reset_mujoco(init_state, *args, **kwargs) # might pass goal in
         self.model.forward()
         self.current_com = self.model.data.com_subtree[0]
         self.dcom = np.zeros_like(self.current_com)

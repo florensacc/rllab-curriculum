@@ -40,17 +40,27 @@ seeds = [1]
 
 def run_task(v):
     # for inner environment, goal_generator shouldn't do anything and lego_generator shouldn't do anything
+
+    #These are used exactly twice--when mujoco_env is initialized and calls reset
+    # i think the correct way to avoid using them is to modify the reset called by init of mujoco env
     goal_generator = PR2FixedGoalGenerator(goal = (0.6, 0.1, 0.5025)) # second dimension moves block further away vertically
     lego_generator = PR2LegoFixedBlockGenerator(block = (0.6, 0.2, 0.5025, 1, 0, 0, 0)) # want block at 0.6 +/- 0.2, , 0.1 +/- 0.4, 0.5025
+
+
+
     init_hand = np.array([0.6,  0.3,  0.5025])
 
     #for curriculum learning framework
-    fixed_goal_generator = FixedStateGenerator(state=(0.6, 0.1, 0.5025))
+    fixed_goal_generator = FixedStateGenerator(state=((0.6, 0.15, 0.5025)))
     # TODO: make sure bounds are correct
     # uniform_start_generator = UniformStateGenerator(state_size=3, bounds=((-0.2, -0.4, 0), (0.2, 0.4, 0)),
                                                     # center=(0.6, 0.1, 0.5025))
 
-    uniform_start_generator = UniformStateGenerator(state_size=3, bounds=((-0.05, -0.05, 0), (0.05, 0.05, 0)),
+    # uniform_start_generator = UniformStateGenerator(state_size=3, bounds=((-0.05, -0.05, 0), (0.05, 0.05, 0)),
+    #                                                 center=(0.6, 0.2, 0.5025))
+
+    # should be very easy
+    uniform_start_generator = UniformStateGenerator(state_size=3, bounds=((0.01, -0.05, 0), (0.01, 0.05, 0)),
                                                     center=(0.6, 0.2, 0.5025))
 
     inner_env = normalize(Pr2EnvLego(
@@ -72,11 +82,12 @@ def run_task(v):
         append_start=False,
         start_generator=uniform_start_generator,
         goal_generator=fixed_goal_generator,
-        obs2goal_transform=lambda x: -1 * (x[-6:-3] - x[-3:]),   # TODO: check by setting breakpoint in goalenv
+        # obs2goal_transform=lambda x: -1 * (x[-6:-3] - x[-3:]),   # TODO: check by setting breakpoint in goalenv
+        obs2goal_transform=lambda x: x[-3:],
         # transform is -1 * [ (lego - goal) - lego] (final target position)
         obs2start_transform=lambda x: x[-3:], #TODO, make sure transforms are correct!
         # start is just the initial lego position
-        terminal_eps = 0.03,  # TODO: potentially make smaller?
+        terminal_eps = 0.03,  # TODO: potentially make more lenient?
         distance_metric = 'L2',
         extend_distance_rew = False,  # I think this turns off L2 distance reward
         # distance_rew = True, # check, I think this checks the desired distance
@@ -98,9 +109,9 @@ def run_task(v):
             env=env,
             policy=policy,
             baseline=baseline,
-            batch_size=5000,
-            max_path_length=150,  #100
-            n_itr=500, #50000
+            batch_size=10000,
+            max_path_length=50,  #100 #making path length longer is fine because of early termination
+            n_itr=10, #50000
             discount=0.95,
             gae_lambda=0.98,
             step_size=0.01,
@@ -118,7 +129,7 @@ vg.add('seed', [1])
 
 #exp_name = "exp4"
 for vv in vg.variants():
-    run_task(vv) # uncomment when debugging
+    # run_task(vv) # uncomment when debugging
 
     run_experiment_lite(
         # algo.train(),
@@ -132,7 +143,7 @@ for vv in vg.variants():
         seed=vv['seed'],
         mode="local",
         # mode="ec2",
-        exp_prefix="hand_env15",
+        exp_prefix="hand_env45",
         # exp_name= "decaying-decaying-gamma" + str(t),
         # plot=True,
     )

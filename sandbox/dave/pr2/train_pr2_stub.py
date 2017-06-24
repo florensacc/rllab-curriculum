@@ -32,9 +32,9 @@ seeds = [1]
 
 def run_task(v):
     # train_goal_generator = PR2CrownGoalGeneratorSmall()
-    goal_generator = PR2FixedGoalGenerator(goal = (0.6, 0.1, 0.5025)) # second dimension moves block further away vertically
-    lego_generator = PR2LegoFixedBlockGenerator(block = (0.6, 0.2, 0.5025, 1, 0, 0, 0))
-    init_hand = np.array([0.6,  0.2 + v['initial_hand_distance'] * 0.05,  0.5025])
+    goal_generator = PR2FixedGoalGenerator(goal = (0.6, 0.2, 0.5025)) # second dimension moves block further away vertically
+    lego_generator = PR2LegoFixedBlockGenerator(block = (0.6, 0.25, 0.5025, 1, 0, 0, 0))
+    init_hand = np.array([0.6,  0.3,  0.5025])
 
     # action_limiter = FixedActionLimiter()
 
@@ -73,9 +73,9 @@ def run_task(v):
         env=env,
         policy=policy,
         baseline=baseline,
-        batch_size=5000,
-        max_path_length=150,  #100
-        n_itr=500, #50000
+        batch_size=10000,
+        max_path_length=v['max_path_length'],  #100
+        n_itr=100, #50000
         discount=0.95,
         gae_lambda=0.98,
         step_size=0.01,
@@ -99,10 +99,11 @@ def run_task(v):
 #exp4 fixed goal and target
 
 vg = VariantGenerator()
-vg.add('seed', [1])
+vg.add('seed', [1, 2])
 # vg.add('initial_hand_distance', list(range(5, 10))) # how far hand is initialized
 vg.add('initial_hand_distance', [3])
-vg.add('random_noise', [True, False])
+vg.add('max_path_length', [30, 50, 100])
+vg.add('random_noise', [False])
 #exp_name = "exp4"
 for vv in vg.variants():
     #run_task(vv)
@@ -135,7 +136,7 @@ for vv in vg.variants():
         # exp_name="trial",
         # exp_prefix="train-Lego/RSS/torque-control",
         # exp_name="random_0001_param_torque_eve_fixed" + str(s),
-        exp_prefix="hand_env24",
+        exp_prefix="hand_env27",
         # exp_name="dist_lessmass_noforcelimit",
         # exp_name= "decaying-decaying-gamma" + str(t),
         #exp_name=exp_name,

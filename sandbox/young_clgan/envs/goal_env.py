@@ -138,6 +138,8 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         info['reward_dist'] = reward_dist = self.compute_dist_reward(observation)
         info['goal_reached'] = 1.0 * self.is_goal_reached(observation)
         info['goal'] = self.current_goal
+        # print(reward_dist)
+        # print(reward_inner)
         # print("step: obs={}, dist={}".format(self.append_goal_observation(observation), dist))
         if self.terminate_env and dist < self.terminal_eps:  # if the inner env is done it will stay done.
             # print("\n*******done**********\n")

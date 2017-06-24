@@ -255,7 +255,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
 
         # Generate a new goal (target position of the lego) <- weird that Ignasi previously has a goal generator
         if goal is not None:
-            self.goal = goal
+            self.goal = np.array(goal)
             qpos[-goal_dims:] = self.goal[:goal_dims, None]
         else:
             if self._goal_generator is not None:
@@ -265,9 +265,6 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             else:
                 print("No goal generator!")
         #
-
-
-        # self.lego_pos = self.lego[:3]
 
         if self.fixed_target is not None:
             init_hand = self.fixed_target
