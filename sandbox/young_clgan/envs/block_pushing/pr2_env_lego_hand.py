@@ -50,6 +50,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.counter = 1
         self._goal_generator = goal_generator
         self._lego_generator = lego_generator
+        self.old_generators_used = 0 # TODO: for some reason, the old generators Ignasi uses are still sometimes used
         self._action_limiter = action_limiter
         self.allow_random_restarts = allow_random_restarts
         self.allow_random_vel_restarts = allow_random_vel_restarts
@@ -106,14 +107,19 @@ class Pr2EnvLego(MujocoEnv, Serializable):
     def get_current_obs(self):
         # vec_to_goal = self.get_vec_to_goal()
         # dim = self.model.data.qpos.shape[0]
+
+        # print(self.model.data.qpos)
+        # print(self.model.data.qvel)
+        # print(self.get_vec_tip_to_lego())
+        # print(self.get_vec_to_goal())
+        # print(self.get_lego_position())
+        # import pdb; pdb.set_trace()
         obs = np.concatenate([
             self.model.data.qpos.flat,
-            # We do not need to explicitly include the goal                                  # since we already have the vec to the goal.
-            self.model.data.qvel.flat,  # Do not include the velocity of the target (should be 0).
+            self.model.data.qvel.flat,
             self.get_vec_tip_to_lego(),
             self.get_vec_to_goal(),
-
-            self.get_lego_position(), # include this otherwise resetting would be very challenging
+            self.get_lego_position(), # TODO: include this otherwise resetting would be challenging, can probably remove eventually and adjust obs2goal/obs2start
         ]).reshape(-1)
         return obs
 
@@ -170,10 +176,6 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         tip_position = self.get_tip_position()
         lego_position = self.get_lego_position()
         vec_tip_to_lego2 = lego_position - tip_position
-        # logger.log("Tip position: " + str(tip_position))
-        # logger.log("lego position: " + str(lego_position))
-        # logger.log("Tip to lego: " + str(vec_tip_to_lego2))
-        # logger.log("distance_tip_to_lego: " + str(distance_tip_to_lego))
         #
 
         if self.t >= 1.4:
@@ -221,7 +223,9 @@ class Pr2EnvLego(MujocoEnv, Serializable):
                     )
 
     @overrides
-    def reset_mujoco(self, goal, qpos=None, qvel=None):
+    def reset_mujoco(self, init_state = None, goal = None, qpos=None, qvel=None):
+        # TODO: Ignoring goal for now since goal is fixed.. but eventually we might be passing a goal through here as well
+
         goal_dims = 3  # self.goal_dims
         lego_dims = 6
         self.t = 0
@@ -230,63 +234,41 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         # self.error = np.zeros((7,))
         qpos = copy.copy(self.model.data.qpos)
 
-        # Generate block position with fixed orientation.
-        # if self.allow_random_restarts or self.first_time:
-
-        # always restart to fix start location
-        if goal is not None:
-            if goal.shape == 3:
-                goal.extend((0.5025, 1, 0, 0, 0))
+        # Following code generates the position of the lego
+        if init_state is not None:
+            # import pdb; pdb.set_trace()
+            if len(init_state) == 3:
+                init_state = np.append(init_state, (1, 0, 0, 0))
             else:
                 raise Exception
-            qpos[-goal_dims - lego_dims - 1:-goal_dims] = self.lego[:, None]
-            import pdb;pdb.set_trace() # should hit
+            qpos[-goal_dims - lego_dims - 1:-goal_dims] = init_state[:, None]
         else:
+            # import pdb; pdb.set_trace()
             lego_position = self.get_lego_position()
             if self._lego_generator is not None:
+                self.old_generators_used += 1
                 self.lego = self._lego_generator.generate_goal(lego_position)
                 qpos[-goal_dims - lego_dims - 1:-goal_dims] = self.lego[:, None]
             else:
                 # print("No lego generator!")
                 qpos[-goal_dims - lego_dims - 1:-goal_dims] = np.array((0.6, 0.2, 0.5025, 1, 0, 0, 0))[:, None]
 
-
-        # else:
-        #     # Use current position as new position.
-        #     qpos = copy.copy(self.model.data.qpos)  # [:-goal_dims]
-        #     lego_position = self.get_lego_position()
-
-        # Generate block position + uniform random orientation.
-        # if self._lego_generator is not None:
-        #     self.lego = self._lego_generator.generate_goal(lego_position)
-        #     # Randomly select block orientation.
-        #     theta = np.random.uniform(0, 2 * np.pi)
-        #     # Convert orientation to quaternion + noise.
-        #     quat = np.array([np.cos(theta / 2), 0, 0, np.sin(theta / 2)]) +\
-        #            np.random.multivariate_normal(np.zeros((4,)), np.eye(4) * 0.001)
-        #     qpos[-goal_dims - lego_dims - 1:-goal_dims, 0] = np.concatenate([self.lego[:3], quat])
-        # else:
-        #     # print("No lego generator!")
-        #     qpos[-goal_dims - lego_dims - 1:-goal_dims] = np.array((0.6, 0.2, 0.5025, 1, 0, 0, 0))[:, None]
-
-        # Generate a new goal.
-        if self._goal_generator is not None:
-            self.goal = self._goal_generator.generate_goal(self.lego[:3])
+        # Generate a new goal (target position of the lego) <- weird that Ignasi previously has a goal generator
+        if goal is not None:
+            self.goal = goal
             qpos[-goal_dims:] = self.goal[:goal_dims, None]
         else:
-            print("No goal generator!")
+            if self._goal_generator is not None:
+                self.old_generators_used += 1
+                self.goal = self._goal_generator.generate_goal(self.lego[:3])
+                qpos[-goal_dims:] = self.goal[:goal_dims, None]
+            else:
+                print("No goal generator!")
+        #
 
-        # Manually initialize the hand to be on the opposite side of the lego from the goal.
-        # import pdb; pdb.set_trace()
-        self.lego_pos = self.lego[:3]
-        # import pdb; pdb.set_trace()
-        # lg = (self.goal - self.lego_pos)
-        # init_hand = self.lego_pos + lg * (self.t - 0.25 / np.linalg.norm(lg))
-        # init_hand =  0.6 ,  0.2,  0.5025  # test what happens when hand initialized on block
-        # if self.fixed_target == 2:
-        #     init_hand = np.array([0.7,  0.3,  0.5025]) # hard
-        # else:
-        #     init_hand = np.array([0.65,  0.25,  0.5025])
+
+        # self.lego_pos = self.lego[:3]
+
         if self.fixed_target is not None:
             init_hand = self.fixed_target
         qpos[:2, 0] = init_hand[:2]

@@ -21,7 +21,7 @@ import copy
 MODEL_DIR = osp.abspath(
     osp.join(
         osp.dirname(__file__),
-        '../../../vendor/mujoco_models'
+        '../../../dave/vendor/mujoco_models' # modified
     )
 )
 
@@ -38,6 +38,7 @@ class MujocoEnv(Env):
                        'proportional to the action bounds')
     def __init__(self, action_noise=0.0, file_path=None, template_args=None):
         # compile template
+        # import pdb; pdb.set_trace()
         if file_path is None:
             if self.__class__.FILE is None:
                 raise "Mujoco file not specified"
@@ -108,7 +109,7 @@ class MujocoEnv(Env):
     def action_bounds(self):
         return self.action_space.bounds
 
-    def reset_mujoco(self, goal):
+    def reset_mujoco(self, init_state):
         self.model.data.qpos = self.init_qpos + \
                                np.random.normal(size=self.init_qpos.shape) * 0.01
         self.model.data.qvel = self.init_qvel + \
@@ -117,8 +118,8 @@ class MujocoEnv(Env):
         self.model.data.ctrl = self.init_ctrl
 
     @overrides
-    def reset(self, goal = None):
-        self.reset_mujoco(goal)
+    def reset(self, init_state = None, *args, **kwargs):
+        self.reset_mujoco(init_state)
         self.model.forward()
         self.current_com = self.model.data.com_subtree[0]
         self.dcom = np.zeros_like(self.current_com)

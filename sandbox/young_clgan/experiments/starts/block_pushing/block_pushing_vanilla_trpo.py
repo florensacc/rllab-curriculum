@@ -1,4 +1,10 @@
-import multiprocessing
+
+from rllab.misc import logger
+from sandbox.young_clgan.logging import HTMLReport
+from sandbox.young_clgan.logging import format_dict
+from sandbox.young_clgan.logging.logger import ExperimentLogger
+from sandbox.young_clgan.logging.visualization import plot_labeled_states
+
 
 from sandbox.dave.pr2.action_limiter import FixedActionLimiter
 from sandbox.dave.rllab.algos.trpo import TRPO
@@ -33,17 +39,19 @@ from sandbox.young_clgan.state.utils import StateCollection
 seeds = [1]
 
 def run_task(v):
-
-    # for inner environment
+    # for inner environment, goal_generator shouldn't do anything and lego_generator shouldn't do anything
     goal_generator = PR2FixedGoalGenerator(goal = (0.6, 0.1, 0.5025)) # second dimension moves block further away vertically
-    lego_generator = PR2LegoFixedBlockGenerator(block = (0.6, 0.1, 0.5025, 1, 0, 0, 0)) # want block at 0.6 +/- 0.2, , 0.1 +/- 0.4, 0.5025
-    init_hand = np.array([0.6,  0.2,  0.5025])
+    lego_generator = PR2LegoFixedBlockGenerator(block = (0.6, 0.2, 0.5025, 1, 0, 0, 0)) # want block at 0.6 +/- 0.2, , 0.1 +/- 0.4, 0.5025
+    init_hand = np.array([0.6,  0.3,  0.5025])
 
     #for curriculum learning framework
-    fixed_goal_generator = FixedStateGenerator(state=(0.6, 0.1))
+    fixed_goal_generator = FixedStateGenerator(state=(0.6, 0.1, 0.5025))
     # TODO: make sure bounds are correct
-    uniform_start_generator = UniformStateGenerator(state_size=3, bounds=((-0.2, 0.4, 0), (0.2, 0.4, 0)),
-                                                    center=(0.6, 0.1, 0.5025))
+    # uniform_start_generator = UniformStateGenerator(state_size=3, bounds=((-0.2, -0.4, 0), (0.2, 0.4, 0)),
+                                                    # center=(0.6, 0.1, 0.5025))
+
+    uniform_start_generator = UniformStateGenerator(state_size=3, bounds=((-0.05, -0.05, 0), (0.05, 0.05, 0)),
+                                                    center=(0.6, 0.2, 0.5025))
 
     inner_env = normalize(Pr2EnvLego(
         goal_generator=goal_generator,
@@ -52,11 +60,11 @@ def run_task(v):
         max_action=1,
         pos_normal_sample=True,
         qvel_init_std=0, #0.01,
-        pos_normal_sample_std=.01,  #0.5
-        fixed_target = init_hand,
+        pos_normal_sample_std=.01, # ignored i think?
+        fixed_target = init_hand, # sets the initial position of the hand to 0.6 0.3
         # use_depth=True,
         # use_vision=True,
-        allow_random_restarts=True,
+        allow_random_restarts=True, #ignored i think?
     ))
 
     env = GoalStartExplorationEnv(
@@ -68,9 +76,11 @@ def run_task(v):
         # transform is -1 * [ (lego - goal) - lego] (final target position)
         obs2start_transform=lambda x: x[-3:], #TODO, make sure transforms are correct!
         # start is just the initial lego position
-        terminal_eps = 0.1,  # TODO: potentially make smaller?
+        terminal_eps = 0.03,  # TODO: potentially make smaller?
         distance_metric = 'L2',
-        distance_rew = True, # check, I think this checks the desired distance
+        extend_distance_rew = False,  # I think this turns off L2 distance reward
+        # distance_rew = True, # check, I think this checks the desired distance
+        terminate_env = True,
     )
 
     policy = GaussianMLPPolicy(
@@ -82,32 +92,33 @@ def run_task(v):
         )
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
+    for outer_iter in range(1, 10):
+        logger.log("Outer itr # %i" % outer_iter)
+        algo = TRPO(
+            env=env,
+            policy=policy,
+            baseline=baseline,
+            batch_size=5000,
+            max_path_length=150,  #100
+            n_itr=500, #50000
+            discount=0.95,
+            gae_lambda=0.98,
+            step_size=0.01,
+            # goal_generator=goal_generator,
+            action_limiter=None,
+            optimizer_args={'subsample_factor': 0.1},
+            )
 
-    algo = TRPO(
-        env=env,
-        policy=policy,
-        baseline=baseline,
-        batch_size=5000,
-        max_path_length=150,  #100
-        n_itr=500, #50000
-        discount=0.95,
-        gae_lambda=0.98,
-        step_size=0.01,
-        # goal_generator=goal_generator,
-        action_limiter=None,
-        optimizer_args={'subsample_factor': 0.1},
-        )
-
-    algo.train()
+        algo.train()
 
 
 vg = VariantGenerator()
 vg.add('seed', [1])
-vg.add('initial_hand_distance', list(range(0, 5))) # how far hand is initialized
+# vg.add('initial_hand_distance', list(range(0, 5))) # how far hand is initialized
 
 #exp_name = "exp4"
 for vv in vg.variants():
-    #run_task(vv)
+    run_task(vv) # uncomment when debugging
 
     run_experiment_lite(
         # algo.train(),
@@ -118,10 +129,10 @@ for vv in vg.variants():
         # n_parallel=32,
         n_parallel=8,
         snapshot_mode="last",
-        seed=v['seed'],
+        seed=vv['seed'],
         mode="local",
         # mode="ec2",
-        exp_prefix="hand_env10",
+        exp_prefix="hand_env15",
         # exp_name= "decaying-decaying-gamma" + str(t),
         # plot=True,
     )

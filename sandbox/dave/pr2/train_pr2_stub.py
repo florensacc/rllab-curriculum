@@ -50,6 +50,7 @@ def run_task(v):
         # use_depth=True,
         # use_vision=True,
         allow_random_restarts=True,
+        random_noise=v['random_noise'],
         # tip=t,
         # tau=t,
         # crop=True,
@@ -99,8 +100,9 @@ def run_task(v):
 
 vg = VariantGenerator()
 vg.add('seed', [1])
-vg.add('initial_hand_distance', list(range(5, 10))) # how far hand is initialized
-
+# vg.add('initial_hand_distance', list(range(5, 10))) # how far hand is initialized
+vg.add('initial_hand_distance', [3])
+vg.add('random_noise', [True, False])
 #exp_name = "exp4"
 for vv in vg.variants():
     #run_task(vv)
@@ -133,7 +135,7 @@ for vv in vg.variants():
         # exp_name="trial",
         # exp_prefix="train-Lego/RSS/torque-control",
         # exp_name="random_0001_param_torque_eve_fixed" + str(s),
-        exp_prefix="hand_env12",
+        exp_prefix="hand_env24",
         # exp_name="dist_lessmass_noforcelimit",
         # exp_name= "decaying-decaying-gamma" + str(t),
         #exp_name=exp_name,
