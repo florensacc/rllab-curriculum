@@ -14,13 +14,16 @@ from rllab.misc.overrides import overrides
 class DiscInsertionEnv(MujocoEnv, Serializable):
     
     FILE = "arm3d_disc.xml"
-    #FILE = "arm3d_disc_done.xml"
 
+    def __init__(self,
+                 init_solved=True,
+                 *args, **kwargs):
 
-    def __init__(self, *args, **kwargs):
+        self.file = self.__class__.FILE
+        self.init_solved = init_solved
+
         MujocoEnv.__init__(self, *args, **kwargs)
         Serializable.quick_init(self, locals())
-        self.file = self.__class__.FILE
 
     @overrides
     def get_current_obs(self):
@@ -32,14 +35,18 @@ class DiscInsertionEnv(MujocoEnv, Serializable):
     @overrides
     def reset(self, **kwargs):
 
+
         solved_qpos = [1.09725987, 0.70068112, -2.26654845, -1.65700369, 2.58752605, -2.12087312, 2.11059846]
 
         # if 'goal' in kwargs:
         #     goal = np.array(kwargs['goal']).flatten()
         # else:
         #     goal = np.array([0, 0])
-        #init_qpos = np.copy(self.init_qpos)
-        init_qpos = np.array(solved_qpos)
+
+        if self.init_solved is not None and self.init_solved:
+            init_qpos = np.array(solved_qpos)
+        else:
+            init_qpos = np.copy(self.init_qpos)
         init_qvel = np.copy(self.init_qvel)
         init_qvel[:] = 0
         
@@ -72,8 +79,8 @@ class DiscInsertionEnv(MujocoEnv, Serializable):
         distance_to_goal = self.get_distance_to_goal()
         reward = -distance_to_goal
 
-        if distance_to_goal < 0.03:
-            print("Qpos: " + str(self.model.data.qpos))
+        # if distance_to_goal < 0.03:
+        #     print("Qpos: " + str(self.model.data.qpos))
 
         ob = self.get_current_obs()
         done = False

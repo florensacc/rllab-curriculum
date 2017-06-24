@@ -9,10 +9,7 @@ from sandbox.young_clgan.envs.disc_insertion.disc_insertion_env import DiscInser
 exp_prefix = 'disc_insertion1'
 
 def run_task(*_):
-    #env = normalize(CartpoleEnv())
-    #env = normalize(PointMazeEnv())
-    #env = normalize(PointMazeEnv(goal_generator=FixedStateGenerator([0.1, 0.1])))
-    env = normalize(DiscInsertionEnv())
+    env = normalize(DiscInsertionEnv(init_solved=True))
 
     policy = GaussianMLPPolicy(
         env_spec=env.spec,
