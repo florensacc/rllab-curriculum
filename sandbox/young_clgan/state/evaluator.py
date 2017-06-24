@@ -75,34 +75,38 @@ def parallel_map(func, iterable_object, num_processes=-1):
     process_pool.join()
     return results
 
-def label_states_from_paths(all_paths, min_reward=0, max_reward=1, key='rewards',
-                 old_rewards=None, improvement_threshold=0, n_traj=1):
-    goal_dict = {}
+
+def label_states_from_paths(all_paths, min_reward=0, max_reward=1, key='rewards', as_goal=True,
+                 old_rewards=None, improvement_threshold=0, n_traj=1, env=None):
+    state_dict = {}
     for paths in all_paths:
         for path in paths:
             reward = evaluate_path(path, key=key)
-            goal = tuple(path['env_infos']['goal'][0])
-            if goal in goal_dict:
-                goal_dict[goal].append(reward)
+            if as_goal:
+                state = tuple(path['env_infos']['goal'][0])
             else:
-                goal_dict[goal] = [reward]
+                state = tuple(env.transform_to_start_space(path['observations'][0]))
+            if state in state_dict:
+                state_dict[state].append(reward)
+            else:
+                state_dict[state] = [reward]
 
-    goals = []
+    states = []
     mean_rewards = []
-    for goal, rewards in goal_dict.items():
+    for state, rewards in state_dict.items():
         if len(rewards) >= n_traj:
-            goals.append(list(goal))
+            states.append(list(state))
             mean_rewards.append(np.mean(rewards))
 
     # Make this a vertical list.
     mean_rewards = np.array(mean_rewards).reshape(-1, 1)
 
     labels = compute_labels(mean_rewards, old_rewards=old_rewards, min_reward=min_reward, max_reward=max_reward,
-                          improvement_threshold=improvement_threshold)
+                            improvement_threshold=improvement_threshold)
 
-    goals = np.array(goals)
+    states = np.array(states)
 
-    return [goals, labels]
+    return [states, labels]
 
 
 def label_states(states, env, policy, horizon, as_goals=True, min_reward=0.1, max_reward=0.9, key='rewards',
@@ -126,7 +130,7 @@ def label_states(states, env, policy, horizon, as_goals=True, min_reward=0.1, ma
 
 
 def compute_labels(mean_rewards, old_rewards=None, min_reward=0, max_reward=1, improvement_threshold=0):
-    print("Computing state labels")
+    logger.log("Computing state labels")
     if old_rewards is not None:
         old_rewards = old_rewards.reshape(-1, 1)
         labels = np.hstack(

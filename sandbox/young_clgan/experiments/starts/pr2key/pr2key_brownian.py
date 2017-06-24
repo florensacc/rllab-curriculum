@@ -6,6 +6,7 @@ import tensorflow as tf
 import tflearn
 import argparse
 import sys
+import random
 import numpy as np
 from multiprocessing import cpu_count
 from rllab.misc.instrument import run_experiment_lite
@@ -35,10 +36,9 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        # 'ap-south-1b', 'ap-northeast-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'us-west-1b', 'us-west-1a',
-        # 'ap-south-1a', 'ap-northeast-1a', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'us-east-1b'
+        'us-east-2a', 'us-east-2b', 'us-east-2c', 'eu-central-1b', 'eu-central-1a'
     ]
-    ec2_instance = args.type if args.type else 'm4.4xlarge'
+    ec2_instance = args.type if args.type else 'm4.16xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -54,7 +54,7 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-brownian-pr2key'
+    exp_prefix = 'start-brownian-pr2key-fast'
 
     vg = VariantGenerator()
     vg.add('start_size', [7])  # this is the ultimate start we care about: getting the pendulum upright
@@ -72,7 +72,7 @@ if __name__ == '__main__':
     vg.add('ctrl_cost_coeff', [0])
     # brownian params
     vg.add('brownian_variance', [1])
-    vg.add('brownian_horizon', [50, 200])
+    vg.add('brownian_horizon', [50, 500])
     vg.add('regularize_starts', [0.1, 0])
     # goal-algo params
     vg.add('min_reward', [0.1])
@@ -84,6 +84,7 @@ if __name__ == '__main__':
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('with_replacement', [True])
+    vg.add('use_trpo_paths', [True, False])
     # replay buffer
     vg.add('replay_buffer', [True])
     vg.add('coll_eps', lambda terminal_eps: [terminal_eps])
@@ -101,7 +102,7 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
 
-    vg.add('seed', range(100, 400, 100))
+    vg.add('seed', range(100, 500, 100))
 
     # # gan_configs
     # vg.add('GAN_batch_size', [128])  # proble with repeated name!!
@@ -125,24 +126,24 @@ if __name__ == '__main__':
 
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
-            # # choose subnet
-            # subnet = random.choice(subnets)
-            # config.AWS_REGION_NAME = subnet[:-1]
-            # config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_SECURITY_GROUP_IDS = \
-            #     config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
-            #         config.AWS_REGION_NAME]
-            # config.AWS_NETWORK_INTERFACES = [
-            #     dict(
-            #         SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
-            #         Groups=config.AWS_SECURITY_GROUP_IDS,
-            #         DeviceIndex=0,
-            #         AssociatePublicIpAddress=True,
-            #     )
-            # ]
+            # choose subnet
+            subnet = random.choice(subnets)
+            config.AWS_REGION_NAME = subnet[:-1]
+            config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
+                config.AWS_REGION_NAME]
+            config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
+                config.AWS_REGION_NAME]
+            config.AWS_SECURITY_GROUP_IDS = \
+                config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
+                    config.AWS_REGION_NAME]
+            config.AWS_NETWORK_INTERFACES = [
+                dict(
+                    SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
+                    Groups=config.AWS_SECURITY_GROUP_IDS,
+                    DeviceIndex=0,
+                    AssociatePublicIpAddress=True,
+                )
+            ]
 
             run_experiment_lite(
                 # use_cloudpickle=False,

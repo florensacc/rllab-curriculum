@@ -245,8 +245,8 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
                 avg_success.append(np.mean(success[3 * i: 3 * i + 3]))
             success = avg_success  # here the success can be non-int
 
-        print('the success is: ', success)
-        print('the feasible is: ', feasible)
+        print('the mean success is: ', np.mean(success))
+        print('the mean feasible is: ', np.mean(feasible))
 
         # Process by trajectories
         logger.record_tabular('AvgInitGoalDistance', np.mean(initial_goal_distances))
