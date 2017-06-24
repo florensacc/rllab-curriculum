@@ -3,14 +3,16 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import run_experiment_lite
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
-from sandbox.young_clgan.lib.envs.base import FixedStateGenerator
-from sandbox.young_clgan.lib.envs.maze.point_maze_env import PointMazeEnv
 
+from sandbox.young_clgan.envs.disc_insertion.disc_insertion_env import DiscInsertionEnv
+
+exp_prefix = 'disc_insertion1'
 
 def run_task(*_):
     #env = normalize(CartpoleEnv())
     #env = normalize(PointMazeEnv())
-    env = normalize(PointMazeEnv(goal_generator=FixedStateGenerator([0.1, 0.1])))
+    #env = normalize(PointMazeEnv(goal_generator=FixedStateGenerator([0.1, 0.1])))
+    env = normalize(DiscInsertionEnv())
 
     policy = GaussianMLPPolicy(
         env_spec=env.spec,
@@ -25,7 +27,7 @@ def run_task(*_):
         policy=policy,
         baseline=baseline,
         batch_size=4000,
-        max_path_length=100,
+        max_path_length=200,
         n_itr=1000,
         discount=0.99,
         step_size=0.01,
@@ -38,12 +40,13 @@ def run_task(*_):
 run_experiment_lite(
     run_task,
     # Number of parallel workers for sampling
-    n_parallel=1,
+    n_parallel=4,
     # Only keep the snapshot parameters for the last iteration
     snapshot_mode="last",
     # Specifies the seed for the experiment. If this is not provided, a random seed
     # will be used
     seed=1,
     variant=dict(),
+    exp_prefix=exp_prefix,
     plot=True,
 )
