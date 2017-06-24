@@ -46,8 +46,6 @@ def run_task(v):
     goal_generator = PR2FixedGoalGenerator(goal = (0.6, 0.1, 0.5025)) # second dimension moves block further away vertically
     lego_generator = PR2LegoFixedBlockGenerator(block = (0.6, 0.2, 0.5025, 1, 0, 0, 0)) # want block at 0.6 +/- 0.2, , 0.1 +/- 0.4, 0.5025
 
-
-
     init_hand = np.array(v['init_hand'])
 
     #for curriculum learning framework
@@ -61,9 +59,9 @@ def run_task(v):
         max_action=1,
         pos_normal_sample=True,
         qvel_init_std=0, #0.01,
-        pos_normal_sample_std=.01, # ignored i think?
+        # pos_normal_sample_std=.01, # ignored i think?
         fixed_target = init_hand, # sets the initial position of the hand to 0.6 0.3
-        allow_random_restarts=True, #ignored i think?
+        # allow_random_restarts=True, #ignored i think?
     ))
 
     env = GoalStartExplorationEnv(
@@ -76,13 +74,14 @@ def run_task(v):
         # transform is -1 * [ (lego - goal) - lego] (final target position)
         obs2start_transform=lambda x: x[-3:], #TODO, make sure transforms are correct!
         # start is just the initial lego position
-        terminal_eps = 0.03,  # TODO: potentially make more lenient?
+        terminal_eps = v['terminal_eps'],  # TODO: potentially make more lenient?
         distance_metric = 'L2',
-        extend_distance_rew = False,  # I think this turns off L2 distance reward
+        extend_distance_rew = v['extend_distance_rew'],  # I think this turns off L2 distance reward
         # distance_rew = True, # check, I think this checks the desired distance
-        terminate_env = True,
+        terminate_env = v['terminate_env'],
     )
 
+    # Follows Ignasi's code
     policy = GaussianMLPPolicy(
         env_spec=env.spec,
         # The neural network policy should have n hidden layers, each with k hidden units.
@@ -92,7 +91,7 @@ def run_task(v):
         )
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
-    for outer_iter in range(1, 10):
+    for outer_iter in range(1, v['outer_iters']):
         logger.log("Outer itr # %i" % outer_iter)
         algo = TRPO(
             env=env,
@@ -100,7 +99,7 @@ def run_task(v):
             baseline=baseline,
             batch_size=10000,
             max_path_length=100,  #100 #making path length longer is fine because of early termination
-            n_itr=10, #50000
+            n_itr=v['inner_iters'],
             discount=0.95,
             gae_lambda=0.98,
             step_size=0.01,
@@ -114,11 +113,25 @@ def run_task(v):
 
 vg = VariantGenerator()
 vg.add('seed', [1])
-vg.add('init_hand', [[0.6,  0.2,  0.5025],])
-vg.add('lego_target', [(0.6, 0.1, 0.5025),])
-vg.add('lego_init_center', [(0.6, 0.15, 0.5025),])
-vg.add('lego_init_lower', [(-0.05, -0.05, 0),])
-vg.add('lego_init_upper', [(0.05, 0.05, 0),])
+# vg.add('seed', [2,12,22,32,42])
+
+# Environment parameters
+vg.add('init_hand', [[0.5,  0.3,  0.5025],])
+vg.add('lego_target', [(0.5, 0.1, 0.5025),])
+vg.add('lego_init_center', [(0.5, 0.15, 0.5025),])
+vg.add('lego_init_lower', [(-0.1, -0.05, 0),])
+vg.add('lego_init_upper', [(0.1, 0.05, 0),])
+
+# Optimizer parameters
+vg.add('inner_iters', [5])
+vg.add('outer_iters', [300])
+vg.add('batch_size', [20000])
+vg.add('max_path_length', [100])
+
+# Goal generation parameters
+vg.add('terminal_eps', [0.02])
+vg.add('extend_distance_rew', [False])
+vg.add('terminate_env', [True])
 
 for vv in vg.variants():
     # run_task(vv) # uncomment when debugging
@@ -129,7 +142,7 @@ for vv in vg.variants():
         variant=vv,
         # Number of parallel workers for sampling
         # n_parallel=32,
-        n_parallel=8,
+        n_parallel=8, # use cpu_count in the future
         snapshot_mode="last",
         seed=vv['seed'],
         mode="local",
