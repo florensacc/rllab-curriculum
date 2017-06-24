@@ -48,32 +48,21 @@ def run_task(v):
 
 
 
-    init_hand = np.array([0.6,  0.3,  0.5025])
+    init_hand = np.array(v['init_hand'])
 
     #for curriculum learning framework
-    fixed_goal_generator = FixedStateGenerator(state=((0.6, 0.15, 0.5025)))
-    # TODO: make sure bounds are correct
-    # uniform_start_generator = UniformStateGenerator(state_size=3, bounds=((-0.2, -0.4, 0), (0.2, 0.4, 0)),
-                                                    # center=(0.6, 0.1, 0.5025))
-
-    # uniform_start_generator = UniformStateGenerator(state_size=3, bounds=((-0.05, -0.05, 0), (0.05, 0.05, 0)),
-    #                                                 center=(0.6, 0.2, 0.5025))
-
-    # should be very easy
-    uniform_start_generator = UniformStateGenerator(state_size=3, bounds=((0.01, -0.05, 0), (0.01, 0.05, 0)),
-                                                    center=(0.6, 0.2, 0.5025))
+    fixed_goal_generator = FixedStateGenerator(state=v['lego_target'])
+    uniform_start_generator = UniformStateGenerator(state_size=3, bounds=(v['lego_init_lower'], v['lego_init_upper']),
+                                                    center=v['lego_init_center'])
 
     inner_env = normalize(Pr2EnvLego(
         goal_generator=goal_generator,
         lego_generator=lego_generator,
-        # action_limiter=action_limiter,
         max_action=1,
         pos_normal_sample=True,
         qvel_init_std=0, #0.01,
         pos_normal_sample_std=.01, # ignored i think?
         fixed_target = init_hand, # sets the initial position of the hand to 0.6 0.3
-        # use_depth=True,
-        # use_vision=True,
         allow_random_restarts=True, #ignored i think?
     ))
 
@@ -110,7 +99,7 @@ def run_task(v):
             policy=policy,
             baseline=baseline,
             batch_size=10000,
-            max_path_length=50,  #100 #making path length longer is fine because of early termination
+            max_path_length=100,  #100 #making path length longer is fine because of early termination
             n_itr=10, #50000
             discount=0.95,
             gae_lambda=0.98,
@@ -125,14 +114,16 @@ def run_task(v):
 
 vg = VariantGenerator()
 vg.add('seed', [1])
-# vg.add('initial_hand_distance', list(range(0, 5))) # how far hand is initialized
+vg.add('init_hand', [[0.6,  0.2,  0.5025],])
+vg.add('lego_target', [(0.6, 0.1, 0.5025),])
+vg.add('lego_init_center', [(0.6, 0.15, 0.5025),])
+vg.add('lego_init_lower', [(-0.05, -0.05, 0),])
+vg.add('lego_init_upper', [(0.05, 0.05, 0),])
 
-#exp_name = "exp4"
 for vv in vg.variants():
     # run_task(vv) # uncomment when debugging
 
     run_experiment_lite(
-        # algo.train(),
         stub_method_call=run_task,
         use_gpu=False,
         variant=vv,
@@ -143,7 +134,7 @@ for vv in vg.variants():
         seed=vv['seed'],
         mode="local",
         # mode="ec2",
-        exp_prefix="hand_env45",
+        exp_prefix="hand_env47",
         # exp_name= "decaying-decaying-gamma" + str(t),
         # plot=True,
     )
