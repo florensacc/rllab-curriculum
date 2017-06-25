@@ -24,7 +24,7 @@ def update_rewards(agent1_paths, agent2_paths, gamma):
 
 class AsymSelfplay(object):
 
-    def __init__(self, algo_a1, algo_a2, num_rollouts=10, gamma = 0.5):
+    def __init__(self, algo_a1, algo_a2, num_rollouts=10, gamma = 0.01):
         self.algo_a1 = algo_a1
         self.algo_a2 = algo_a2
         self.env_a1 = algo_a1.env
@@ -63,10 +63,13 @@ class AsymSelfplay(object):
 
 
 if __name__ == '__main__':
+    # aym selfplay only uses a single rollout
+    # batching should be more stable
     num_rollouts = 50
     iterations = 10
     max_path_length = 100
-    gamma = 0.5
+    # they use a gamma between 0.1 and 0.01
+    gamma = 0.01
 
     # todo setup the correct environments (correct wrappers for arbitrary reset)
     env_a1 = PointMazeEnv()
@@ -86,6 +89,11 @@ if __name__ == '__main__':
 
     baseline_a1 = LinearFeatureBaseline(env_spec=env_a1.spec)
     baseline_a2 = LinearFeatureBaseline(env_spec=env_a2.spec)
+
+
+    # They use discrete policy gradient but we should compare based on the same optimiser as TRPO tends to be mroe robust
+    # Their algo: R. J. Williams. Simple statistical gradient-following algorithms for connectionist reinforcement
+    # learning. In Machine Learning, pages 229–256, 1992.
 
     algo_a1 = TRPO(
         env=env_a1,
