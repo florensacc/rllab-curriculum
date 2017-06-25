@@ -38,6 +38,12 @@ if __name__ == "__main__":
         else:
             policy = data['policy']
             env = data['env']
+
+        # temp fix
+        from sandbox.young_clgan.envs.mjc_key.pr2_key_env import PR2KeyEnv
+        from rllab.envs.normalized_env import normalize
+        env = normalize(PR2KeyEnv())
+
         while True:
             path = rollout(env, policy, max_path_length=args.max_path_length,
                            animated=True, speedup=args.speedup)

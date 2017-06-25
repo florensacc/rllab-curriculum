@@ -1,7 +1,7 @@
 import os
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
-os.environ['CUDA_VISIBLE_DEVICES'] = ''
+os.environ['CUDA_VISIBLE_DEVICES'] = 0
 import argparse
 import sys
 from multiprocessing import cpu_count
