@@ -4,12 +4,12 @@ from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import run_experiment_lite
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.envs.disc_insertion.disc_insertion_env import DiscInsertionEnv
+from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
 
 exp_prefix = 'disc_insertion1'
 
 def run_task(*_):
-    env = normalize(DiscInsertionEnv(init_solved=True))
+    env = normalize(Arm3dDiscEnv(init_solved=True))
 
     policy = GaussianMLPPolicy(
         env_spec=env.spec,

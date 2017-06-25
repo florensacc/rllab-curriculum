@@ -33,7 +33,7 @@ from sandbox.young_clgan.envs.start_env import generate_starts
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
 from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy, sample_unif_feas, unwrap_maze, \
     plot_policy_means
-from sandbox.young_clgan.envs.mjc_key.pr2_key_env import PR2KeyEnv
+from sandbox.young_clgan.envs.arm3d.arm3d_key_env import Arm3dKeyEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -50,7 +50,7 @@ def run_task(v):
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
 
-    inner_env = normalize(PR2KeyEnv(ctrl_cost_coeff=v['ctrl_cost_coeff']))
+    inner_env = normalize(Arm3dKeyEnv(ctrl_cost_coeff=v['ctrl_cost_coeff']))
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
     fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
@@ -89,8 +89,9 @@ def run_task(v):
 
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
     brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
-    seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=10,  # this is smaller as they are seeds!
-                                  variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=10)
+    with env.set_kill_outside():
+        seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=10,  # this is smaller as they are seeds!
+                                      variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=10)
 
     # show where these states are:
     # seed_starts = generate_starts(env, starts=all_feasible_starts.state_list, horizon=100,  # this is smaller as they are seeds!
@@ -101,7 +102,8 @@ def run_task(v):
         logger.log("Outer itr # %i" % outer_iter)
         logger.log("Sampling starts")
 
-        starts = generate_starts(env, starts=seed_starts, horizon=v['brownian_horizon'], variance=v['brownian_variance'])
+        with env.set_kill_outside():
+            starts = generate_starts(env, starts=seed_starts, horizon=v['brownian_horizon'], variance=v['brownian_variance'])
         # regularization of the brownian starts
         brownian_starts.empty()
         brownian_starts.append(starts)
@@ -178,5 +180,6 @@ def run_task(v):
         elif np.sum(start_classes == 0) > np.sum(start_classes == 1):  # if more low reward than high reward
             seed_starts = all_starts.sample(300)  # sample them from the replay
         else:
-            seed_starts = generate_starts(env, starts=starts, horizon=int(v['horizon'] * 10), subsample=v['num_new_starts'],
-                                          variance=v['brownian_variance'] * 10)
+            with env.set_kill_outside():
+                seed_starts = generate_starts(env, starts=starts, horizon=int(v['horizon'] * 10), subsample=v['num_new_starts'],
+                                              variance=v['brownian_variance'] * 10)

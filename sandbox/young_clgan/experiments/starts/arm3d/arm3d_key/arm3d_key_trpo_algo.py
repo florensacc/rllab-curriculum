@@ -34,7 +34,7 @@ from sandbox.young_clgan.envs.start_env import generate_starts
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
 from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy, sample_unif_feas, unwrap_maze, \
     plot_policy_means
-from sandbox.young_clgan.envs.mjc_key.pr2_key_env import PR2KeyEnv
+from sandbox.young_clgan.envs.arm3d.arm3d_key_env import Arm3dKeyEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -51,7 +51,7 @@ def run_task(v):
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
 
-    inner_env = normalize(PR2KeyEnv(ctrl_cost_coeff=v['ctrl_cost_coeff']))
+    inner_env = normalize(Arm3dKeyEnv(ctrl_cost_coeff=v['ctrl_cost_coeff']))
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
     fixed_start_generator = FixedStateGenerator(state=v['start_out'])

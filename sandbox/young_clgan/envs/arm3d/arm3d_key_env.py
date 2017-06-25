@@ -14,8 +14,8 @@ from sandbox.young_clgan.envs.start_env import generate_starts
 
 
 
-class PR2KeyEnv(MujocoEnv, Serializable):
-    FILE = 'pr2_arm3d_key_tight.xml'
+class Arm3dKeyEnv(MujocoEnv, Serializable):
+    FILE = 'arm3d_key_tight.xml'
 
     @autoargs.arg('ctrl_cost_coeff', type=float,
                   help='cost coefficient for controls')
@@ -26,7 +26,7 @@ class PR2KeyEnv(MujocoEnv, Serializable):
             hill_lim=0.2,
             *args, **kwargs):
         self.ctrl_cost_coeff = ctrl_cost_coeff
-        super(PR2KeyEnv, self).__init__(*args, **kwargs)
+        super(Arm3dKeyEnv, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
         self.goal_dist = goal_dist
         self.hill_lim = hill_lim

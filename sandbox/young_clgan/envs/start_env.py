@@ -178,7 +178,7 @@ def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsa
             # action = np.zeros_like(action)
             obs, _, done, env_info = env.step(action)
             states.append(env.start_observation)
-            if done and env_info['goal_reached']:  # we don't care about done, otherwise will never advance!
+            if done and env_info['goal_reached']:  # we don't care about goal done, otherwise will never advance!
                 goal_reached = True
                 done = False
         if animated:
@@ -198,19 +198,18 @@ def find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_
     all_feasible_starts = StateCollection(distance_threshold=distance_threshold)
     all_feasible_starts.append(seed_starts)
     no_new_states = 0
-    with env.set_kill_outside():  # this is only in the pr2 env so far..
-        while no_new_states < 5:
-            total_num_starts = all_feasible_starts.size
-            starts = all_feasible_starts.sample(100)
-            new_starts = generate_starts(env, starts=starts, horizon=1000, size=100000, variance=brownian_variance,
-                                         animated=animate, speedup=10)
-            all_feasible_starts.append(new_starts)
-            num_new_starts = all_feasible_starts.size - total_num_starts
-            logger.log("number of new states: " + str(num_new_starts))
-            if num_new_starts < 10:
-                no_new_states += 1
-            with open(osp.join(log_dir, 'all_feasible_states.pkl'), 'wb') as f:
-                cloudpickle.dump(all_feasible_starts, f, protocol=3)
+    while no_new_states < 5:
+        total_num_starts = all_feasible_starts.size
+        starts = all_feasible_starts.sample(100)
+        new_starts = generate_starts(env, starts=starts, horizon=1000, size=100000, variance=brownian_variance,
+                                     animated=animate, speedup=10)
+        all_feasible_starts.append(new_starts)
+        num_new_starts = all_feasible_starts.size - total_num_starts
+        logger.log("number of new states: " + str(num_new_starts))
+        if num_new_starts < 10:
+            no_new_states += 1
+        with open(osp.join(log_dir, 'all_feasible_states.pkl'), 'wb') as f:
+            cloudpickle.dump(all_feasible_starts, f, protocol=3)
 
 
 def find_all_feasible_reject_states(env, distance_threshold=0.1,):
