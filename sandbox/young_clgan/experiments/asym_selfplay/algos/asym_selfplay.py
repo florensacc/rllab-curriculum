@@ -51,7 +51,7 @@ class AsymSelfplay(object):
                                     animated=False))
 
         # update rewards
-        update_rewards(agent1_paths=a1_paths, agent2_paths=a2_paths,gamma=self.gamma)
+        a1_paths, a2_paths = update_rewards(agent1_paths=a1_paths, agent2_paths=a2_paths,gamma=self.gamma)
 
         # extract samples
         a1_training_samples = self.algo_a1.process_samples(itr=itr, paths=a1_paths)
