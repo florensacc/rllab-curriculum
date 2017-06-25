@@ -8,6 +8,7 @@ from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
 
 exp_prefix = 'disc_insertion1'
 
+
 def run_task(*_):
     env = normalize(Arm3dDiscEnv(init_solved=True))
 
