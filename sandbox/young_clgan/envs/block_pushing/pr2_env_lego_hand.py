@@ -236,8 +236,10 @@ class Pr2EnvLego(MujocoEnv, Serializable):
 
         # Following code generates the position of the lego
         if init_state is not None:
-            # import pdb; pdb.set_trace()
-            if len(init_state) == 3:
+            # import pdb; pdb.set_trace()\
+            if len(init_state) == 2:
+                init_state = np.append(init_state, (0.5025, 1, 0, 0, 0))
+            elif len(init_state) == 3:
                 init_state = np.append(init_state, (1, 0, 0, 0))
             else:
                 raise Exception

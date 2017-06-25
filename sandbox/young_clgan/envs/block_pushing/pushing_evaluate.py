@@ -17,6 +17,7 @@ from sandbox.young_clgan.envs.base import FixedStateGenerator
 # from sandbox.young_clgan.state.selectors import FixedStateSelector
 from sandbox.young_clgan.state.evaluator import evaluate_states
 from sandbox.young_clgan.logging.visualization import save_image
+from random import uniform
 
 quick_test = False
 
@@ -71,7 +72,7 @@ def sample_unif_feas(train_env, samples_per_cell):
     return np.array(states)
 
 
-def my_square_scatter(axes, x_array, y_array, z_array, min_z=None, max_z=None, size=0.5, **kwargs):
+def my_square_scatter(axes, x_array, y_array, z_array, min_z=None, max_z=None, size=0.01, **kwargs):
     size = float(size)
 
     if min_z is None:
@@ -94,8 +95,9 @@ def my_square_scatter(axes, x_array, y_array, z_array, min_z=None, max_z=None, s
     return True
 
 
-def plot_heatmap(rewards, goals, prefix='', spacing=1, show_heatmap=True, maze_id=0,
+def plot_heatmap(rewards, goals, prefix='', spacing=1, show_heatmap=True, maze_id=-1,
                  limit=None, center=None):
+    # default not a maze
     fig, ax = plt.subplots()
 
     x_goal, y_goal = np.array(goals)[:, :2].T
@@ -125,8 +127,8 @@ def plot_heatmap(rewards, goals, prefix='', spacing=1, show_heatmap=True, maze_i
     if limit is not None:
         if center is None:
             center = np.zeros(2)
-        ax.set_ylim(center[0] - limit, center[0] + limit)
-        ax.set_xlim(center[1] - limit, center[1] + limit)
+        ax.set_ylim(center[0] - limit[0], center[0] + limit[0])
+        ax.set_xlim(center[1] - limit[1], center[1] + limit[1])
 
     # colmap = cm.ScalarMappable(cmap=cm.rainbow)
     # colmap.set_array(rewards)
@@ -149,17 +151,91 @@ def plot_heatmap(rewards, goals, prefix='', spacing=1, show_heatmap=True, maze_i
         plt.show()
     return fig
 
+def plot_pushing(policy, env, report, bounds, center, itr, max_path_length = 100, half_grid_size = 0.02, n_traj = 6):
+    # get the block pushing environment
+    # base_env = env
+    # while hasattr(base_env, 'wrapped_env'):
+    #     base_env = base_env.wrapped_env
+
+    empty_spaces = []
+    lower_bound, upper_bound = bounds
+    start_x, end_x = center[0] + lower_bound[0], center[0] + upper_bound[0]
+    start_y, end_y = center[1] + lower_bound[1], center[1] + upper_bound[1]
+    curr_x = start_x
+    curr_y = start_y
+    while curr_x < end_x:
+        while curr_y < end_y:
+            empty_spaces.append((curr_x + half_grid_size, curr_y + half_grid_size))
+            curr_y += half_grid_size * 2  # should be twice above, gets grid
+        curr_y = start_y
+        curr_x += half_grid_size * 2
+    print(len(empty_spaces))
+    avg_totRewards = []
+    avg_success = []
+    for empty_space in empty_spaces:
+        paths = []
+        for n in range(n_traj):
+            # TODO: make sure start generator is correctly just setting a specific start
+            starting_x = empty_space[0] + uniform(-1 * half_grid_size, half_grid_size)
+            starting_y = empty_space[1] + uniform(-1 * half_grid_size, half_grid_size)
+            path = rollout(env, policy, animated=False, max_path_length=max_path_length, speedup=100,
+                           init_state=(starting_x, starting_y, 0.5025))
+            paths.append(path)
+        avg_totRewards.append(np.mean([np.sum(path['rewards']) for path in paths]))
+        avg_success.append(np.mean([int(np.min(path['env_infos']['distance'])
+                                        <= env.terminal_eps) for path in paths]))
+
+    print("hi")
+    plot_heatmap(avg_success, empty_spaces, center=center[:2], limit=np.array(upper_bound[:2]) + 0.1, spacing=half_grid_size, show_heatmap=False)
+    logger.log(str(avg_success))
+    logger.log(str(empty_spaces))
+    report.add_text(str(avg_success))
+    report.add_text(str(empty_spaces))
+    reward_img = save_image()
+    mean_rewards = np.mean(avg_totRewards)
+    success = np.mean(avg_success)
+
+    with logger.tabular_prefix('Outer_'):
+        logger.record_tabular('iter', itr)
+        logger.record_tabular('MeanRewards', mean_rewards)
+        logger.record_tabular('Success', success)
+
+    if report is not None:
+        report.add_image(
+            reward_img,
+            'policy performance\n itr: {} \nmean_rewards: {} \nsuccess: {}'.format(
+                itr, mean_rewards, success
+            )
+        )
+
 
 def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1, n_traj=1, parallel=True,
                 bounds = None, center = None):
 
-    if parallel:
-        return test_policy_parallel(policy, train_env, as_goals, visualize, sampling_res, n_traj=n_traj)
-    
+    # if parallel:
+    #     return test_policy_parallel(policy, train_env, as_goals, visualize, sampling_res, n_traj=n_traj)
+    # make parallel work later
+    if hasattr(train_env.wrapped_env, 'find_empty_space'):
+        maze_env = train_env.wrapped_env
+    else:
+        maze_env = train_env.wrapped_env.wrapped_env
 
-
-
-
+    if bounds is None:
+        raise Exception
+    else:
+        empty_spaces = []
+        lower_bound, upper_bound = bounds
+        start_x, end_x = center[0] - lower_bound[0], center[0] + lower_bound[0]
+        start_y, end_y = center[1] - lower_bound[1], center[0] + lower_bound[1]
+        curr_x = start_x
+        curr_y = start_y
+        while curr_x < end_x:
+            while curr_y < end_y:
+                empty_spaces.append((curr_x + 0.01, curr_y + 0.01))
+                curr_y += 0.02 # should be twice above, gets grid
+            curr_y = start_y
+            curr_x += 0.02
+    empty_spaces = maze_env.find_empty_space()
 
     old_goal_generator = train_env.goal_generator if hasattr(train_env, 'goal_generator') else None
     old_start_generator = train_env.start_generator if hasattr(train_env, 'start_generator') else None
@@ -171,7 +247,7 @@ def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1
     else:
         max_path_length = 400
 
-    size_scaling = maze_env.MAZE_SIZE_SCALING
+    size_scaling = 0.02 # seems to be reasonable default
     num_samples = 2 ** sampling_res
     spacing = size_scaling / num_samples
     starting_offset = spacing / 2
@@ -208,7 +284,7 @@ def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1
                     init_state = np.zeros_like(old_start_generator.state)
                     init_state[:2] = (x, y)
                     states.append(init_state)
-                    train_env.update_init_selector(FixedStateGenerator(init_state))
+                    train_env.update_init_selector(FixedStateGenerator(init_state)) # TODO: doesn't this require changing init selector again later
                     print(init_state)
                 for n in range(n_traj):
                     path = rollout(train_env, policy, animated=visualize, max_path_length=max_path_length, speedup=100)
@@ -258,7 +334,7 @@ def find_empty_spaces(train_env, sampling_res=1):
     return np.array(states), empty_spaces, spacing
 
 
-def test_policy_parallel(policy, train_env, as_goals=True, visualize=True, sampling_res=1, n_traj=1, bounds = None):
+def test_policy_parallel(policy, train_env, as_goals=True, visualize=True, sampling_res=1, n_traj=1):
 
     if quick_test:
         sampling_res = 0
@@ -298,7 +374,7 @@ def test_and_plot_policy(policy, env, as_goals=True, visualize=True, sampling_re
                          n_traj=1, max_reward=1, itr=0, report=None, center=None, limit=None, bounds = None):
 
     avg_totRewards, avg_success, states, spacing = test_policy(policy, env, as_goals, visualize,
-                                                               sampling_res=sampling_res, n_traj=n_traj, bounds =bounds)
+                                                               sampling_res=sampling_res, n_traj=n_traj, bounds = bounds)
     obj = env
     while not hasattr(obj, '_maze_id') and hasattr(obj, 'wrapped_env'):
         obj = env.wrapped_env
@@ -316,13 +392,6 @@ def test_and_plot_policy(policy, env, as_goals=True, visualize=True, sampling_re
         logger.record_tabular('Success', success)
     # logger.dump_tabular(with_prefix=False)
 
-    if report is not None:
-        report.add_image(
-            reward_img,
-            'policy performance\n itr: {} \nmean_rewards: {} \nsuccess: {}'.format(
-                itr, mean_rewards, success
-            )
-        )
     return mean_rewards, success
 
 
