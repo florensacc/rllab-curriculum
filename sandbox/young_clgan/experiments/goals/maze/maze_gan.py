@@ -146,7 +146,7 @@ if __name__ == '__main__':
                 variant=vv,
                 mode=mode,
                 # Number of parallel workers for sampling
-                n_parallel=n_parallel,
+                n_parallel=1,
                 # Only keep the snapshot parameters for the last iteration
                 snapshot_mode="last",
                 seed=vv['seed'],
@@ -172,12 +172,13 @@ if __name__ == '__main__':
             if mode == 'local_docker':
                 sys.exit()
         else:
+            # run_task(vv)
             run_experiment_lite(
                 # use_cloudpickle=False,
                 stub_method_call=run_task,
                 variant=vv,
                 mode='local',
-                n_parallel=n_parallel,
+                n_parallel=1,
                 # Only keep the snapshot parameters for the last iteration
                 snapshot_mode="last",
                 seed=vv['seed'],
