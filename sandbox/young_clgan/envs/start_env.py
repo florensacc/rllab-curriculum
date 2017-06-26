@@ -140,57 +140,65 @@ class StartExplorationEnv(StartEnv, ProxyEnv, Serializable):
 
 
 def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsample=None, variance=1,
-                    animated=False, speedup=1):
+                    zero_action=False, animated=False, speedup=1):
     """ If policy is None, brownian motion applied """
     if starts is None or len(starts) == 0:
         starts = [env.reset()]
-    n_starts = len(starts)
-    i = 0
-    done = False
-    obs = env.reset(init_state=starts[i % n_starts])
-    states = [env.start_observation]
-    steps = 0
-    noise = 0
-    num_roll_reached_goal = 0
-    num_roll = 0
-    goal_reached = False
-    if animated:
-        env.render()
-    while len(states) < size:
-        steps += 1
-        # print(steps)
-        if done or steps >= horizon:
-            steps = 0
-            noise = 0
-            i += 1
-            done = False
-            obs = env.reset(init_state=starts[i % n_starts])
-            states.append(env.start_observation)
-            num_roll += 1
-            if goal_reached:
-                num_roll_reached_goal += 1
-        else:
-            noise += np.random.randn(env.action_space.flat_dim) * variance
-            if policy:
-                action, _ = policy.get_action(obs)
-            else:
-                action = noise
-            # action = np.zeros_like(action)
-            obs, _, done, env_info = env.step(action)
-            states.append(env.start_observation)
-            if done and env_info['goal_reached']:  # we don't care about goal done, otherwise will never advance!
-                goal_reached = True
-                done = False
+    if horizon <= 1:
+        states = starts  # you better give me some starts if there is no horizon!
+    else:
+        n_starts = len(starts)
+        i = 0
+        done = False
+        obs = env.reset(init_state=starts[i % n_starts])
+        states = [env.start_observation]
+        steps = 0
+        noise = 0
+        num_roll_reached_goal = 0
+        num_roll = 0
+        goal_reached = False
         if animated:
             env.render()
-            timestep = 0.05
-            time.sleep(timestep / speedup)
+        while len(states) < size:
+            steps += 1
+            # print(steps)
+            if done or steps >= horizon:
+                steps = 0
+                noise = 0
+                i += 1
+                done = False
+                obs = env.reset(init_state=starts[i % n_starts])
+                # print(obs)
+                states.append(env.start_observation)
+                num_roll += 1
+                if goal_reached:
+                    num_roll_reached_goal += 1
+            else:
+                noise += np.random.randn(env.action_space.flat_dim) * variance
+                if policy:
+                    action, _ = policy.get_action(obs)
+                else:
+                    action = noise
+                if zero_action:
+                    action = np.zeros_like(action)
+                obs, _, done, env_info = env.step(action)
+                states.append(env.start_observation)
+                if done and env_info['goal_reached']:  # we don't care about goal done, otherwise will never advance!
+                    goal_reached = True
+                    done = False
+            if animated:
+                env.render()
+                timestep = 0.05
+                time.sleep(timestep / speedup)
 
-    logger.log("Generating starts, rollouts that reached goal: " + str(num_roll_reached_goal) + " out of " + str(num_roll))
+        logger.log("Generating starts, rollouts that reached goal: " + str(num_roll_reached_goal) + " out of " + str(num_roll))
     if subsample is None:
         return np.array(states)
     else:
-        return np.array(states)[np.random.choice(np.shape(states)[0], size=subsample)]
+        states = np.array(states)
+        if len(states) < subsample:
+            return states
+        return states[np.random.choice(np.shape(states)[0], size=subsample)]
 
 
 def find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_variance=1, animate=False):
