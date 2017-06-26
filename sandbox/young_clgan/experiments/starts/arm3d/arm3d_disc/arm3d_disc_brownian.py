@@ -1,7 +1,8 @@
 import os
+import random
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
-os.environ['CUDA_VISIBLE_DEVICES'] = 0
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
 import argparse
 import sys
 from multiprocessing import cpu_count
@@ -10,7 +11,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.goals.maze_ant.maze_ant_gan_algo import run_task
+from sandbox.young_clgan.experiments.starts.arm3d.arm3d_disc.arm3d_disc_brownian_algo import run_task
 
 if __name__ == '__main__':
 
@@ -32,10 +33,10 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        # 'ap-south-1b', 'ap-northeast-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'us-west-1b', 'us-west-1a',
-        # 'ap-south-1a', 'ap-northeast-1a', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'us-east-1b'
+        'ap-northeast-2a', 'ap-northeast-2c', 'us-east-2b', 'ap-south-1a', 'us-east-2c', 'us-east-2a', 'ap-south-1b',
+        'us-east-1b', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'eu-west-1c', 'eu-west-1a', 'eu-west-1b'
     ]
-    ec2_instance = args.type if args.type else 'm4.16xlarge'
+    ec2_instance = args.type if args.type else 'c4.8xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -51,62 +52,53 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'new-goalGAN-maze-ant-largeEps-redo'
+    exp_prefix = 'start-brownian-arm3d-disc'
 
     vg = VariantGenerator()
-    vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
-    vg.add('terminal_eps', [0.5, 1])
-    vg.add('only_feasible', [True])
-    vg.add('goal_range', [5])  # this will be used also as bound of the state_space
-    vg.add('goal_center', [(2, 2)])
+    vg.add('start_size', [7])  # this is the ultimate start we care about: getting the pendulum upright
+    vg.add('start_bounds',
+           [[(-2.2854, -.05236, -3.9, -2.3213, -3.15, -2.094, -3.15),
+             (1.714602, 1.3963, 0.0, 0.0, 3.15, 0.0, 3.15)]])
+    # vg.add('start_goal', [(0.386884635, 1.13705218, -2.02754147, -1.74429440, 2.02916096, -0.873269847, 1.54785694)])
+    vg.add('start_goal', [(0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55)])
+    vg.add('ultimate_goal', [(0., 0.3, -0.4)])
+    vg.add('goal_size', [3])
+    vg.add('terminal_eps', [0.03])
+    # brownian params
+    # vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
+    vg.add('seed_with', ['only_goods'])  # good from brown, onPolicy, previousBrown (ie no good)
+    vg.add('brownian_horizon', lambda seed_with: [0, 50, 500] if seed_with == 'on_policy' else [50, 500])
+    vg.add('brownian_variance', [1])
+    vg.add('regularize_starts', [0])
     # goal-algo params
-    vg.add('min_reward', [0])
-    vg.add('max_reward', [1])
+    vg.add('min_reward', [0.1])
+    vg.add('max_reward', [0.9])
     vg.add('distance_metric', ['L2'])
     vg.add('extend_dist_rew', [False])
+    vg.add('inner_weight', [0])
+    vg.add('goal_weight', lambda inner_weight: [1000] if inner_weight > 0 else [1])
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
-    vg.add('with_replacement', [False])
-    vg.add('smart_init', [True])
+    vg.add('with_replacement', [True])
+    vg.add('use_trpo_paths', [True])
     # replay buffer
-    vg.add('replay_buffer', [True])
-    vg.add('coll_eps', [0.3])
-    vg.add('num_new_goals', [200])
-    vg.add('num_old_goals', [100])
-    vg.add('add_on_policy', [True])
+    vg.add('replay_buffer', [False])  # todo: attention!!
+    vg.add('coll_eps', lambda terminal_eps: [terminal_eps])
+    vg.add('num_new_starts', [200])
+    vg.add('num_old_starts', [100])
     # sampling params
     vg.add('horizon', [500])
-    vg.add('outer_iters', [10000])
-    vg.add('inner_iters', [5])
-    vg.add('pg_batch_size', [100000])
+    vg.add('outer_iters', [5000])
+    vg.add('inner_iters', [5])  # again we will have to divide/adjust the
+    vg.add('pg_batch_size', [20000])
     # policy initialization
-    vg.add('output_gain', [1])
+    vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
-    vg.add('learn_std', [True])
+    vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
-    # gan configs
-    vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
-    vg.add('gan_generator_layers', [[256, 256]])
-    vg.add('gan_discriminator_layers', [[128, 128]])
-    vg.add('gan_noise_size', [4])
-    vg.add('goal_noise_level', [0.5])
-    vg.add('gan_outer_iters', [250])
+    vg.add('discount', [0.995])
 
-    vg.add('seed', range(100, 300, 100))
-
-    # # gan_configs
-    # vg.add('GAN_batch_size', [128])  # proble with repeated name!!
-    # vg.add('GAN_generator_activation', ['relu'])
-    # vg.add('GAN_discriminator_activation', ['relu'])
-    # vg.add('GAN_generator_optimizer', [tf.train.AdamOptimizer])
-    # vg.add('GAN_generator_optimizer_stepSize', [0.001])
-    # vg.add('GAN_discriminator_optimizer', [tf.train.AdamOptimizer])
-    # vg.add('GAN_discriminator_optimizer_stepSize', [0.001])
-    # vg.add('GAN_generator_weight_initializer', [tflearn.initializations.truncated_normal])
-    # vg.add('GAN_generator_weight_initializer_stddev', [0.05])
-    # vg.add('GAN_discriminator_weight_initializer', [tflearn.initializations.truncated_normal])
-    # vg.add('GAN_discriminator_weight_initializer_stddev', [0.02])
-    # vg.add('GAN_discriminator_batch_noise_stddev', [1e-2])
+    vg.add('seed', range(100, 600, 100))
 
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
@@ -116,24 +108,24 @@ if __name__ == '__main__':
 
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
-            # # choose subnet
-            # subnet = random.choice(subnets)
-            # config.AWS_REGION_NAME = subnet[:-1]
-            # config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_SECURITY_GROUP_IDS = \
-            #     config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
-            #         config.AWS_REGION_NAME]
-            # config.AWS_NETWORK_INTERFACES = [
-            #     dict(
-            #         SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
-            #         Groups=config.AWS_SECURITY_GROUP_IDS,
-            #         DeviceIndex=0,
-            #         AssociatePublicIpAddress=True,
-            #     )
-            # ]
+            # choose subnet
+            subnet = random.choice(subnets)
+            config.AWS_REGION_NAME = subnet[:-1]
+            config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
+                config.AWS_REGION_NAME]
+            config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
+                config.AWS_REGION_NAME]
+            config.AWS_SECURITY_GROUP_IDS = \
+                config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
+                    config.AWS_REGION_NAME]
+            config.AWS_NETWORK_INTERFACES = [
+                dict(
+                    SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
+                    Groups=config.AWS_SECURITY_GROUP_IDS,
+                    DeviceIndex=0,
+                    AssociatePublicIpAddress=True,
+                )
+            ]
 
             run_experiment_lite(
                 # use_cloudpickle=False,
@@ -163,6 +155,7 @@ if __name__ == '__main__':
                     'pip install scikit-image',
                     'conda install numpy -n rllab3 -y',
                 ],
+                # terminate_machine=False,
             )
             if mode == 'local_docker':
                 sys.exit()

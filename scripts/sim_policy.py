@@ -1,11 +1,12 @@
-
+import os.path as osp
 import argparse
-
+import pickle
 import joblib
 import tensorflow as tf
 
 from rllab.sampler.utils import rollout
 from rllab.misc.ext import set_seed
+from sandbox.young_clgan.envs.base import FixedStateGenerator
 
 if __name__ == "__main__":
 
@@ -18,6 +19,10 @@ if __name__ == "__main__":
                         help='Speedup')
     parser.add_argument('--seed', type=int, default=-1,
                         help='Fixed random seed')
+    parser.add_argument("-is", '--init_state', type=str,
+                        help='vector of init_state')
+    parser.add_argument("-cf", '--collection_file', type=str,
+                        help='path to the pkl file with start positions Collection')
     args = parser.parse_args()
 
     policy = None
@@ -30,6 +35,9 @@ if __name__ == "__main__":
     # while True:
     if args.seed >= 0:
         set_seed(args.seed)
+    if args.collection_file:
+        all_feasible_starts = pickle.load(open(args.collection_file, 'rb'))
+
     with tf.Session() as sess:
         data = joblib.load(args.file)
         if "algo" in data:
@@ -38,7 +46,18 @@ if __name__ == "__main__":
         else:
             policy = data['policy']
             env = data['env']
+
+        # temp fix
+        from sandbox.young_clgan.envs.mjc_key.pr2_key_env import PR2KeyEnv
+        from rllab.envs.normalized_env import normalize
+        env = normalize(PR2KeyEnv())
+
         while True:
+            if args.init_state:
+                env.update_start_generator(FixedStateGenerator(args.init_state))
+            elif args.collection_file:
+                init_state = all_feasible_starts.sample(1)
+                env.update_start_generator(FixedStateGenerator(init_state))
             path = rollout(env, policy, max_path_length=args.max_path_length,
                            animated=True, speedup=args.speedup)
             print(path["rewards"][-1])

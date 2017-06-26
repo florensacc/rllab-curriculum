@@ -1,37 +1,40 @@
 import matplotlib
+import cloudpickle
+import pickle
 
 matplotlib.use('Agg')
 import os
 import os.path as osp
 import random
+import time
 import numpy as np
 import tensorflow as tf
 import tflearn
 
 from rllab.misc import logger
+from collections import OrderedDict
 from sandbox.young_clgan.logging import HTMLReport
 from sandbox.young_clgan.logging import format_dict
 from sandbox.young_clgan.logging.logger import ExperimentLogger
-from sandbox.young_clgan.logging.visualization import plot_labeled_states
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
+from rllab import config
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.state.evaluator import label_states, label_states_from_paths
-from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator
-from sandbox.young_clgan.state.generator import StateGAN
+from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states, label_states_from_paths
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator, \
+    StateGenerator
 from sandbox.young_clgan.state.utils import StateCollection
+from sandbox.young_clgan.state.generator import StateGAN
 
-from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, generate_initial_goals, generate_brownian_goals
 from sandbox.young_clgan.envs.start_env import generate_starts
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
-from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy, plot_policy_means
-from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
+from sandbox.young_clgan.envs.arm3d.arm3d_key_env import Arm3dKeyEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -39,10 +42,9 @@ EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 def run_task(v):
     random.seed(v['seed'])
     np.random.seed(v['seed'])
-    sampling_res = 2 if 'sampling_res' not in v.keys() else v['sampling_res']
 
     # Log performance of randomly initialized policy with FIXED goal [0.1, 0.1]
-    logger.log("Initializing report and plot_policy_reward...")
+    logger.log("Initializing report...")
     log_dir = logger.get_snapshot_dir()  # problem with logger module here!!
     report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=4)
 
@@ -51,22 +53,22 @@ def run_task(v):
 
     tf_session = tf.Session()
 
-    inner_env = normalize(PointMazeEnv(maze_id=v['maze_id']))
+    inner_env = normalize(Arm3dKeyEnv(ctrl_cost_coeff=v['ctrl_cost_coeff']))
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
-    uniform_start_generator = UniformStateGenerator(state_size=v['start_size'], bounds=v['start_range'],
-                                                    center=v['start_center'])
+    fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
 
     env = GoalStartExplorationEnv(
         env=inner_env,
-        start_generator=uniform_start_generator,
+        start_generator=fixed_start_generator,
         obs2start_transform=lambda x: x[:v['start_size']],
         goal_generator=fixed_goal_generator,
-        obs2goal_transform=lambda x: x[:v['goal_size']],
+        obs2goal_transform=lambda x: x[-1 * v['goal_size']:],  # the goal are the last 9 coords
         terminal_eps=v['terminal_eps'],
         distance_metric=v['distance_metric'],
         extend_dist_rew=v['extend_dist_rew'],
-        only_feasible=v['only_feasible'],
+        inner_weight=v['inner_weight'],
+        goal_weight=v['goal_weight'],
         terminate_env=True,
     )
 
@@ -83,13 +85,10 @@ def run_task(v):
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
 
-    # initialize all logging arrays on itr0
-    outer_iter = 0
-
-    logger.log('Generating the Initial Heatmap...')
-    plot_policy_means(policy, env, sampling_res=2, report=report, limit=v['start_range'], center=v['start_center'])
-    # test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
-    #                      itr=outer_iter, report=report, limit=v['goal_range'], center=v['goal_center'])
+    # load the state collection from data_upload
+    load_dir = 'data_upload/state_collections/'
+    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'key_all_feasible_states.pkl'), 'rb'))
+    print("we have %d feasible starts" % all_feasible_starts.size)
 
     # GAN
     logger.log("Instantiating the GAN...")
@@ -103,8 +102,7 @@ def run_task(v):
     gan = StateGAN(
         state_size=v['start_size'],
         evaluater_size=v['num_labels'],
-        state_range=v['start_range'],
-        state_center=v['start_center'],
+        state_bounds=v['start_bounds'],
         state_noise_level=v['start_noise_level'],
         generator_layers=v['gan_generator_layers'],
         discriminator_layers=v['gan_discriminator_layers'],
@@ -114,38 +112,35 @@ def run_task(v):
     )
     logger.log("pretraining the GAN...")
     if v['smart_init']:
-        feasible_starts = generate_starts(env, starts=[v['ultimate_goal']], horizon=50)  # without giving the policy it does brownian mo.
-        labels = np.ones((feasible_starts.shape[0], 2)).astype(np.float32)  # make them all good goals
-        plot_labeled_states(feasible_starts, labels, report=report, itr=outer_iter,
-                            limit=v['goal_range'], center=v['goal_center'], maze_id=v['maze_id'])
-
+        feasible_starts = generate_starts(env, starts=[v['start_goal']], horizon=50, size=100000)  # , animated=True, speedup=10)  # without giving the policy it does brownian mo.
         dis_loss, gen_loss = gan.pretrain(states=feasible_starts, outer_iters=v['gan_outer_iters'])
         print("Loss of Gen and Dis: ", gen_loss, dis_loss)
     else:
         gan.pretrain_uniform(outer_iters=500, report=report)  # v['gan_outer_iters'])
 
-    # log first samples form the GAN
-    initial_starts, _ = gan.sample_states_with_noise(v['num_new_starts'])
-
-    logger.log("Labeling the starts")
-    labels = label_states(initial_starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
-
-    plot_labeled_states(initial_starts, labels, report=report, itr=outer_iter,
-                        limit=v['goal_range'], center=v['goal_center'], maze_id=v['maze_id'])
-    report.new_row()
-
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
+
+    # # show where these states are:
+    # print("showing the states the GAN trained on:")
+    # shuffled_starts = np.array(feasible_starts)
+    # np.random.shuffle(shuffled_starts)
+    # generate_starts(env, starts=shuffled_starts, horizon=100, zero_action=True, animated=True, speedup=10)
 
     for outer_iter in range(1, v['outer_iters']):
 
+
         logger.log("Outer itr # %i" % outer_iter)
-        # Sample GAN
-        logger.log("Sampling starts from the GAN")
+        logger.log("Sampling starts")
         raw_starts, _ = gan.sample_states_with_noise(v['num_new_starts'])
+
+        # show where these states are:
+        shuffled_starts = np.array(raw_starts)
+        np.random.shuffle(shuffled_starts)
+        generate_starts(env, starts=shuffled_starts, horizon=100, zero_action=True, animated=True, speedup=10)
 
         if v['replay_buffer'] and outer_iter > 0 and all_starts.size > 0:
             old_starts = all_starts.sample(v['num_old_starts'])
-            starts = np.vstack([raw_starts, old_starts])
+            starts = np.vstack([starts, old_starts])
         else:
             starts = raw_starts
 
@@ -175,7 +170,7 @@ def run_task(v):
         if v['use_trpo_paths']:
             logger.log("labeling starts with trpo rollouts")
             [starts, labels] = label_states_from_paths(trpo_paths, n_traj=2, key='goal_reached',  # using the min n_traj
-                                                       as_goal=False, env=env)
+                                                                 as_goal=False, env=env)
             paths = [path for paths in trpo_paths for path in paths]
         else:
             logger.log("labeling starts manually")
@@ -184,19 +179,15 @@ def run_task(v):
 
         with logger.tabular_prefix("OnStarts_"):
             env.log_diagnostics(paths)
-        plot_labeled_states(starts, labels, report=report, itr=outer_iter, limit=v['goal_range'],
-                            center=v['goal_center'], maze_id=v['maze_id'])
 
-        logger.log('Generating the Heatmap...')
-        plot_policy_means(policy, env, sampling_res=2, report=report, limit=v['start_range'], center=v['start_center'])
-        test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
-                             itr=outer_iter, report=report, limit=v['goal_range'], center=v['goal_center'])
-
-        # ###### extra for deterministic:
-        # logger.log("Labeling the goals deterministic")
-        # with policy.set_std_to_0():
-        #     labels_det = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], n_processes=1)
-        # plot_labeled_states(goals, labels_det, report=report, itr=outer_iter, limit=v['goal_range'], center=v['goal_center'])
+        start_classes, text_labels = convert_label(labels)
+        total_starts = labels.shape[0]
+        logger.record_tabular('GenStarts_evaluated', total_starts)
+        start_class_frac = OrderedDict()  # this needs to be an ordered dict!! (for the log tabular)
+        for k in text_labels.keys():
+            frac = np.sum(start_classes == k) / total_starts
+            logger.record_tabular('GenStart_frac_' + text_labels[k], frac)
+            start_class_frac[text_labels[k]] = frac
 
         labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
 
@@ -207,10 +198,31 @@ def run_task(v):
                 v['gan_outer_iters'],
             )
 
-        logger.dump_tabular(with_prefix=False)
-        report.new_row()
+        logger.log("Labeling on uniform starts")
+        with logger.tabular_prefix("Uniform_"):
+            unif_starts = all_feasible_starts.sample(1000)
+            mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=1, key='goal_reached',
+                                                 as_goals=False, full_path=True)
+            env.log_diagnostics(paths)
 
-        # append new goals to list of all goals (replay buffer): Not the low reward ones!!
-        filtered_raw_start = [start for start, label in zip(starts, labels) if label[0] == 1]
-        all_starts.append(filtered_raw_start)
+        logger.dump_tabular(with_prefix=True)
 
+        # append new states to list of all starts (replay buffer): Not the low reward ones!!
+        logger.log("Appending good goals to replay and generating seeds")
+        filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1]
+        all_starts.append(filtered_raw_starts)
+
+        # if v['seed_with'] == 'only_goods':
+        #     if len(filtered_raw_starts) > 0:  # add a tone of noise if all the states I had ended up being high_reward!
+        #         seed_starts = filtered_raw_starts
+        #     elif np.sum(start_classes == 0) > np.sum(start_classes == 1):  # if more low reward than high reward
+        #         seed_starts = all_starts.sample(300)  # sample them from the replay
+        #     else:
+        #         with env.set_kill_outside():
+        #             seed_starts = generate_starts(env, starts=starts, horizon=int(v['horizon'] * 10), subsample=v['num_new_starts'],
+        #                                           variance=v['brownian_variance'] * 10)
+        # elif v['seed_with'] == 'all_previous':
+        #     seed_starts = starts
+        # elif v['seed_with'] == 'on_policy':
+        #     with env.set_kill_outside():
+        #         seed_starts = generate_starts(env, policy, horizon=v['horizon'], subsample=v['num_new_starts'])

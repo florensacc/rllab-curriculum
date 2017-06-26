@@ -1,20 +1,17 @@
 import os
+import random
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
-import tensorflow as tf
-import tflearn
 import argparse
 import sys
-import random
-import numpy as np
 from multiprocessing import cpu_count
 from rllab.misc.instrument import run_experiment_lite
 from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.starts.pr2key.pr2key_brownian_algo import run_task
+from sandbox.young_clgan.experiments.starts.arm3d.arm3d_key.arm3d_key_gan_algo import run_task
 
 if __name__ == '__main__':
 
@@ -36,9 +33,10 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        'us-east-2a', 'us-east-2b', 'us-east-2c', 'eu-central-1b', 'eu-central-1a'
+        'us-east-2a', 'us-east-2b', 'us-east-2c', 'us-west-2a', 'us-west-2c', 'us-west-2b', 'ap-southeast-2c',
+        'ap-southeast-2b'
     ]
-    ec2_instance = args.type if args.type else 'm4.16xlarge'
+    ec2_instance = args.type if args.type else 'm4.10xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -54,7 +52,7 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-brownian-pr2key-fast'
+    exp_prefix = 'start-gan-arm3d-key'
 
     vg = VariantGenerator()
     vg.add('start_size', [7])  # this is the ultimate start we care about: getting the pendulum upright
@@ -70,11 +68,8 @@ if __name__ == '__main__':
     vg.add('goal_size', [9])
     vg.add('terminal_eps', [0.03])
     vg.add('ctrl_cost_coeff', [0])
-    # brownian params
-    vg.add('brownian_variance', [1])
-    vg.add('brownian_horizon', [50, 500])
-    vg.add('regularize_starts', [0.1, 0])
     # goal-algo params
+    vg.add('num_labels', [1])
     vg.add('min_reward', [0.1])
     vg.add('max_reward', [0.9])
     vg.add('distance_metric', ['L2'])
@@ -84,7 +79,7 @@ if __name__ == '__main__':
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('with_replacement', [True])
-    vg.add('use_trpo_paths', [True, False])
+    vg.add('use_trpo_paths', [True])
     # replay buffer
     vg.add('replay_buffer', [True])
     vg.add('coll_eps', lambda terminal_eps: [terminal_eps])
@@ -92,7 +87,7 @@ if __name__ == '__main__':
     vg.add('num_old_starts', [100])
     # sampling params
     vg.add('horizon', [500])
-    vg.add('outer_iters', [1000])
+    vg.add('outer_iters', [5000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
     vg.add('pg_batch_size', [20000])
     # policy initialization
@@ -101,22 +96,16 @@ if __name__ == '__main__':
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
+    # gan configs
+    vg.add("smart_init", [True])
+    vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
+    vg.add('gan_generator_layers', [[200, 200]])
+    vg.add('gan_discriminator_layers', [[128, 128]])
+    vg.add('gan_noise_size', [5])
+    vg.add('start_noise_level', [0.0])
+    vg.add('gan_outer_iters', [5000])
 
-    vg.add('seed', range(100, 500, 100))
-
-    # # gan_configs
-    # vg.add('GAN_batch_size', [128])  # proble with repeated name!!
-    # vg.add('GAN_generator_activation', ['relu'])
-    # vg.add('GAN_discriminator_activation', ['relu'])
-    # vg.add('GAN_generator_optimizer', [tf.train.AdamOptimizer])
-    # vg.add('GAN_generator_optimizer_stepSize', [0.001])
-    # vg.add('GAN_discriminator_optimizer', [tf.train.AdamOptimizer])
-    # vg.add('GAN_discriminator_optimizer_stepSize', [0.001])
-    # vg.add('GAN_generator_weight_initializer', [tflearn.initializations.truncated_normal])
-    # vg.add('GAN_generator_weight_initializer_stddev', [0.05])
-    # vg.add('GAN_discriminator_weight_initializer', [tflearn.initializations.truncated_normal])
-    # vg.add('GAN_discriminator_weight_initializer_stddev', [0.02])
-    # vg.add('GAN_discriminator_batch_noise_stddev', [1e-2])
+    vg.add('seed', range(100, 600, 100))
 
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))

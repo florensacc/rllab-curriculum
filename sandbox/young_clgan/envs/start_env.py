@@ -140,57 +140,65 @@ class StartExplorationEnv(StartEnv, ProxyEnv, Serializable):
 
 
 def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsample=None, variance=1,
-                    animated=False, speedup=1):
+                    zero_action=False, animated=False, speedup=1):
     """ If policy is None, brownian motion applied """
     if starts is None or len(starts) == 0:
         starts = [env.reset()]
-    n_starts = len(starts)
-    i = 0
-    done = False
-    obs = env.reset(init_state=starts[i % n_starts])
-    states = [env.start_observation]
-    steps = 0
-    noise = 0
-    num_roll_reached_goal = 0
-    num_roll = 0
-    goal_reached = False
-    if animated:
-        env.render()
-    while len(states) < size:
-        steps += 1
-        # print(steps)
-        if done or steps >= horizon:
-            steps = 0
-            noise = 0
-            i += 1
-            done = False
-            obs = env.reset(init_state=starts[i % n_starts])
-            states.append(env.start_observation)
-            num_roll += 1
-            if goal_reached:
-                num_roll_reached_goal += 1
-        else:
-            noise += np.random.randn(env.action_space.flat_dim) * variance
-            if policy:
-                action, _ = policy.get_action(obs)
-            else:
-                action = noise
-            # action = np.zeros_like(action)
-            obs, _, done, env_info = env.step(action)
-            states.append(env.start_observation)
-            if done and env_info['goal_reached']:  # we don't care about done, otherwise will never advance!
-                goal_reached = True
-                done = False
+    if horizon <= 1:
+        states = starts  # you better give me some starts if there is no horizon!
+    else:
+        n_starts = len(starts)
+        i = 0
+        done = False
+        obs = env.reset(init_state=starts[i % n_starts])
+        states = [env.start_observation]
+        steps = 0
+        noise = 0
+        num_roll_reached_goal = 0
+        num_roll = 0
+        goal_reached = False
         if animated:
             env.render()
-            timestep = 0.05
-            time.sleep(timestep / speedup)
+        while len(states) < size:
+            steps += 1
+            # print(steps)
+            if done or steps >= horizon:
+                steps = 0
+                noise = 0
+                i += 1
+                done = False
+                obs = env.reset(init_state=starts[i % n_starts])
+                # print(obs)
+                states.append(env.start_observation)
+                num_roll += 1
+                if goal_reached:
+                    num_roll_reached_goal += 1
+            else:
+                noise += np.random.randn(env.action_space.flat_dim) * variance
+                if policy:
+                    action, _ = policy.get_action(obs)
+                else:
+                    action = noise
+                if zero_action:
+                    action = np.zeros_like(action)
+                obs, _, done, env_info = env.step(action)
+                states.append(env.start_observation)
+                if done and env_info['goal_reached']:  # we don't care about goal done, otherwise will never advance!
+                    goal_reached = True
+                    done = False
+            if animated:
+                env.render()
+                timestep = 0.05
+                time.sleep(timestep / speedup)
 
-    logger.log("Generating starts, rollouts that reached goal: " + str(num_roll_reached_goal) + " out of " + str(num_roll))
+        logger.log("Generating starts, rollouts that reached goal: " + str(num_roll_reached_goal) + " out of " + str(num_roll))
     if subsample is None:
         return np.array(states)
     else:
-        return np.array(states)[np.random.choice(np.shape(states)[0], size=subsample)]
+        states = np.array(states)
+        if len(states) < subsample:
+            return states
+        return states[np.random.choice(np.shape(states)[0], size=subsample)]
 
 
 def find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_variance=1, animate=False):
@@ -198,19 +206,18 @@ def find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_
     all_feasible_starts = StateCollection(distance_threshold=distance_threshold)
     all_feasible_starts.append(seed_starts)
     no_new_states = 0
-    with env.set_kill_outside():  # this is only in the pr2 env so far..
-        while no_new_states < 5:
-            total_num_starts = all_feasible_starts.size
-            starts = all_feasible_starts.sample(100)
-            new_starts = generate_starts(env, starts=starts, horizon=1000, size=100000, variance=brownian_variance,
-                                         animated=animate, speedup=10)
-            all_feasible_starts.append(new_starts)
-            num_new_starts = all_feasible_starts.size - total_num_starts
-            logger.log("number of new states: " + str(num_new_starts))
-            if num_new_starts < 10:
-                no_new_states += 1
-            with open(osp.join(log_dir, 'all_feasible_states.pkl'), 'wb') as f:
-                cloudpickle.dump(all_feasible_starts, f, protocol=3)
+    while no_new_states < 5:
+        total_num_starts = all_feasible_starts.size
+        starts = all_feasible_starts.sample(100)
+        new_starts = generate_starts(env, starts=starts, horizon=1000, size=100000, variance=brownian_variance,
+                                     animated=animate, speedup=10)
+        all_feasible_starts.append(new_starts)
+        num_new_starts = all_feasible_starts.size - total_num_starts
+        logger.log("number of new states: " + str(num_new_starts))
+        if num_new_starts < 10:
+            no_new_states += 1
+        with open(osp.join(log_dir, 'all_feasible_states.pkl'), 'wb') as f:
+            cloudpickle.dump(all_feasible_starts, f, protocol=3)
 
 
 def find_all_feasible_reject_states(env, distance_threshold=0.1,):

@@ -1,4 +1,5 @@
 import os
+import random
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -34,8 +35,8 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        # 'ap-south-1b', 'ap-northeast-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'us-west-1b', 'us-west-1a',
-        # 'ap-south-1a', 'ap-northeast-1a', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'us-east-1b'
+        'us-east-2b', 'us-east-2a', 'us-east-2c', 'ap-southeast-1a', 'ap-southeast-1b', 'ap-northeast-2a',
+        'ap-northeast-2c'
     ]
     ec2_instance = args.type if args.type else 'c4.2xlarge'
     # configure instan
@@ -52,11 +53,11 @@ if __name__ == '__main__':
         mode = 'local'
         n_parallel = cpu_count() if not args.debug else 1
 
-    exp_prefix = 'startGAN-maze'
+    exp_prefix = 'start-gan-maze'
 
     vg = VariantGenerator()
-    vg.add('maze_id', [0])
-    vg.add('start_size', [2])  # this is the ultimate start we care about: getting the pendulum upright
+    vg.add('maze_id', [11])
+    vg.add('start_size', [2])
     vg.add('start_range',
            lambda maze_id: [4] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
     vg.add('start_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
@@ -67,20 +68,19 @@ if __name__ == '__main__':
     vg.add('goal_range',
            lambda maze_id: [4] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
     vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
-    vg.add('ultimate_goal', lambda maze_id: [(0, 4)] if maze_id == 0 else [(0, 4)])
     # goal-algo params
     vg.add('min_reward', [0.1])
     vg.add('max_reward', [0.9])
     vg.add('distance_metric', ['L2'])
-    vg.add('extend_dist_rew', [False])  # !!!!
+    vg.add('extend_dist_rew', [False, True])  # !!!!
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('with_replacement', [True])
-    vg.add('smart_init', [False])
+    vg.add('smart_init', [True])
+    vg.add('use_trpo_paths', [True])
     # replay buffer
     vg.add('replay_buffer', [True])
     vg.add('coll_eps', [0.3])
-    vg.add('num_new_starts', [200])
     vg.add('num_new_starts', [200])
     vg.add('num_old_starts', [100])
     # sampling params
@@ -89,7 +89,7 @@ if __name__ == '__main__':
     vg.add('inner_iters', [5])
     vg.add('pg_batch_size', [20000])
     # policy initialization
-    vg.add('output_gain', [1])
+    vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
@@ -102,7 +102,7 @@ if __name__ == '__main__':
     vg.add('start_noise_level', [0.5])
     vg.add('gan_outer_iters', [500])
 
-    vg.add('seed', range(110, 510, 100))
+    vg.add('seed', range(110, 710, 100))
 
     # # gan_configs
     # vg.add('GAN_batch_size', [128])  # proble with repeated name!!
@@ -126,24 +126,24 @@ if __name__ == '__main__':
 
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
-            # # choose subnet
-            # subnet = random.choice(subnets)
-            # config.AWS_REGION_NAME = subnet[:-1]
-            # config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_SECURITY_GROUP_IDS = \
-            #     config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
-            #         config.AWS_REGION_NAME]
-            # config.AWS_NETWORK_INTERFACES = [
-            #     dict(
-            #         SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
-            #         Groups=config.AWS_SECURITY_GROUP_IDS,
-            #         DeviceIndex=0,
-            #         AssociatePublicIpAddress=True,
-            #     )
-            # ]
+            # choose subnet
+            subnet = random.choice(subnets)
+            config.AWS_REGION_NAME = subnet[:-1]
+            config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
+                config.AWS_REGION_NAME]
+            config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
+                config.AWS_REGION_NAME]
+            config.AWS_SECURITY_GROUP_IDS = \
+                config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
+                    config.AWS_REGION_NAME]
+            config.AWS_NETWORK_INTERFACES = [
+                dict(
+                    SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
+                    Groups=config.AWS_SECURITY_GROUP_IDS,
+                    DeviceIndex=0,
+                    AssociatePublicIpAddress=True,
+                )
+            ]
 
             run_experiment_lite(
                 # use_cloudpickle=False,

@@ -166,7 +166,7 @@ def smart_repr(x):
             return repr(x)
 
 
-def extract_distinct_params(exps_data, excluded_params=('exp_name', 'seed', 'log_dir'), l=1):
+def extract_distinct_params(exps_data, excluded_params=('exp_name', 'log_dir'), l=1):
     # all_pairs = unique(flatten([d.flat_params.items() for d in exps_data]))
     # if logger:
     #     logger("(Excluding {excluded})".format(excluded=', '.join(excluded_params)))

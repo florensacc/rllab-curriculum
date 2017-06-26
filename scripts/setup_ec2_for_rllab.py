@@ -11,8 +11,8 @@ from collections import OrderedDict
 
 ACCESS_KEY = os.environ["AWS_ACCESS_KEY"]
 ACCESS_SECRET = os.environ["AWS_ACCESS_SECRET"]
-S3_BUCKET_NAME = os.environ["RLLAB_S3_BUCKET"]
-PREFIX = os.environ.get("RLLAB_PREFIX", "")
+S3_BUCKET_NAME = os.environ["RLLAB_S3_BUCKET2"]
+PREFIX = os.environ.get("RLLAB_PREFIX2", "")
 
 SECURITY_GROUP_NAME = PREFIX + "rllab-sg"
 INSTANCE_PROFILE_NAME = PREFIX + "rllab"
@@ -55,9 +55,9 @@ else:
 
 DOCKER_LOG_DIR = "/tmp/expt"
 
-AWS_S3_PATH = "s3://$s3_bucket_name/rllab/experiments"
+AWS_S3_PATH = "s3://$s3_bucket_name/rllab_goal/experiments"
 
-AWS_CODE_SYNC_S3_PATH = "s3://$s3_bucket_name/rllab/code"
+AWS_CODE_SYNC_S3_PATH = "s3://$s3_bucket_name/rllab_goal/code"
 
 ALL_REGION_AWS_IMAGE_IDS = {
     "ap-northeast-1": "ami-c42689a5",

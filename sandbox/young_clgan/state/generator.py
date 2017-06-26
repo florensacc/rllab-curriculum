@@ -71,8 +71,8 @@ class CrossEntropyStateGenerator(StateGenerator):
 class StateGAN(StateGenerator):
     """A GAN for generating states. It is just a wrapper for clgan.GAN.FCGAN"""
 
-    def __init__(self, state_size, evaluater_size, state_range,
-                 state_noise_level, state_center=None, *args, **kwargs):
+    def __init__(self, state_size, evaluater_size,
+                 state_noise_level, state_range=None, state_center=None, state_bounds=None, *args, **kwargs):
         self.gan = FCGAN(
             generator_output_size=state_size,
             discriminator_output_size=evaluater_size,
@@ -81,10 +81,16 @@ class StateGAN(StateGenerator):
         )
         self.state_size = state_size
         self.evaluater_size = evaluater_size
-        self.state_range = state_range
         self.state_center = np.array(state_center) if state_center is not None else np.zeros(state_size)
+        if state_range is not None:
+            self.state_range = state_range
+            self.state_bounds = np.vstack([-self.state_range * np.ones(self.state_size), self.state_range * np.ones(self.state_size)])
+        elif state_bounds is not None:
+            self.state_bounds = np.array(state_bounds)
+            self.state_range = self.state_bounds[1] - self.state_bounds[0]
         self.state_noise_level = state_noise_level
-        print('state_center is : ', self.state_center, 'state_range: ', self.state_range)
+        print('state_center is : ', self.state_center, 'state_range: ', self.state_range,
+              'state_bounds: ', self.state_bounds)
 
     def pretrain_uniform(self, size=10000, report=None, *args, **kwargs):
         """
@@ -92,12 +98,8 @@ class StateGAN(StateGenerator):
         :param outer_iters: of the GAN
         """
         states = np.random.uniform(
-            self.state_center - self.state_range, self.state_center + self.state_range, size=(size, self.state_size)
+            self.state_center + self.state_bounds[0], self.state_center + self.state_bounds[1], size=(size, self.state_size)
         )
-        # labels = np.ones((states.shape[0], 2)).astype(np.float32)  # make them all good goals
-        # plot_labeled_states(states, labels, report=report, limit=4, center=(2, 2), maze_id=0,
-        #                     summary_string_base='states used to pretrain uniform the GAN')
-        # report.new_row()
         return self.pretrain(states, *args, **kwargs)
 
     def pretrain(self, states, outer_iters=500, generator_iters=None, discriminator_iters=None):
@@ -114,11 +116,11 @@ class StateGAN(StateGenerator):
     def _add_noise_to_states(self, states):
         noise = np.random.randn(*states.shape) * self.state_noise_level
         states += noise
-        return np.clip(states, self.state_center - self.state_range, self.state_center + self.state_range)
+        return np.clip(states, self.state_center + self.state_bounds[0], self.state_center + self.state_bounds[1])
 
     def sample_states(self, size):  # un-normalizes the states
         normalized_states, noise = self.gan.sample_generator(size)
-        states = self.state_center + normalized_states * self.state_range
+        states = self.state_center + normalized_states * (self.state_bounds[1] - self.state_bounds[0])
         return states, noise
 
     def sample_states_with_noise(self, size):

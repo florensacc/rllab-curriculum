@@ -31,9 +31,7 @@ from sandbox.young_clgan.state.utils import StateCollection
 
 from sandbox.young_clgan.envs.start_env import generate_starts
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
-from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy, sample_unif_feas, unwrap_maze, \
-    plot_policy_means
-from sandbox.young_clgan.envs.mjc_key.pr2_key_env import PR2KeyEnv
+from sandbox.young_clgan.envs.arm3d.arm3d_key_env import Arm3dKeyEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -50,7 +48,7 @@ def run_task(v):
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
 
-    inner_env = normalize(PR2KeyEnv(ctrl_cost_coeff=v['ctrl_cost_coeff']))
+    inner_env = normalize(Arm3dKeyEnv(ctrl_cost_coeff=v['ctrl_cost_coeff']))
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
     fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
@@ -84,24 +82,27 @@ def run_task(v):
 
     # load the state collection from data_upload
     load_dir = 'data_upload/state_collections/'
-    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states.pkl'), 'rb'))
+    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'key_all_feasible_states.pkl'), 'rb'))
     print("we have %d feasible starts" % all_feasible_starts.size)
 
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
     brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
-    seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=10,  # this is smaller as they are seeds!
-                                  variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=10)
+    with env.set_kill_outside():
+        seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=10,  # this is smaller as they are seeds!
+                                      variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=10)
 
-    # show where these states are:
-    # seed_starts = generate_starts(env, starts=all_feasible_starts.state_list, horizon=100,  # this is smaller as they are seeds!
-    #                               variance=v['brownian_variance'], animated=True, speedup=10)
+    # # show where these states are:
+    # shuffled_starts = np.array(all_feasible_starts.state_list)
+    # np.random.shuffle(shuffled_starts)
+    # generate_starts(env, starts=shuffled_starts, horizon=100, variance=v['brownian_variance'], animated=True, speedup=10)
 
     for outer_iter in range(1, v['outer_iters']):
 
         logger.log("Outer itr # %i" % outer_iter)
         logger.log("Sampling starts")
 
-        starts = generate_starts(env, starts=seed_starts, horizon=v['brownian_horizon'], variance=v['brownian_variance'])
+        with env.set_kill_outside():
+            starts = generate_starts(env, starts=seed_starts, horizon=v['brownian_horizon'], variance=v['brownian_variance'])
         # regularization of the brownian starts
         brownian_starts.empty()
         brownian_starts.append(starts)
@@ -167,16 +168,23 @@ def run_task(v):
             env.log_diagnostics(paths)
 
         logger.dump_tabular(with_prefix=True)
-        # report.new_row()
 
         # append new states to list of all starts (replay buffer): Not the low reward ones!!
         logger.log("Appending good goals to replay and generating seeds")
         filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1]
         all_starts.append(filtered_raw_starts)
-        if len(filtered_raw_starts) > 0:  # add a tone of noise if all the states I had ended up being high_reward!
-            seed_starts = filtered_raw_starts
-        elif np.sum(start_classes == 0) > np.sum(start_classes == 1):  # if more low reward than high reward
-            seed_starts = all_starts.sample(300)  # sample them from the replay
-        else:
-            seed_starts = generate_starts(env, starts=starts, horizon=int(v['horizon'] * 10), subsample=v['num_new_starts'],
-                                          variance=v['brownian_variance'] * 10)
+
+        if v['seed_with'] == 'only_goods':
+            if len(filtered_raw_starts) > 0:  # add a tone of noise if all the states I had ended up being high_reward!
+                seed_starts = filtered_raw_starts
+            elif np.sum(start_classes == 0) > np.sum(start_classes == 1):  # if more low reward than high reward
+                seed_starts = all_starts.sample(300)  # sample them from the replay
+            else:
+                with env.set_kill_outside():
+                    seed_starts = generate_starts(env, starts=starts, horizon=int(v['horizon'] * 10), subsample=v['num_new_starts'],
+                                                  variance=v['brownian_variance'] * 10)
+        elif v['seed_with'] == 'all_previous':
+            seed_starts = starts
+        elif v['seed_with'] == 'on_policy':
+            with env.set_kill_outside():
+                seed_starts = generate_starts(env, policy, horizon=v['horizon'], subsample=v['num_new_starts'])

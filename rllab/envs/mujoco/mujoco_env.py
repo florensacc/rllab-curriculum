@@ -135,6 +135,7 @@ class MujocoEnv(Env):
                     datum = getattr(self, 'init_' + datum_name)
                 setattr(self.model.data, datum_name, datum)
                 start += datum_dim
+        # print("inside mujoco reset: ", self.model.data.qpos, self.model.data.qvel, self.model.data.qacc, self.model.data.ctrl)
 
     @overrides
     def reset(self, init_state=None, *args, **kwargs):
@@ -142,6 +143,7 @@ class MujocoEnv(Env):
         self.model.forward()
         self.current_com = self.model.data.com_subtree[0]
         self.dcom = np.zeros_like(self.current_com)
+        # print("outside mujoco reset: ", self.model.data.qpos, self.model.data.qvel, self.model.data.qacc, self.model.data.ctrl)
         return self.get_current_obs()
 
     def get_current_obs(self):

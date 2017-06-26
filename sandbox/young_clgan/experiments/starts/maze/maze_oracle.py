@@ -56,8 +56,8 @@ if __name__ == '__main__':
     exp_prefix = 'start-oracle-maze-debugged'
 
     vg = VariantGenerator()
-    vg.add('maze_id', [11, 0])  # default is 0, spiral is 11
-    vg.add('start_size', [4])  # this is the ultimate start we care about: getting the pendulum upright
+    vg.add('maze_id', [11])  # default is 0, spiral is 11
+    vg.add('start_size', [4])
     vg.add('start_range',
            lambda maze_id: [4] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
     vg.add('start_center', lambda maze_id, start_size: [(2, 2)] if maze_id == 0 and start_size == 2
