@@ -57,7 +57,7 @@ def run_task(v):
         start_generator=fixed_start_generator,
         obs2start_transform=lambda x: x[:v['start_size']],
         goal_generator=fixed_goal_generator,
-        obs2goal_transform=lambda x: x[-1 * v['goal_size']:],  # todo: the goal are the last 3 coords?
+        obs2goal_transform=lambda x: x[-1 * v['goal_size']:],
         terminal_eps=v['terminal_eps'],
         distance_metric=v['distance_metric'],
         extend_dist_rew=v['extend_dist_rew'],
@@ -79,12 +79,10 @@ def run_task(v):
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
 
-    # # load the state collection from data_upload
-    # load_dir = 'data_upload/state_collections/'
-    # all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states.pkl'), 'rb'))
-    # print("we have %d feasible starts" % all_feasible_starts.size)
-
-    # import pdb; pdb.set_trace()
+    # load the state collection from data_upload
+    load_dir = 'data_upload/state_collections/'
+    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'disc_all_feasible_states_min.pkl'), 'rb'))
+    print("we have %d feasible starts" % all_feasible_starts.size)
 
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
     brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
@@ -92,12 +90,13 @@ def run_task(v):
         seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=10,  # this is smaller as they are seeds!
                                       variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=1)
 
-    with env.set_kill_outside():
-        find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_variance=1, animate=False)
+    # with env.set_kill_outside():
+    #     find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_variance=1, animate=False)
 
     # show where these states are:
-    # seed_starts = generate_starts(env, starts=all_feasible_starts.state_list, horizon=100,  # this is smaller as they are seeds!
-    #                               variance=v['brownian_variance'], animated=True, speedup=10)
+    shuffled_starts = np.array(all_feasible_starts.state_list)
+    np.random.shuffle(shuffled_starts)
+    generate_starts(env, starts=shuffled_starts, horizon=100, variance=v['brownian_variance'], animated=True, speedup=10)
 
     for outer_iter in range(1, v['outer_iters']):
 
@@ -172,17 +171,23 @@ def run_task(v):
             env.log_diagnostics(paths)
 
         logger.dump_tabular(with_prefix=True)
-        # report.new_row()
 
         # append new states to list of all starts (replay buffer): Not the low reward ones!!
         logger.log("Appending good goals to replay and generating seeds")
         filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1]
         all_starts.append(filtered_raw_starts)
-        if len(filtered_raw_starts) > 0:  # add a tone of noise if all the states I had ended up being high_reward!
-            seed_starts = filtered_raw_starts
-        elif np.sum(start_classes == 0) > np.sum(start_classes == 1):  # if more low reward than high reward
-            seed_starts = all_starts.sample(300)  # sample them from the replay
-        else:
+
+        if v['seed_with'] == 'only_goods':
+            if len(filtered_raw_starts) > 0:  # add a tone of noise if all the states I had ended up being high_reward!
+                seed_starts = filtered_raw_starts
+            elif np.sum(start_classes == 0) > np.sum(start_classes == 1):  # if more low reward than high reward
+                seed_starts = all_starts.sample(300)  # sample them from the replay
+            else:
+                with env.set_kill_outside():
+                    seed_starts = generate_starts(env, starts=starts, horizon=int(v['horizon'] * 10), subsample=v['num_new_starts'],
+                                                  variance=v['brownian_variance'] * 10)
+        elif v['seed_with'] == 'all_previous':
+            seed_starts = starts
+        elif v['seed_with'] == 'on_policy':
             with env.set_kill_outside():
-                seed_starts = generate_starts(env, starts=starts, horizon=int(v['horizon'] * 10), subsample=v['num_new_starts'],
-                                              variance=v['brownian_variance'] * 10)
+                seed_starts = generate_starts(env, policy, horizon=v['horizon'], subsample=v['num_new_starts'])

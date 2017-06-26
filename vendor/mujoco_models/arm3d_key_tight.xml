@@ -91,7 +91,11 @@
         </body>
 
         <!--<body name="debug" pos="0.0 0.3 -0.55">-->
-            <!--<geom name="debug" type="sphere" rgba="1.0 0.0 0.0 1" pos="0.0 0.0 0.0" size="0.2" />-->
+            <!--<geom name="debug" type="sphere" rgba="0.0 1.0 0.0 1" pos="0.0 0.0 0.0" size="0.2" />-->
+        <!--</body>-->
+
+        <!--<body name="debug2" pos="0.0 0.3 -0.7">-->
+            <!--<geom name="debug2" type="sphere" rgba="1.0 0.0 0.0 1" pos="0.0 0.0 0.0" size="0.30" />-->
         <!--</body>-->
 
         <body name="g1" pos="0.0 0.3 -0.7">

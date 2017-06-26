@@ -13,7 +13,6 @@ from sandbox.young_clgan.state.utils import StateCollection
 from sandbox.young_clgan.envs.start_env import generate_starts
 
 
-
 class Arm3dKeyEnv(MujocoEnv, Serializable):
     FILE = 'arm3d_key_tight.xml'
 

@@ -11,7 +11,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.starts.arm3d.arm3d_key.arm3d_key_brownian_algo import run_task
+from sandbox.young_clgan.experiments.starts.arm3d.arm3d_key.arm3d_key_gan_algo import run_task
 
 if __name__ == '__main__':
 
@@ -52,7 +52,7 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-brownian-arm3d-key'
+    exp_prefix = 'start-gan-arm3d-key'
 
     vg = VariantGenerator()
     vg.add('start_size', [7])  # this is the ultimate start we care about: getting the pendulum upright
@@ -68,13 +68,8 @@ if __name__ == '__main__':
     vg.add('goal_size', [9])
     vg.add('terminal_eps', [0.03])
     vg.add('ctrl_cost_coeff', [0])
-    # brownian params
-    # vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
-    vg.add('seed_with', ['on_policy'])  # good from brown, onPolicy, previousBrown (ie no good)
-    vg.add('brownian_horizon', lambda seed_with: [0, 50, 500] if seed_with == 'on_policy' else [50])
-    vg.add('brownian_variance', [1])
-    vg.add('regularize_starts', [0])
     # goal-algo params
+    vg.add('num_labels', [1])
     vg.add('min_reward', [0.1])
     vg.add('max_reward', [0.9])
     vg.add('distance_metric', ['L2'])
@@ -101,6 +96,14 @@ if __name__ == '__main__':
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
+    # gan configs
+    vg.add("smart_init", [True])
+    vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
+    vg.add('gan_generator_layers', [[200, 200]])
+    vg.add('gan_discriminator_layers', [[128, 128]])
+    vg.add('gan_noise_size', [5])
+    vg.add('start_noise_level', [0.0])
+    vg.add('gan_outer_iters', [5000])
 
     vg.add('seed', range(100, 600, 100))
 
