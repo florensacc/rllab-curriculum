@@ -42,8 +42,6 @@ def run_task(v):
     # Log performance of randomly initialized policy with FIXED goal [0.1, 0.1]
     logger.log("Initializing report and plot_policy_reward...")
     log_dir = logger.get_snapshot_dir()  # problem with logger module here!!
-    if log_dir is None:
-        log_dir = "/home/davheld/repos/rllab_goal_rl/data/local/debug"
     report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=4)
 
     report.add_header("{}".format(EXPERIMENT_TYPE))
@@ -84,12 +82,12 @@ def run_task(v):
     # initialize all logging arrays on itr0
     outer_iter = 0
 
-    # logger.log('Generating the Initial Heatmap...')
-    # plot_policy_means(policy, env, sampling_res=2, report=report, limit=v['goal_range'], center=v['goal_center'])
-    # test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=sampling_res,
-    #                      n_traj=v['n_traj'],
-    #                      itr=outer_iter, report=report, center=v['goal_center'],
-    #                      limit=v['goal_range'])  # use goal for plot
+    logger.log('Generating the Initial Heatmap...')
+    plot_policy_means(policy, env, sampling_res=2, report=report, limit=v['goal_range'], center=v['goal_center'])
+    test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=sampling_res,
+                         n_traj=v['n_traj'],
+                         itr=outer_iter, report=report, center=v['goal_center'],
+                         limit=v['goal_range'])  # use goal for plot
     report.new_row()
 
     all_starts = StateCollection(distance_threshold=v['coll_eps'])

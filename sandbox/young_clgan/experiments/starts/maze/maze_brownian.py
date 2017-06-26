@@ -124,8 +124,6 @@ if __name__ == '__main__':
           *subnets)
 
     for vv in vg.variants():
-        run_task(vv)
-
         if mode in ['ec2', 'local_docker']:
             # # choose subnet
             # subnet = random.choice(subnets)
