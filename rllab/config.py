@@ -45,6 +45,8 @@ AWS_EXTRA_CONFIGS = dict()
 
 AWS_REGION_NAME = "us-east-1"
 
+AWS_BUCKET_REGION_NAME = "us-east-1"  # added by me trying to fix the issue.
+
 CODE_SYNC_IGNORES = ["*.git/*", "*data/*", "*.pod/*"]
 
 DOCKER_CODE_DIR = "/root/code/rllab"
