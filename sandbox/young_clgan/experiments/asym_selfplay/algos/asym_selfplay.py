@@ -46,20 +46,16 @@ class AsymSelfplay(object):
     def optimize(self, iter=0):
 
         # get paths
-        paths_alice = []
-        paths_bob = []
         n_starts = len(self.start_states)
 
         for itr in range(self.algo_alice.n_itr):
 
+            paths_alice = []
+            paths_bob = []
             new_start_states = []
 
             for i in range(self.num_rollouts):
-                #self.env_alice.reset(init_state=self.start_states[i % n_starts])
                 self.env_alice.update_start_generator(FixedStateGenerator(self.start_states[i % n_starts]))
-                    # UniformListStateGenerator(
-                    #     starts.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
-                    # )
 
                 paths_alice.append(rollout(self.env_alice, self.policy_alice, max_path_length=self.max_path_length,
                                            animated=False))
@@ -68,7 +64,6 @@ class AsymSelfplay(object):
                 new_start_state = self.env_alice._obs2start_transform(alice_end_obs)
                 new_start_states.append(new_start_state)
 
-                #self.env_bob.reset(init_state=new_start_state)
                 self.env_bob.update_start_generator(FixedStateGenerator(new_start_state))
                 paths_bob.append(rollout(self.env_bob, self.policy_bob, max_path_length=self.max_path_length,
                                          animated=False))

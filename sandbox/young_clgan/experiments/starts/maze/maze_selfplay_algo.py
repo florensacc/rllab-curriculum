@@ -117,7 +117,7 @@ def run_task(v):
         baseline=baseline_alice,
         batch_size=v['pg_batch_size'],
         max_path_length=v['horizon'],
-        n_itr=v['inner_iters'],
+        n_itr=v['inner_iters_alice'],
         step_size=0.01,
         discount=v['discount'],
         plot=False,
@@ -159,7 +159,7 @@ def run_task(v):
                 batch_size=v['pg_batch_size'],
                 max_path_length=v['horizon'],
                 n_itr=v['inner_iters'],
-                step_size=0.01,
+                step_size=v['step_size'],
                 discount=v['discount'],
                 plot=False,
             )
