@@ -141,6 +141,11 @@ def run_task(v):
     initial_starts, _ = gan.sample_states(v['num_new_starts'])
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
 
+    labels = label_states(initial_starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
+    plot_labeled_states(initial_starts, labels, report=report, itr=outer_iter,
+                        # limit=v['goal_range'], # add limit in later
+                        center=v['lego_init_center'][:2], maze_id=-1)
+
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
     for outer_iter in range(1, v['outer_iters']):
@@ -190,6 +195,10 @@ def run_task(v):
 
         #TODO: figure out how states are labelled
         labels = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
+        plot_labeled_states(starts, labels, report=report, itr=outer_iter,
+                            # limit=v['goal_range'], # add limit in later
+                            center=v['lego_init_center'][:2], maze_id=-1)
+
         labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
         logger.log("Training the GAN")
         if np.any(labels):
@@ -199,7 +208,6 @@ def run_task(v):
             )
         filtered_raw_start = [start for start, label in zip(starts, labels) if label[0] == 1]
         all_starts.append(filtered_raw_start)
-
         report.save()
 
         # plot_pushing(policy, env, report, bounds=(v['lego_init_lower'], v['lego_init_upper']),
@@ -260,7 +268,7 @@ for vv in vg.variants():
         seed=vv['seed'],
         mode="local",
         # mode="ec2",
-        exp_prefix="hand_env63",
+        exp_prefix="hand_env65",
         # exp_name= "decaying-decaying-gamma" + str(t),
         # plot=True,
     )
