@@ -12,9 +12,11 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.starts.maze.maze_brownian_algo import run_task
+from sandbox.young_clgan.experiments.starts.maze.maze_selfplay_algo import run_task
 
 if __name__ == '__main__':
+
+    debug = True
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
@@ -53,7 +55,7 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-brownian-maze'
+    exp_prefix = 'start-selfplay-maze3'
 
     vg = VariantGenerator()
     vg.add('maze_id', [0])  # default is 0
@@ -65,7 +67,12 @@ if __name__ == '__main__':
                                                 else [(2, 2, 0, 0)] if maze_id == 0 and start_size == 4
                                                 else [(0, 0)] if start_size == 2
                                                 else [(0, 0, 0, 0)])
-    vg.add('ultimate_goal', lambda maze_id: [(0, 4)] if maze_id == 0 else [(2, 4), (0, 0)] if maze_id == 12 else [(4, 4)])
+
+
+    ultimate_goal = lambda maze_id: [(0, 4)] if maze_id == 0 else [(2, 4), (0, 0)] if maze_id == 12 else [(4, 4)]
+    vg.add('ultimate_goal', ultimate_goal)
+    vg.add('start_goal', ultimate_goal)
+
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('terminal_eps', [0.3])
     vg.add('only_feasible', [True])
@@ -73,8 +80,8 @@ if __name__ == '__main__':
            lambda maze_id: [4] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
     vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
     # brownian params
-    vg.add('brownian_variance', [0.1, 1])
-    vg.add('brownian_horizon', [50, 100])
+    #vg.add('brownian_variance', [0.1, 1])
+    #vg.add('brownian_horizon', [50, 100])
     # goal-algo params
     vg.add('min_reward', [0.1])
     vg.add('max_reward', [0.9])
@@ -96,12 +103,17 @@ if __name__ == '__main__':
     vg.add('pg_batch_size', [20000])
     # policy initialization
     vg.add('output_gain', [0.1])
+    vg.add('output_gain_alice', [0.1])
     vg.add('policy_init_std', [1])
+    vg.add('policy_init_std_alice', [1])
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
 
-    vg.add('seed', range(100, 700, 100))
+    if debug:
+        vg.add('seed', [100])
+    else:
+        vg.add('seed', range(100, 700, 100))
 
     # # gan_configs
     # vg.add('GAN_batch_size', [128])  # proble with repeated name!!
@@ -124,7 +136,7 @@ if __name__ == '__main__':
           *subnets)
 
     for vv in vg.variants():
-        run_task(vv)
+        #run_task(vv)
 
         if mode in ['ec2', 'local_docker']:
             # # choose subnet

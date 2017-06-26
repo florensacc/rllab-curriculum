@@ -44,6 +44,8 @@ def run_task(v):
     # Log performance of randomly initialized policy with FIXED goal [0.1, 0.1]
     logger.log("Initializing report and plot_policy_reward...")
     log_dir = logger.get_snapshot_dir()  # problem with logger module here!!
+    if log_dir is None:
+        log_dir = "/home/davheld/scratch/"
     report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=3)
 
     report.add_header("{}".format(EXPERIMENT_TYPE))

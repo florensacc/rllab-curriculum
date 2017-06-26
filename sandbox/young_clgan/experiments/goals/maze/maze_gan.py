@@ -26,7 +26,7 @@ if __name__ == '__main__':
     parser.add_argument('--price', '-p', type=str, default='', help='set betting price')
     parser.add_argument('--subnet', '-sn', type=str, default='', help='set subnet like us-west-1a')
     parser.add_argument('--name', '-n', type=str, default='', help='set exp prefix name and new file name')
-    parser.add_argument('--debug', action='store_true', default=False, help="run code without multiprocessing")
+    parser.add_argument('--debug', action='store_true', default=True, help="run code without multiprocessing")
     args = parser.parse_args()
 
     if args.clone:
@@ -118,6 +118,8 @@ if __name__ == '__main__':
           *subnets)
 
     for vv in vg.variants():
+        run_task(vv)
+
         if mode in ['ec2', 'local_docker']:
             # # choose subnet
             # subnet = random.choice(subnets)

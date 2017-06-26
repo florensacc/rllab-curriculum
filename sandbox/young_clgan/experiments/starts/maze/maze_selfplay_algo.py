@@ -1,5 +1,7 @@
 import matplotlib
 
+from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import StopActionEnv
+
 matplotlib.use('Agg')
 import os
 import os.path as osp
@@ -24,7 +26,7 @@ from sandbox.young_clgan.state.evaluator import convert_label, label_states, eva
 from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator
 from sandbox.young_clgan.state.utils import StateCollection
 
-from sandbox.young_clgan.envs.start_env import generate_starts
+from sandbox.young_clgan.envs.start_env import generate_starts, generate_starts_alice
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
 from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy, sample_unif_feas, unwrap_maze, \
     plot_policy_means
@@ -90,18 +92,46 @@ def run_task(v):
     #                      n_traj=v['n_traj'],
     #                      itr=outer_iter, report=report, center=v['goal_center'],
     #                      limit=v['goal_range'])  # use goal for plot
-    report.new_row()
+    # report.new_row()
 
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
-    seed_starts = generate_starts(env, starts=[v['ultimate_goal']], subsample=v['num_new_starts'])
+
+    # Use asymmetric self-play to run Alice to generate starts for Bob.
+    env_alice = StopActionEnv(env)
+
+    policy_alice = GaussianMLPPolicy(
+            env_spec=env_alice.spec,
+            hidden_sizes=(64, 64),
+            # Fix the variance since different goals will require different variances, making this parameter hard to learn.
+            learn_std=v['learn_std'],
+            adaptive_std=v['adaptive_std'],
+            std_hidden_sizes=(16, 16),  # this is only used if adaptive_std is true!
+            output_gain = v['output_gain_alice'],
+            init_std = v['policy_init_std_alice'],
+    )
+    baseline_alice = LinearFeatureBaseline(env_spec=env_alice.spec)
+
+    algo_alice = TRPO(
+        env=env_alice,
+        policy=policy_alice,
+        baseline=baseline_alice,
+        batch_size=v['pg_batch_size'],
+        max_path_length=v['horizon'],
+        n_itr=v['inner_iters'],
+        step_size=0.01,
+        discount=v['discount'],
+        plot=False,
+    )
 
     for outer_iter in range(1, v['outer_iters']):
 
         logger.log("Outer itr # %i" % outer_iter)
         logger.log("Sampling starts")
 
-        starts = generate_starts(env, starts=seed_starts, subsample=v['num_new_starts'],
-                                 horizon=v['brownian_horizon'], variance=v['brownian_variance'])
+        starts = generate_starts_alice(env_bob=env, env_alice=env_alice, policy_bob=policy, policy_alice=policy_alice,
+                              algo_alice=algo_alice, start_states=[v['start_goal']],
+                              num_new_starts=v['num_new_starts'])
+
         labels = label_states(starts, env, policy, v['horizon'],
                               as_goals=False, n_traj=v['n_traj'], key='goal_reached')
         plot_labeled_states(starts, labels, report=report, itr=outer_iter, limit=v['goal_range'],
@@ -161,9 +191,12 @@ def run_task(v):
 
         # append new states to list of all starts (replay buffer): Not the low reward ones!!
         filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1]
-        if len(filtered_raw_starts) > 0:  # add a tone of noise if all the states I had ended up being high_reward!
-            seed_starts = filtered_raw_starts
-        else:
-            seed_starts = generate_starts(env, starts=starts, horizon=v['horizon'] * 2, subsample=v['num_new_starts'],
-                                          variance=v['brownian_variance'] * 10)
+
+        if len(filtered_raw_starts) == 0:  # add a tone of noise if all the states I had ended up being high_reward!
+            logger.log("Bad Alice!  All goals are high reward!")
+
+        #     seed_starts = filtered_raw_starts
+        # else:
+        #     seed_starts = generate_starts(env, starts=starts, horizon=v['horizon'] * 2, subsample=v['num_new_starts'],
+        #                                   variance=v['brownian_variance'] * 10)
         all_starts.append(filtered_raw_starts)
