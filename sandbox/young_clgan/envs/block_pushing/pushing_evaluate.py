@@ -124,11 +124,12 @@ def plot_heatmap(rewards, goals, prefix='', spacing=1, show_heatmap=True, maze_i
         ax.add_patch(patches.Rectangle((5, -7), 2, 14, fill=True, edgecolor="none", facecolor='0.4'))
         ax.add_patch(patches.Rectangle((-7, -7), 14, 2, fill=True, edgecolor="none", facecolor='0.4'))
         ax.add_patch(patches.Rectangle((-7, -7), 2, 14, fill=True, edgecolor="none", facecolor='0.4'))
-    if limit is not None:
-        if center is None:
-            center = np.zeros(2)
-        ax.set_ylim(center[0] - limit[0], center[0] + limit[0])
-        ax.set_xlim(center[1] - limit[1], center[1] + limit[1])
+
+    # if limit is not None:
+    #     if center is None:
+    #         center = np.zeros(2)
+    #     ax.set_ylim(center[0] - limit[0], center[0] + limit[0])
+    #     ax.set_xlim(center[1] - limit[1], center[1] + limit[1])
 
     # colmap = cm.ScalarMappable(cmap=cm.rainbow)
     # colmap.set_array(rewards)
@@ -157,6 +158,7 @@ def plot_pushing(policy, env, report, bounds, center, itr, max_path_length = 100
     # while hasattr(base_env, 'wrapped_env'):
     #     base_env = base_env.wrapped_env
 
+    # Finds empty spaces
     empty_spaces = []
     lower_bound, upper_bound = bounds
     start_x, end_x = center[0] + lower_bound[0], center[0] + upper_bound[0]
@@ -186,7 +188,7 @@ def plot_pushing(policy, env, report, bounds, center, itr, max_path_length = 100
                                         <= env.terminal_eps) for path in paths]))
 
     print("hi")
-    plot_heatmap(avg_success, empty_spaces, center=center[:2], limit=np.array(upper_bound[:2]) + 0.1, spacing=half_grid_size, show_heatmap=False)
+    plot_heatmap(avg_success, empty_spaces, center=center[:2], limit=np.array(upper_bound[:2]) + 0.1, spacing=2 * half_grid_size, show_heatmap=True)
     logger.log(str(avg_success))
     logger.log(str(empty_spaces))
     report.add_text(str(avg_success))

@@ -136,10 +136,9 @@ def run_task(v):
         tf_session=tf_session,
         configs=gan_configs,
     )
-    initial_starts, _ = gan.sample_states_with_noise(v['num_new_starts'])
     logger.log("pretraining the GAN...")
     gan.pretrain_uniform()
-    initial_starts, _ = gan.sample_states_with_noise(v['num_new_starts'])
+    initial_starts, _ = gan.sample_states(v['num_new_starts'])
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
 
 
@@ -155,35 +154,35 @@ def run_task(v):
         else:
             starts = raw_starts
 
-        #TODO: add with with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):??
 
-        logger.log("Updating the environment start generator")
-        env.update_start_generator(
-            UniformListStateGenerator(
-                starts.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
-            )
-        )
-
-        logger.log("Training the algorithm")
-        algo = TRPO(
-            env=env,
-            policy=policy,
-            baseline=baseline,
-            batch_size=v['batch_size'],
-            max_path_length=v['max_path_length'],  #100 #making path length longer is fine because of early termination
-            n_itr=v['inner_iters'],
-            # max_path_length=50,
-            # batch_size=1000,
-            # n_itr =2,
-            discount=0.95,
-            gae_lambda=0.98,
-            step_size=0.01,
-            # goal_generator=goal_generator,
-            action_limiter=None,
-            optimizer_args={'subsample_factor': 0.1},
+        with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
+            logger.log("Updating the environment start generator")
+            env.update_start_generator(
+                UniformListStateGenerator(
+                    starts.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
+                )
             )
 
-        algo.train()
+            logger.log("Training the algorithm")
+            algo = TRPO(
+                env=env,
+                policy=policy,
+                baseline=baseline,
+                batch_size=v['batch_size'],
+                max_path_length=v['max_path_length'],  #100 #making path length longer is fine because of early termination
+                n_itr=v['inner_iters'],
+                # max_path_length=50,
+                # batch_size=1000,
+                # n_itr =2,
+                discount=0.95,
+                gae_lambda=0.98,
+                step_size=0.01,
+                # goal_generator=goal_generator,
+                action_limiter=None,
+                optimizer_args={'subsample_factor': 0.1},
+                )
+
+            algo.train()
 
         logger.log("Generating heat map")
         plot_pushing(policy, env, report, bounds=(v['lego_init_lower'], v['lego_init_upper']),
@@ -191,6 +190,7 @@ def run_task(v):
 
         #TODO: figure out how states are labelled
         labels = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
+        labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
         logger.log("Training the GAN")
         if np.any(labels):
             gan.train(
@@ -199,6 +199,8 @@ def run_task(v):
             )
         filtered_raw_start = [start for start, label in zip(starts, labels) if label[0] == 1]
         all_starts.append(filtered_raw_start)
+
+        report.save()
 
         # plot_pushing(policy, env, report, bounds=(v['lego_init_lower'], v['lego_init_upper']),
         #              center=v['lego_init_center'], itr=outer_iter)
@@ -210,7 +212,7 @@ vg.add('seed', [1])
 
 # Environment parameters
 vg.add('init_hand', [[0.5,  0.24,  0.5025],])
-vg.add('lego_target', [(0.5, 0.1, 0.5025),])
+vg.add('lego_target', [(0.5, 0.15, 0.5025),])
 vg.add('lego_init_center', [(0.5, 0.15, 0.5025),])
 vg.add('lego_init_lower', [(-0.06, -0.06, 0),])
 vg.add('lego_init_upper', [(0.06, 0.06, 0),])
@@ -232,13 +234,13 @@ vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learna
 vg.add('gan_generator_layers', [[200, 200]])
 vg.add('gan_discriminator_layers', [[128, 128]])
 vg.add('gan_noise_size', [5])
-vg.add('start_noise_level', [0.5])
+vg.add('start_noise_level', [0]) # no noise when sampling
 vg.add('gan_outer_iters', [500])
 vg.add('num_new_starts', [200])
 vg.add('num_old_starts', [100])
 vg.add('coll_eps', [0.3])
 vg.add('horizon', [100])
-vg.add('n_traj', [3])
+vg.add('n_traj', [5])
 
 # start generator
 vg.add('persistence', [1])
@@ -258,7 +260,7 @@ for vv in vg.variants():
         seed=vv['seed'],
         mode="local",
         # mode="ec2",
-        exp_prefix="hand_env60",
+        exp_prefix="hand_env63",
         # exp_name= "decaying-decaying-gamma" + str(t),
         # plot=True,
     )

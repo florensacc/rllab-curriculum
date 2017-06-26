@@ -109,6 +109,7 @@ def run_task(v):
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
     for outer_iter in range(1, v['outer_iters']):
+        #with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
         logger.log("Outer itr # %i" % outer_iter)
         algo = TRPO(
             env=env,
@@ -128,7 +129,7 @@ def run_task(v):
         algo.train()
 
         plot_pushing(policy, env, report, bounds=(v['lego_init_lower'], v['lego_init_upper']),
-                     center=v['lego_init_center'], itr=outer_iter)
+                         center=v['lego_init_center'], itr=outer_iter)
 
 
 vg = VariantGenerator()
