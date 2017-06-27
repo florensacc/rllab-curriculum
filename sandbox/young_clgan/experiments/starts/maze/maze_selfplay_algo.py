@@ -119,7 +119,7 @@ def run_task(v):
         max_path_length=v['horizon'],
         n_itr=v['inner_iters_alice'],
         step_size=0.01,
-        discount=v['discount'],
+        discount=v['discount_alice'],
         plot=False,
     )
 

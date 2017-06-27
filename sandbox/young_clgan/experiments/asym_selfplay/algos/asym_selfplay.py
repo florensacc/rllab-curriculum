@@ -13,13 +13,14 @@ def update_rewards(paths_alice, paths_bob, gamma):
     assert len(paths_alice) == len(paths_bob), 'Error, both agents need an equal number of paths.'
 
     for path_alice, path_bob in zip(paths_alice, paths_bob):
-        #alice_bonus = 10
+        alice_bonus = 10
+        alice_factor = 0.1
         t_alice = path_alice['rewards'].shape[0]
         t_bob = path_bob['rewards'].shape[0]
         path_alice['rewards'] = np.zeros_like(path_alice['rewards'])
         path_bob['rewards'] = np.zeros_like(path_bob['rewards'])
         #path_alice['rewards'][-1] = gamma * np.max([0, t_bob + alice_bonus - t_alice])
-        path_alice['rewards'][-1] = gamma * (t_bob - t_alice)
+        path_alice['rewards'][-1] = gamma * max(0, alice_bonus + t_bob - alice_factor * t_alice)
         path_bob['rewards'][-1] = -gamma * t_bob
 
     return paths_alice, paths_bob

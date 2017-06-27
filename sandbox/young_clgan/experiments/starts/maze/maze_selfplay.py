@@ -19,7 +19,7 @@ if __name__ == '__main__':
     debug = False
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ec2', '-e', action='store_true', default=True, help="add flag to run in ec2")
+    parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
     parser.add_argument('--clone', '-c', action='store_true', default=False,
                         help="add flag to copy file and checkout current")
     parser.add_argument('--local_docker', '-d', action='store_true', default=False,
@@ -55,7 +55,7 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-selfplay-maze6'
+    exp_prefix = 'start-selfplay-maze14'
 
     vg = VariantGenerator()
     vg.add('maze_id', [0])  # default is 0
@@ -110,6 +110,7 @@ if __name__ == '__main__':
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
+    vg.add('discount_alice', [0.995])
     vg.add('step_size', [0.01])
 
     if debug:
