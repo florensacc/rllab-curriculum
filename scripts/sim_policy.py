@@ -47,10 +47,6 @@ if __name__ == "__main__":
             policy = data['policy']
             env = data['env']
 
-        # temp fix
-        from sandbox.young_clgan.envs.mjc_key.pr2_key_env import PR2KeyEnv
-        from rllab.envs.normalized_env import normalize
-        env = normalize(PR2KeyEnv())
 
         while True:
             if args.init_state:
