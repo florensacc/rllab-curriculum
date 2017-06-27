@@ -5,61 +5,86 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.mujoco.maze.point_maze_env import PointMazeEnv
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.sampler.utils import rollout
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator
 from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import StopActionEnv
 
 
-def update_rewards(agent1_paths, agent2_paths, gamma):
-    assert len(agent1_paths)==len(agent2_paths), 'Error, both agents need an equal number of paths.'
+def update_rewards(paths_alice, paths_bob, gamma):
+    assert len(paths_alice) == len(paths_bob), 'Error, both agents need an equal number of paths.'
 
-    for a1path,a2path in zip(agent1_paths,agent2_paths):
-        t_a1 = a1path['rewards'].shape[0]
-        t_a2 = a2path['rewards'].shape[1]
-        a1path['rewards'] = np.zeros_like(a1path['rewards'])
-        a2path['rewards'] = np.zeros_like(a2path['rewards'])
-        a1path['rewards'][-1] = gamma * np.max([0, t_a2-t_a1])
-        a2path['rewards'][-1] = -gamma * t_a2
+    for path_alice, path_bob in zip(paths_alice, paths_bob):
+        #alice_bonus = 10
+        t_alice = path_alice['rewards'].shape[0]
+        t_bob = path_bob['rewards'].shape[0]
+        path_alice['rewards'] = np.zeros_like(path_alice['rewards'])
+        path_bob['rewards'] = np.zeros_like(path_bob['rewards'])
+        #path_alice['rewards'][-1] = gamma * np.max([0, t_bob + alice_bonus - t_alice])
+        path_alice['rewards'][-1] = gamma * (t_bob - t_alice)
+        path_bob['rewards'][-1] = -gamma * t_bob
 
-    return agent1_paths, agent2_paths
+    return paths_alice, paths_bob
 
 
 class AsymSelfplay(object):
 
-    def __init__(self, algo_a1, algo_a2, num_rollouts=10, gamma = 0.01):
-        self.algo_a1 = algo_a1
-        self.algo_a2 = algo_a2
-        self.env_a1 = algo_a1.env
-        self.env_a2 = algo_a2.env
-        self.policy_a1 = algo_a1.policy
-        self.policy_a2 = algo_a2.policy
-        self.max_path_length = algo_a1.max_path_length
+    def __init__(self, algo_alice, algo_bob, env_alice, env_bob, policy_alice, policy_bob, start_states,
+                 num_rollouts=10, gamma = 0.1):
+        self.algo_alice = algo_alice
+        self.algo_bob = algo_bob
+        self.env_alice = env_alice
+        self.env_bob = env_bob
+        self.policy_alice = policy_alice
+        self.policy_bob = policy_bob
+
+        self.max_path_length = algo_alice.max_path_length
         self.num_rollouts = num_rollouts
         self.gamma = gamma
+        self.optimize_alice = True
+        self.optimize_bob = False
+        self.start_states = start_states
 
-    def optimize(self, itr):
+    def optimize(self, iter=0):
 
         # get paths
-        a1_paths = []
-        a2_paths = []
-        for i in range(self.num_rollouts):
-            # TODO command for resetting to goal position
-            self.env_a1.reset('to the goal position')
-            a1_paths.append(rollout(self.env_a1, self.policy_a1, max_path_length=self.max_path_length,
-                                    animated=False))
-            # todo which part of observation for reset
-            self.env_a2.reset(a1_paths[i]['observations'][-1])
-            a2_paths.append(rollout(self.env_a2, self.policy_a2, max_path_length=self.max_path_length,
-                                    animated=False))
+        n_starts = len(self.start_states)
 
-        # update rewards
-        a1_paths, a2_paths = update_rewards(agent1_paths=a1_paths, agent2_paths=a2_paths,gamma=self.gamma)
+        for itr in range(self.algo_alice.n_itr):
 
-        # extract samples
-        a1_training_samples = self.algo_a1.process_samples(itr=itr, paths=a1_paths)
-        a2_training_samples = self.algo_a2.process_samples(itr=itr, paths=a2_paths)
+            paths_alice = []
+            paths_bob = []
+            new_start_states = []
 
-        # optimise policies
-        self.algo_a1.optimize_policy(itr=itr, samples_data=a1_training_samples)
-        self.algo_a2.optimize_policy(itr=itr, samples_data=a2_training_samples)
+            for i in range(self.num_rollouts):
+                self.env_alice.update_start_generator(FixedStateGenerator(self.start_states[i % n_starts]))
+
+                paths_alice.append(rollout(self.env_alice, self.policy_alice, max_path_length=self.max_path_length,
+                                           animated=False))
+
+                alice_end_obs = paths_alice[i]['observations'][-1]
+                new_start_state = self.env_alice._obs2start_transform(alice_end_obs)
+                new_start_states.append(new_start_state)
+
+                self.env_bob.update_start_generator(FixedStateGenerator(new_start_state))
+                paths_bob.append(rollout(self.env_bob, self.policy_bob, max_path_length=self.max_path_length,
+                                         animated=False))
+
+            # update rewards
+            paths_alice, paths_bob = update_rewards(paths_alice=paths_alice, paths_bob=paths_bob, gamma=self.gamma)
+
+            # optimize policies
+            if self.optimize_alice:
+                self.algo_alice.start_worker()
+                self.algo_alice.init_opt()
+                training_samples_alice = self.algo_alice.sampler.process_samples(itr=iter, paths=paths_alice)
+                self.algo_alice.optimize_policy(itr=iter, samples_data=training_samples_alice)
+
+            if self.optimize_bob:
+                self.algo_bob.start_worker()
+                self.algo_bob.init_opt()
+                training_samples_bob = self.algo_bob.sampler.process_samples(itr=iter, paths=paths_bob)
+                self.algo_bob.optimize_policy(itr=iter, samples_data=training_samples_bob)
+
+        return np.array(new_start_states)
 
 
 if __name__ == '__main__':
@@ -119,7 +144,7 @@ if __name__ == '__main__':
         # plot=True,
     )
 
-    asym_selfplay = AsymSelfplay(algo_a1=algo_a1, algo_a2=algo_a2, num_rollouts=num_rollouts, gamma = gamma)
+    asym_selfplay = AsymSelfplay(algo_alice=algo_a1, algo_bob=algo_a2, num_rollouts=num_rollouts, gamma = gamma)
 
     for i in range(iterations):
         asym_selfplay.optimize(i)

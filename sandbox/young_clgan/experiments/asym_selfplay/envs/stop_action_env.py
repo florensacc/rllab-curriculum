@@ -35,8 +35,10 @@ class StopActionEnv(ProxyEnv, Serializable):
     def step(self, action):
         wrapped_step = self._wrapped_env.step(action[:-1])
         next_obs, reward, done, info = wrapped_step
-        if np.tanh(action[-1])>0:
+        if np.tanh(action[-1])>0.9:
             done = True
+        else:
+            done = False
         return Step(next_obs, reward, done, **info)
 
     def get_current_obs(self):

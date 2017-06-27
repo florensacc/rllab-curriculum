@@ -17,6 +17,7 @@ import tempfile
 import math
 import time
 
+from rllab.algos.trpo import TRPO
 from rllab.envs.mujoco.mujoco_env import MODEL_DIR, BIG
 from rllab.core.serializable import Serializable
 from rllab.envs.proxy_env import ProxyEnv
@@ -29,6 +30,8 @@ from rllab.misc.overrides import overrides
 
 from sandbox.young_clgan.envs.base import StateGenerator, UniformListStateGenerator, \
     UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv
+from sandbox.young_clgan.experiments.asym_selfplay.algos.asym_selfplay import AsymSelfplay
+from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import StopActionEnv
 from sandbox.young_clgan.state.utils import StateCollection
 
 
@@ -138,6 +141,16 @@ class StartExplorationEnv(StartEnv, ProxyEnv, Serializable):
         self.update_start(*args, **kwargs)
         return self.wrapped_env.reset(init_state=self.current_start)
 
+
+def generate_starts_alice(env_bob, env_alice, policy_bob, policy_alice, algo_alice, start_states=None,
+                          num_new_starts=10000, animated=False, speedup=1):
+    asym_selfplay = AsymSelfplay(algo_alice=algo_alice, algo_bob=None, env_alice=env_alice, env_bob=env_bob,
+                                 policy_alice=policy_alice, policy_bob=policy_bob, start_states=start_states,
+                                 num_rollouts=num_new_starts)
+
+    new_start_states = asym_selfplay.optimize()
+    logger.log('Done generating starts by Alice')
+    return new_start_states
 
 def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsample=None, variance=1,
                     zero_action=False, animated=False, speedup=1):
