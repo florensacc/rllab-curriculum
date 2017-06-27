@@ -50,7 +50,7 @@ def run_task(v):
     inner_env = normalize(Arm3dDiscEnv())
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
-    fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
+    fixed_start_generator = FixedStateGenerator(state=v['start_goal'])
 
     env = GoalStartExplorationEnv(
         env=inner_env,
@@ -93,7 +93,7 @@ def run_task(v):
     # with env.set_kill_outside():
     #     find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_variance=1, animate=False)
 
-    # show where these states are:
+    # # show where these states are:
     # shuffled_starts = np.array(all_feasible_starts.state_list)
     # np.random.shuffle(shuffled_starts)
     # generate_starts(env, starts=shuffled_starts, horizon=100, variance=v['brownian_variance'], animated=True, speedup=10)

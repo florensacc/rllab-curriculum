@@ -1,0 +1,5 @@
+#!/bin/bash
+for i in {106..120}
+do
+	echo -e "y\n" | ec2ctl.py kill_f "00$i";
+done

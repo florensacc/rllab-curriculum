@@ -21,6 +21,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = ''
 from rllab import config
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
@@ -69,7 +70,7 @@ def run_task(v):
 
     policy = GaussianMLPPolicy(
         env_spec=env.spec,
-        hidden_sizes=(64, 64),
+        hidden_sizes=v['policy_hidden_sizes'],
         # Fix the variance since different goals will require different variances, making this parameter hard to learn.
         learn_std=v['learn_std'],
         adaptive_std=v['adaptive_std'],
@@ -78,7 +79,10 @@ def run_task(v):
         init_std=v['policy_init_std'],
     )
 
-    baseline = LinearFeatureBaseline(env_spec=env.spec)
+    if v['baseline'] == 'linear':
+        baseline = LinearFeatureBaseline(env_spec=env.spec)
+    elif v['baseline'] == 'g_mlp':
+        baseline = GaussianMLPBaseline(env_spec=env.spec)
 
     # load the state collection from data_upload
     load_dir = 'data_upload/state_collections/'
