@@ -3,15 +3,17 @@ import numpy as np
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.mujoco.maze.point_maze_env import PointMazeEnv
+from rllab.misc import logger
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.sampler.utils import rollout
 from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator
 from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import AliceEnv
+from sandbox.young_clgan.logging import ExperimentLogger
 
 
 class AsymSelfplay(object):
 
-    def __init__(self, algo_alice, algo_bob, env_alice, env_bob, policy_alice, policy_bob, start_states,
+    def __init__(self, algo_alice, algo_bob, env_alice, env_bob, policy_alice, policy_bob, start_states, log_dir,
                  num_rollouts=10, gamma = 0.1, alice_factor = 0.5):
         self.algo_alice = algo_alice
         self.algo_bob = algo_bob
@@ -27,6 +29,7 @@ class AsymSelfplay(object):
         self.optimize_bob = False
         self.start_states = start_states
         self.alice_factor = alice_factor
+        self.log_dir = log_dir
 
     def update_rewards(self, paths_alice, paths_bob, gamma):
         assert len(paths_alice) == len(paths_bob), 'Error, both agents need an equal number of paths.'
@@ -49,22 +52,34 @@ class AsymSelfplay(object):
 
         # get paths
         n_starts = len(self.start_states)
+        logger.log("N starts: " + str(n_starts))
         all_alice_paths = []
+        self.algo_alice.current_itr = 0
 
-        for i in range(n_starts):
-            self.env_alice.update_start_generator(FixedStateGenerator(self.start_states[i % n_starts]))
+        with ExperimentLogger(self.log_dir, 'last_alice', snapshot_mode='last', hold_outter_log=True):
+            logger.log("Training Alice")
 
-            alice_paths = self.algo_alice.train()
-            all_alice_paths.extend(alice_paths)
+            for i in range(n_starts):
+                self.env_alice.update_start_generator(FixedStateGenerator(self.start_states[i % n_starts]))
+                logger.log("Num itrs: " + str(self.algo_alice.n_itr))
+                alice_paths = self.algo_alice.train()
+                all_alice_paths.extend(alice_paths)
 
-        new_start_states = [self.env_alice._obs2start_transform(path['observations'][-1]) for path in all_alice_paths]
+        logger.log("All alice paths: " + str(len(all_alice_paths)))
+
+        new_paths = [path for paths in all_alice_paths for path in paths]
+        logger.log("New paths: " + str(len(new_paths)))
+        new_start_states = [self.env_alice._obs2start_transform(path['observations'][-1]) for path in new_paths]
+        logger.log("new start states: " + str(len(new_start_states)))
+
+        logger.log("self.num_rollouts: " + str(self.num_rollouts))
 
         new_start_states = np.array(new_start_states)
         if len(new_start_states) < self.num_rollouts:
             return new_start_states
         else:
-            #return new_start_states[np.random.choice(np.shape(new_start_states)[0], size=self.num_rollouts)]
-            return new_start_states[np.random.choice(new_start_states.shape[0], size=self.num_rollouts)]
+            return new_start_states[np.random.choice(np.shape(new_start_states)[0], size=self.num_rollouts)]
+            #return np.array(new_start_states[np.random.choice(new_start_states.shape[0], size=self.num_rollouts)])
 
     def optimize(self, iter=0):
 

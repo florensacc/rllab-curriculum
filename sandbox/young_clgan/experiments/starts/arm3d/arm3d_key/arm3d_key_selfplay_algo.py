@@ -99,7 +99,7 @@ def run_task(v):
     # generate_starts(env, starts=shuffled_starts, horizon=100, variance=v['brownian_variance'], animated=True, speedup=10)
 
     # Use asymmetric self-play to run Alice to generate starts for Bob.
-    env_alice = AliceEnv(env)
+    env_alice = AliceEnv(env, env, policy, v['horizon'])
 
     policy_alice = GaussianMLPPolicy(
             env_spec=env_alice.spec,
@@ -117,7 +117,7 @@ def run_task(v):
         env=env_alice,
         policy=policy_alice,
         baseline=baseline_alice,
-        batch_size=v['pg_batch_size'],
+        batch_size=v['pg_batch_size_alice'],
         max_path_length=v['horizon'],
         n_itr=v['inner_iters_alice'],
         step_size=0.01,
@@ -132,7 +132,8 @@ def run_task(v):
 
         starts = generate_starts_alice(env_bob=env, env_alice=env_alice, policy_bob=policy, policy_alice=policy_alice,
                               algo_alice=algo_alice, start_states=[v['start_goal']],
-                              num_new_starts=v['num_new_starts'], alice_factor=v['alice_factor'])
+                              num_new_starts=v['num_new_starts'], alice_factor=v['alice_factor'],
+                                       log_dir=log_dir)
 
         # with env.set_kill_outside():
         #     starts = generate_starts(env, starts=seed_starts, horizon=v['brownian_horizon'], variance=v['brownian_variance'])
