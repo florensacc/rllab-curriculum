@@ -9,27 +9,10 @@ from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateG
 from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import StopActionEnv
 
 
-def update_rewards(paths_alice, paths_bob, gamma):
-    assert len(paths_alice) == len(paths_bob), 'Error, both agents need an equal number of paths.'
-
-    for path_alice, path_bob in zip(paths_alice, paths_bob):
-        alice_bonus = 10
-        alice_factor = 0.1
-        t_alice = path_alice['rewards'].shape[0]
-        t_bob = path_bob['rewards'].shape[0]
-        path_alice['rewards'] = np.zeros_like(path_alice['rewards'])
-        path_bob['rewards'] = np.zeros_like(path_bob['rewards'])
-        #path_alice['rewards'][-1] = gamma * np.max([0, t_bob + alice_bonus - t_alice])
-        path_alice['rewards'][-1] = gamma * max(0, alice_bonus + t_bob - alice_factor * t_alice)
-        path_bob['rewards'][-1] = -gamma * t_bob
-
-    return paths_alice, paths_bob
-
-
 class AsymSelfplay(object):
 
     def __init__(self, algo_alice, algo_bob, env_alice, env_bob, policy_alice, policy_bob, start_states,
-                 num_rollouts=10, gamma = 0.1):
+                 num_rollouts=10, gamma = 0.1, alice_factor = 0.5):
         self.algo_alice = algo_alice
         self.algo_bob = algo_bob
         self.env_alice = env_alice
@@ -43,6 +26,22 @@ class AsymSelfplay(object):
         self.optimize_alice = True
         self.optimize_bob = False
         self.start_states = start_states
+        self.alice_factor = alice_factor
+
+    def update_rewards(self, paths_alice, paths_bob, gamma):
+        assert len(paths_alice) == len(paths_bob), 'Error, both agents need an equal number of paths.'
+
+        for path_alice, path_bob in zip(paths_alice, paths_bob):
+            alice_bonus = 10
+            t_alice = path_alice['rewards'].shape[0]
+            t_bob = path_bob['rewards'].shape[0]
+            path_alice['rewards'] = np.zeros_like(path_alice['rewards'])
+            path_bob['rewards'] = np.zeros_like(path_bob['rewards'])
+            # path_alice['rewards'][-1] = gamma * np.max([0, t_bob + alice_bonus - t_alice])
+            path_alice['rewards'][-1] = gamma * max(0, alice_bonus + t_bob - self.alice_factor * t_alice)
+            path_bob['rewards'][-1] = -gamma * t_bob
+
+        return paths_alice, paths_bob
 
     def optimize(self, iter=0):
 
@@ -70,7 +69,7 @@ class AsymSelfplay(object):
                                          animated=False))
 
             # update rewards
-            paths_alice, paths_bob = update_rewards(paths_alice=paths_alice, paths_bob=paths_bob, gamma=self.gamma)
+            paths_alice, paths_bob = self.update_rewards(paths_alice=paths_alice, paths_bob=paths_bob, gamma=self.gamma)
 
             # optimize policies
             if self.optimize_alice:
