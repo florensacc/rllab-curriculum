@@ -2,7 +2,7 @@ import matplotlib
 import cloudpickle
 import pickle
 
-from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import StopActionEnv
+from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import AliceEnv
 
 matplotlib.use('Agg')
 import os
@@ -99,7 +99,7 @@ def run_task(v):
     # generate_starts(env, starts=shuffled_starts, horizon=100, variance=v['brownian_variance'], animated=True, speedup=10)
 
     # Use asymmetric self-play to run Alice to generate starts for Bob.
-    env_alice = StopActionEnv(env)
+    env_alice = AliceEnv(env)
 
     policy_alice = GaussianMLPPolicy(
             env_spec=env_alice.spec,

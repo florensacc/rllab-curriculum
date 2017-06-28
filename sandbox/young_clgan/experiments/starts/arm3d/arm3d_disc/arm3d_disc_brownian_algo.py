@@ -94,9 +94,9 @@ def run_task(v):
     #     find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_variance=1, animate=False)
 
     # show where these states are:
-    shuffled_starts = np.array(all_feasible_starts.state_list)
-    np.random.shuffle(shuffled_starts)
-    generate_starts(env, starts=shuffled_starts, horizon=100, variance=v['brownian_variance'], animated=True, speedup=10)
+    # shuffled_starts = np.array(all_feasible_starts.state_list)
+    # np.random.shuffle(shuffled_starts)
+    # generate_starts(env, starts=shuffled_starts, horizon=100, variance=v['brownian_variance'], animated=True, speedup=10)
 
     for outer_iter in range(1, v['outer_iters']):
 

@@ -3,7 +3,7 @@ import numpy as np
 from rllab.envs.mujoco.maze.point_maze_env import PointMazeEnv
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.sampler.utils import rollout
-from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import StopActionEnv
+from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import AliceEnv
 
 
 def update_rewards(agent1_paths, agent2_paths, gamma):
@@ -20,7 +20,7 @@ def update_rewards(agent1_paths, agent2_paths, gamma):
     return agent1_paths, agent2_paths
 
 regular_env = PointMazeEnv()
-stop_action_env = StopActionEnv(PointMazeEnv())
+stop_action_env = AliceEnv(PointMazeEnv())
 
 print('Regular')
 print(regular_env.action_space.low)

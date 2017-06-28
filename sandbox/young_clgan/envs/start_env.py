@@ -31,7 +31,7 @@ from rllab.misc.overrides import overrides
 from sandbox.young_clgan.envs.base import StateGenerator, UniformListStateGenerator, \
     UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv
 from sandbox.young_clgan.experiments.asym_selfplay.algos.asym_selfplay import AsymSelfplay
-from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import StopActionEnv
+from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import AliceEnv
 from sandbox.young_clgan.state.utils import StateCollection
 
 
@@ -178,7 +178,7 @@ def generate_starts_alice(env_bob, env_alice, policy_bob, policy_alice, algo_ali
                                  policy_alice=policy_alice, policy_bob=policy_bob, start_states=start_states,
                                  num_rollouts=num_new_starts, alice_factor=alice_factor)
 
-    new_start_states = asym_selfplay.optimize()
+    new_start_states = asym_selfplay.optimize_batch()
     logger.log('Done generating starts by Alice')
     return new_start_states
 
