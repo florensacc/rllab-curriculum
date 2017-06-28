@@ -6,7 +6,7 @@ from rllab.envs.mujoco.maze.point_maze_env import PointMazeEnv
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.sampler.utils import rollout
 from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator
-from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import StopActionEnv
+from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import AliceEnv
 
 
 class AsymSelfplay(object):
@@ -42,6 +42,29 @@ class AsymSelfplay(object):
             path_bob['rewards'][-1] = -gamma * t_bob
 
         return paths_alice, paths_bob
+
+
+
+    def optimize_batch(self):
+
+        # get paths
+        n_starts = len(self.start_states)
+        all_alice_paths = []
+
+        for i in range(n_starts):
+            self.env_alice.update_start_generator(FixedStateGenerator(self.start_states[i % n_starts]))
+
+            alice_paths = self.algo_alice.train()
+            all_alice_paths.extend(alice_paths)
+
+        new_start_states = [self.env_alice._obs2start_transform(path['observations'][-1]) for path in all_alice_paths]
+
+        new_start_states = np.array(new_start_states)
+        if len(new_start_states) < self.num_rollouts:
+            return new_start_states
+        else:
+            #return new_start_states[np.random.choice(np.shape(new_start_states)[0], size=self.num_rollouts)]
+            return new_start_states[np.random.choice(new_start_states.shape[0], size=self.num_rollouts)]
 
     def optimize(self, iter=0):
 
@@ -98,7 +121,7 @@ if __name__ == '__main__':
 
     # todo setup the correct environments (correct wrappers for arbitrary reset)
     env_a1 = PointMazeEnv()
-    env_a2 = StopActionEnv(PointMazeEnv())
+    env_a2 = AliceEnv(PointMazeEnv())
 
     policy_a1 = GaussianMLPPolicy(
             env_spec=env_a1.spec,

@@ -1,6 +1,6 @@
 import matplotlib
 
-from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import StopActionEnv
+from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import AliceEnv
 
 matplotlib.use('Agg')
 import os
@@ -97,7 +97,7 @@ def run_task(v):
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
 
     # Use asymmetric self-play to run Alice to generate starts for Bob.
-    env_alice = StopActionEnv(env)
+    env_alice = AliceEnv(env, env, policy, v['horizon'])
 
     policy_alice = GaussianMLPPolicy(
             env_spec=env_alice.spec,

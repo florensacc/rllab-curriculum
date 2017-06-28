@@ -2,7 +2,7 @@ import matplotlib
 import cloudpickle
 import pickle
 
-from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import StopActionEnv
+from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import AliceEnv
 
 matplotlib.use('Agg')
 import os
@@ -87,21 +87,21 @@ def run_task(v):
     print("we have %d feasible starts" % all_feasible_starts.size)
 
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
-    brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
-    with env.set_kill_outside():
-        seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=10,  # this is smaller as they are seeds!
-                                      variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=1)
-
-    with env.set_kill_outside():
-        find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_variance=1, animate=False)
+    # brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
+    # with env.set_kill_outside():
+    #     seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=10,  # this is smaller as they are seeds!
+    #                                   variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=1)
+    #
+    # with env.set_kill_outside():
+    #     find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_variance=1, animate=False)
 
     # show where these states are:
-    shuffled_starts = np.array(all_feasible_starts.state_list)
-    np.random.shuffle(shuffled_starts)
-    generate_starts(env, starts=shuffled_starts, horizon=100, variance=v['brownian_variance'], animated=True, speedup=10)
+    # shuffled_starts = np.array(all_feasible_starts.state_list)
+    # np.random.shuffle(shuffled_starts)
+    # generate_starts(env, starts=shuffled_starts, horizon=100, variance=v['brownian_variance'], animated=True, speedup=10)
 
     # Use asymmetric self-play to run Alice to generate starts for Bob.
-    env_alice = StopActionEnv(env)
+    env_alice = AliceEnv(env)
 
     policy_alice = GaussianMLPPolicy(
             env_spec=env_alice.spec,

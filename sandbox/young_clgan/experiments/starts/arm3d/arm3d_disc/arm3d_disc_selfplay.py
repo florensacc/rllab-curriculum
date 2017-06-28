@@ -16,7 +16,7 @@ from sandbox.young_clgan.experiments.starts.arm3d.arm3d_disc.arm3d_disc_selfplay
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ec2', '-e', action='store_true', default=True, help="add flag to run in ec2")
+    parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
     parser.add_argument('--clone', '-c', action='store_true', default=False,
                         help="add flag to copy file and checkout current")
     parser.add_argument('--local_docker', '-d', action='store_true', default=False,
@@ -101,7 +101,7 @@ if __name__ == '__main__':
     vg.add('output_gain_alice', [0.1])
     vg.add('policy_init_std_alice', [1])
     vg.add('discount_alice', [0.995])
-    vg.add('alice_factor', [0.1])
+    vg.add('alice_factor', [0.5])
     vg.add('inner_iters_alice', [5])  # again we will have to divide/adjust the
 
     vg.add('seed', range(100, 700, 100))
