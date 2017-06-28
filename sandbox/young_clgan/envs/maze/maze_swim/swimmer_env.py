@@ -5,7 +5,7 @@ import numpy as np
 from rllab.core.serializable import Serializable
 from rllab.misc import logger
 from rllab.misc import autoargs
-
+from contextlib import contextmanager
 
 class SwimmerEnv(MujocoEnv, Serializable):
 
@@ -60,3 +60,11 @@ class SwimmerEnv(MujocoEnv, Serializable):
             logger.record_tabular('MaxForwardProgress', np.nan)
             logger.record_tabular('MinForwardProgress', np.nan)
             logger.record_tabular('StdForwardProgress', np.nan)
+
+    @contextmanager
+    def set_kill_outside(self):
+        self.kill_outside = True
+        try:
+            yield
+        finally:
+            self.kill_outside = False

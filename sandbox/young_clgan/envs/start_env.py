@@ -173,10 +173,10 @@ def generate_starts_random(starts=None, horizon = 1, size = 1000, subsample = No
 
 
 def generate_starts_alice(env_bob, env_alice, policy_bob, policy_alice, algo_alice, start_states=None,
-                          num_new_starts=10000, animated=False, speedup=1):
+                          num_new_starts=10000, alice_factor=0.5):
     asym_selfplay = AsymSelfplay(algo_alice=algo_alice, algo_bob=None, env_alice=env_alice, env_bob=env_bob,
                                  policy_alice=policy_alice, policy_bob=policy_bob, start_states=start_states,
-                                 num_rollouts=num_new_starts)
+                                 num_rollouts=num_new_starts, alice_factor=alice_factor)
 
     new_start_states = asym_selfplay.optimize()
     logger.log('Done generating starts by Alice')

@@ -3,8 +3,6 @@ import random
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
-import tensorflow as tf
-import tflearn
 import argparse
 import sys
 from multiprocessing import cpu_count
@@ -13,11 +11,9 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.starts.maze.maze_selfplay_algo import run_task
+from sandbox.young_clgan.experiments.starts.maze.maze_swimmer.maze_swimmer_brownian_algo import run_task
 
 if __name__ == '__main__':
-
-    debug = False
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
@@ -37,11 +33,10 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        # 'eu-central-1c', 'us-east-2c', 'us-east-2b', 'us-east-2a', 'ap-southeast-2c', 'ap-southeast-2a', 'us-west-2c',
-        # 'us-west-2a', 'us-west-2b', 'eu-west-1a', 'eu-west-1b', 'eu-west-1c', 'us-east-1d', 'ap-southeast-1a',
-        # 'us-east-1a', 'us-east-1b', 'us-east-1c', 'us-west-1a', 'us-west-1c'
+        'ap-northeast-2a', 'ap-northeast-2c', 'us-east-2b', 'ap-south-1a', 'us-east-2c', 'us-east-2a', 'ap-south-1b',
+        'us-east-1b', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'eu-west-1c', 'eu-west-1a', 'eu-west-1b'
     ]
-    ec2_instance = args.type if args.type else 'm4.10xlarge' #'c4.4xlarge'
+    ec2_instance = args.type if args.type else 'c4.8xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -57,10 +52,10 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-selfplay-maze11-run2'
+    exp_prefix = 'start-brownian-arm3d-disc'
 
     vg = VariantGenerator()
-    vg.add('maze_id', [11])  # default is 0
+    vg.add('maze_id', [0])  # default is 0
     vg.add('start_size', [2])  # this is the ultimate start we care about: getting the pendulum upright
     vg.add('start_range',
            lambda maze_id: [4] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
@@ -69,26 +64,21 @@ if __name__ == '__main__':
                                                 else [(2, 2, 0, 0)] if maze_id == 0 and start_size == 4
                                                 else [(0, 0)] if start_size == 2
                                                 else [(0, 0, 0, 0)])
-
-
-    ultimate_goal = lambda maze_id: [(0, 4)] if maze_id == 0 else [(2, 4), (0, 0)] if maze_id == 12 else [(4, 4)]
-    vg.add('ultimate_goal', ultimate_goal)
-    vg.add('start_goal', ultimate_goal)
-
+    vg.add('ultimate_goal', lambda maze_id: [(0, 4)] if maze_id == 0 else [(2, 4), (0, 0)] if maze_id == 12 else [(4, 4)])
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('terminal_eps', [0.3])
-    vg.add('only_feasible', [True])
-    vg.add('goal_range',
-           lambda maze_id: [4] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
-    vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
     # brownian params
-    #vg.add('brownian_variance', [0.1, 1])
-    #vg.add('brownian_horizon', [50, 100])
+    vg.add('brownian_variance', [1])
+    vg.add('brownian_horizon', [50])
     # goal-algo params
     vg.add('min_reward', [0.1])
     vg.add('max_reward', [0.9])
     vg.add('distance_metric', ['L2'])
     vg.add('extend_dist_rew', [False])  # !!!!
+    vg.add('inner_weight', [0])
+    vg.add('goal_weight', lambda inner_weight: [1000] if inner_weight > 0 else [1])
+    vg.add('regularize_starts', [0])
+
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('sampling_res', [2])
@@ -99,8 +89,7 @@ if __name__ == '__main__':
     vg.add('num_new_starts', [200])
     vg.add('num_old_starts', [100])
     # sampling params
-    #vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
-    vg.add('horizon', [500])
+    vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
     vg.add('outer_iters', lambda maze_id: [200] if maze_id == 0 else [1000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
     vg.add('pg_batch_size', [20000])
@@ -110,32 +99,8 @@ if __name__ == '__main__':
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
-    vg.add('step_size', [0.01])
-    # Alice params.
-    vg.add('output_gain_alice', [0.1])
-    vg.add('policy_init_std_alice', [1])
-    vg.add('discount_alice', [0.995])
-    vg.add('alice_factor', [0.5])
-    vg.add('inner_iters_alice', [5])  # again we will have to divide/adjust the
 
-    if debug:
-        vg.add('seed', [100])
-    else:
-        vg.add('seed', range(100, 700, 100))
-
-    # # gan_configs
-    # vg.add('GAN_batch_size', [128])  # proble with repeated name!!
-    # vg.add('GAN_generator_activation', ['relu'])
-    # vg.add('GAN_discriminator_activation', ['relu'])
-    # vg.add('GAN_generator_optimizer', [tf.train.AdamOptimizer])
-    # vg.add('GAN_generator_optimizer_stepSize', [0.001])
-    # vg.add('GAN_discriminator_optimizer', [tf.train.AdamOptimizer])
-    # vg.add('GAN_discriminator_optimizer_stepSize', [0.001])
-    # vg.add('GAN_generator_weight_initializer', [tflearn.initializations.truncated_normal])
-    # vg.add('GAN_generator_weight_initializer_stddev', [0.05])
-    # vg.add('GAN_discriminator_weight_initializer', [tflearn.initializations.truncated_normal])
-    # vg.add('GAN_discriminator_weight_initializer_stddev', [0.02])
-    # vg.add('GAN_discriminator_batch_noise_stddev', [1e-2])
+    vg.add('seed', range(100, 600, 100))
 
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
@@ -144,27 +109,25 @@ if __name__ == '__main__':
           *subnets)
 
     for vv in vg.variants():
-        #run_task(vv)
-
         if mode in ['ec2', 'local_docker']:
             # choose subnet
-            # subnet = random.choice(subnets)
-            # config.AWS_REGION_NAME = subnet[:-1]
-            # config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_SECURITY_GROUP_IDS = \
-            #     config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
-            #         config.AWS_REGION_NAME]
-            # config.AWS_NETWORK_INTERFACES = [
-            #     dict(
-            #         SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
-            #         Groups=config.AWS_SECURITY_GROUP_IDS,
-            #         DeviceIndex=0,
-            #         AssociatePublicIpAddress=True,
-            #     )
-            # ]
+            subnet = random.choice(subnets)
+            config.AWS_REGION_NAME = subnet[:-1]
+            config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
+                config.AWS_REGION_NAME]
+            config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
+                config.AWS_REGION_NAME]
+            config.AWS_SECURITY_GROUP_IDS = \
+                config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
+                    config.AWS_REGION_NAME]
+            config.AWS_NETWORK_INTERFACES = [
+                dict(
+                    SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
+                    Groups=config.AWS_SECURITY_GROUP_IDS,
+                    DeviceIndex=0,
+                    AssociatePublicIpAddress=True,
+                )
+            ]
 
             run_experiment_lite(
                 # use_cloudpickle=False,
@@ -194,6 +157,7 @@ if __name__ == '__main__':
                     'pip install scikit-image',
                     'conda install numpy -n rllab3 -y',
                 ],
+                # terminate_machine=False,
             )
             if mode == 'local_docker':
                 sys.exit()
