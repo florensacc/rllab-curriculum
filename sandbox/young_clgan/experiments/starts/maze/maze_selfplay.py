@@ -18,7 +18,7 @@ from sandbox.young_clgan.experiments.starts.maze.maze_selfplay_algo import run_t
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
+    parser.add_argument('--ec2', '-e', action='store_true', default=True, help="add flag to run in ec2")
     parser.add_argument('--clone', '-c', action='store_true', default=False,
                         help="add flag to copy file and checkout current")
     parser.add_argument('--local_docker', '-d', action='store_true', default=False,
@@ -27,7 +27,7 @@ if __name__ == '__main__':
     parser.add_argument('--price', '-p', type=str, default='', help='set betting price')
     parser.add_argument('--subnet', '-sn', type=str, default='', help='set subnet like us-west-1a')
     parser.add_argument('--name', '-n', type=str, default='', help='set exp prefix name and new file name')
-    parser.add_argument('--debug', action='store_true', default=True, help="run code without multiprocessing")
+    parser.add_argument('--debug', action='store_true', default=False, help="run code without multiprocessing")
     args = parser.parse_args()
 
     if args.clone:
@@ -55,7 +55,7 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-selfplay-maze11-run3'
+    exp_prefix = 'start-selfplay-maze11-run4'
 
     vg = VariantGenerator()
     vg.add('maze_id', [11])  # default is 0
@@ -115,6 +115,10 @@ if __name__ == '__main__':
     vg.add('discount_alice', [0.995])
     vg.add('alice_factor', [0.5])
     vg.add('inner_iters_alice', [5])  # again we will have to divide/adjust the
+    if args.debug:
+        vg.add('pg_batch_size_alice', [200])
+    else:
+        vg.add('pg_batch_size_alice', [2000])
 
     if args.ec2:
         vg.add('seed', range(100, 700, 100))

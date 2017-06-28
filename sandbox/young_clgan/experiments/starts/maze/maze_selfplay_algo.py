@@ -86,13 +86,13 @@ def run_task(v):
     # initialize all logging arrays on itr0
     outer_iter = 0
 
-    # logger.log('Generating the Initial Heatmap...')
-    # plot_policy_means(policy, env, sampling_res=2, report=report, limit=v['goal_range'], center=v['goal_center'])
+    logger.log('Generating the Initial Heatmap...')
+    plot_policy_means(policy, env, sampling_res=2, report=report, limit=v['goal_range'], center=v['goal_center'])
     # test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=sampling_res,
     #                      n_traj=v['n_traj'],
     #                      itr=outer_iter, report=report, center=v['goal_center'],
     #                      limit=v['goal_range'])  # use goal for plot
-    # report.new_row()
+    report.new_row()
 
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
 
@@ -115,7 +115,7 @@ def run_task(v):
         env=env_alice,
         policy=policy_alice,
         baseline=baseline_alice,
-        batch_size=v['pg_batch_size'],
+        batch_size=v['pg_batch_size_alice'],
         max_path_length=v['horizon'],
         n_itr=v['inner_iters_alice'],
         step_size=0.01,
@@ -129,8 +129,9 @@ def run_task(v):
         logger.log("Sampling starts")
 
         starts = generate_starts_alice(env_bob=env, env_alice=env_alice, policy_bob=policy, policy_alice=policy_alice,
-                              algo_alice=algo_alice, start_states=[v['start_goal']],
-                              num_new_starts=v['num_new_starts'], alice_factor=v['alice_factor'])
+                                       algo_alice=algo_alice, start_states=[v['start_goal']],
+                                       num_new_starts=v['num_new_starts'], alice_factor=v['alice_factor'],
+                                       log_dir=log_dir)
 
         labels = label_states(starts, env, policy, v['horizon'],
                               as_goals=False, n_traj=v['n_traj'], key='goal_reached')

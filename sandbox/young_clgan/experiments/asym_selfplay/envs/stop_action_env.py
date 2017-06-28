@@ -50,7 +50,7 @@ class AliceEnv(ProxyEnv, Serializable):
         alice_end_obs = next_obs
         bob_start_state = self._obs2start_transform(alice_end_obs)
         self.env_bob.update_start_generator(FixedStateGenerator(bob_start_state))
-        path_bob = rollout(self.env_bob, self.policy_bob, max_path_length=self.max_path_length,
+        path_bob = rollout(self.env_bob, self.policy_bob, max_path_length=max(1, self.max_path_length - self.time), #self.max_path_length,
                            animated=False)
         t_alice = self.time
         t_bob = path_bob['rewards'].shape[0]
@@ -84,5 +84,8 @@ class AliceEnv(ProxyEnv, Serializable):
     def __str__(self):
         return "Wrapped with stop action: %s" % self._wrapped_env
 
+    @overrides
+    def log_diagnostics(self, paths, n_traj=1, *args, **kwargs):
+        pass
 
 
