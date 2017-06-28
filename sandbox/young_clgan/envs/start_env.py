@@ -141,6 +141,36 @@ class StartExplorationEnv(StartEnv, ProxyEnv, Serializable):
         self.update_start(*args, **kwargs)
         return self.wrapped_env.reset(init_state=self.current_start)
 
+def generate_starts_random(starts=None, horizon = 1, size = 1000, subsample = None, sigma = 0.2,
+                           center = None, range_lower = None, range_upper = None, noise = "gaussian"):
+    # have to check that starts generated are feasible
+    logger.log("generating random starts")
+    if starts is None:
+        raise Exception
+    if noise == "gaussian":
+        random_generator = random.gauss
+    else:
+        random_generator = random.uniform
+    states = []
+    if center is not None and range_lower is not None and range_upper is not None:
+        center = np.array(center)
+        range_lower = np.array(range_lower)
+        range_upper = np.array(range_upper)
+        while len(states) < size:
+            start = starts[random.randint(0, len(starts) - 1)]
+            new_state = np.random.randn(*start.shape) * sigma + start
+            if np.all(new_state > center + range_lower) and np.all(new_state < center + range_upper):
+                states.append(new_state)
+
+    if subsample is None:
+        return np.array(states)
+    else:
+        states = np.array(states)
+        if len(states) < subsample:
+            return states
+        return states[np.random.choice(np.shape(states)[0], size=subsample)]
+
+
 
 def generate_starts_alice(env_bob, env_alice, policy_bob, policy_alice, algo_alice, start_states=None,
                           num_new_starts=10000, animated=False, speedup=1):
