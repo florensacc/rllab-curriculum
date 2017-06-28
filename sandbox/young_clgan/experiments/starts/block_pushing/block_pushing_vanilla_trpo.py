@@ -130,27 +130,28 @@ def run_task(v):
 
         plot_pushing(policy, env, report, bounds=(v['lego_init_lower'], v['lego_init_upper']),
                          center=v['lego_init_center'], itr=outer_iter)
+        report.save()
 
 
 vg = VariantGenerator()
-vg.add('seed', [1])
-# vg.add('seed', [2,12,22,32,42])
+# vg.add('seed', [1])
+vg.add('seed', [2,12,22,32,42])
 
 # Environment parameters
-vg.add('init_hand', [[0.5,  0.24,  0.5025],])
-vg.add('lego_target', [(0.5, 0.1, 0.5025),])
-vg.add('lego_init_center', [(0.5, 0.15, 0.5025),])
-vg.add('lego_init_lower', [(-0.06, -0.06, 0),])
-vg.add('lego_init_upper', [(0.06, 0.06, 0),])
+vg.add('init_hand', [[0.6,  0.27,  0.5025],])
+vg.add('lego_target', [(0.6, 0.15, 0.5025),])
+vg.add('lego_init_center', [(0.6, 0.15, 0.5025),])
+vg.add('lego_init_lower', [(-0.1, -0.02, 0),])
+vg.add('lego_init_upper', [(0.1, 0.1, 0),])
 
 # Optimizer parameters
 vg.add('inner_iters', [5])
-vg.add('outer_iters', [200])
-vg.add('batch_size', [10000])
-vg.add('max_path_length', [100])
+vg.add('outer_iters', [300])
+vg.add('batch_size', [15000])
+vg.add('max_path_length', [150]) #TODO: make longer?
 
 # Goal generation parameters
-vg.add('terminal_eps', [0.02])
+vg.add('terminal_eps', [0.03])
 vg.add('extend_distance_rew', [False])
 vg.add('terminate_env', [True])
 
@@ -168,7 +169,7 @@ for vv in vg.variants():
         seed=vv['seed'],
         mode="local",
         # mode="ec2",
-        exp_prefix="hand_env58",
+        exp_prefix="hand_env77",
         # exp_name= "decaying-decaying-gamma" + str(t),
         # plot=True,
     )
