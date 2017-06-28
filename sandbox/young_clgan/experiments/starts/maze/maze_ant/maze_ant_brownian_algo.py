@@ -33,7 +33,7 @@ from sandbox.young_clgan.state.utils import StateCollection
 from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasible_states
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
 from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
-from sandbox.young_clgan.envs.maze.maze_swim.swim_maze_env import SwimmerMazeEnv
+from sandbox.young_clgan.envs.maze.maze_ant.ant_maze_env import AntMazeEnv
 from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy, sample_unif_feas, unwrap_maze, \
     plot_policy_means
 
@@ -55,7 +55,7 @@ def run_task(v):
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
 
-    inner_env = normalize(SwimmerMazeEnv())
+    inner_env = normalize(AntMazeEnv())
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
     fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
@@ -99,8 +99,9 @@ def run_task(v):
                                   variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=1)
 
     # with env.set_kill_outside():
-    feasible_states = find_all_feasible_states(env, seed_starts, distance_threshold=0.2, brownian_variance=1, animate=True, min_new_states=10)
+    feasible_states = find_all_feasible_states(env, seed_starts, distance_threshold=0.2, brownian_variance=1, animate=True, min_new_states=5)
     print("hi")
+    import pdb;pdb.set_trace()
     # show where these states are:
     # shuffled_starts = np.array(seed_starts.state_list)
     # np.random.shuffle(shuffled_starts)

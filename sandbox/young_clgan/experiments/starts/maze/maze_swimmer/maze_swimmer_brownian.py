@@ -42,6 +42,7 @@ if __name__ == '__main__':
     config.AWS_INSTANCE_TYPE = ec2_instance
     config.AWS_SPOT_PRICE = str(info["price"])
     n_parallel = int(info["vCPU"] / 2)  # make the default 4 if not using ec2
+    # args.ec2 = True
     if args.ec2:
         mode = 'ec2'
     elif args.local_docker:
@@ -80,7 +81,7 @@ if __name__ == '__main__':
     vg.add('max_reward', [0.9])
     vg.add('distance_metric', ['L2'])
     vg.add('extend_dist_rew', [False])  # !!!!
-    vg.add('inner_weight', [0])
+    vg.add('inner_weight', [0, 1])
     vg.add('goal_weight', lambda inner_weight: [1000] if inner_weight > 0 else [1])
     vg.add('regularize_starts', [0])
 
@@ -97,14 +98,15 @@ if __name__ == '__main__':
     vg.add('horizon', lambda maze_id: [2000] if maze_id == 0 else [500])
     vg.add('outer_iters', lambda maze_id: [5000] if maze_id == 0 else [1000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size', [400000])
+    vg.add('pg_batch_size', [100000])
     # policy initialization
     vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
-    vg.add('seed', [3])
+    # vg.add('seed', [3])
+    vg.add('seed', [3,13,23,33,43,54])
     # vg.add('seed', range(100, 600, 100))
 
     # Launching

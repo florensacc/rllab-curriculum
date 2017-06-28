@@ -188,7 +188,7 @@ def plot_pushing(policy, env, report, bounds, center, itr, max_path_length = 100
                                         <= env.terminal_eps) for path in paths]))
 
     print("hi")
-    plot_heatmap(avg_success, empty_spaces, center=center[:2], limit=np.array(upper_bound[:2]) + 0.1, spacing=2 * half_grid_size, show_heatmap=True)
+    plot_heatmap(avg_success, empty_spaces, center=center[:2], limit=np.array(upper_bound[:2]) + 0.1, spacing=2 * half_grid_size, show_heatmap=False)
     logger.log(str(avg_success))
     logger.log(str(empty_spaces))
     report.add_text(str(avg_success))

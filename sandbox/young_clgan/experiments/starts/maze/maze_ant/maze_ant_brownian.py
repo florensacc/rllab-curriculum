@@ -11,7 +11,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.starts.maze.maze_swimmer.maze_swimmer_brownian_algo import run_task
+from sandbox.young_clgan.experiments.starts.maze.maze_ant.maze_ant_brownian_algo import run_task
 
 if __name__ == '__main__':
 
@@ -52,7 +52,7 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-brownian-snake3'
+    exp_prefix = 'start-brownian-ant3'
 
     vg = VariantGenerator()
     vg.add('maze_id', [0])  # default is 0
@@ -72,7 +72,7 @@ if __name__ == '__main__':
     vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
     vg.add('terminal_eps', [0.3])
     # brownian params
-    vg.add('brownian_variance', [1])
+    vg.add('brownian_variance', [0.1])
     vg.add('brownian_horizon', [50])
     # goal-algo params
     vg.add('min_reward', [0.1])

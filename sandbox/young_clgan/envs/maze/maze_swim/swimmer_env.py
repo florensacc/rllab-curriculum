@@ -40,9 +40,17 @@ class SwimmerEnv(MujocoEnv, Serializable):
         done = False
         return Step(next_obs, reward, done)
 
+    # @overrides
+    # def reset_mujoco(self, init_state=None):
+    #     super(SwimmerEnv, self).reset_mujoco(init)
+        # if init_state is not None:
+        #     idx = self.model.body_names.index("torso")
+        #     self.model.data.com_subtree[idx][0] = init_state[0]
+        #     self.model.data.com_subtree[idx][1] = init_state[1]
+
     @overrides  # ignoring the goal
     def reset(self, *args, **kwargs):
-        return super(SwimmerEnv, self).reset()
+        return super(SwimmerEnv, self).reset(*args, **kwargs) # passing in keyword arguments
 
     @overrides
     def log_diagnostics(self, paths):

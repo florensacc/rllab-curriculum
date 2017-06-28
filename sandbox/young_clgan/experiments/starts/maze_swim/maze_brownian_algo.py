@@ -59,9 +59,9 @@ def run_task(v):
     env = GoalStartExplorationEnv(
         env=inner_env,
         start_generator=uniform_start_generator,
-        obs2start_transform=lambda x: x[:v['start_size']],
+        obs2start_transform=lambda x: x[-3:-1],
         goal_generator=fixed_goal_generator,
-        obs2goal_transform=lambda x: x[:v['goal_size']],
+        obs2goal_transform=lambda x: x[-3:-1],
         terminal_eps=v['terminal_eps'],
         distance_metric=v['distance_metric'],
         extend_dist_rew=v['extend_dist_rew'],
