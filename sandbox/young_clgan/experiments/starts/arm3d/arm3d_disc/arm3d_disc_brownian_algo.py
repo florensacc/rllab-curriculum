@@ -82,6 +82,8 @@ def run_task(v):
     # load the state collection from data_upload
     load_dir = 'data_upload/state_collections/'
     all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'disc_all_feasible_states_min.pkl'), 'rb'))
+    all_feasible_starts2 = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'disc_all_feasible_states_min2.pkl'), 'rb'))
+    all_feasible_starts3 = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'disc_all_feasible_states_old.pkl'), 'rb'))
     print("we have %d feasible starts" % all_feasible_starts.size)
 
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
@@ -163,22 +165,33 @@ def run_task(v):
 
         labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
 
-        logger.log("Labeling on uniform starts")
-        with logger.tabular_prefix("Uniform_"):
-            unif_starts = all_feasible_starts.sample(1000)
+        with logger.tabular_prefix("Uniform1_"):
+            logger.log("Labeling on uniform starts")
+            unif_starts = all_feasible_starts.sample(500)
             mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=1, key='goal_reached',
                                                  as_goals=False, full_path=True)
             env.log_diagnostics(paths)
 
+        with logger.tabular_prefix("Uniform2_"):
+            logger.log("Labeling on uniform starts2")
+            unif_starts2 = all_feasible_starts2.sample(500)
+            mean_reward2, paths2 = evaluate_states(unif_starts2, env, policy, v['horizon'], n_traj=1, key='goal_reached',
+                                                 as_goals=False, full_path=True)
+
+        with logger.tabular_prefix("Uniform3_"):
+            env.log_diagnostics(paths2)
+            logger.log("Labeling on uniform starts3")
+            unif_starts3 = all_feasible_starts3.sample(500)
+            mean_reward3, paths3 = evaluate_states(unif_starts3, env, policy, v['horizon'], n_traj=1, key='goal_reached',
+                                                   as_goals=False, full_path=True)
+            env.log_diagnostics(paths3)
+
         logger.dump_tabular(with_prefix=True)
 
-        # append new states to list of all starts (replay buffer): Not the low reward ones!!
-        logger.log("Appending good goals to replay and generating seeds")
-        logger.log("Number of raw starts")
-        filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1]
-        all_starts.append(filtered_raw_starts)
-
         if v['seed_with'] == 'only_goods':
+            logger.log("Appending good goals to replay and generating seeds")
+            filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1]
+            all_starts.append(filtered_raw_starts)
             if len(filtered_raw_starts) > 0:  # add a tone of noise if all the states I had ended up being high_reward!
                 seed_starts = filtered_raw_starts
             elif np.sum(start_classes == 0) > np.sum(start_classes == 1):  # if more low reward than high reward
@@ -188,6 +201,7 @@ def run_task(v):
                     seed_starts = generate_starts(env, starts=starts, horizon=int(v['horizon'] * 10), subsample=v['num_new_starts'],
                                                   variance=v['brownian_variance'] * 10)
         elif v['seed_with'] == 'all_previous':
+            all_starts.append(starts)
             seed_starts = starts
         elif v['seed_with'] == 'on_policy':
             with env.set_kill_outside():

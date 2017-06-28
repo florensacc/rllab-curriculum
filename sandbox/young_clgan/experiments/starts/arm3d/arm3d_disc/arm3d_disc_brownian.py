@@ -33,10 +33,9 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        'ap-northeast-2a', 'ap-northeast-2c', 'us-east-2b', 'ap-south-1a', 'us-east-2c', 'us-east-2a', 'ap-south-1b',
-        'us-east-1b', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'eu-west-1c', 'eu-west-1a', 'eu-west-1b'
+        'us-east-2a', 'us-east-2b', 'us-east-2c', 'ap-southeast-2c', 'ap-southeast-2b', 'eu-central-1a'
     ]
-    ec2_instance = args.type if args.type else 'c4.8xlarge'
+    ec2_instance = args.type if args.type else 'm4.16xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -52,7 +51,7 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-brownian-arm3d-disc'
+    exp_prefix = 'start-brownian-arm3d-disc-bigBS'
 
     vg = VariantGenerator()
     vg.add('start_size', [7])  # this is the ultimate start we care about: getting the pendulum upright
@@ -66,8 +65,8 @@ if __name__ == '__main__':
     vg.add('terminal_eps', [0.03])
     # brownian params
     # vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
-    vg.add('seed_with', ['only_goods'])  # good from brown, onPolicy, previousBrown (ie no good)
-    vg.add('brownian_horizon', lambda seed_with: [0, 50, 500] if seed_with == 'on_policy' else [50, 500])
+    vg.add('seed_with', ['all_previous', 'only_goods'])  # good from brown, onPolicy, previousBrown (ie no good)
+    vg.add('brownian_horizon', lambda seed_with: [0, 50, 500] if seed_with == 'on_policy' else [50])
     vg.add('brownian_variance', [1])
     vg.add('regularize_starts', [0])
     # goal-algo params
@@ -82,21 +81,22 @@ if __name__ == '__main__':
     vg.add('with_replacement', [True])
     vg.add('use_trpo_paths', [True])
     # replay buffer
-    vg.add('replay_buffer', [True])  # todo: attention!!
+    vg.add('replay_buffer', [True])
     vg.add('coll_eps', lambda terminal_eps: [terminal_eps])
-    vg.add('num_new_starts', [200])
-    vg.add('num_old_starts', [100])
+    vg.add('num_new_starts', [600])
+    vg.add('num_old_starts', [300])
     # sampling params
     vg.add('horizon', [500])
     vg.add('outer_iters', [5000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size', [20000])
+    vg.add('pg_batch_size', [50000])
     # policy initialization
     vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
+    vg.add('baseline', ['g_mlp'])
 
     vg.add('seed', range(100, 600, 100))
 

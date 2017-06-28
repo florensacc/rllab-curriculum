@@ -33,11 +33,9 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        'us-east-2c', 'us-east-2b', 'us-east-2a', 'ap-southeast-1b', 'eu-central-1b', 'ap-south-1a',
-        'ap-southeast-2c', 'ap-southeast-2b', 'ap-southeast-2a', 'eu-west-1a', 'us-west-2b', 'us-west-2a', 'us-west-2c',
-        'eu-west-1c', 'eu-west-1b'
+        'ap-northeast-2a', 'ap-northeast-2c', 'us-east-2b', 'us-east-2c'
     ]
-    ec2_instance = args.type if args.type else 'm4.4xlarge'
+    ec2_instance = args.type if args.type else 'c4.8xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -70,9 +68,9 @@ if __name__ == '__main__':
     vg.add('terminal_eps', [0.03])
     vg.add('ctrl_cost_coeff', [0])
     # brownian params
-    # vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
-    vg.add('seed_with', ['only_goods'])  # good from brown, onPolicy, previousBrown (ie no good)
-    vg.add('brownian_horizon', lambda seed_with: [0, 50, 500] if seed_with == 'on_policy' else [10, 50, 250])
+    vg.add('seed_with', ['all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
+    # vg.add('seed_with', ['only_goods'])  # good from brown, onPolicy, previousBrown (ie no good)
+    vg.add('brownian_horizon', lambda seed_with: [0, 50, 500] if seed_with == 'on_policy' else [50])
     vg.add('brownian_variance', [1])
     vg.add('regularize_starts', [0])
     # goal-algo params
@@ -94,16 +92,16 @@ if __name__ == '__main__':
     # sampling params
     vg.add('horizon', [500])
     vg.add('outer_iters', [5000])
-    vg.add('inner_iters', [5, 10])  # again we will have to divide/adjust the
+    vg.add('inner_iters', [5])  # again we will have to divide/adjust the
     vg.add('pg_batch_size', [50000])
     # policy initialization
     vg.add('output_gain', [0.1])
-    vg.add('policy_hidden_sizes', [(64, 64), (64, 128, 64, 32)])
+    vg.add('policy_hidden_sizes', [(64, 64)])
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
-    vg.add('baseline', ['g_mlp', 'linear'])
+    vg.add('baseline', ['g_mlp'])
 
     vg.add('seed', range(100, 600, 100))
 

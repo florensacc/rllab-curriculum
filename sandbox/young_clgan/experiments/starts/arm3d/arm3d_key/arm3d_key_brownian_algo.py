@@ -173,7 +173,7 @@ def run_task(v):
 
         logger.dump_tabular(with_prefix=True)
 
-        # append new states to list of all starts (replay buffer): Not the low reward ones!!
+        # append new states to list of all starts (replay buffer):
         logger.log("Appending good goals to replay and generating seeds")
         filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1]
         all_starts.append(filtered_raw_starts)
