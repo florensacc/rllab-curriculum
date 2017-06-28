@@ -3,14 +3,17 @@ from rllab.misc import tensor_utils
 import time
 
 
-def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1):
+def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1, init_state=None):
     observations = []
     actions = []
     rewards = []
     agent_infos = []
     env_infos = []
     dones = []
-    o = env.reset()
+    if init_state is not None:
+        o = env.reset(init_state)
+    else:
+        o = env.reset()
     agent.reset()
     path_length = 0
     if animated:

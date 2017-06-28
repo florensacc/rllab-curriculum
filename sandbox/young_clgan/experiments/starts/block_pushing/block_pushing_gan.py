@@ -143,8 +143,8 @@ def run_task(v):
 
     labels = label_states(initial_starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
     plot_labeled_states(initial_starts, labels, report=report, itr=outer_iter,
-                        # limit=v['goal_range'], # add limit in later
-                        center=v['lego_init_center'][:2], maze_id=-1)
+                        limit=v['lego_init_upper'][0] + 0.02, # provides some slack
+                        center=v['lego_init_center'][:2][::-1], maze_id=-1)
 
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
@@ -196,8 +196,8 @@ def run_task(v):
         #TODO: figure out how states are labelled
         labels = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
         plot_labeled_states(starts, labels, report=report, itr=outer_iter,
-                            # limit=v['goal_range'], # add limit in later
-                            center=v['lego_init_center'][:2], maze_id=-1)
+                            limit=v['lego_init_upper'][0] + 0.02, # add limit in later
+                            center=v['lego_init_center'][:2][::-1], maze_id=-1)
 
         labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
         logger.log("Training the GAN")
@@ -210,20 +210,17 @@ def run_task(v):
         all_starts.append(filtered_raw_start)
         report.save()
 
-        # plot_pushing(policy, env, report, bounds=(v['lego_init_lower'], v['lego_init_upper']),
-        #              center=v['lego_init_center'], itr=outer_iter)
-
 
 vg = VariantGenerator()
 vg.add('seed', [1])
 # vg.add('seed', [2,12,22,32,42])
 
 # Environment parameters
-vg.add('init_hand', [[0.5,  0.24,  0.5025],])
-vg.add('lego_target', [(0.5, 0.15, 0.5025),])
-vg.add('lego_init_center', [(0.5, 0.15, 0.5025),])
-vg.add('lego_init_lower', [(-0.06, -0.06, 0),])
-vg.add('lego_init_upper', [(0.06, 0.06, 0),])
+vg.add('init_hand', [[0.6,  0.27,  0.5025],])
+vg.add('lego_target', [(0.6, 0.15, 0.5025),])
+vg.add('lego_init_center', [(0.6, 0.15, 0.5025),])
+vg.add('lego_init_lower', [(-0.1, -0.1, 0),])
+vg.add('lego_init_upper', [(0.1, 0.1, 0),])
 
 # Optimizer parameters
 vg.add('inner_iters', [5])
@@ -232,7 +229,7 @@ vg.add('batch_size', [10000])
 vg.add('max_path_length', [100])
 
 # Goal generation parameters
-vg.add('terminal_eps', [0.02])
+vg.add('terminal_eps', [0.03])
 vg.add('extend_distance_rew', [False])
 vg.add('terminate_env', [True])
 
@@ -246,7 +243,7 @@ vg.add('start_noise_level', [0]) # no noise when sampling
 vg.add('gan_outer_iters', [500])
 vg.add('num_new_starts', [200])
 vg.add('num_old_starts', [100])
-vg.add('coll_eps', [0.3])
+vg.add('coll_eps', [0.03]) # might make big difference?
 vg.add('horizon', [100])
 vg.add('n_traj', [5])
 
@@ -263,12 +260,12 @@ for vv in vg.variants():
         variant=vv,
         # Number of parallel workers for sampling
         # n_parallel=32,
-        n_parallel=8, # use cpu_count in the future
+        n_parallel=2, # use cpu_count in the future
         snapshot_mode="last",
         seed=vv['seed'],
         mode="local",
         # mode="ec2",
-        exp_prefix="hand_env65",
+        exp_prefix="hand_env70",
         # exp_name= "decaying-decaying-gamma" + str(t),
         # plot=True,
     )
