@@ -33,7 +33,7 @@ from sandbox.young_clgan.state.utils import StateCollection
 from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasible_states
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
 from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
-from sandbox.young_clgan.envs.maze.maze_ant.ant_maze_env import AntMazeEnv
+from sandbox.young_clgan.envs.maze.maze_ant.ant_maze_start_env import AntMazeEnv
 from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy, sample_unif_feas, unwrap_maze, \
     plot_policy_means
 
@@ -95,13 +95,15 @@ def run_task(v):
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
     # brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
     # with env.set_kill_outside():
-    seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=10, size=5000, # this is smaller as they are seeds!
-                                  variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=1)
+    seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=v['initial_brownian_horizon'], size=10000, # this is smaller as they are seeds!
+                                  variance=v['brownian_variance'], subsample=v['num_new_starts'],
+                                  # animated=True, speedup = 2,
+                                  )  # , animated=True, speedup=1)
 
     # with env.set_kill_outside():
-    feasible_states = find_all_feasible_states(env, seed_starts, distance_threshold=0.2, brownian_variance=1, animate=True, min_new_states=5)
-    print("hi")
-    import pdb;pdb.set_trace()
+    # feasible_states = find_all_feasible_states(env, seed_starts, distance_threshold=0.2, brownian_variance=1, animate=True, min_new_states=5)
+    # print("hi")
+    # import pdb;pdb.set_trace()
     # show where these states are:
     # shuffled_starts = np.array(seed_starts.state_list)
     # np.random.shuffle(shuffled_starts)
@@ -176,7 +178,7 @@ def run_task(v):
         if len(filtered_raw_starts) > 0:  # add a tone of noise if all the states I had ended up being high_reward!
             seed_starts = filtered_raw_starts
         else:
-            seed_starts = generate_starts(env, starts=starts, horizon=v['horizon'] * 2, subsample=v['num_new_starts'], size=5000,
+            seed_starts = generate_starts(env, starts=starts, horizon=v['horizon'] * 2, subsample=v['num_new_starts'], size=10000,
                                           variance=v['brownian_variance'] * 10)
         all_starts.append(filtered_raw_starts)
 

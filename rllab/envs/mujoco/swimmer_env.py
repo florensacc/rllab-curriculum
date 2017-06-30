@@ -27,6 +27,14 @@ class SwimmerEnv(MujocoEnv, Serializable):
             self.model.data.qvel.flat,
             self.get_body_com("torso").flat,
         ]).reshape(-1)
+    #
+    # def reset(self, init_state=None, *args, **kwargs):
+    #     return super(SwimmerEnv, self).reset_mujoco(init_state)
+    #
+    #
+    def reset_mujoco(self, init_state=None, goal = None):
+        super(SwimmerEnv, self).reset_mujoco() # TODO: should be changed?
+        self.model.data.qpos = init_state
 
     def step(self, action):
         self.forward_dynamics(action)

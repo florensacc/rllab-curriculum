@@ -32,16 +32,19 @@ if __name__ == '__main__':
         autoclone.autoclone(__file__, args)
 
     # setup ec2
-    subnets = [
-        'ap-northeast-2a', 'ap-northeast-2c', 'us-east-2b', 'ap-south-1a', 'us-east-2c', 'us-east-2a', 'ap-south-1b',
-        'us-east-1b', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'eu-west-1c', 'eu-west-1a', 'eu-west-1b'
-    ]
+    args.ec2=True
+    # subnets = [
+    #     'ap-northeast-2a', 'ap-northeast-2c', 'us-east-2b', 'ap-south-1a', 'us-east-2c', 'us-east-2a', 'ap-south-1b',
+    #     'us-east-1b', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'eu-west-1c', 'eu-west-1a', 'eu-west-1b'
+    # ]
     ec2_instance = args.type if args.type else 'c4.8xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
-    config.AWS_SPOT_PRICE = str(info["price"])
+    # config.AWS_SPOT_PRICE = str(info["price"])
+    config.AWS_SPOT_PRICE = '2.50'
     n_parallel = int(info["vCPU"] / 2)  # make the default 4 if not using ec2
+    args.ec2=True
     if args.ec2:
         mode = 'ec2'
     elif args.local_docker:
@@ -52,12 +55,12 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-brownian-ant3'
+    exp_prefix = 'start-brownian-ant7'
 
     vg = VariantGenerator()
     vg.add('maze_id', [0])  # default is 0
-    vg.add('start_size', [5])  # this is the ultimate start we care about: getting the pendulum upright
-    vg.add('start_goal', [(0,0,0,0,0)])
+    vg.add('start_size', [15])  # this is the ultimate start we care about: getting the pendulum upright
+    vg.add('start_goal', [[0, 4, 0.55, 1, 0, 0, 0, 0, 1, 0, -1, 0, -1, 0, 1,]])
     vg.add('start_range',
            lambda maze_id: [4] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
     # vg.add('start_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
@@ -73,13 +76,14 @@ if __name__ == '__main__':
     vg.add('terminal_eps', [0.3])
     # brownian params
     vg.add('brownian_variance', [0.1])
-    vg.add('brownian_horizon', [50])
+    vg.add('initial_brownian_horizon', [10])
+    vg.add('brownian_horizon', [300])
     # goal-algo params
     vg.add('min_reward', [0.1])
     vg.add('max_reward', [0.9])
     vg.add('distance_metric', ['L2'])
     vg.add('extend_dist_rew', [False])  # !!!!
-    vg.add('inner_weight', [0])
+    vg.add('inner_weight', [0,1])
     vg.add('goal_weight', lambda inner_weight: [1000] if inner_weight > 0 else [1])
     vg.add('regularize_starts', [0])
 
@@ -93,45 +97,46 @@ if __name__ == '__main__':
     vg.add('num_new_starts', [200])
     vg.add('num_old_starts', [100])
     # sampling params
-    vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
+    vg.add('horizon', lambda maze_id: [2000] if maze_id == 0 else [500])
     vg.add('outer_iters', lambda maze_id: [200] if maze_id == 0 else [1000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size', [20000])
+    vg.add('pg_batch_size', [30000])
     # policy initialization
     vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
-    vg.add('seed', [2])
+    # vg.add('seed', [2])
+    vg.add('seed', [3, 13, 23, 33, 43, 54])
     # vg.add('seed', range(100, 600, 100))
 
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
-    print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
-                                                                                   config.AWS_SPOT_PRICE, n_parallel),
-          *subnets)
+    # print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
+    #                                                                                config.AWS_SPOT_PRICE, n_parallel),
+    #       *subnets)
 
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
             # choose subnet
-            subnet = random.choice(subnets)
-            config.AWS_REGION_NAME = subnet[:-1]
-            config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
-                config.AWS_REGION_NAME]
-            config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
-                config.AWS_REGION_NAME]
-            config.AWS_SECURITY_GROUP_IDS = \
-                config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
-                    config.AWS_REGION_NAME]
-            config.AWS_NETWORK_INTERFACES = [
-                dict(
-                    SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
-                    Groups=config.AWS_SECURITY_GROUP_IDS,
-                    DeviceIndex=0,
-                    AssociatePublicIpAddress=True,
-                )
-            ]
+            # subnet = random.choice(subnets)
+            # config.AWS_REGION_NAME = subnet[:-1]
+            # config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
+            #     config.AWS_REGION_NAME]
+            # config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
+            #     config.AWS_REGION_NAME]
+            # config.AWS_SECURITY_GROUP_IDS = \
+            #     config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
+            #         config.AWS_REGION_NAME]
+            # config.AWS_NETWORK_INTERFACES = [
+            #     dict(
+            #         SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
+            #         Groups=config.AWS_SECURITY_GROUP_IDS,
+            #         DeviceIndex=0,
+            #         AssociatePublicIpAddress=True,
+            #     )
+            # ]
 
             run_experiment_lite(
                 # use_cloudpickle=False,
