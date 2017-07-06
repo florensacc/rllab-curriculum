@@ -56,7 +56,7 @@ class AliceEnv(ProxyEnv, Serializable):
         alice_end_obs = next_obs
         bob_start_state = self._obs2start_transform(alice_end_obs)
         self.env_bob.update_start_generator(FixedStateGenerator(bob_start_state))
-        path_bob = rollout(self.env_bob, self.policy_bob, max_path_length=self.max_path_length, #max(5, self.max_path_length - self.time), #
+        path_bob = rollout(self.env_bob, self.policy_bob, max_path_length=max(5, self.max_path_length - self.time), #
                            animated=False)
         t_alice = self.time
         t_bob = path_bob['rewards'].shape[0]

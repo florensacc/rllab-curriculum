@@ -7,7 +7,7 @@ from rllab.misc import logger
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.sampler.utils import rollout
 from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator
-from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import AliceEnv
+from sandbox.young_clgan.experiments.asym_selfplay.envs.alice_env import AliceEnv
 from sandbox.young_clgan.logging import ExperimentLogger
 
 

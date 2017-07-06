@@ -2,7 +2,7 @@ import matplotlib
 import cloudpickle
 import pickle
 
-from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import AliceEnv
+from sandbox.young_clgan.experiments.asym_selfplay.envs.alice_env import AliceEnv
 
 matplotlib.use('Agg')
 import os
