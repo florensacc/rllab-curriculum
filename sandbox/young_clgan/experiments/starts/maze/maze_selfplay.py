@@ -17,6 +17,8 @@ from sandbox.young_clgan.experiments.starts.maze.maze_selfplay_algo import run_t
 
 if __name__ == '__main__':
 
+    fast_mode = False
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--ec2', '-e', action='store_true', default=True, help="add flag to run in ec2")
     parser.add_argument('--clone', '-c', action='store_true', default=False,
@@ -39,7 +41,7 @@ if __name__ == '__main__':
         # 'us-west-2a', 'us-west-2b', 'eu-west-1a', 'eu-west-1b', 'eu-west-1c', 'us-east-1d', 'ap-southeast-1a',
         # 'us-east-1a', 'us-east-1b', 'us-east-1c', 'us-west-1a', 'us-west-1c'
     ]
-    ec2_instance = args.type if args.type else 'm4.10xlarge' #'c4.4xlarge'
+    ec2_instance = args.type if args.type else 'c4.4xlarge' #'m4.10xlarge' #
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -55,10 +57,11 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-selfplay-maze11-run4'
+    exp_prefix = 'start-selfplay-maze0-run6'
 
     vg = VariantGenerator()
-    vg.add('maze_id', [11])  # default is 0
+    #vg.add('maze_id', [11])  # default is 0
+    vg.add('maze_id', [0])  # default is 0
     vg.add('start_size', [2])  # this is the ultimate start we care about: getting the pendulum upright
     vg.add('start_range',
            lambda maze_id: [4] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
@@ -97,10 +100,11 @@ if __name__ == '__main__':
     vg.add('num_new_starts', [200])
     vg.add('num_old_starts', [100])
     # sampling params
-    #vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
-    vg.add('horizon', [500])
-    vg.add('outer_iters', lambda maze_id: [200] if maze_id == 0 else [1000])
-    vg.add('inner_iters', [5])  # again we will have to divide/adjust the
+    vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
+    #vg.add('horizon', [500])
+    #vg.add('outer_iters', lambda maze_id: [200] if maze_id == 0 else [1000])
+    vg.add('outer_iters', lambda maze_id: [1000] if maze_id == 0 else [5000])
+    vg.add('inner_iters', [1])  # again we will have to divide/adjust the
     vg.add('pg_batch_size', [20000])
     # policy initialization
     vg.add('output_gain', [0.1])
@@ -113,12 +117,15 @@ if __name__ == '__main__':
     vg.add('output_gain_alice', [0.1])
     vg.add('policy_init_std_alice', [1])
     vg.add('discount_alice', [0.995])
-    vg.add('alice_factor', [0.5])
-    vg.add('inner_iters_alice', [5])  # again we will have to divide/adjust the
-    if args.debug:
+    vg.add('alice_factor', [1])
+    vg.add("alice_horizon", lambda horizon: [horizon]) # Use 2 * horizon because time is split between Alice and Bob.
+    vg.add('alice_bonus', lambda alice_horizon: [alice_horizon])
+    vg.add('inner_iters_alice', [1, 3, 5])  # again we will have to divide/adjust the
+    vg.add('stop_threshold', [1])
+    if args.debug or fast_mode:
         vg.add('pg_batch_size_alice', [200])
     else:
-        vg.add('pg_batch_size_alice', [2000])
+        vg.add('pg_batch_size_alice', [20000])
 
     if args.ec2:
         vg.add('seed', range(100, 700, 100))

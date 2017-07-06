@@ -49,6 +49,7 @@ def run_task(v):
 
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
+    report.save()
 
     inner_env = normalize(Arm3dKeyEnv(ctrl_cost_coeff=v['ctrl_cost_coeff']))
 

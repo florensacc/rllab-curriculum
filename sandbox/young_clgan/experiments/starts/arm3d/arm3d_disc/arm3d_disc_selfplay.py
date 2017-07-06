@@ -16,7 +16,7 @@ from sandbox.young_clgan.experiments.starts.arm3d.arm3d_disc.arm3d_disc_selfplay
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
+    parser.add_argument('--ec2', '-e', action='store_true', default=True, help="add flag to run in ec2")
     parser.add_argument('--clone', '-c', action='store_true', default=False,
                         help="add flag to copy file and checkout current")
     parser.add_argument('--local_docker', '-d', action='store_true', default=False,
@@ -36,7 +36,7 @@ if __name__ == '__main__':
         # 'ap-northeast-2a', 'ap-northeast-2c', 'us-east-2b', 'ap-south-1a', 'us-east-2c', 'us-east-2a', 'ap-south-1b',
         # 'us-east-1b', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'eu-west-1c', 'eu-west-1a', 'eu-west-1b'
     ]
-    ec2_instance = args.type if args.type else 'm4.10xlarge' #'c4.4xlarge'
+    ec2_instance = args.type if args.type else 'm4.10xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -52,7 +52,7 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-selfplay-arm3d-disc3'
+    exp_prefix = 'start-selfplay-arm3d-disc7'
 
     vg = VariantGenerator()
     vg.add('start_size', [7])  # this is the ultimate start we care about: getting the pendulum upright
@@ -103,7 +103,7 @@ if __name__ == '__main__':
     vg.add('discount_alice', [0.995])
     vg.add('alice_factor', [0.5])
     vg.add('inner_iters_alice', [5])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size_alice', [2000])
+    vg.add('pg_batch_size_alice', [20000])
 
     vg.add('seed', range(100, 700, 100))
 

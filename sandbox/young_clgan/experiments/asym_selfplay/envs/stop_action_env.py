@@ -3,6 +3,7 @@ import numpy as np
 from rllab import spaces
 from rllab.core.serializable import Serializable
 from rllab.envs.proxy_env import ProxyEnv
+from rllab.misc import logger
 from rllab.sampler.utils import rollout
 from rllab.spaces.box import Box
 from rllab.misc.overrides import overrides
@@ -17,6 +18,10 @@ class AliceEnv(ProxyEnv, Serializable):
             env_bob,
             policy_bob,
             max_path_length,
+            alice_bonus,
+            alice_factor,
+            gamma=0.1,
+            stop_threshold=0.9
     ):
         Serializable.quick_init(self, locals())
         ProxyEnv.__init__(self, env)
@@ -26,9 +31,10 @@ class AliceEnv(ProxyEnv, Serializable):
         self.max_path_length = max_path_length
         self.time = 0
 
-        self.alice_bonus = 10
-        self.alice_factor = 0.5
-        self.gamma = 0.1
+        self.alice_bonus = alice_bonus
+        self.alice_factor = alice_factor
+        self.gamma = gamma
+        self.stop_threshold = stop_threshold
 
 
     def reset(self, **kwargs):
@@ -50,7 +56,7 @@ class AliceEnv(ProxyEnv, Serializable):
         alice_end_obs = next_obs
         bob_start_state = self._obs2start_transform(alice_end_obs)
         self.env_bob.update_start_generator(FixedStateGenerator(bob_start_state))
-        path_bob = rollout(self.env_bob, self.policy_bob, max_path_length=max(1, self.max_path_length - self.time), #self.max_path_length,
+        path_bob = rollout(self.env_bob, self.policy_bob, max_path_length=self.max_path_length, #max(5, self.max_path_length - self.time), #
                            animated=False)
         t_alice = self.time
         t_bob = path_bob['rewards'].shape[0]
@@ -64,13 +70,17 @@ class AliceEnv(ProxyEnv, Serializable):
         next_obs, reward, done, info = wrapped_step
 
         # Determine whether Alice wants to end the episode.
-        if np.tanh(action[-1])>0.9:
+        if np.tanh(action[-1]) > self.stop_threshold:
             done = True
+            #logger.log("Alice sampled a stop action at t = " + str(self.time))
         else:
             done = False
 
+        # if self.time >= self.max_path_length and not done:
+        #     logger.log("No stop action sampled")
+
         # Compute the reward for Alice.
-        if done or self.time > self.max_path_length:
+        if done or self.time >= self.max_path_length:
             # Alice is done here; we need to run Bob!
             reward = self.compute_alice_reward(next_obs)
         else:
