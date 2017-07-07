@@ -1,4 +1,4 @@
-
+import sys
 from rllab.misc import logger
 from sandbox.young_clgan.logging import HTMLReport
 from sandbox.young_clgan.logging import format_dict
@@ -26,7 +26,7 @@ import os
 import random
 import os.path as osp
 import numpy as np
-from sandbox.young_clgan.envs.start_env import generate_starts, generate_starts_random
+from sandbox.young_clgan.envs.start_env import generate_starts
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
 from sandbox.young_clgan.envs.block_pushing.pushing_evaluate import test_and_plot_policy, plot_policy_means, plot_heatmap, plot_pushing
 from sandbox.young_clgan.logging.visualization import save_image
@@ -36,20 +36,15 @@ from sandbox.young_clgan.state.evaluator import label_states
 from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator
 from sandbox.young_clgan.state.generator import StateGAN
 from sandbox.young_clgan.state.utils import StateCollection
-
-import tensorflow as tf
-import tflearn
 # stub(globals())
 #TODO: figure out crown goal generator
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
 def run_task(v):
-    #TODO: add seed
+    # for inner environment, goal_generator shouldn't do anything and lego_generator shouldn't do anything
     random.seed(v['seed'])
     np.random.seed(v['seed'])
-    # for inner environment, goal_generator shouldn't do anything and lego_generator shouldn't do anything
-
     #These are used exactly twice--when mujoco_env is initialized and calls reset
     # i think the correct way to avoid using them is to modify the reset called by init of mujoco env
     goal_generator = PR2FixedGoalGenerator(goal = (0.6, 0.1, 0.5025)) # second dimension moves block further away vertically
@@ -58,10 +53,9 @@ def run_task(v):
     # plotting code, similar to maze/starts
     logger.log("Initializing report and plot_policy_reward...")
     log_dir = logger.get_snapshot_dir()  # problem with logger module here!!
-    # need to use run_experiment_lite for log_dir not to be none
-    if log_dir is None:
+    if log_dir is None: #need to use run_experiment_lite for log_dir not to be none
         log_dir = "/home/michael/"
-    report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=2)
+    report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=1)
     logger.log(osp.join(log_dir, 'report.html'))
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
@@ -71,15 +65,20 @@ def run_task(v):
     fixed_goal_generator = FixedStateGenerator(state=v['lego_target'])
     uniform_start_generator = UniformStateGenerator(state_size=3, bounds=(v['lego_init_lower'], v['lego_init_upper']),
                                                     center=v['lego_init_center'])
+    action_limiter = FixedActionLimiter()
 
     inner_env = normalize(Pr2EnvLego(
         goal_generator=goal_generator,
         lego_generator=lego_generator,
         max_action=1,
         pos_normal_sample=True,
+        action_limiter=action_limiter,
         qvel_init_std=0, #0.01,
         # pos_normal_sample_std=.01, # ignored i think?
         fixed_target = init_hand, # sets the initial position of the hand to 0.6 0.3
+        reward_function=v['reward_function'],
+        gamma=v['discount'],
+        phi_positive=v['phi_positive']
         # allow_random_restarts=True, #ignored i think?
     ))
 
@@ -88,15 +87,16 @@ def run_task(v):
         append_start=False,
         start_generator=uniform_start_generator,
         goal_generator=fixed_goal_generator,
-        # obs2goal_transform=lambda x: -1 * (x[-6:-3] - x[-3:]),   # TODO: check by setting breakpoint in goalenv
         obs2goal_transform=lambda x: x[-3:],
-        obs2start_transform=lambda x: x[-3:], #TODO, make sure transforms are correct!
+        obs2start_transform=lambda x: x[-3:],
         # start is just the initial lego position
         terminal_eps = v['terminal_eps'],  # TODO: potentially make more lenient?
         distance_metric = 'L2',
         extend_distance_rew = v['extend_distance_rew'],  # I think this turns off L2 distance reward
         # distance_rew = True, # check, I think this checks the desired distance
         terminate_env = v['terminate_env'],
+        inner_weight = v['inner_weight'],
+        goal_weight = v['goal_weight'],
     )
 
     # Follows Ignasi's code
@@ -104,7 +104,7 @@ def run_task(v):
         env_spec=env.spec,
         # The neural network policy should have n hidden layers, each with k hidden units.
         hidden_sizes=(64, 64, 64),
-        init_std=0.1,
+        init_std=v['init_std'],
         output_gain=0.1,
         )
 
@@ -115,153 +115,130 @@ def run_task(v):
                                                     center=v['lego_init_center'], itr=outer_iter)
 
 
-    all_starts = StateCollection(distance_threshold=v['coll_eps'])
-    # random gaussian from goal to generate starts, TODO: sigma and size should be parameters
-    seed_starts = generate_starts_random(starts=[np.array(v['lego_target'][:2])], size = 1000, subsample=v['num_new_starts'], sigma = 0.03,
-                                            center=v['lego_init_center'][:2], range_lower=v['lego_init_lower'][:2], range_upper=v['lego_init_upper'][:2], noise="gaussian")
-    labels = label_states(seed_starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
-    plot_labeled_states(seed_starts, labels, report=report, itr=outer_iter,
-                        limit=v['lego_init_upper'][0] + 0.02, # provides some slack
-                        center=v['lego_init_center'][:2][::-1], maze_id=-1)
-    sigma = v['sigma']
-    report.new_row()
-
-
     baseline = LinearFeatureBaseline(env_spec=env.spec)
     for outer_iter in range(1, v['outer_iters']):
-
+        #with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
         logger.log("Outer itr # %i" % outer_iter)
-        logger.log("Sampling starts")
-        starts = generate_starts_random(starts=seed_starts, size=1000, subsample=v['num_new_starts'], sigma=sigma * 3,
-                                        center=v['lego_init_center'][:2], range_lower=v['lego_init_lower'][:2], range_upper=v['lego_init_upper'][:2],
-                                        noise="gaussian")
-
-        labels = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
-        plot_labeled_states(starts, labels, report=report, itr=outer_iter,
-                            limit=v['lego_init_upper'][0] + 0.02,  # add limit in later
-                            center=v['lego_init_center'][:2][::-1], maze_id=-1)
-        report.save()
-
-        if v['replay_buffer'] and outer_iter > 0 and all_starts.size > 0:
-            old_starts = all_starts.sample(v['num_old_starts'])
-            starts = np.vstack([starts, old_starts])
-
-        with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
-            logger.log("Updating the environment start generator")
-            env.update_start_generator(
-                UniformListStateGenerator(
-                    starts.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
-                )
+        algo = TRPO(
+            env=env,
+            policy=policy,
+            baseline=baseline,
+            batch_size=v['batch_size'],
+            max_path_length=v['max_path_length'],  #100 #making path length longer is fine because of early termination
+            n_itr=v['inner_iters'],
+            discount=v['discount'],
+            gae_lambda=0.98,
+            step_size=0.01,
+            # goal_generator=goal_generator,
+            action_limiter=None,
+            optimizer_args={'subsample_factor': 0.1},
             )
 
-            logger.log("Training the algorithm")
-            algo = TRPO(
-                env=env,
-                policy=policy,
-                baseline=baseline,
-                batch_size=v['batch_size'],
-                max_path_length=v['max_path_length'],  #100 #making path length longer is fine because of early termination
-                n_itr=v['inner_iters'],
-                # max_path_length=50,
-                # batch_size=1000,
-                # n_itr =2,
-                discount=0.95,
-                gae_lambda=0.98,
-                step_size=0.01,
-                # goal_generator=goal_generator,
-                action_limiter=None,
-                optimizer_args={'subsample_factor': 0.1},
-                )
+        algo.train()
 
-            algo.train()
-
-        logger.log("Generating heat map")
         plot_pushing(policy, env, report, bounds=(v['lego_init_lower'], v['lego_init_upper']),
-                     center=v['lego_init_center'], itr=outer_iter)
-
-        labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
-
-        logger.dump_tabular(with_prefix=False)
-        report.new_row()
-
-        # TODO: should probably choose ones with middleish reward?
-        filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1] # high reward starts
-        if len(filtered_raw_starts) > 0:  # add a tone of noise if all the states I had ended up being high_reward!
-            seed_starts = filtered_raw_starts
-        else:
-            seed_starts = generate_starts_random(starts=seed_starts, size=1000, subsample=v['num_new_starts'], sigma=sigma * 3,
-                                        center=v['lego_init_center'][:2], range_lower=v['lego_init_lower'][:2], range_upper=v['lego_init_upper'][:2],
-                                        noise="gaussian")
-        all_starts.append(filtered_raw_starts)
-
-
+                         center=v['lego_init_center'], itr=outer_iter)
+        report.save()
 
 
 vg = VariantGenerator()
-vg.add('seed', [1])
-# vg.add('seed', [2,12,22,32,42])
+# vg.add('seed', [1])
+vg.add('seed', [2,12,22])
 
 # Environment parameters
-vg.add('init_hand', [[0.6,  0.27,  0.5025],])
-vg.add('lego_target', [(0.6, 0.15, 0.5025),])
+vg.add('init_hand', [[0.6,  0.35,  0.5025],]) # changed
+vg.add('lego_target', [(0.6, 0.12, 0.5025),])
 vg.add('lego_init_center', [(0.6, 0.15, 0.5025),])
 vg.add('lego_init_lower', [(-0.1, -0.02, 0),])
 vg.add('lego_init_upper', [(0.1, 0.1, 0),])
+vg.add('reward_function', ["dense"])
+# vg.add('reward_function', ["shaped", "dense"]) #TODO: change
+# vg.add('phi_positive', [False, True]) #TODO: change
+vg.add('phi_positive', [False]) #TODO: changed
 
-# vg.add('init_hand', [[0.6,  0.25,  0.5025],])
-# vg.add('lego_target', [(0.6, 0.05, 0.5025),])
-# vg.add('lego_init_center', [(0.6, 0.15, 0.5025),])
-# vg.add('lego_init_lower', [(-0.06, -0.06, 0),])
-# vg.add('lego_init_upper', [(0.06, 0.06, 0),])
+# Network parameters
+vg.add('init_std', [0.1])
 
 # Optimizer parameters
 vg.add('inner_iters', [5])
-vg.add('outer_iters', [300])
+vg.add('outer_iters', [800])
 vg.add('batch_size', [15000])
-vg.add('max_path_length', [150]) #TODO: make longer?
+vg.add('max_path_length', [80])
+vg.add('discount', [0.95])
 
 # Goal generation parameters
 vg.add('terminal_eps', [0.03])
 vg.add('extend_distance_rew', [False])
-vg.add('terminate_env', [True])
+vg.add('terminate_env', [True]) #TODO: maybe do not allow to terminate early??
 
-# gan configs
-vg.add('replay_buffer', [True])
-vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
-vg.add('gan_generator_layers', [[200, 200]])
-vg.add('gan_discriminator_layers', [[128, 128]])
-vg.add('gan_noise_size', [5])
-vg.add('start_noise_level', [0]) # no noise when sampling
-vg.add('gan_outer_iters', [500])
-vg.add('num_new_starts', [200])
-vg.add('num_old_starts', [100])
-vg.add('coll_eps', [0.03])
-vg.add('horizon', [100])
-vg.add('n_traj', [5])
-vg.add('sigma', [0.03])
+# all the reward is from the inner environment
+vg.add('inner_weight', [1])
+vg.add('goal_weight', [0])
 
-# start generator
-vg.add('persistence', [1])
-vg.add('with_replacement', [True])
+# mode = "local_docker"
+mode = "ec2"
+# mode = "local"
+ec2_instance = 'c4.4xlarge'
+info = config.INSTANCE_TYPE_INFO[ec2_instance]
+config.AWS_INSTANCE_TYPE = ec2_instance
+config.AWS_SPOT_PRICE = str(info["price"])
+n_parallel = int(info["vCPU"] / 2)  # make the default 4 if not using ec2
 
 for vv in vg.variants():
     # run_task(vv) # uncomment when debugging
+    if mode in ['ec2', "docker"]:
+        run_experiment_lite(
+            # use_cloudpickle=False,
+            stub_method_call=run_task,
+            variant=vv,
+            mode=mode,
+            # Number of parallel workers for sampling
+            n_parallel=n_parallel,
+            # Only keep the snapshot parameters for the last iteration
+            snapshot_mode="last",
+            seed=vv['seed'],
+            # plot=True,
+            exp_prefix="handbenchmark_discount2",
+            # exp_name=exp_name,
+            # for sync the pkl file also during the training
+            sync_s3_pkl=True,
+            # sync_s3_png=True,
+            sync_s3_html=True,
+            use_cloudpickle=False,
+            # # use this ONLY with ec2 or local_docker!!!
+            pre_commands=[
+                'export MPLBACKEND=Agg',
+                'pip install --upgrade pip',
+                'pip install --upgrade -I tensorflow',
+                'pip install git+https://github.com/tflearn/tflearn.git',
+                'pip install dominate',
+                'pip install multiprocessing_on_dill',
+                'pip install scikit-image',
+                'conda install numpy -n rllab3 -y',
+            ],
+        )
 
-    run_experiment_lite(
-        stub_method_call=run_task,
-        use_gpu=False,
-        variant=vv,
-        # Number of parallel workers for sampling
-        # n_parallel=32,
-        n_parallel=12, # use cpu_count in the future
-        snapshot_mode="last",
-        seed=vv['seed'],
-        mode="local",
-        # mode="ec2",
-        exp_prefix="hand_env76",
-        # exp_name= "decaying-decaying-gamma" + str(t),
-        # plot=True,
-    )
+        sys.exit()
+    else:
+        run_experiment_lite(
+            stub_method_call=run_task,
+            use_gpu=False,
+            variant=vv,
+            # Number of parallel workers for sampling
+            # n_parallel=32,
+            n_parallel=4, # use cpu_count in the future
+            snapshot_mode="last",
+            # snapshot_mode="gap",
+            # snapshot_gap=100,
+            seed=vv['seed'],
+            mode="local",
+            # mode="ec2",
+            exp_prefix="handbenchmark11",
+            # exp_prefix="handbenchmarkdebug",
+            # exp_name= "decaying-decaying-gamma" + str(t),
+            # plot=True,
+        )
+        # sys.exit()
 
 
 # add more stuff

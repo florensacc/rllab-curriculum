@@ -26,7 +26,8 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states, label_states_from_paths
+from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states, label_states_from_paths, \
+    compute_labels
 from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator
 from sandbox.young_clgan.state.utils import StateCollection
 
@@ -50,7 +51,7 @@ def run_task(v):
     log_dir = logger.get_snapshot_dir()  # problem with logger module here!!
     if log_dir is None:
         log_dir = "/home/michael/"
-    report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=4)
+    report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=2)
 
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
@@ -88,44 +89,66 @@ def run_task(v):
     baseline = LinearFeatureBaseline(env_spec=env.spec)
 
     # load the state collection from data_upload
-    load_dir = 'data_upload/state_collections/'
-    # all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'disc_all_feasible_states_min.pkl'), 'rb'))
-    # print("we have %d feasible starts" % all_feasible_starts.size)
 
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
     # brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
     # with env.set_kill_outside():
-    seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=v['initial_brownian_horizon'], size=10000, # this is smaller as they are seeds!
+    seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=v['initial_brownian_horizon'], size=1000, # this is smaller as they are seeds!
                                   variance=v['brownian_variance'], subsample=v['num_new_starts'],
                                   # animated=True, speedup = 2,
                                   )  # , animated=True, speedup=1)
 
-    # with env.set_kill_outside():
-    # feasible_states = find_all_feasible_states(env, seed_starts, distance_threshold=0.2, brownian_variance=1, animate=True, min_new_states=5)
-    # print("hi")
-    # import pdb;pdb.set_trace()
-    # show where these states are:
-    # shuffled_starts = np.array(seed_starts.state_list)
-    # np.random.shuffle(shuffled_starts)
-    # generate_starts(env, starts=seed_starts, horizon=100, variance=v['brownian_variance'], animated=True, speedup=10)
+    # test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=2,
+    #                      n_traj=v['n_traj'],
+    #                     report=report, center=v['goal_center'], limit=v['goal_range'])  # can comment
+
+    load_dir = 'sandbox/young_clgan/experiments/starts/maze/maze_ant/'
+    all_feasible_starts = pickle.load(
+        open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states.pkl'), 'rb'))
+    print("we have %d feasible starts" % all_feasible_starts.size)
+
+    min_reward = 0.1
+    max_reward = 0.9
+    improvement_threshold = 0
+    old_rewards = None
+
+
+    # logger.log("Labeling on uniform starts")
+    # with logger.tabular_prefix("Uniform_"):
+    #     unif_starts = all_feasible_starts.sample(100)
+    #     mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=1, key='goal_reached',
+    #                                          as_goals=False, full_path=True)
+    #     env.log_diagnostics(paths)
+    #     mean_rewards = mean_reward.reshape(-1, 1)
+    #     labels = compute_labels(mean_rewards, old_rewards=old_rewards, min_reward=min_reward, max_reward=max_reward,
+    #                       improvement_threshold=improvement_threshold)
+    #     logger.log("Starts labelled")
+    #     plot_labeled_states(unif_starts, labels, report=report, itr=0, limit=v['goal_range'],
+    #                         center=v['goal_center'], maze_id=v['maze_id'],
+    #                         summary_string_base='initial starts labels:\n')
+    #     report.add_text("Success: " + str(np.mean(mean_reward)))
+
 
     for outer_iter in range(1, v['outer_iters']):
 
         logger.log("Outer itr # %i" % outer_iter)
         logger.log("Sampling starts")
 
+        report.save()
+
         starts = generate_starts(env, starts=seed_starts, subsample=v['num_new_starts'], size=5000,
                                  horizon=v['brownian_horizon'], variance=v['brownian_variance'])
+
+        if v['replay_buffer'] and outer_iter > 0 and all_starts.size > 0:
+            old_starts = all_starts.sample(v['num_old_starts'])
+            starts = np.vstack([starts, old_starts])
+
         labels = label_states(starts, env, policy, v['horizon'],
                               as_goals=False, n_traj=v['n_traj'], key='goal_reached')
         plot_labeled_states(starts, labels, report=report, itr=outer_iter, limit=v['goal_range'],
                             center=v['goal_center'], maze_id=v['maze_id'],
                             summary_string_base='initial starts labels:\n')
-        report.save()
 
-        if v['replay_buffer'] and outer_iter > 0 and all_starts.size > 0:
-            old_starts = all_starts.sample(v['num_old_starts'])
-            starts = np.vstack([starts, old_starts])
 
         with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment start generator")
@@ -150,23 +173,33 @@ def run_task(v):
 
             algo.train()
 
-        logger.log('Generating the Heatmap...')
-        plot_policy_means(policy, env, sampling_res=2, report=report, limit=v['goal_range'], center=v['goal_center'])
-        test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=2,
-                             n_traj=v['n_traj'],
-                             itr=outer_iter, report=report, center=v['goal_center'], limit=v['goal_range'])
+        # logger.log('Generating the Heatmap...')
+        # test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=2,
+        #                      n_traj=v['n_traj'],
+        #                      itr=outer_iter, report=report, center=v['goal_center'], limit=v['goal_range'])
 
         logger.log("Labeling the starts")
         labels = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
-
+        start_classes, text_labels = convert_label(labels)
         plot_labeled_states(starts, labels, report=report, itr=outer_iter, limit=v['goal_range'],
                             center=v['goal_center'], maze_id=v['maze_id'])
 
-        # ###### extra for deterministic:
-        # logger.log("Labeling the goals deterministic")
-        # with policy.set_std_to_0():
-        #     labels_det = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], n_processes=1)
-        # plot_labeled_states(goals, labels_det, report=report, itr=outer_iter, limit=v['goal_range'], center=v['goal_center'])
+        logger.log("Labeling on uniform starts")
+        with logger.tabular_prefix("Uniform_"):
+            unif_starts = all_feasible_starts.sample(100)
+            mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=1, key='goal_reached',
+                                                 as_goals=False, full_path=True)
+            env.log_diagnostics(paths)
+            mean_rewards = mean_reward.reshape(-1, 1)
+            labels = compute_labels(mean_rewards, old_rewards=old_rewards, min_reward=min_reward, max_reward=max_reward,
+                                    improvement_threshold=improvement_threshold)
+            logger.log("Starts labelled")
+            plot_labeled_states(unif_starts, labels, report=report, itr=outer_iter, limit=v['goal_range'],
+                                center=v['goal_center'], maze_id=v['maze_id'],
+                                summary_string_base='initial starts labels:\n')
+            report.add_text("Success: " + str(np.mean(mean_reward)))
+
+
 
         labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
 
@@ -177,99 +210,10 @@ def run_task(v):
         filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1]
         if len(filtered_raw_starts) > 0:  # add a tone of noise if all the states I had ended up being high_reward!
             seed_starts = filtered_raw_starts
+        elif np.sum(start_classes == 0) > np.sum(start_classes == 1):  # if more low reward than high reward
+            seed_starts = all_starts.sample(300)  # sample them from the replay
         else:
             seed_starts = generate_starts(env, starts=starts, horizon=v['horizon'] * 2, subsample=v['num_new_starts'], size=10000,
                                           variance=v['brownian_variance'] * 10)
         all_starts.append(filtered_raw_starts)
 
-        # logger.log("Outer itr # %i" % outer_iter)
-        # logger.log("Sampling starts")
-        #
-        # with env.set_kill_outside():
-        #     starts = generate_starts(env, starts=seed_starts, horizon=v['brownian_horizon'], variance=v['brownian_variance'])
-        #
-        # # regularization of the brownian starts
-        # brownian_starts.empty()
-        # brownian_starts.append(starts)
-        # starts = brownian_starts.sample(size=v['num_new_starts'])
-        #
-        # if v['replay_buffer'] and outer_iter > 0 and all_starts.size > 0:
-        #     old_starts = all_starts.sample(v['num_old_starts'])
-        #     starts = np.vstack([starts, old_starts])
-        #
-        # with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
-        #     logger.log("Updating the environment start generator")
-        #     env.update_start_generator(
-        #         UniformListStateGenerator(
-        #             starts.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
-        #         )
-        #     )
-        #
-        #     logger.log("Training the algorithm")
-        #     algo = TRPO(
-        #         env=env,
-        #         policy=policy,
-        #         baseline=baseline,
-        #         batch_size=v['pg_batch_size'],
-        #         max_path_length=v['horizon'],
-        #         n_itr=v['inner_iters'],
-        #         step_size=0.01,
-        #         discount=v['discount'],
-        #         plot=False,
-        #     )
-        #
-        #     trpo_paths = algo.train()
-        #
-        # if v['use_trpo_paths']:
-        #     logger.log("labeling starts with trpo rollouts")
-        #     [starts, labels] = label_states_from_paths(trpo_paths, n_traj=2, key='goal_reached',  # using the min n_traj
-        #                                                          as_goal=False, env=env)
-        #     paths = [path for paths in trpo_paths for path in paths]
-        # else:
-        #     logger.log("labeling starts manually")
-        #     labels, paths = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'],
-        #                                  key='goal_reached', full_path=True)
-        #
-        # with logger.tabular_prefix("OnStarts_"):
-        #     env.log_diagnostics(paths)
-        # logger.record_tabular('brownian_starts', brownian_starts.size)
-        #
-        # start_classes, text_labels = convert_label(labels)
-        # total_starts = labels.shape[0]
-        # logger.record_tabular('GenStarts_evaluated', total_starts)
-        # start_class_frac = OrderedDict()  # this needs to be an ordered dict!! (for the log tabular)
-        # for k in text_labels.keys():
-        #     frac = np.sum(start_classes == k) / total_starts
-        #     logger.record_tabular('GenStart_frac_' + text_labels[k], frac)
-        #     start_class_frac[text_labels[k]] = frac
-        #
-        # labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
-        #
-        # logger.log("Labeling on uniform starts")
-        # with logger.tabular_prefix("Uniform_"):
-        #     unif_starts = all_feasible_starts.sample(1000)
-        #     mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=1, key='goal_reached',
-        #                                          as_goals=False, full_path=True)
-        #     env.log_diagnostics(paths)
-        #
-        # logger.dump_tabular(with_prefix=True)
-        #
-        # # append new states to list of all starts (replay buffer): Not the low reward ones!!
-        # logger.log("Appending good goals to replay and generating seeds")
-        # filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1]
-        # all_starts.append(filtered_raw_starts)
-        #
-        # if v['seed_with'] == 'only_goods':
-        #     if len(filtered_raw_starts) > 0:  # add a tone of noise if all the states I had ended up being high_reward!
-        #         seed_starts = filtered_raw_starts
-        #     elif np.sum(start_classes == 0) > np.sum(start_classes == 1):  # if more low reward than high reward
-        #         seed_starts = all_starts.sample(300)  # sample them from the replay
-        #     else:
-        #         with env.set_kill_outside():
-        #             seed_starts = generate_starts(env, starts=starts, horizon=int(v['horizon'] * 10), subsample=v['num_new_starts'],
-        #                                           variance=v['brownian_variance'] * 10)
-        # elif v['seed_with'] == 'all_previous':
-        #     seed_starts = starts
-        # elif v['seed_with'] == 'on_policy':
-        #     with env.set_kill_outside():
-        #         seed_starts = generate_starts(env, policy, horizon=v['horizon'], subsample=v['num_new_starts'])
