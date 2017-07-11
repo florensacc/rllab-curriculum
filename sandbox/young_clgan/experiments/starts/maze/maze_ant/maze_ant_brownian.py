@@ -43,8 +43,8 @@ if __name__ == '__main__':
     # config.AWS_SPOT_PRICE = str(info["price"])
     config.AWS_SPOT_PRICE = '2.50'
     n_parallel = int(info["vCPU"] / 2)  # make the default 4 if not using ec2
-    # args.ec2=False
-    args.ec2=True
+    args.ec2=False
+    # args.ec2=True
     if args.ec2:
         mode = 'ec2'
     elif args.local_docker:
@@ -54,8 +54,6 @@ if __name__ == '__main__':
         mode = 'local'
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
-
-    exp_prefix = 'start-brownian-ant10'
 
     vg = VariantGenerator()
     vg.add('maze_id', [0])  # default is 0
@@ -89,6 +87,7 @@ if __name__ == '__main__':
 
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
+    vg.add('filter_bad_starts', [True])
     vg.add('sampling_res', [2])
     vg.add('with_replacement', [True])
     # replay buffer
@@ -96,6 +95,7 @@ if __name__ == '__main__':
     vg.add('coll_eps', [0.3])
     vg.add('num_new_starts', [200])
     vg.add('num_old_starts', [100])
+    vg.add('feasibility_path_length', [20, 50, 100])
     # sampling params
     vg.add('horizon', lambda maze_id: [3000, 5000] if maze_id == 0 else [500]) #2
     vg.add('outer_iters', lambda maze_id: [1000] if maze_id == 0 else [1000])
@@ -112,33 +112,16 @@ if __name__ == '__main__':
     # vg.add('seed', range(100, 600, 100))
 
     # Launching
+    exp_prefix = 'start-brownian-ant16'
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     # print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
     #                                                                                config.AWS_SPOT_PRICE, n_parallel),
     #       *subnets)
 
+
     for vv in vg.variants():
         # import pdb; pdb.set_trace()
         if mode in ['ec2', 'local_docker']:
-            # choose subnet
-            # subnet = random.choice(subnets)
-            # config.AWS_REGION_NAME = subnet[:-1]
-            # config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_SECURITY_GROUP_IDS = \
-            #     config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
-            #         config.AWS_REGION_NAME]
-            # config.AWS_NETWORK_INTERFACES = [
-            #     dict(
-            #         SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
-            #         Groups=config.AWS_SECURITY_GROUP_IDS,
-            #         DeviceIndex=0,
-            #         AssociatePublicIpAddress=True,
-            #     )
-            # ]
-
             run_experiment_lite(
                 # use_cloudpickle=False,
                 stub_method_call=run_task,
@@ -179,7 +162,7 @@ if __name__ == '__main__':
                 stub_method_call=run_task,
                 variant=vv,
                 mode='local',
-                n_parallel=4,
+                n_parallel=6,
                 # Only keep the snapshot parameters for the last iteration
                 snapshot_mode="last",
                 seed=vv['seed'],

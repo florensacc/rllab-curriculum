@@ -2,16 +2,53 @@
 
 import random
 import numpy as np
+import time
 from rllab.envs.normalized_env import normalize
 from rllab.misc import logger
 from rllab.misc.instrument import stub, run_experiment_lite, VariantGenerator
 from rllab.mujoco_py.mjlib import osp
 from sandbox.young_clgan.envs.base import FixedStateGenerator
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
-from sandbox.young_clgan.envs.start_env import find_all_feasible_states_plotting, generate_starts
+from sandbox.young_clgan.envs.start_env import find_all_feasible_states_plotting, generate_starts, \
+    parallel_check_feasibility
 from sandbox.young_clgan.logging import HTMLReport
 from sandbox.young_clgan.envs.maze.maze_ant.ant_maze_start_env import AntMazeEnv
 
+
+def benchmark_parallel(v):
+    # test that prallel mapping actually speeds things up; helpful when >100 states
+    fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
+    fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
+
+    inner_env = normalize(AntMazeEnv())
+    env = GoalStartExplorationEnv(
+        env=inner_env,
+        start_generator=fixed_start_generator,
+        obs2start_transform=lambda x: x[:v['start_size']],
+        goal_generator=fixed_goal_generator,
+        obs2goal_transform=lambda x: x[-3:-1],
+        terminal_eps=v['terminal_eps'],
+        distance_metric=v['distance_metric'],
+        extend_dist_rew=v['extend_dist_rew'],
+        inner_weight=v['inner_weight'],
+        goal_weight=v['goal_weight'],
+        terminate_env=True,
+    )
+    for size in [100, 1000, 5000]:
+        for parallel in [True, False]:
+            starts = generate_starts(env, starts=[v['start_goal']], horizon=v['initial_brownian_horizon'],
+                                     size=size,
+                                     # size speeds up training a bit
+                                     variance=v['brownian_variance'],
+                                     # subsample=v['num_new_starts'],
+                                     )
+            start = time.time()
+            if parallel:
+                processes = -1
+            else:
+                processes = 1
+            filtered_starts = parallel_check_feasibility(env=env, starts=starts, max_path_length=100, n_processes=processes)
+            print("Size: {}  parallel: {}  time: {}".format(size, parallel, time.time() - start))
 
 def run_task(v):
     random.seed(v['seed'])
@@ -40,7 +77,8 @@ def run_task(v):
         terminate_env=True,
     )
 
-    seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=v['initial_brownian_horizon'], size=500, #TODO: increase to 2000
+    seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=v['initial_brownian_horizon'], #TODO: increase to 2000
+                                  size = 1000,
                                   # size speeds up training a bit
                                   variance=v['brownian_variance'],
                                   subsample=v['num_new_starts'],
@@ -49,8 +87,10 @@ def run_task(v):
     np.random.shuffle(seed_starts)
 
     # with env.set_kill_outside():
-    feasible_states = find_all_feasible_states_plotting(env, seed_starts, report, distance_threshold=0.15, brownian_variance=1,
+    feasible_states = find_all_feasible_states_plotting(env, seed_starts, report, distance_threshold=0.15, brownian_variance=1, size=100,
                                                         animate=True,  limit = v['goal_range'],
+                                                        check_feasible=True,
+                                                        check_feasible_path_length=100,
                                   center = v['goal_center'])
     return
 
@@ -78,15 +118,24 @@ vg.add('goal_range',
            lambda maze_id: [4] if maze_id == 0 else [7])
 vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
 for vv in vg.variants():
-    # run_task(vv)
     run_experiment_lite(
         variant=vv,
         seed=vv['seed'],
-        stub_method_call=run_task,
+        stub_method_call=benchmark_parallel,
         use_gpu=False,
-        exp_prefix="ant_find_starts2",
+        exp_prefix="ant_benchmark",
         mode="local",
-        n_parallel=3,
-
+        n_parallel=4,
     )
+    # run_task(vv)
+    # run_experiment_lite(
+    #     variant=vv,
+    #     seed=vv['seed'],
+    #     stub_method_call=run_task,
+    #     use_gpu=False,
+    #     exp_prefix="ant_find_starts7",
+    #     mode="local",
+    #     n_parallel=4,
+    #
+    # )
 

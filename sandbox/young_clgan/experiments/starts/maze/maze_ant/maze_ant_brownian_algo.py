@@ -31,7 +31,7 @@ from sandbox.young_clgan.state.evaluator import convert_label, label_states, eva
 from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator
 from sandbox.young_clgan.state.utils import StateCollection
 
-from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasible_states
+from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasible_states, check_feasibility
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
 from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
 from sandbox.young_clgan.envs.maze.maze_ant.ant_maze_start_env import AntMazeEnv
@@ -98,35 +98,17 @@ def run_task(v):
                                   # animated=True, speedup = 2,
                                   )  # , animated=True, speedup=1)
 
-    # test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=2,
-    #                      n_traj=v['n_traj'],
-    #                     report=report, center=v['goal_center'], limit=v['goal_range'])  # can comment
+    # can also filter these starts optionally
 
     load_dir = 'sandbox/young_clgan/experiments/starts/maze/maze_ant/'
     all_feasible_starts = pickle.load(
         open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states.pkl'), 'rb'))
-    print("we have %d feasible starts" % all_feasible_starts.size)
+    logger.log("we have %d feasible starts" % all_feasible_starts.size)
 
     min_reward = 0.1
     max_reward = 0.9
     improvement_threshold = 0
     old_rewards = None
-
-
-    # logger.log("Labeling on uniform starts")
-    # with logger.tabular_prefix("Uniform_"):
-    #     unif_starts = all_feasible_starts.sample(100)
-    #     mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=1, key='goal_reached',
-    #                                          as_goals=False, full_path=True)
-    #     env.log_diagnostics(paths)
-    #     mean_rewards = mean_reward.reshape(-1, 1)
-    #     labels = compute_labels(mean_rewards, old_rewards=old_rewards, min_reward=min_reward, max_reward=max_reward,
-    #                       improvement_threshold=improvement_threshold)
-    #     logger.log("Starts labelled")
-    #     plot_labeled_states(unif_starts, labels, report=report, itr=0, limit=v['goal_range'],
-    #                         center=v['goal_center'], maze_id=v['maze_id'],
-    #                         summary_string_base='initial starts labels:\n')
-    #     report.add_text("Success: " + str(np.mean(mean_reward)))
 
 
     for outer_iter in range(1, v['outer_iters']):
@@ -136,13 +118,23 @@ def run_task(v):
 
         report.save()
 
-        starts = generate_starts(env, starts=seed_starts, subsample=v['num_new_starts'], size=5000,
+        # generate starts from the previous seed starts, which are defined below
+        starts = generate_starts(env, starts=seed_starts, subsample=v['num_new_starts'], size=3000,
                                  horizon=v['brownian_horizon'], variance=v['brownian_variance'])
 
+        # note: this messes with the balance between starts and old_starts!
+        if v['filter_bad_starts']:
+            logger.log("Prefilter starts: {}".format(len(starts)))
+            starts = [start for start in starts if check_feasibility(start, env, v['feasibility_path_length'])]
+            starts = np.array(starts)
+            logger.log("Filtered starts: {}".format(len(starts)))
+
+        logger.log("Total number of starts in buffer: {}".format(all_starts.size))
         if v['replay_buffer'] and outer_iter > 0 and all_starts.size > 0:
             old_starts = all_starts.sample(v['num_old_starts'])
             starts = np.vstack([starts, old_starts])
 
+        # plot starts before training
         labels = label_states(starts, env, policy, v['horizon'],
                               as_goals=False, n_traj=v['n_traj'], key='goal_reached')
         plot_labeled_states(starts, labels, report=report, itr=outer_iter, limit=v['goal_range'],
@@ -150,6 +142,7 @@ def run_task(v):
                             summary_string_base='initial starts labels:\n')
 
 
+        # Following code should be indented
         with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment start generator")
             env.update_start_generator(
@@ -173,10 +166,7 @@ def run_task(v):
 
             algo.train()
 
-        # logger.log('Generating the Heatmap...')
-        # test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=2,
-        #                      n_traj=v['n_traj'],
-        #                      itr=outer_iter, report=report, center=v['goal_center'], limit=v['goal_range'])
+
 
         logger.log("Labeling the starts")
         labels = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
@@ -184,6 +174,29 @@ def run_task(v):
         plot_labeled_states(starts, labels, report=report, itr=outer_iter, limit=v['goal_range'],
                             center=v['goal_center'], maze_id=v['maze_id'])
 
+
+        labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
+
+        logger.dump_tabular(with_prefix=False)
+        report.new_row()
+
+        # append new states to list of all starts (replay buffer): Not the low reward ones!!
+        filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1]
+
+
+        if len(filtered_raw_starts) > 0:  # add a ton of noise if all the states I had ended up being high_reward!
+            logger.log("We have {} good starts!".format(len(filtered_raw_starts)))
+            seed_starts = filtered_raw_starts
+        elif np.sum(start_classes == 0) > np.sum(start_classes == 1):  # if more low reward than high reward
+            logger.log("More bad starts than good starts, sampling seeds from replay buffer")
+            seed_starts = all_starts.sample(300)  # sample them from the replay
+        else:
+            logger.log("More good starts than bad starts, resampling")
+            seed_starts = generate_starts(env, starts=starts, horizon=v['horizon'] * 2, subsample=v['num_new_starts'], size=10000,
+                                          variance=v['brownian_variance'] * 10)
+        all_starts.append(filtered_raw_starts)
+
+        # need to put this last! otherwise labels variable gets confused
         logger.log("Labeling on uniform starts")
         with logger.tabular_prefix("Uniform_"):
             unif_starts = all_feasible_starts.sample(100)
@@ -198,22 +211,4 @@ def run_task(v):
                                 center=v['goal_center'], maze_id=v['maze_id'],
                                 summary_string_base='initial starts labels:\n')
             report.add_text("Success: " + str(np.mean(mean_reward)))
-
-
-
-        labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
-
-        logger.dump_tabular(with_prefix=False)
-        report.new_row()
-
-        # append new states to list of all starts (replay buffer): Not the low reward ones!!
-        filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1]
-        if len(filtered_raw_starts) > 0:  # add a tone of noise if all the states I had ended up being high_reward!
-            seed_starts = filtered_raw_starts
-        elif np.sum(start_classes == 0) > np.sum(start_classes == 1):  # if more low reward than high reward
-            seed_starts = all_starts.sample(300)  # sample them from the replay
-        else:
-            seed_starts = generate_starts(env, starts=starts, horizon=v['horizon'] * 2, subsample=v['num_new_starts'], size=10000,
-                                          variance=v['brownian_variance'] * 10)
-        all_starts.append(filtered_raw_starts)
 

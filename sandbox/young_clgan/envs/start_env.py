@@ -5,6 +5,8 @@ from the state environment base classes.
 
 
 import random
+from collections import OrderedDict
+
 from rllab import spaces
 import sys
 import os.path as osp
@@ -32,7 +34,9 @@ from sandbox.young_clgan.envs.base import StateGenerator, UniformListStateGenera
     UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv
 from sandbox.young_clgan.experiments.asym_selfplay.algos.asym_selfplay import AsymSelfplay
 from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import AliceEnv
+from sandbox.young_clgan.state.evaluator import parallel_map, FunctionWrapper
 from sandbox.young_clgan.state.utils import StateCollection
+from sandbox.young_clgan.logging.visualization import plot_labeled_states, plot_labeled_samples
 
 
 class StartEnv(Serializable):
@@ -236,6 +240,7 @@ def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsa
                 time.sleep(timestep / speedup)
 
         logger.log("Generating starts, rollouts that reached goal: " + str(num_roll_reached_goal) + " out of " + str(num_roll))
+    logger.log("Starts generated.")
     if subsample is None:
         return np.array(states)
     else:
@@ -244,7 +249,152 @@ def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsa
             return states
         return states[np.random.choice(np.shape(states)[0], size=subsample)]
 
+def parallel_check_feasibility(starts, env, max_path_length=50, n_processes=-1):
+    feasibility_wrapper = FunctionWrapper(
+        check_feasibility,
+        env =env,
+        max_path_length=max_path_length,
+    )
+    is_feasible = parallel_map(
+        feasibility_wrapper,
+        starts,
+        n_processes,
+    )
+    #TODO: is there better way to do this?
+    result = [starts[i] for i in range(len(starts)) if is_feasible[i]] # keep starts that are feasible only
+    return np.array(result)
 
+def check_feasibility(start, env, max_path_length = 50):
+    """
+    Rolls out a policy with no action on ENV wifh init_state START for STEPS
+    useful for checking if a state should be added to generated starts--if it's incredibly unstable, then a trained
+    policy will likely not be able to work well
+    :param env:
+    :param steps:
+    :return: True iff state is good
+    """
+    path_length = 0
+    d = False
+    o = env.reset(start)
+    while path_length < max_path_length:
+        a = np.zeros(env.action_space.flat_dim)
+        next_o, r, d, env_info = env.step(a)
+        path_length += 1
+        if d:
+            break
+    return not d
+
+def find_all_feasible_states_plotting(env, seed_starts, report, distance_threshold=0.1, size=10000, horizon = 300, brownian_variance=1, animate=False,
+                                      num_samples = 100, limit = None, center = None, fast = True, check_feasible = True,
+                                      check_feasible_path_length=50):
+    """
+
+    :param env:
+    :param seed_starts:
+    :param report:
+    :param distance_threshold:
+    :param size:
+    :param horizon:
+    :param brownian_variance:
+    :param animate:
+    :param num_samples: number of samples produced every iteration
+    :param limit:
+    :param center:
+    :param fast:
+    :param check_feasible:
+    :param check_feasible_path_length:
+    :return:
+    """
+    # If fast is True, we sample half the states from the last set generated and half from all previous generated
+# label some states generated from last iteration and some from all
+    log_dir = logger.get_snapshot_dir()
+    if log_dir is None:
+        log_dir = "/home/michael/"
+
+    iteration = 0
+    # use only first two coordinates (so in fransformed space
+    all_feasible_starts = StateCollection(distance_threshold=distance_threshold, states_transform=lambda x: x[:, :2])
+    all_feasible_starts.append(seed_starts)
+    all_starts_samples = all_feasible_starts.sample(num_samples)
+    text_labels =  OrderedDict({
+        0: 'New starts',
+        1: 'Old sampled starts',
+        2: 'Other'
+    })
+    img = plot_labeled_samples(samples = all_starts_samples[:,:2],  # first two are COM
+                        sample_classes=np.zeros(num_samples, dtype=int),
+                               text_labels= text_labels,
+                               limit=limit,
+                               center=center,
+                               maze_id=0,
+                               )
+    report.add_image(img, 'itr: {}\n'.format(iteration), width=500)
+    report.save()
+
+    no_new_states = 0
+    while no_new_states < 20:
+        iteration += 1
+        logger.log("Iteration: {}".format(iteration))
+        total_num_starts = all_feasible_starts.size
+        starts = all_feasible_starts.sample(num_samples)
+
+        # definitely want to initialize from new generated states, roughtly half proportion of both
+        if fast and iteration > 1:
+            print(len(added_states))
+            if len(added_states) > 0:
+                while len(starts) < 1.5 * num_samples:
+                    starts = np.concatenate((starts, added_states), axis=0)
+        new_starts = generate_starts(env, starts=starts, horizon=horizon, size=size, variance=brownian_variance,
+                                     animated=animate, speedup=50)
+        # filters starts so that we only keep the good starts
+        if check_feasible:
+            logger.log("Prefilteredstarts: {}".format(len(new_starts)))
+            new_starts = parallel_check_feasibility(env=env, starts=new_starts, max_path_length=check_feasible_path_length)
+            # new_starts = [start for start in new_starts if check_feasibility(env, start, check_feasible_path_length)]
+            logger.log("Filtered starts: {}".format(len(new_starts)))
+        all_starts_samples = all_feasible_starts.sample(num_samples)
+        added_states = all_feasible_starts.append(new_starts)
+        num_new_starts = len(added_states)
+        logger.log("number of new states: " + str(num_new_starts))
+        if num_new_starts < 3:
+            no_new_states += 1
+        with open(osp.join(log_dir, 'all_feasible_states.pkl'), 'wb') as f:
+            cloudpickle.dump(all_feasible_starts, f, protocol=3)
+
+
+        # want to plot added_states and old sampled starts
+        img = plot_labeled_samples(samples=np.concatenate((added_states[:, :2], all_starts_samples[:, :2]), axis = 0),  # first two are COM
+                           sample_classes=np.concatenate((np.zeros(num_new_starts, dtype=int), np.ones(num_samples, dtype=int)), axis =0),
+                                   text_labels=text_labels,
+                                   limit=limit,
+                                   center=center,
+                                   maze_id=0,
+                                   ) # fine if sample classes is longer
+
+
+        report.add_image(img, 'itr: {}\n'.format(iteration), width=500)
+        report.add_text("number of new states: " + str(num_new_starts))
+        report.save()
+        # break
+
+    all_starts_samples = all_feasible_starts.sample(all_feasible_starts.size)
+    img = plot_labeled_samples(samples=all_starts_samples,
+                               # first two are COM
+                               sample_classes=np.ones(all_feasible_starts.size, dtype=int),
+                               text_labels=text_labels,
+                               limit=limit,
+                               center=center,
+                               maze_id=0,
+                               )  # fine if sample classes is longer
+
+    report.add_image(img, 'itr: {}\n'.format(iteration), width=500)
+    report.add_text("Total number of states: " + str(all_feasible_starts.size))
+    report.save()
+
+
+
+
+#
 def find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_variance=1, animate=False):
     log_dir = logger.get_snapshot_dir()
     all_feasible_starts = StateCollection(distance_threshold=distance_threshold)

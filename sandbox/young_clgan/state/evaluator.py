@@ -111,6 +111,7 @@ def label_states_from_paths(all_paths, min_reward=0, max_reward=1, key='rewards'
 
 def label_states(states, env, policy, horizon, as_goals=True, min_reward=0.1, max_reward=0.9, key='rewards',
                  old_rewards=None, improvement_threshold=0, n_traj=1, n_processes=-1, full_path=False):
+    logger.log("Labelling starts")
     result = evaluate_states(
         states, env, policy, horizon, as_goals=as_goals,
         n_traj=n_traj, n_processes=n_processes, key=key, full_path=full_path
@@ -119,10 +120,12 @@ def label_states(states, env, policy, horizon, as_goals=True, min_reward=0.1, ma
         mean_rewards, paths = result
     else:
         mean_rewards = result
+    logger.log("Evaluated states.")
 
     mean_rewards = mean_rewards.reshape(-1, 1)
     labels = compute_labels(mean_rewards, old_rewards=old_rewards, min_reward=min_reward, max_reward=max_reward,
                           improvement_threshold=improvement_threshold)
+    logger.log("Starts labelled")
 
     if full_path:
         return labels, paths
