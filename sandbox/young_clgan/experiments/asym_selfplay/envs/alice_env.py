@@ -14,7 +14,7 @@ from sandbox.young_clgan.envs.base import FixedStateGenerator
 class AliceEnv(ProxyEnv, Serializable):
     def __init__(
             self,
-            env,
+            env_alice,
             env_bob,
             policy_bob,
             max_path_length,
@@ -24,7 +24,7 @@ class AliceEnv(ProxyEnv, Serializable):
             stop_threshold=0.9
     ):
         Serializable.quick_init(self, locals())
-        ProxyEnv.__init__(self, env)
+        ProxyEnv.__init__(self, env_alice)
 
         self.env_bob = env_bob
         self.policy_bob = policy_bob
@@ -61,6 +61,11 @@ class AliceEnv(ProxyEnv, Serializable):
         t_alice = self.time
         t_bob = path_bob['rewards'].shape[0]
         reward = self.gamma * max(0, self.alice_bonus + t_bob - self.alice_factor * t_alice)
+
+        # print("t_bob: " + str(t_bob) + ", np.linalg.norm(bob_start_state): " + str(np.linalg.norm(bob_start_state)))
+        # print("t_alice: " + str(t_alice), " speed: " + str(np.linalg.norm(bob_start_state) / t_alice))
+        # print("reward: " + str(reward))
+
         return reward
 
     @overrides

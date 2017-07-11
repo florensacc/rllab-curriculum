@@ -57,12 +57,12 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-selfplay-fakebob-run1'
+    exp_prefix = 'start-selfplay-fakebob-run4'
 
     vg = VariantGenerator()
     #vg.add('maze_id', [11])  # default is 0
     vg.add('maze_id', [12])  # default is 0
-    vg.add('maze_length',[5])
+    vg.add('maze_length',[9])
 
     vg.add('start_size', [2])  # The number of dimensions for the start state that we will set
     vg.add('start_range', lambda maze_length: [maze_length]) # The range of the maze
@@ -120,7 +120,7 @@ if __name__ == '__main__':
     vg.add('output_gain_alice', [0.1])
     vg.add('policy_init_std_alice', [1])
     vg.add('discount_alice', [0.995])
-    vg.add('alice_factor', [1])
+    vg.add('alice_factor', [0.1])
     vg.add("alice_horizon", lambda horizon: [horizon]) # Use 2 * horizon because time is split between Alice and Bob.
     vg.add('alice_bonus', [0]) #lambda alice_horizon: [alice_horizon])
     vg.add('inner_iters_alice', [5])  # again we will have to divide/adjust the
@@ -153,7 +153,7 @@ if __name__ == '__main__':
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
-          *subnets)
+        *subnets)
 
     for vv in vg.variants():
         if args.debug:

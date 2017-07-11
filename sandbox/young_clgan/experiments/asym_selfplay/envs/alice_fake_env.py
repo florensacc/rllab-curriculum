@@ -34,7 +34,7 @@ class AliceFakeEnv(ProxyEnv, Serializable):
         self.time = 0
         self.iter = init_iter
         self.ring_spacing = ring_spacing
-        self.bob_speed = 0.01
+        self.bob_speed = 0.1 #0.02
 
         self.alice_bonus = alice_bonus
         self.alice_factor = alice_factor
@@ -66,12 +66,16 @@ class AliceFakeEnv(ProxyEnv, Serializable):
 
         # Rather than running bob, analytically compute the time for bob to get to the goal based on the iter
         max_bob_distance = self.iter * self.ring_spacing
+        # print("Max bob distance: " + str(max_bob_distance) + ", iter: " + str(self.iter) + ", ring spacing: " + str(self.ring_spacing))
         if np.linalg.norm(bob_start_state) > max_bob_distance:
             # This is farther than what bob knows how to do; return the max time
+            # print("Too far for bob")
             t_bob = self.max_path_length - self.time
         else:
             # This is within Bob's range of knowledge; the time for bob is proportional to the distance
-            t_bob = np.linalg.norm(bob_start_state) / self.bob_speed
+            # print("Within bob's range: " + str(self.max_path_length - self.time) + ", " + str(np.linalg.norm(bob_start_state) / self.bob_speed))
+            t_bob = min(self.max_path_length - self.time, np.linalg.norm(bob_start_state) / self.bob_speed)
+            #t_bob = np.linalg.norm(bob_start_state) / self.bob_speed
 
         # self.env_bob.update_start_generator(FixedStateGenerator(bob_start_state))
         # path_bob = rollout(self.env_bob, self.policy_bob, max_path_length=max(5, self.max_path_length - self.time), #self.max_path_length, #
@@ -79,6 +83,9 @@ class AliceFakeEnv(ProxyEnv, Serializable):
         t_alice = self.time
         #t_bob = path_bob['rewards'].shape[0]
         reward = self.gamma * max(0, self.alice_bonus + t_bob - self.alice_factor * t_alice)
+        # print("t_bob: " + str(t_bob) + ", np.linalg.norm(bob_start_state): " + str(np.linalg.norm(bob_start_state)))
+        # print("t_alice: " + str(t_alice), " speed: " + str(np.linalg.norm(bob_start_state) / t_alice))
+        # print("reward: " + str(reward))
         return reward
 
     @overrides

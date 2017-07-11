@@ -20,7 +20,7 @@ if __name__ == '__main__':
     fast_mode = False
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ec2', '-e', action='store_true', default=True, help="add flag to run in ec2")
+    parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
     parser.add_argument('--clone', '-c', action='store_true', default=False,
                         help="add flag to copy file and checkout current")
     parser.add_argument('--local_docker', '-d', action='store_true', default=False,
@@ -29,7 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('--price', '-p', type=str, default='', help='set betting price')
     parser.add_argument('--subnet', '-sn', type=str, default='', help='set subnet like us-west-1a')
     parser.add_argument('--name', '-n', type=str, default='', help='set exp prefix name and new file name')
-    parser.add_argument('--debug', action='store_true', default=False, help="run code without multiprocessing")
+    parser.add_argument('--debug', action='store_true', default=True, help="run code without multiprocessing")
     args = parser.parse_args()
 
     if args.clone:
@@ -57,11 +57,12 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-selfplay-maze0-run6'
+    #exp_prefix = 'start-selfplay-maze0-run7'
+    exp_prefix = 'start-selfplay-maze11-run10'
 
     vg = VariantGenerator()
-    #vg.add('maze_id', [11])  # default is 0
-    vg.add('maze_id', [0])  # default is 0
+    vg.add('maze_id', [11])  # default is 0
+    #vg.add('maze_id', [0])  # default is 0
     vg.add('start_size', [2])  # this is the ultimate start we care about: getting the pendulum upright
     vg.add('start_range',
            lambda maze_id: [4] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
@@ -92,7 +93,7 @@ if __name__ == '__main__':
     vg.add('extend_dist_rew', [False])  # !!!!
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
-    vg.add('sampling_res', [2])
+    vg.add('sampling_res', [1])
     vg.add('with_replacement', [True])
     # replay buffer
     vg.add('replay_buffer', [True])
@@ -102,8 +103,7 @@ if __name__ == '__main__':
     # sampling params
     vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
     #vg.add('horizon', [500])
-    #vg.add('outer_iters', lambda maze_id: [200] if maze_id == 0 else [1000])
-    vg.add('outer_iters', lambda maze_id: [1000] if maze_id == 0 else [5000])
+    vg.add('outer_iters', lambda maze_id: [100] if maze_id == 0 else [300])
     vg.add('inner_iters', [1])  # again we will have to divide/adjust the
     vg.add('pg_batch_size', [20000])
     # policy initialization
@@ -117,11 +117,11 @@ if __name__ == '__main__':
     vg.add('output_gain_alice', [0.1])
     vg.add('policy_init_std_alice', [1])
     vg.add('discount_alice', [0.995])
-    vg.add('alice_factor', [1])
-    vg.add("alice_horizon", lambda horizon: [horizon]) # Use 2 * horizon because time is split between Alice and Bob.
-    vg.add('alice_bonus', lambda alice_horizon: [alice_horizon])
-    vg.add('inner_iters_alice', [1, 3, 5])  # again we will have to divide/adjust the
-    vg.add('stop_threshold', [1])
+    vg.add('alice_factor', [0.1])
+    vg.add("alice_horizon", lambda horizon: [2 * horizon]) # Use 2 * horizon because time is split between Alice and Bob.
+    vg.add('alice_bonus', [0])
+    vg.add('inner_iters_alice', [1])  # again we will have to divide/adjust the
+    vg.add('stop_threshold', [0.99])
     if args.debug or fast_mode:
         vg.add('pg_batch_size_alice', [200])
     else:

@@ -202,14 +202,31 @@ def construct_maze(maze_id=0, length=1):
 
     elif maze_id == 12:  # no maze, goal in the middle
         structure = [
-            [1, ] * (length + 2),
+            [1, ] * (length + 2)]
+        for x in range(length):
+            structure.append(
             [1, ] + [0, ] * length + [1, ],
-            [1, ] + [0, ] * length + [1, ],
+            )
+        structure.append(
             [1, 'g'] + [0, ] * int((length-1)/2-1) + ['r',] + [0, ] *  int((length-1)/2) + [1, ],
-            [1, ] + [0, ] * length + [1, ],
-            [1, ] + [0, ] * length + [1, ],
+        )
+        for x in range(length):
+            structure.append(
+                [1, ] + [0, ] * length + [1, ],
+            )
+        structure.append(
             [1, ] * (length + 2),
-        ]
+        )
+
+    # elif maze_id == 12:  # no maze, goal in the middle
+    #     structure = [
+    #         [1, ] * (length + 2),
+    #         [1, ] + [0, ] * length + [1, ],
+    #         [1, 'g'] + [0, ] * int((length-1)/2-1) + ['r',] + [0, ] *  int((length-1)/2) + [1, ],
+    #         [1, ] + [0, ] * length + [1, ],
+    #         [1, ] + [0, ] * length + [1, ],
+    #         [1, ] * (length + 2),
+    #     ]
     if structure:
         return structure
     else:

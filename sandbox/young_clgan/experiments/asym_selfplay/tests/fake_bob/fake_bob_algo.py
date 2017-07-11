@@ -1,5 +1,6 @@
 import matplotlib
 
+from examples.point_env import PointEnv
 from sandbox.young_clgan.experiments.asym_selfplay.envs.alice_env import AliceEnv
 from sandbox.young_clgan.experiments.asym_selfplay.envs.alice_fake_env import AliceFakeEnv
 
@@ -48,6 +49,7 @@ def run_task(v):
     report.add_text(format_dict(v))
 
     inner_env = normalize(PointMazeEnv(maze_id=v['maze_id'], length=v['maze_length']))
+    #inner_env = normalize(PointEnv())
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
     uniform_start_generator = UniformStateGenerator(state_size=v['start_size'], bounds=v['start_range'],
@@ -109,6 +111,18 @@ def run_task(v):
 
         logger.log("Outer itr # %i" % outer_iter)
         logger.log("Sampling starts")
+
+        # if outer_iter > 10:
+        #     init_iter = 5
+            #env_alice.set_iter(init_iter)
+            #import pdb; pdb.set_trace()
+
+        print("Init iter: " + str(init_iter))
+
+        env_alice = AliceFakeEnv(env, max_path_length=v['alice_horizon'], alice_factor=v['alice_factor'],
+                                     alice_bonus=v['alice_bonus'], gamma=1, stop_threshold=v['stop_threshold'],
+                                     ring_spacing=ring_spacing, init_iter=init_iter)
+        algo_alice.env = env_alice
 
         #env_alice.set_iter(outer_iter)
 
