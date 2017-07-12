@@ -25,7 +25,7 @@ def run_task(v):
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
     fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
 
-    inner_env = normalize(SwimmerMazeEnv())
+    inner_env = normalize(SwimmerMazeEnv(maze_size_scaling=3))
     env = GoalStartExplorationEnv(
         env=inner_env,
         start_generator=fixed_start_generator,
@@ -49,8 +49,9 @@ def run_task(v):
     np.random.shuffle(seed_starts)
 
     # with env.set_kill_outside():
-    feasible_states = find_all_feasible_states_plotting(env, seed_starts, report, distance_threshold=0.15, brownian_variance=1,
+    feasible_states = find_all_feasible_states_plotting(env, seed_starts, report, distance_threshold=0.2, brownian_variance=1,
                                                         animate=True,  limit = v['goal_range'],
+                                                        check_feasible=False,
                                   center = v['goal_center'])
     return
 
@@ -59,7 +60,7 @@ vg.add('seed', [2])
 vg.add('maze_id', [0])  # default is 0
 vg.add('terminal_eps', [0.3])
 vg.add('start_size', [5])  # this is the ultimate start we care about: getting the pendulum upright
-vg.add('start_goal', [(0, 4, 0, 0, 0)])
+vg.add('start_goal', [(0, 6, 0, 0, 0)])
 # brownian params
 vg.add('brownian_variance', [1])
 vg.add('initial_brownian_horizon', [10])
@@ -84,9 +85,9 @@ for vv in vg.variants():
         seed=vv['seed'],
         stub_method_call=run_task,
         use_gpu=False,
-        exp_prefix="swimmer_find_starts7",
+        exp_prefix="swimmer_find_starts10",
         mode="local",
-        n_parallel=3,
+        n_parallel=4,
 
     )
 

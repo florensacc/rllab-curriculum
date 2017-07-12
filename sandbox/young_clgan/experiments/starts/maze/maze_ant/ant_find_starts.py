@@ -10,7 +10,7 @@ from rllab.mujoco_py.mjlib import osp
 from sandbox.young_clgan.envs.base import FixedStateGenerator
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
 from sandbox.young_clgan.envs.start_env import find_all_feasible_states_plotting, generate_starts, \
-    parallel_check_feasibility
+    parallel_check_feasibility, check_feasibility
 from sandbox.young_clgan.logging import HTMLReport
 from sandbox.young_clgan.envs.maze.maze_ant.ant_maze_start_env import AntMazeEnv
 
@@ -81,13 +81,23 @@ def run_task(v):
                                   size = 1000,
                                   # size speeds up training a bit
                                   variance=v['brownian_variance'],
+                                  animated=True,
                                   subsample=v['num_new_starts'],
 
                                   )  # , animated=True, speedup=1)
     np.random.shuffle(seed_starts)
 
+    logger.log("Prefilter seed starts: {}".format(len(seed_starts)))
+    # breaks code
+    # starts = seed_starts
+    # # hack to not print code
+    # seed_starts = [start for start in seed_starts if check_feasibility(start, env, 10)]
+    # starts = np.array(starts)
+    # seed_starts = starts
+    logger.log("Filtered seed starts: {}".format(len(seed_starts)))
+
     # with env.set_kill_outside():
-    feasible_states = find_all_feasible_states_plotting(env, seed_starts, report, distance_threshold=0.15, brownian_variance=1, size=100,
+    feasible_states = find_all_feasible_states_plotting(env, seed_starts, report, distance_threshold=0.15, brownian_variance=1, size=8000,
                                                         animate=True,  limit = v['goal_range'],
                                                         check_feasible=True,
                                                         check_feasible_path_length=100,
@@ -102,7 +112,7 @@ vg.add('start_size', [15])  # this is the ultimate start we care about: getting 
 vg.add('start_goal', [[0, 4, 0.55, 1, 0, 0, 0, 0, 1, 0, -1, 0, -1, 0, 1,]])
 # brownian params
 vg.add('brownian_variance', [1])
-vg.add('initial_brownian_horizon', [10])
+vg.add('initial_brownian_horizon', [50])
 vg.add('brownian_horizon', [200])
 vg.add('ultimate_goal', lambda maze_id: [(0, 4)] if maze_id == 0 else [(2, 4), (0, 0)] if maze_id == 12 else [(4, 4)])
 # goal-algo params
@@ -118,24 +128,24 @@ vg.add('goal_range',
            lambda maze_id: [4] if maze_id == 0 else [7])
 vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
 for vv in vg.variants():
-    run_experiment_lite(
-        variant=vv,
-        seed=vv['seed'],
-        stub_method_call=benchmark_parallel,
-        use_gpu=False,
-        exp_prefix="ant_benchmark",
-        mode="local",
-        n_parallel=4,
-    )
-    # run_task(vv)
     # run_experiment_lite(
     #     variant=vv,
     #     seed=vv['seed'],
-    #     stub_method_call=run_task,
+    #     stub_method_call=benchmark_parallel,
     #     use_gpu=False,
-    #     exp_prefix="ant_find_starts7",
+    #     exp_prefix="ant_benchmark",
     #     mode="local",
     #     n_parallel=4,
-    #
     # )
+    # run_task(vv)
+    run_experiment_lite(
+        variant=vv,
+        seed=vv['seed'],
+        stub_method_call=run_task,
+        use_gpu=False,
+        exp_prefix="ant_find_starts9",
+        mode="local",
+        n_parallel=2,
+
+    )
 

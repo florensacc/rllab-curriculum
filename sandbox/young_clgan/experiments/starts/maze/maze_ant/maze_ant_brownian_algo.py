@@ -31,7 +31,8 @@ from sandbox.young_clgan.state.evaluator import convert_label, label_states, eva
 from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator
 from sandbox.young_clgan.state.utils import StateCollection
 
-from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasible_states, check_feasibility
+from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasible_states, check_feasibility, \
+    parallel_check_feasibility
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
 from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
 from sandbox.young_clgan.envs.maze.maze_ant.ant_maze_start_env import AntMazeEnv
@@ -93,16 +94,30 @@ def run_task(v):
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
     # brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
     # with env.set_kill_outside():
-    seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=v['initial_brownian_horizon'], size=1000, # this is smaller as they are seeds!
-                                  variance=v['brownian_variance'], subsample=v['num_new_starts'],
-                                  # animated=True, speedup = 2,
+    # initial brownian horizon and size are pretty important
+    logger.log("Brownian horizon: {}".format(v['initial_brownian_horizon']))
+    seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=v['initial_brownian_horizon'], size=2000, # this is smaller as they are seeds!
+                                  variance=v['brownian_variance'],
+                                  animated=True,
+                                  # subsample=v['num_new_starts'],
                                   )  # , animated=True, speedup=1)
+
+    if v['filter_bad_starts']:
+        logger.log("Prefilter seed starts: {}".format(len(seed_starts)))
+        seed_starts = parallel_check_feasibility(env=env, starts=seed_starts, max_path_length=v['feasibility_path_length'])
+
+        # starts = seed_starts
+        # hack to not print code
+        # starts = [start for start in starts if check_feasibility(start, env, v['feasibility_path_length'])]
+        # starts = np.array(starts)
+        # seed_starts = starts
+        logger.log("Filtered seed starts: {}".format(len(seed_starts)))
 
     # can also filter these starts optionally
 
     load_dir = 'sandbox/young_clgan/experiments/starts/maze/maze_ant/'
     all_feasible_starts = pickle.load(
-        open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states.pkl'), 'rb'))
+        open(osp.join(config.PROJECT_PATH, load_dir, 'good_all_feasible_starts.pkl'), 'rb'))
     logger.log("we have %d feasible starts" % all_feasible_starts.size)
 
     min_reward = 0.1
@@ -119,14 +134,16 @@ def run_task(v):
         report.save()
 
         # generate starts from the previous seed starts, which are defined below
-        starts = generate_starts(env, starts=seed_starts, subsample=v['num_new_starts'], size=3000,
+        starts = generate_starts(env, starts=seed_starts, subsample=v['num_new_starts'], size=2000,
                                  horizon=v['brownian_horizon'], variance=v['brownian_variance'])
 
         # note: this messes with the balance between starts and old_starts!
         if v['filter_bad_starts']:
             logger.log("Prefilter starts: {}".format(len(starts)))
-            starts = [start for start in starts if check_feasibility(start, env, v['feasibility_path_length'])]
-            starts = np.array(starts)
+            starts = parallel_check_feasibility(env=env, starts=starts, max_path_length=v['feasibility_path_length'])
+
+            # starts = [start for start in starts if check_feasibility(start, env, v['feasibility_path_length'])]
+            # starts = np.array(starts)
             logger.log("Filtered starts: {}".format(len(starts)))
 
         logger.log("Total number of starts in buffer: {}".format(all_starts.size))

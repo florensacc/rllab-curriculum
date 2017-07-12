@@ -292,7 +292,7 @@ def find_all_feasible_states_plotting(env, seed_starts, report, distance_thresho
     :param env:
     :param seed_starts:
     :param report:
-    :param distance_threshold:
+    :param distance_threshold: min distance between states
     :param size:
     :param horizon:
     :param brownian_variance:

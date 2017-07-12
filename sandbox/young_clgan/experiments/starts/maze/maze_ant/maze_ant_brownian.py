@@ -43,8 +43,8 @@ if __name__ == '__main__':
     # config.AWS_SPOT_PRICE = str(info["price"])
     config.AWS_SPOT_PRICE = '2.50'
     n_parallel = int(info["vCPU"] / 2)  # make the default 4 if not using ec2
-    args.ec2=False
-    # args.ec2=True
+    # args.ec2=False
+    args.ec2=True
     if args.ec2:
         mode = 'ec2'
     elif args.local_docker:
@@ -71,10 +71,10 @@ if __name__ == '__main__':
     vg.add('goal_range',
            lambda maze_id: [4] if maze_id == 0 else [7])
     vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
-    vg.add('terminal_eps', [0.3])
+    vg.add('terminal_eps', [1.0])
     # brownian params
-    vg.add('brownian_variance', [0.1])
-    vg.add('initial_brownian_horizon', [10])
+    vg.add('brownian_variance', [1])
+    vg.add('initial_brownian_horizon', [50])
     vg.add('brownian_horizon', [300])
     # goal-algo params
     vg.add('min_reward', [0.1])
@@ -95,21 +95,23 @@ if __name__ == '__main__':
     vg.add('coll_eps', [0.3])
     vg.add('num_new_starts', [200])
     vg.add('num_old_starts', [100])
-    vg.add('feasibility_path_length', [20, 50, 100])
+    vg.add('feasibility_path_length', [100, 50, 20])
     # sampling params
-    vg.add('horizon', lambda maze_id: [3000, 5000] if maze_id == 0 else [500]) #2
+    vg.add('horizon', lambda maze_id: [3000, 5000] if maze_id == 0 else [500])
     vg.add('outer_iters', lambda maze_id: [1000] if maze_id == 0 else [1000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
     vg.add('pg_batch_size', [30000])
     # policy initialization
     vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
-    vg.add('learn_std', [False, True]) #2
+    vg.add('learn_std', [True]) #2
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995]) #1
     vg.add('seed', [2,3,4])
     # vg.add('seed', [3, 13, 23, 33, 43, 54])
     # vg.add('seed', range(100, 600, 100))
+    # sweeping: horizon, seed, feasibility_path_length
+    # possible important: learn_std
 
     # Launching
     exp_prefix = 'start-brownian-ant16'
