@@ -31,20 +31,24 @@ if __name__ == '__main__':
     if args.clone:
         autoclone.autoclone(__file__, args)
 
-
+    # subnets = [
+    #     'us-east-2b', 'us-east-2c', 'us-east-2a',
+    # ]
+    subnets = [
+        'ap-northeast-2c', 'ap-northeast-2a', 'ap-southeast-1b'
+    ]
     # subnets = [
     #     'ap-northeast-2a', 'ap-northeast-2c', 'us-east-2b', 'ap-south-1a', 'us-east-2c', 'us-east-2a', 'ap-south-1b',
     #     'us-east-1b', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'eu-west-1c', 'eu-west-1a', 'eu-west-1b'
     # ]
-    ec2_instance = args.type if args.type else 'c4.4xlarge'
+    ec2_instance = 'c4.8xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
     # config.AWS_SPOT_PRICE = str(info["price"])
-    config.AWS_SPOT_PRICE = '2.50'
+    config.AWS_SPOT_PRICE = '1.50'
     n_parallel = int(info["vCPU"] / 2)  # make the default 4 if not using ec2
-    # args.ec2=False
-    args.ec2=True
+    args.ec2=False
     if args.ec2:
         mode = 'ec2'
     elif args.local_docker:
@@ -92,15 +96,15 @@ if __name__ == '__main__':
     vg.add('with_replacement', [True])
     # replay buffer
     vg.add('replay_buffer', [True])
-    vg.add('coll_eps', [0.3])
+    vg.add('coll_eps', [0.2])
     vg.add('num_new_starts', [200])
     vg.add('num_old_starts', [100])
-    vg.add('feasibility_path_length', [100, 50, 20])
+    vg.add('feasibility_path_length', [100, 50])
     # sampling params
-    vg.add('horizon', lambda maze_id: [3000, 5000] if maze_id == 0 else [500])
-    vg.add('outer_iters', lambda maze_id: [1000] if maze_id == 0 else [1000])
+    vg.add('horizon', lambda maze_id: [2000, 3000] if maze_id == 0 else [500])
+    vg.add('outer_iters', lambda maze_id: [2000] if maze_id == 0 else [1000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size', [30000])
+    vg.add('pg_batch_size', [120000, 60000])
     # policy initialization
     vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
@@ -110,20 +114,46 @@ if __name__ == '__main__':
     vg.add('seed', [2,3,4])
     # vg.add('seed', [3, 13, 23, 33, 43, 54])
     # vg.add('seed', range(100, 600, 100))
-    # sweeping: horizon, seed, feasibility_path_length
+    # sweeping: horizon, seed, feasibility_path_length, pg_batch_size
     # possible important: learn_std
 
     # Launching
-    exp_prefix = 'start-brownian-ant16'
+    subnets = [
+        "us-east-1b","us-east-1a", "us-east-1e", "us-east-1f","us-east-1d"
+    ]
+    mode = 'ec2'
+    # mode = "local"
+    exp_prefix = 'start-brownian-ant22'
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
-    # print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
-    #                                                                                config.AWS_SPOT_PRICE, n_parallel),
-    #       *subnets)
 
 
     for vv in vg.variants():
         # import pdb; pdb.set_trace()
+        print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
+                                                                                       config.AWS_SPOT_PRICE,
+                                                                                       n_parallel),
+              *subnets)
+
         if mode in ['ec2', 'local_docker']:
+
+            subnet = random.choice(subnets)
+            config.AWS_REGION_NAME = subnet[:-1]
+            config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
+                config.AWS_REGION_NAME]
+            config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
+                config.AWS_REGION_NAME]
+            config.AWS_SECURITY_GROUP_IDS = \
+                config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
+                    config.AWS_REGION_NAME]
+            config.AWS_NETWORK_INTERFACES = [
+                dict(
+                    SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
+                    Groups=config.AWS_SECURITY_GROUP_IDS,
+                    DeviceIndex=0,
+                    AssociatePublicIpAddress=True,
+                )
+            ]
+
             run_experiment_lite(
                 # use_cloudpickle=False,
                 stub_method_call=run_task,

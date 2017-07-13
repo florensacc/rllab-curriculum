@@ -177,7 +177,6 @@ vg.add('goal_weight', [0])
 
 # mode = "local_docker"
 mode = "ec2"
-# mode = "local"
 ec2_instance = 'c4.4xlarge'
 info = config.INSTANCE_TYPE_INFO[ec2_instance]
 config.AWS_INSTANCE_TYPE = ec2_instance
@@ -187,6 +186,7 @@ n_parallel = int(info["vCPU"] / 2)  # make the default 4 if not using ec2
 for vv in vg.variants():
     # run_task(vv) # uncomment when debugging
     if mode in ['ec2', "docker"]:
+
         run_experiment_lite(
             # use_cloudpickle=False,
             stub_method_call=run_task,
@@ -198,7 +198,7 @@ for vv in vg.variants():
             snapshot_mode="last",
             seed=vv['seed'],
             # plot=True,
-            exp_prefix="handbenchmark_discount2",
+            exp_prefix="handbenchmark5",
             # exp_name=exp_name,
             # for sync the pkl file also during the training
             sync_s3_pkl=True,
@@ -226,7 +226,7 @@ for vv in vg.variants():
             variant=vv,
             # Number of parallel workers for sampling
             # n_parallel=32,
-            n_parallel=4, # use cpu_count in the future
+            n_parallel=2, # use cpu_count in the future
             snapshot_mode="last",
             # snapshot_mode="gap",
             # snapshot_gap=100,

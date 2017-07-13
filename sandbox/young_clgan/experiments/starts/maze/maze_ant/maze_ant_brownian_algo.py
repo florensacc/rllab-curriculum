@@ -91,26 +91,20 @@ def run_task(v):
 
     # load the state collection from data_upload
 
-    all_starts = StateCollection(distance_threshold=v['coll_eps'])
+    all_starts = StateCollection(distance_threshold=v['coll_eps'], states_transform=lambda x: x[:, :2])
     # brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
     # with env.set_kill_outside():
     # initial brownian horizon and size are pretty important
     logger.log("Brownian horizon: {}".format(v['initial_brownian_horizon']))
     seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=v['initial_brownian_horizon'], size=2000, # this is smaller as they are seeds!
                                   variance=v['brownian_variance'],
-                                  animated=True,
+                                  animated=False,
                                   # subsample=v['num_new_starts'],
                                   )  # , animated=True, speedup=1)
 
     if v['filter_bad_starts']:
         logger.log("Prefilter seed starts: {}".format(len(seed_starts)))
         seed_starts = parallel_check_feasibility(env=env, starts=seed_starts, max_path_length=v['feasibility_path_length'])
-
-        # starts = seed_starts
-        # hack to not print code
-        # starts = [start for start in starts if check_feasibility(start, env, v['feasibility_path_length'])]
-        # starts = np.array(starts)
-        # seed_starts = starts
         logger.log("Filtered seed starts: {}".format(len(seed_starts)))
 
     # can also filter these starts optionally
@@ -118,7 +112,7 @@ def run_task(v):
     load_dir = 'sandbox/young_clgan/experiments/starts/maze/maze_ant/'
     all_feasible_starts = pickle.load(
         open(osp.join(config.PROJECT_PATH, load_dir, 'good_all_feasible_starts.pkl'), 'rb'))
-    logger.log("we have %d feasible starts" % all_feasible_starts.size)
+    logger.log("We have %d feasible starts" % all_feasible_starts.size)
 
     min_reward = 0.1
     max_reward = 0.9
@@ -141,9 +135,6 @@ def run_task(v):
         if v['filter_bad_starts']:
             logger.log("Prefilter starts: {}".format(len(starts)))
             starts = parallel_check_feasibility(env=env, starts=starts, max_path_length=v['feasibility_path_length'])
-
-            # starts = [start for start in starts if check_feasibility(start, env, v['feasibility_path_length'])]
-            # starts = np.array(starts)
             logger.log("Filtered starts: {}".format(len(starts)))
 
         logger.log("Total number of starts in buffer: {}".format(all_starts.size))
@@ -194,7 +185,7 @@ def run_task(v):
 
         labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
 
-        logger.dump_tabular(with_prefix=False)
+        # logger.dump_tabular(with_prefix=False)
         report.new_row()
 
         # append new states to list of all starts (replay buffer): Not the low reward ones!!
@@ -217,7 +208,7 @@ def run_task(v):
         logger.log("Labeling on uniform starts")
         with logger.tabular_prefix("Uniform_"):
             unif_starts = all_feasible_starts.sample(100)
-            mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=1, key='goal_reached',
+            mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=2, key='goal_reached',
                                                  as_goals=False, full_path=True)
             env.log_diagnostics(paths)
             mean_rewards = mean_reward.reshape(-1, 1)
@@ -228,4 +219,6 @@ def run_task(v):
                                 center=v['goal_center'], maze_id=v['maze_id'],
                                 summary_string_base='initial starts labels:\n')
             report.add_text("Success: " + str(np.mean(mean_reward)))
+        logger.record_tabular("Testset_success: ", np.mean(mean_reward))
+        logger.dump_tabular()
 
