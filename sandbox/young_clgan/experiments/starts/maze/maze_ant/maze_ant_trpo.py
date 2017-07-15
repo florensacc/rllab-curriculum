@@ -11,7 +11,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.starts.maze.maze_ant.maze_ant_brownian_algo import run_task
+from sandbox.young_clgan.experiments.starts.maze.maze_ant.maze_ant_trpo_algo import run_task
 
 if __name__ == '__main__':
 
@@ -46,7 +46,7 @@ if __name__ == '__main__':
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
     # config.AWS_SPOT_PRICE = str(info["price"])
-    config.AWS_SPOT_PRICE = '1.2'
+    config.AWS_SPOT_PRICE = '1.50'
     n_parallel = int(info["vCPU"] / 2)  # make the default 4 if not using ec2
     args.ec2=False
     if args.ec2:
@@ -78,7 +78,7 @@ if __name__ == '__main__':
     vg.add('terminal_eps', [1.0])
     # brownian params
     vg.add('brownian_variance', [1])
-    vg.add('initial_brownian_horizon', [200])
+    vg.add('initial_brownian_horizon', [50])
     vg.add('brownian_horizon', [300])
     # goal-algo params
     vg.add('min_reward', [0.1])
@@ -89,11 +89,11 @@ if __name__ == '__main__':
     vg.add('goal_weight', lambda inner_weight: [1000] if inner_weight > 0 else [1])
     vg.add('regularize_starts', [0])
 
-    vg.add('persistence', [1])
-    vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
-    vg.add('filter_bad_starts', [True])
-    vg.add('sampling_res', [2])
-    vg.add('with_replacement', [True])
+    # vg.add('persistence', [1])
+    # vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
+    # vg.add('filter_bad_starts', [True])
+    # vg.add('sampling_res', [2])
+    # vg.add('with_replacement', [True])
     # replay buffer
     vg.add('replay_buffer', [True])
     vg.add('coll_eps', [0.05]) # should try this
@@ -111,8 +111,6 @@ if __name__ == '__main__':
     vg.add('learn_std', [False]) #2
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995]) #1
-    vg.add('seed_with', ['only_goods'])
-    # vg.add('seed_with', ['all_previous'])
     # vg.add('seed', [2,3,4])
     vg.add('seed', [43, 13, 23, 33, 53, 63, 73, 83, 93])
     # vg.add('seed', range(100, 600, 100))
@@ -121,11 +119,11 @@ if __name__ == '__main__':
 
     # Launching
     subnets = [
-        "us-west-2a","us-west-2b", 'us-west-2c'
+        'us-west-2a', 'us-west-2b', 'us-west-2c'
     ]
     mode = 'ec2'
     # mode = "local"
-    exp_prefix = 'ant-startgen-only-goods'
+    exp_prefix = 'ant-startgen-trpo'
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
 
 
@@ -196,7 +194,7 @@ if __name__ == '__main__':
                 stub_method_call=run_task,
                 variant=vv,
                 mode='local',
-                n_parallel=5,
+                n_parallel=2,
                 # Only keep the snapshot parameters for the last iteration
                 snapshot_mode="last",
                 seed=vv['seed'],

@@ -76,7 +76,7 @@ vg.add('goal_weight', lambda inner_weight: [1000] if inner_weight > 0 else [1])
 vg.add('regularize_starts', [0])
 vg.add('num_new_starts', [200])
 vg.add('goal_range',
-           lambda maze_id: [4] if maze_id == 0 else [7])
+           lambda maze_id: [5] if maze_id == 0 else [7]) #makes maze bigger
 vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
 for vv in vg.variants():
     # run_task(vv)
@@ -85,7 +85,7 @@ for vv in vg.variants():
         seed=vv['seed'],
         stub_method_call=run_task,
         use_gpu=False,
-        exp_prefix="swimmer_find_starts10",
+        exp_prefix="swimmer_find_starts12",
         mode="local",
         n_parallel=4,
 

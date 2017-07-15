@@ -46,7 +46,7 @@ if __name__ == '__main__':
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
     # config.AWS_SPOT_PRICE = str(info["price"])
-    config.AWS_SPOT_PRICE = '1.2'
+    config.AWS_SPOT_PRICE = '1.50'
     n_parallel = int(info["vCPU"] / 2)  # make the default 4 if not using ec2
     args.ec2=False
     if args.ec2:
@@ -104,7 +104,7 @@ if __name__ == '__main__':
     vg.add('horizon', lambda maze_id: [2000] if maze_id == 0 else [500])
     vg.add('outer_iters', lambda maze_id: [2000] if maze_id == 0 else [1000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size', [120000])
+    vg.add('pg_batch_size', [12000])
     # policy initialization
     vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
@@ -112,6 +112,14 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995]) #1
     vg.add('seed_with', ['only_goods'])
+
+    # Alice params.
+    vg.add('output_gain_alice', [0.1])
+    vg.add('policy_init_std_alice', [1])
+    vg.add('discount_alice', [0.995])
+    vg.add('alice_factor', [0.5])
+    vg.add('inner_iters_alice', [5])  # again we will have to divide/adjust th
+    vg.add('pg_batch_size_alice', [2000])
     # vg.add('seed_with', ['all_previous'])
     # vg.add('seed', [2,3,4])
     vg.add('seed', [43, 13, 23, 33, 53, 63, 73, 83, 93])
@@ -121,11 +129,11 @@ if __name__ == '__main__':
 
     # Launching
     subnets = [
-        "us-west-2a","us-west-2b", 'us-west-2c'
+        "us-west-2a","us-west-2b"
     ]
-    mode = 'ec2'
-    # mode = "local"
-    exp_prefix = 'ant-startgen-only-goods'
+    # mode = 'ec2'
+    mode = "local"
+    exp_prefix = 'start-brownian-ant24'
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
 
 
