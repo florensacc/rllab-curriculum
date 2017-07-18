@@ -78,8 +78,9 @@ if __name__ == '__main__':
     vg.add('terminal_eps', [1.0])
     # brownian params
     vg.add('brownian_variance', [1])
-    vg.add('initial_brownian_horizon', [50])
-    vg.add('brownian_horizon', [300])
+    # vg.add('initial_brownian_horizon', [50])
+    # vg.add('brownian_horizon', [300])
+    vg.add('baseline', ["MLP"])
     # goal-algo params
     vg.add('min_reward', [0.1])
     vg.add('max_reward', [0.9])
@@ -112,7 +113,7 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995]) #1
     # vg.add('seed', [2,3,4])
-    vg.add('seed', [43, 13, 23, 33, 53, 63, 73, 83, 93])
+    vg.add('seed', [43, 13, 23, 33, 53, 63, 73, 83])
     # vg.add('seed', range(100, 600, 100))
     # sweeping: horizon, seed, feasibility_path_length, pg_batch_size
     # possible important: learn_std
@@ -122,8 +123,8 @@ if __name__ == '__main__':
         'us-west-2a', 'us-west-2b', 'us-west-2c'
     ]
     mode = 'ec2'
-    # mode = "local"
-    exp_prefix = 'ant-startgen-trpo'
+    #mode = "local"
+    exp_prefix = 'ant-startgen-trpo2'
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
 
 

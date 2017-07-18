@@ -11,7 +11,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.starts.maze.maze_ant.maze_ant_brownian_algo import run_task
+from sandbox.young_clgan.experiments.starts.maze.maze_ant.maze_ant_selfplay_algo import run_task
 
 if __name__ == '__main__':
 
@@ -78,8 +78,9 @@ if __name__ == '__main__':
     vg.add('terminal_eps', [1.0])
     # brownian params
     vg.add('brownian_variance', [1])
-    vg.add('initial_brownian_horizon', [200])
-    vg.add('brownian_horizon', [300])
+    # vg.add('initial_brownian_horizon', [200])
+    # vg.add('brownian_horizon', [50])
+    vg.add('baseline', ["MLP"])
     # goal-algo params
     vg.add('min_reward', [0.1])
     vg.add('max_reward', [0.9])
@@ -91,7 +92,7 @@ if __name__ == '__main__':
 
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
-    vg.add('filter_bad_starts', [True])
+    vg.add('filter_bad_starts', [False])
     vg.add('sampling_res', [2])
     vg.add('with_replacement', [True])
     # replay buffer
@@ -104,7 +105,7 @@ if __name__ == '__main__':
     vg.add('horizon', lambda maze_id: [2000] if maze_id == 0 else [500])
     vg.add('outer_iters', lambda maze_id: [2000] if maze_id == 0 else [1000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size', [12000])
+    vg.add('pg_batch_size', [120000])
     # policy initialization
     vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
@@ -117,23 +118,27 @@ if __name__ == '__main__':
     vg.add('output_gain_alice', [0.1])
     vg.add('policy_init_std_alice', [1])
     vg.add('discount_alice', [0.995])
-    vg.add('alice_factor', [0.5])
+    vg.add('alice_factor', [1])
     vg.add('inner_iters_alice', [5])  # again we will have to divide/adjust th
     vg.add('pg_batch_size_alice', [2000])
     # vg.add('seed_with', ['all_previous'])
     # vg.add('seed', [2,3,4])
-    vg.add('seed', [43, 13, 23, 33, 53, 63, 73, 83, 93])
+    vg.add('seed', [43, 13, 23, 33, 53, 63, 73, 83])
     # vg.add('seed', range(100, 600, 100))
     # sweeping: horizon, seed, feasibility_path_length, pg_batch_size
     # possible important: learn_std
 
     # Launching
+    # subnets = [
+    #     "us-west-2a","us-west-2b"
+    # ]
+
     subnets = [
-        "us-west-2a","us-west-2b"
+        "us-east-1a","us-east-1b"
     ]
-    # mode = 'ec2'
-    mode = "local"
-    exp_prefix = 'start-brownian-ant24'
+    mode = 'ec2'
+    # mode = "local"
+    exp_prefix = 'ant-startgen-selfplay1'
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
 
 

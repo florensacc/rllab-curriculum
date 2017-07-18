@@ -24,6 +24,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = ''
 from rllab import config
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
@@ -88,8 +89,10 @@ def run_task(v):
         init_std=v['policy_init_std'],
     )
 
-
-    baseline = LinearFeatureBaseline(env_spec=env.spec)
+    if v["baseline"] == "MLP":
+        baseline = GaussianMLPBaseline(env_spec=env.spec)
+    else:
+        baseline = LinearFeatureBaseline(env_spec=env.spec)
 
     # create Alice
 
@@ -105,7 +108,10 @@ def run_task(v):
         output_gain=v['output_gain_alice'],
         init_std=v['policy_init_std_alice'],
     )
-    baseline_alice = LinearFeatureBaseline(env_spec=env_alice.spec)
+    if v["baseline"] == "MLP":
+        baseline_alice = GaussianMLPBaseline(env_spec=env.spec)
+    else:
+        baseline_alice = LinearFeatureBaseline(env_spec=env.spec)
 
     algo_alice = TRPO(
         env=env_alice,
@@ -122,11 +128,6 @@ def run_task(v):
     # load the state collection from data_upload
 
     all_starts = StateCollection(distance_threshold=v['coll_eps'], states_transform=lambda x: x[:, :2])
-    # brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
-    # with env.set_kill_outside():
-    # initial brownian horizon and size are pretty important
-    logger.log("Brownian horizon: {}".format(v['initial_brownian_horizon']))
-    # can also filter these starts optionally
 
     load_dir = 'sandbox/young_clgan/experiments/starts/maze/maze_ant/'
     all_feasible_starts = pickle.load(
@@ -167,16 +168,11 @@ def run_task(v):
                                        algo_alice=algo_alice, start_states=[v['start_goal']],
                                        num_new_starts=v['num_new_starts'], alice_factor=v['alice_factor'],
                                        log_dir=log_dir)
-        # generate starts from the previous seed starts, which are defined below
-        # starts = generate_starts(env, starts=seed_starts, subsample=v['num_new_starts'], size=2000,
-        #                          horizon=v['brownian_horizon'], variance=v['brownian_variance'])
 
-        # note: this messes with the balance between starts and old_starts!
-        # TODO: put this back in to help Alice?
-        # if v['filter_bad_starts']:
-        #     logger.log("Prefilter starts: {}".format(len(starts)))
-        #     starts = parallel_check_feasibility(env=env, starts=starts, max_path_length=v['feasibility_path_length'])
-        #     logger.log("Filtered starts: {}".format(len(starts)))
+        if v['filter_bad_starts']:
+            logger.log("Prefilter starts: {}".format(len(starts)))
+            starts = parallel_check_feasibility(env=env, starts=starts, max_path_length=v['feasibility_path_length'])
+            logger.log("Filtered starts: {}".format(len(starts)))
 
         logger.log("Total number of starts in buffer: {}".format(all_starts.size))
         if v['replay_buffer'] and outer_iter > 0 and all_starts.size > 0:
