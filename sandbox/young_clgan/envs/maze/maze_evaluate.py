@@ -95,13 +95,17 @@ def my_square_scatter(axes, x_array, y_array, z_array, min_z=None, max_z=None, s
 
 
 def plot_heatmap(rewards, goals, prefix='', spacing=1, show_heatmap=True, maze_id=0,
-                 limit=None, center=None):
+                 limit=None, center=None, adaptive_range=False):
     fig, ax = plt.subplots()
 
     x_goal, y_goal = np.array(goals)[:, :2].T
 
-    # THIS IS FOR BINARY REWARD!!!
-    my_square_scatter(axes=ax, x_array=x_goal, y_array=y_goal, z_array=rewards, min_z=0, max_z=1, size=spacing)
+    if adaptive_range:
+        my_square_scatter(axes=ax, x_array=x_goal, y_array=y_goal, z_array=rewards, min_z=np.min(rewards),
+                          max_z=np.max(rewards), size=spacing)
+    else:
+        # THIS IS FOR BINARY REWARD!!!
+        my_square_scatter(axes=ax, x_array=x_goal, y_array=y_goal, z_array=rewards, min_z=0, max_z=1, size=spacing)
 
     if maze_id == 0:
         ax.add_patch(patches.Rectangle((-3, -3), 10, 2, fill=True, edgecolor="none", facecolor='0.4'))
@@ -293,7 +297,7 @@ def test_policy_parallel(policy, train_env, as_goals=True, visualize=True, sampl
                 avg_totRewards.append(np.mean([np.sum(path['rewards']) for path in state_paths]))
                 avg_success.append(np.mean([int(np.min(path['env_infos']['distance'])
                                                 <= train_env.terminal_eps) for path in state_paths]))
-                avg_time.append(np.mean([path['rewards'].shape[0] for path in paths]))
+                avg_time.append(np.mean([path['rewards'].shape[0] for path in state_paths]))
 
                 path_index += n_traj
     return avg_totRewards, avg_success, states, spacing, avg_time
@@ -313,7 +317,7 @@ def test_and_plot_policy(policy, env, as_goals=True, visualize=True, sampling_re
     reward_img = save_image()
 
     plot_heatmap(avg_time, states, spacing=spacing, show_heatmap=False, maze_id=maze_id,
-                 center=center, limit=limit)
+                 center=center, limit=limit, adaptive_range=True)
     time_img = save_image()
 
     mean_rewards = np.mean(avg_totRewards)

@@ -20,7 +20,7 @@ if __name__ == '__main__':
     fast_mode = False
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
+    parser.add_argument('--ec2', '-e', action='store_true', default=True, help="add flag to run in ec2")
     parser.add_argument('--clone', '-c', action='store_true', default=False,
                         help="add flag to copy file and checkout current")
     parser.add_argument('--local_docker', '-d', action='store_true', default=False,
@@ -29,7 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('--price', '-p', type=str, default='', help='set betting price')
     parser.add_argument('--subnet', '-sn', type=str, default='', help='set subnet like us-west-1a')
     parser.add_argument('--name', '-n', type=str, default='', help='set exp prefix name and new file name')
-    parser.add_argument('--debug', action='store_true', default=True, help="run code without multiprocessing")
+    parser.add_argument('--debug', action='store_true', default=False, help="run code without multiprocessing")
     args = parser.parse_args()
 
     if args.clone:
@@ -37,9 +37,7 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        # 'eu-central-1c', 'us-east-2c', 'us-east-2b', 'us-east-2a', 'ap-southeast-2c', 'ap-southeast-2a', 'us-west-2c',
-        # 'us-west-2a', 'us-west-2b', 'eu-west-1a', 'eu-west-1b', 'eu-west-1c', 'us-east-1d', 'ap-southeast-1a',
-        # 'us-east-1a', 'us-east-1b', 'us-east-1c', 'us-west-1a', 'us-west-1c'
+        'us-east-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2a', 'ap-northeast-2c', 'ap-southeast-1a', 'ap-southeast-1b', 'ap-south-1a', 'ap-south-1b', 'us-east-1b', 'us-east-1c', 'us-east-1e', 'eu-west-1c', 'eu-west-1a', 'eu-west-1b'
     ]
     ec2_instance = args.type if args.type else 'c4.4xlarge' #'m4.10xlarge' #
     # configure instan
@@ -58,7 +56,7 @@ if __name__ == '__main__':
         # n_parallel = multiprocessing.cpu_count()
 
     #exp_prefix = 'start-selfplay-maze0-run7'
-    exp_prefix = 'start-selfplay-maze11-run10'
+    exp_prefix = 'start-selfplay-maze11-run13'
 
     vg = VariantGenerator()
     vg.add('maze_id', [11])  # default is 0
@@ -93,7 +91,7 @@ if __name__ == '__main__':
     vg.add('extend_dist_rew', [False])  # !!!!
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
-    vg.add('sampling_res', [1])
+    vg.add('sampling_res', [2])
     vg.add('with_replacement', [True])
     # replay buffer
     vg.add('replay_buffer', [True])

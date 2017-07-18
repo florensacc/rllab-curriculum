@@ -22,7 +22,7 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states
+from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states, label_states_from_paths
 from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator
 from sandbox.young_clgan.state.utils import StateCollection
 
@@ -46,7 +46,7 @@ def run_task(v):
     log_dir = logger.get_snapshot_dir()  # problem with logger module here!!
     if log_dir is None:
         log_dir = "/home/davheld/repos/rllab_goal_rl/data/local/debug"
-    report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=4)
+    report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=5)
 
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
@@ -165,7 +165,14 @@ def run_task(v):
                 plot=False,
             )
 
+            # We don't use these labels anyway, so we might as well take them from training.
+            #trpo_paths = algo.train()
             algo.train()
+
+        # logger.log("labeling starts with trpo rollouts")
+        # [starts, labels] = label_states_from_paths(trpo_paths, n_traj=2, key='goal_reached',  # using the min n_traj
+        #                                            as_goal=False, env=env)
+        # paths = [path for paths in trpo_paths for path in paths]
 
         with logger.tabular_prefix('Outer_'):
             logger.record_tabular('t_alices', np.mean(t_alices))

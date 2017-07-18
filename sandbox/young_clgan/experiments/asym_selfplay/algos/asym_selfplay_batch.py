@@ -30,14 +30,14 @@ class AsymSelfplayBatch(object):
         all_alice_paths = []
         self.algo_alice.current_itr = 0
 
-        # with ExperimentLogger(self.log_dir, 'last_alice', snapshot_mode='last', hold_outter_log=True):
-        #     logger.log("Training Alice")
+        with ExperimentLogger(self.log_dir, 'last_alice', snapshot_mode='last', hold_outter_log=True):
+            logger.log("Training Alice")
 
-        for i in range(n_starts):
-            self.env_alice.update_start_generator(FixedStateGenerator(self.start_states[i % n_starts]))
-            logger.log("Num itrs: " + str(self.algo_alice.n_itr))
-            alice_paths = self.algo_alice.train()
-            all_alice_paths.extend(alice_paths)
+            for i in range(n_starts):
+                self.env_alice.update_start_generator(FixedStateGenerator(self.start_states[i % n_starts]))
+                logger.log("Num itrs: " + str(self.algo_alice.n_itr))
+                alice_paths = self.algo_alice.train()
+                all_alice_paths.extend(alice_paths)
 
         logger.log("All alice paths: " + str(len(all_alice_paths)))
 
