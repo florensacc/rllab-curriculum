@@ -212,8 +212,8 @@ class MazeEnv(ProxyEnv, Serializable):
             pass
         return self.wrapped_env.model.data.qpos[self.__class__.ORI_IND]
 
-    def reset(self):
-        self.wrapped_env.reset()
+    def reset(self, *args, **kwargs):
+        self.wrapped_env.reset(*args, **kwargs)
         return self.get_current_obs()
 
     @property

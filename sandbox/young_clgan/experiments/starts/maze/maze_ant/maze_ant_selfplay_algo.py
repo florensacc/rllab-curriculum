@@ -2,6 +2,7 @@ import matplotlib
 import cloudpickle
 import pickle
 
+from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import AliceEnv
 from sandbox.young_clgan.logging.visualization import plot_labeled_states
 
 matplotlib.use('Agg')
@@ -32,7 +33,7 @@ from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStat
 from sandbox.young_clgan.state.utils import StateCollection
 
 from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasible_states, check_feasibility, \
-    parallel_check_feasibility
+    parallel_check_feasibility, generate_starts_alice
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
 from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
 from sandbox.young_clgan.envs.maze.maze_ant.ant_maze_start_env import AntMazeEnv
@@ -87,7 +88,36 @@ def run_task(v):
         init_std=v['policy_init_std'],
     )
 
+
     baseline = LinearFeatureBaseline(env_spec=env.spec)
+
+    # create Alice
+
+    env_alice = AliceEnv(env, env, policy, v['horizon'])
+
+    policy_alice = GaussianMLPPolicy(
+        env_spec=env_alice.spec,
+        hidden_sizes=(64, 64),
+        # Fix the variance since different goals will require different variances, making this parameter hard to learn.
+        learn_std=v['learn_std'],
+        adaptive_std=v['adaptive_std'],
+        std_hidden_sizes=(16, 16),  # this is only used if adaptive_std is true!
+        output_gain=v['output_gain_alice'],
+        init_std=v['policy_init_std_alice'],
+    )
+    baseline_alice = LinearFeatureBaseline(env_spec=env_alice.spec)
+
+    algo_alice = TRPO(
+        env=env_alice,
+        policy=policy_alice,
+        baseline=baseline_alice,
+        batch_size=v['pg_batch_size_alice'],
+        max_path_length=v['horizon'],
+        n_itr=v['inner_iters_alice'],
+        step_size=0.01,
+        discount=v['discount_alice'],
+        plot=False,
+    )
 
     # load the state collection from data_upload
 
@@ -96,17 +126,6 @@ def run_task(v):
     # with env.set_kill_outside():
     # initial brownian horizon and size are pretty important
     logger.log("Brownian horizon: {}".format(v['initial_brownian_horizon']))
-    seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=v['initial_brownian_horizon'], size=15000, # this is smaller as they are seeds!
-                                  variance=v['brownian_variance'],
-                                  animated=False,
-                                  # subsample=v['num_new_starts'],
-                                  )  # , animated=True, speedup=1)
-
-    if v['filter_bad_starts']:
-        logger.log("Prefilter seed starts: {}".format(len(seed_starts)))
-        seed_starts = parallel_check_feasibility(env=env, starts=seed_starts, max_path_length=v['feasibility_path_length'])
-        logger.log("Filtered seed starts: {}".format(len(seed_starts)))
-
     # can also filter these starts optionally
 
     load_dir = 'sandbox/young_clgan/experiments/starts/maze/maze_ant/'
@@ -144,28 +163,26 @@ def run_task(v):
 
         report.save()
 
+        starts = generate_starts_alice(env_bob=env, env_alice=env_alice, policy_bob=policy, policy_alice=policy_alice,
+                                       algo_alice=algo_alice, start_states=[v['start_goal']],
+                                       num_new_starts=v['num_new_starts'], alice_factor=v['alice_factor'],
+                                       log_dir=log_dir)
         # generate starts from the previous seed starts, which are defined below
-        starts = generate_starts(env, starts=seed_starts, subsample=v['num_new_starts'], size=2000,
-                                 horizon=v['brownian_horizon'], variance=v['brownian_variance'])
+        # starts = generate_starts(env, starts=seed_starts, subsample=v['num_new_starts'], size=2000,
+        #                          horizon=v['brownian_horizon'], variance=v['brownian_variance'])
 
         # note: this messes with the balance between starts and old_starts!
-        if v['filter_bad_starts']:
-            logger.log("Prefilter starts: {}".format(len(starts)))
-            starts = parallel_check_feasibility(env=env, starts=starts, max_path_length=v['feasibility_path_length'])
-            logger.log("Filtered starts: {}".format(len(starts)))
+        # TODO: put this back in to help Alice?
+        # if v['filter_bad_starts']:
+        #     logger.log("Prefilter starts: {}".format(len(starts)))
+        #     starts = parallel_check_feasibility(env=env, starts=starts, max_path_length=v['feasibility_path_length'])
+        #     logger.log("Filtered starts: {}".format(len(starts)))
 
         logger.log("Total number of starts in buffer: {}".format(all_starts.size))
         if v['replay_buffer'] and outer_iter > 0 and all_starts.size > 0:
             old_starts = all_starts.sample(v['num_old_starts'])
             starts = np.vstack([starts, old_starts])
 
-        # plot starts before training
-        # takes too much time
-        # labels = label_states(starts, env, policy, v['horizon'],
-        #                       as_goals=False, n_traj=v['n_traj'], key='goal_reached')
-        # plot_labeled_states(starts, labels, report=report, itr=outer_iter, limit=v['goal_range'],
-        #                     center=v['goal_center'], maze_id=v['maze_id'],
-        #                     summary_string_base='initial starts labels:\n')
 
 
         # Following code should be indented
@@ -207,25 +224,12 @@ def run_task(v):
 
         # append new states to list of all starts (replay buffer): Not the low reward ones!!
         filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1]
-
-        if v['seed_with'] == 'only_goods':
-            if len(filtered_raw_starts) > 0:  # add a ton of noise if all the states I had ended up being high_reward!
-                logger.log("We have {} good starts!".format(len(filtered_raw_starts)))
-                seed_starts = filtered_raw_starts
-            elif np.sum(start_classes == 0) > np.sum(start_classes == 1):  # if more low reward than high reward
-                logger.log("More bad starts than good starts, sampling seeds from replay buffer")
-                seed_starts = all_starts.sample(300)  # sample them from the replay
-            else:
-                logger.log("More good starts than bad starts, resampling")
-                seed_starts = generate_starts(env, starts=starts, horizon=v['horizon'] * 2, subsample=v['num_new_starts'], size=10000,
-                                              variance=v['brownian_variance'] * 10)
-        elif v['seed_with'] == 'all_previous':
-            seed_starts = starts
-        else:
-            raise Exception
+        if len(filtered_raw_starts) == 0:  # add a tone of noise if all the states I had ended up being high_reward!
+            logger.log("Bad Alice!  All goals are high reward!")
 
         all_starts.append(filtered_raw_starts)
 
+        # Useful plotting and metrics (basic test set)
         # need to put this last! otherwise labels variable gets confused
         logger.log("Labeling on uniform starts")
         with logger.tabular_prefix("Uniform_"):

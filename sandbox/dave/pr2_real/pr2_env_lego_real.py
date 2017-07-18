@@ -191,6 +191,7 @@ class Pr2EnvReal(MujocoEnv, Serializable):
 
         # Limit actions to the specified range.
         action_limit = self.action_limit * self.action_space.ones()
+        #action_limit = self.action_limit * np.ones(self.action_space.shape)
         action = np.maximum(action, -action_limit)
         action = np.minimum(action, action_limit)
         vec_tip_to_lego = self.get_vec_tip_to_lego()
