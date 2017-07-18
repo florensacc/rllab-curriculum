@@ -95,13 +95,17 @@ def my_square_scatter(axes, x_array, y_array, z_array, min_z=None, max_z=None, s
 
 
 def plot_heatmap(rewards, goals, prefix='', spacing=1, show_heatmap=True, maze_id=0,
-                 limit=None, center=None):
+                 limit=None, center=None, adaptive_range=False):
     fig, ax = plt.subplots()
 
     x_goal, y_goal = np.array(goals)[:, :2].T
 
-    # THIS IS FOR BINARY REWARD!!!
-    my_square_scatter(axes=ax, x_array=x_goal, y_array=y_goal, z_array=rewards, min_z=0, max_z=1, size=spacing)
+    if adaptive_range:
+        my_square_scatter(axes=ax, x_array=x_goal, y_array=y_goal, z_array=rewards, min_z=np.min(rewards),
+                          max_z=np.max(rewards), size=spacing)
+    else:
+        # THIS IS FOR BINARY REWARD!!!
+        my_square_scatter(axes=ax, x_array=x_goal, y_array=y_goal, z_array=rewards, min_z=0, max_z=1, size=spacing)
 
     if maze_id == 0:
         ax.add_patch(patches.Rectangle((-3, -3), 10, 2, fill=True, edgecolor="none", facecolor='0.4'))
@@ -178,6 +182,7 @@ def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1
 
     avg_totRewards = []
     avg_success = []
+    avg_time = []
     states = []
 
     distances = []
@@ -216,8 +221,9 @@ def test_policy(policy, train_env, as_goals=True, visualize=True, sampling_res=1
                 avg_totRewards.append(np.mean([np.sum(path['rewards']) for path in paths]))
                 avg_success.append(np.mean([int(np.min(path['env_infos']['distance'])
                                                 <= train_env.terminal_eps) for path in paths]))
+                avg_time.append(np.mean([path['rewards'].shape[0] for path in paths]))
 
-    return avg_totRewards, avg_success, states, spacing
+    return avg_totRewards, avg_success, states, spacing, avg_time
 
 
 def find_empty_spaces(train_env, sampling_res=1):
@@ -271,6 +277,7 @@ def test_policy_parallel(policy, train_env, as_goals=True, visualize=True, sampl
 
     avg_totRewards = []
     avg_success = []
+    avg_time = []
     num_samples = 2 ** sampling_res
     states, empty_spaces, spacing = find_empty_spaces(train_env, sampling_res=sampling_res)
 
@@ -290,23 +297,29 @@ def test_policy_parallel(policy, train_env, as_goals=True, visualize=True, sampl
                 avg_totRewards.append(np.mean([np.sum(path['rewards']) for path in state_paths]))
                 avg_success.append(np.mean([int(np.min(path['env_infos']['distance'])
                                                 <= train_env.terminal_eps) for path in state_paths]))
+                avg_time.append(np.mean([path['rewards'].shape[0] for path in state_paths]))
+
                 path_index += n_traj
-    return avg_totRewards, avg_success, states, spacing
+    return avg_totRewards, avg_success, states, spacing, avg_time
 
 
 def test_and_plot_policy(policy, env, as_goals=True, visualize=True, sampling_res=1,
                          n_traj=1, max_reward=1, itr=0, report=None, center=None, limit=None, bounds = None):
 
-    avg_totRewards, avg_success, states, spacing = test_policy(policy, env, as_goals, visualize,
-                                                               sampling_res=sampling_res, n_traj=n_traj, bounds =bounds)
+    avg_totRewards, avg_success, states, spacing, avg_time = test_policy(policy, env, as_goals, visualize,
+                                                               sampling_res=sampling_res, n_traj=n_traj, bounds=bounds)
     obj = env
     while not hasattr(obj, '_maze_id') and hasattr(obj, 'wrapped_env'):
         obj = env.wrapped_env
     maze_id = obj._maze_id
     plot_heatmap(avg_success, states, spacing=spacing, show_heatmap=False, maze_id=maze_id,
                  center=center, limit=limit)
-
     reward_img = save_image()
+
+    plot_heatmap(avg_time, states, spacing=spacing, show_heatmap=False, maze_id=maze_id,
+                 center=center, limit=limit, adaptive_range=True)
+    time_img = save_image()
+
     mean_rewards = np.mean(avg_totRewards)
     success = np.mean(avg_success)
 
@@ -321,6 +334,12 @@ def test_and_plot_policy(policy, env, as_goals=True, visualize=True, sampling_re
             reward_img,
             'policy performance\n itr: {} \nmean_rewards: {} \nsuccess: {}'.format(
                 itr, mean_rewards, success
+            )
+        )
+        report.add_image(
+            time_img,
+            'policy time\n itr: {} \n'.format(
+                itr
             )
         )
     return mean_rewards, success

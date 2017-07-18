@@ -73,7 +73,8 @@ class HTMLReport:
             self._add_table()
         with self.t:
             # with tr():
-            with td(style="word-wrap: break-word;", halign="center", valign="top"):
+            #with td(style="word-wrap: break-word;", halign="center", valign="top"):
+            with td(halign="center", valign="top"):
                 with p():
                     img(
                         style="width:%dpx" % width,

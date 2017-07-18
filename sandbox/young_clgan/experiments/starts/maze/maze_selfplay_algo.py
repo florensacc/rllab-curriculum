@@ -1,6 +1,6 @@
 import matplotlib
 
-from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import AliceEnv
+from sandbox.young_clgan.experiments.asym_selfplay.envs.alice_env import AliceEnv
 
 matplotlib.use('Agg')
 import os
@@ -22,7 +22,7 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states
+from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states, label_states_from_paths
 from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator
 from sandbox.young_clgan.state.utils import StateCollection
 
@@ -46,7 +46,7 @@ def run_task(v):
     log_dir = logger.get_snapshot_dir()  # problem with logger module here!!
     if log_dir is None:
         log_dir = "/home/davheld/repos/rllab_goal_rl/data/local/debug"
-    report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=4)
+    report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=5)
 
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
@@ -87,17 +87,18 @@ def run_task(v):
     outer_iter = 0
 
     logger.log('Generating the Initial Heatmap...')
-    plot_policy_means(policy, env, sampling_res=2, report=report, limit=v['goal_range'], center=v['goal_center'])
-    # test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=sampling_res,
-    #                      n_traj=v['n_traj'],
-    #                      itr=outer_iter, report=report, center=v['goal_center'],
-    #                      limit=v['goal_range'])  # use goal for plot
+    plot_policy_means(policy, env, sampling_res=sampling_res, report=report, limit=v['goal_range'], center=v['goal_center'])
+    test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=sampling_res,
+                         n_traj=v['n_traj'],
+                         itr=outer_iter, report=report, center=v['goal_center'], limit=v['goal_range'])
     report.new_row()
 
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
 
     # Use asymmetric self-play to run Alice to generate starts for Bob.
-    env_alice = AliceEnv(env, env, policy, v['horizon'])
+    # Use a double horizon because the horizon is shared between Alice and Bob.
+    env_alice = AliceEnv(env_alice=env, env_bob=env, policy_bob=policy, max_path_length=v['alice_horizon'], alice_factor=v['alice_factor'],
+                                       alice_bonus=v['alice_bonus'], gamma=1, stop_threshold=v['stop_threshold'])
 
     policy_alice = GaussianMLPPolicy(
             env_spec=env_alice.spec,
@@ -116,7 +117,7 @@ def run_task(v):
         policy=policy_alice,
         baseline=baseline_alice,
         batch_size=v['pg_batch_size_alice'],
-        max_path_length=v['horizon'],
+        max_path_length=v['alice_horizon'],
         n_itr=v['inner_iters_alice'],
         step_size=0.01,
         discount=v['discount_alice'],
@@ -128,10 +129,9 @@ def run_task(v):
         logger.log("Outer itr # %i" % outer_iter)
         logger.log("Sampling starts")
 
-        starts = generate_starts_alice(env_bob=env, env_alice=env_alice, policy_bob=policy, policy_alice=policy_alice,
+        starts, t_alices = generate_starts_alice(env_alice=env_alice,
                                        algo_alice=algo_alice, start_states=[v['start_goal']],
-                                       num_new_starts=v['num_new_starts'], alice_factor=v['alice_factor'],
-                                       log_dir=log_dir)
+                                       num_new_starts=v['num_new_starts'], log_dir=log_dir)
 
         labels = label_states(starts, env, policy, v['horizon'],
                               as_goals=False, n_traj=v['n_traj'], key='goal_reached')
@@ -165,10 +165,20 @@ def run_task(v):
                 plot=False,
             )
 
+            # We don't use these labels anyway, so we might as well take them from training.
+            #trpo_paths = algo.train()
             algo.train()
 
+        # logger.log("labeling starts with trpo rollouts")
+        # [starts, labels] = label_states_from_paths(trpo_paths, n_traj=2, key='goal_reached',  # using the min n_traj
+        #                                            as_goal=False, env=env)
+        # paths = [path for paths in trpo_paths for path in paths]
+
+        with logger.tabular_prefix('Outer_'):
+            logger.record_tabular('t_alices', np.mean(t_alices))
+
         logger.log('Generating the Heatmap...')
-        plot_policy_means(policy, env, sampling_res=2, report=report, limit=v['goal_range'], center=v['goal_center'])
+        plot_policy_means(policy, env, sampling_res=sampling_res, report=report, limit=v['goal_range'], center=v['goal_center'])
         test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=sampling_res,
                              n_traj=v['n_traj'],
                              itr=outer_iter, report=report, center=v['goal_center'], limit=v['goal_range'])

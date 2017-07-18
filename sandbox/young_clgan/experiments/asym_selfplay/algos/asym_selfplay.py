@@ -7,14 +7,14 @@ from rllab.misc import logger
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.sampler.utils import rollout
 from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator
-from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import AliceEnv
+from sandbox.young_clgan.experiments.asym_selfplay.envs.alice_env import AliceEnv
 from sandbox.young_clgan.logging import ExperimentLogger
 
 
 class AsymSelfplay(object):
 
     def __init__(self, algo_alice, algo_bob, env_alice, env_bob, policy_alice, policy_bob, start_states, log_dir,
-                 num_rollouts=10, gamma = 0.1, alice_factor = 0.5):
+                 num_rollouts=10, gamma = 0.1, alice_factor = 0.5, alice_bonus=10):
         self.algo_alice = algo_alice
         self.algo_bob = algo_bob
         self.env_alice = env_alice
@@ -30,18 +30,18 @@ class AsymSelfplay(object):
         self.start_states = start_states
         self.alice_factor = alice_factor
         self.log_dir = log_dir
+        self.alice_bonus = alice_bonus
 
     def update_rewards(self, paths_alice, paths_bob, gamma):
         assert len(paths_alice) == len(paths_bob), 'Error, both agents need an equal number of paths.'
 
         for path_alice, path_bob in zip(paths_alice, paths_bob):
-            alice_bonus = 10
             t_alice = path_alice['rewards'].shape[0]
             t_bob = path_bob['rewards'].shape[0]
             path_alice['rewards'] = np.zeros_like(path_alice['rewards'])
             path_bob['rewards'] = np.zeros_like(path_bob['rewards'])
             # path_alice['rewards'][-1] = gamma * np.max([0, t_bob + alice_bonus - t_alice])
-            path_alice['rewards'][-1] = gamma * max(0, alice_bonus + t_bob - self.alice_factor * t_alice)
+            path_alice['rewards'][-1] = gamma * max(0, self.alice_bonus + t_bob - self.alice_factor * t_alice)
             path_bob['rewards'][-1] = -gamma * t_bob
 
         return paths_alice, paths_bob
@@ -70,16 +70,19 @@ class AsymSelfplay(object):
         new_paths = [path for paths in all_alice_paths for path in paths]
         logger.log("New paths: " + str(len(new_paths)))
         new_start_states = [self.env_alice._obs2start_transform(path['observations'][-1]) for path in new_paths]
+        t_alices = [path['rewards'].shape[0] for path in new_paths]
         logger.log("new start states: " + str(len(new_start_states)))
 
         logger.log("self.num_rollouts: " + str(self.num_rollouts))
 
         new_start_states = np.array(new_start_states)
         if len(new_start_states) < self.num_rollouts:
-            return new_start_states
+            sampled_starts = new_start_states
         else:
-            return new_start_states[np.random.choice(np.shape(new_start_states)[0], size=self.num_rollouts)]
+            sampled_starts = new_start_states[np.random.choice(np.shape(new_start_states)[0], size=self.num_rollouts)]
             #return np.array(new_start_states[np.random.choice(new_start_states.shape[0], size=self.num_rollouts)])
+
+        return (sampled_starts, t_alices)
 
     def optimize(self, iter=0):
 

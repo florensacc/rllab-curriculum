@@ -33,7 +33,9 @@ from rllab.misc.overrides import overrides
 from sandbox.young_clgan.envs.base import StateGenerator, UniformListStateGenerator, \
     UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv
 from sandbox.young_clgan.experiments.asym_selfplay.algos.asym_selfplay import AsymSelfplay
-from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import AliceEnv
+
+from sandbox.young_clgan.experiments.asym_selfplay.algos.asym_selfplay_batch import AsymSelfplayBatch
+from sandbox.young_clgan.experiments.asym_selfplay.envs.alice_env import AliceEnv
 from sandbox.young_clgan.state.evaluator import parallel_map, FunctionWrapper
 from sandbox.young_clgan.state.utils import StateCollection
 from sandbox.young_clgan.logging.visualization import plot_labeled_states, plot_labeled_samples
@@ -176,16 +178,19 @@ def generate_starts_random(starts=None, horizon = 1, size = 1000, subsample = No
 
 
 
-def generate_starts_alice(env_bob, env_alice, policy_bob, policy_alice, algo_alice, log_dir, start_states=None,
-                          num_new_starts=10000, alice_factor=0.5):
-    asym_selfplay = AsymSelfplay(algo_alice=algo_alice, algo_bob=None, env_alice=env_alice, env_bob=env_bob,
-                                 policy_alice=policy_alice, policy_bob=policy_bob, start_states=start_states,
-                                 num_rollouts=num_new_starts, alice_factor=alice_factor, log_dir=log_dir)
+def generate_starts_alice(env_alice, algo_alice, log_dir, start_states=None, num_new_starts=10000):
+    asym_selfplay = AsymSelfplayBatch(algo_alice=algo_alice, env_alice=env_alice, start_states=start_states,
+                                 num_rollouts=num_new_starts, log_dir=log_dir)
 
-    new_start_states = asym_selfplay.optimize_batch()
+    # asym_selfplay = AsymSelfplay(algo_alice=algo_alice, algo_bob=None, env_alice=env_alice, env_bob=env_bob,
+    #                              policy_alice=policy_alice, policy_bob=policy_bob, start_states=start_states,
+    #                              num_rollouts=num_new_starts, alice_factor=alice_factor, alice_bonus=alice_bonus,
+    #                              log_dir=log_dir)
+
+    new_start_states, t_alices = asym_selfplay.optimize_batch()
     #new_start_states = asym_selfplay.optimize()
     logger.log('Done generating starts by Alice')
-    return np.array(new_start_states)
+    return (np.array(new_start_states), t_alices)
 
 def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsample=None, variance=1,
                     zero_action=False, animated=False, speedup=1):

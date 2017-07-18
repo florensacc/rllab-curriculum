@@ -52,7 +52,7 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-selfplay-arm3d-key3'
+    exp_prefix = 'start-selfplay-arm3d-key8'
 
     vg = VariantGenerator()
     vg.add('start_size', [7])  # this is the ultimate start we care about: getting the pendulum upright
@@ -105,9 +105,9 @@ if __name__ == '__main__':
     vg.add('output_gain_alice', [0.1])
     vg.add('policy_init_std_alice', [1])
     vg.add('discount_alice', [0.995])
-    vg.add('alice_factor', [0.1, 0.5])
+    vg.add('alice_factor', [0.5])
     vg.add('inner_iters_alice', [5])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size_alice', [2000])
+    vg.add('pg_batch_size_alice', [20000])
 
     vg.add('seed', range(100, 700, 100))
 
