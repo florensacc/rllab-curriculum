@@ -37,7 +37,8 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        'us-east-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2a', 'ap-northeast-2c', 'ap-southeast-1a', 'ap-southeast-1b', 'ap-south-1a', 'ap-south-1b', 'us-east-1b', 'us-east-1c', 'us-east-1e', 'eu-west-1c', 'eu-west-1a', 'eu-west-1b'
+        #'us-east-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2a', 'ap-northeast-2c', 'ap-southeast-1a', 'ap-southeast-1b', 'ap-south-1a', 'ap-south-1b', 'us-east-1b', 'us-east-1c', 'us-east-1e', 'eu-west-1c', 'eu-west-1a', 'eu-west-1b'
+        'us-east-2b', 'us-east-2c', 'us-east-2a'
     ]
     ec2_instance = args.type if args.type else 'c4.4xlarge' #'m4.10xlarge' #
     # configure instan
@@ -56,7 +57,7 @@ if __name__ == '__main__':
         # n_parallel = multiprocessing.cpu_count()
 
     #exp_prefix = 'start-selfplay-maze0-run7'
-    exp_prefix = 'start-selfplay-maze11-run13'
+    exp_prefix = 'start-selfplay-maze11-run18'
 
     vg = VariantGenerator()
     vg.add('maze_id', [11])  # default is 0
@@ -115,7 +116,7 @@ if __name__ == '__main__':
     vg.add('output_gain_alice', [0.1])
     vg.add('policy_init_std_alice', [1])
     vg.add('discount_alice', [0.995])
-    vg.add('alice_factor', [0.1])
+    vg.add('alice_factor', [1])
     vg.add("alice_horizon", lambda horizon: [2 * horizon]) # Use 2 * horizon because time is split between Alice and Bob.
     vg.add('alice_bonus', [0])
     vg.add('inner_iters_alice', [1])  # again we will have to divide/adjust the
@@ -156,23 +157,23 @@ if __name__ == '__main__':
 
         if mode in ['ec2', 'local_docker']:
             # choose subnet
-            # subnet = random.choice(subnets)
-            # config.AWS_REGION_NAME = subnet[:-1]
-            # config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_SECURITY_GROUP_IDS = \
-            #     config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
-            #         config.AWS_REGION_NAME]
-            # config.AWS_NETWORK_INTERFACES = [
-            #     dict(
-            #         SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
-            #         Groups=config.AWS_SECURITY_GROUP_IDS,
-            #         DeviceIndex=0,
-            #         AssociatePublicIpAddress=True,
-            #     )
-            # ]
+            subnet = random.choice(subnets)
+            config.AWS_REGION_NAME = subnet[:-1]
+            config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
+                config.AWS_REGION_NAME]
+            config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
+                config.AWS_REGION_NAME]
+            config.AWS_SECURITY_GROUP_IDS = \
+                config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
+                    config.AWS_REGION_NAME]
+            config.AWS_NETWORK_INTERFACES = [
+                dict(
+                    SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
+                    Groups=config.AWS_SECURITY_GROUP_IDS,
+                    DeviceIndex=0,
+                    AssociatePublicIpAddress=True,
+                )
+            ]
 
             run_experiment_lite(
                 # use_cloudpickle=False,
