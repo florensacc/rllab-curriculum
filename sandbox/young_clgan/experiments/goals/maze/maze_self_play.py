@@ -1,4 +1,5 @@
 import os
+import random
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -12,9 +13,11 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.goals.maze.maze_gan_algo import run_task
+from sandbox.young_clgan.experiments.goals.maze.maze_self_play_algo import run_task
 
 if __name__ == '__main__':
+
+    fast_mode = False
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--ec2', '-e', action='store_true', default=True, help="add flag to run in ec2")
@@ -36,6 +39,7 @@ if __name__ == '__main__':
     subnets = [
         # 'ap-south-1b', 'ap-northeast-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'us-west-1b', 'us-west-1a',
         # 'ap-south-1a', 'ap-northeast-1a', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'us-east-1b'
+        'us-east-2c', 'ap-northeast-2a', 'ap-northeast-2c', 'ap-south-1b'
     ]
     ec2_instance = args.type if args.type else 'c4.4xlarge' #'m4.10xlarge'
     # configure instan
@@ -53,8 +57,7 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    #exp_prefix = 'new-goalGAN-maze1'
-    exp_prefix = 'goal-gan-maze11-run2'
+    exp_prefix = 'goal-selfplay-maze11-run2'
 
     vg = VariantGenerator()
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
@@ -90,13 +93,26 @@ if __name__ == '__main__':
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
     vg.add('discount', lambda horizon: [1-1.0/horizon])
+    # Alice params.
+    vg.add('output_gain_alice', lambda output_gain: [output_gain])
+    vg.add('policy_init_std_alice', lambda policy_init_std: [policy_init_std])
+    vg.add('discount_alice', lambda discount: [discount])
+    vg.add("alice_horizon", lambda horizon: [2 * horizon]) # Use 2 * horizon because time is split between Alice and Bob.
+    vg.add('alice_factor', [1])
+    vg.add('alice_bonus', [0])
+    vg.add('inner_iters_alice', [1])  # again we will have to divide/adjust the
+    vg.add('stop_threshold', [0.99])
+    if args.debug or fast_mode:
+        vg.add('pg_batch_size_alice', [200])
+    else:
+        vg.add('pg_batch_size_alice', lambda pg_batch_size: [pg_batch_size])
     # gan configs
-    vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
-    vg.add('gan_generator_layers', [[256, 256]])
-    vg.add('gan_discriminator_layers', [[128, 128]])
-    vg.add('gan_noise_size', [4])
-    vg.add('goal_noise_level', [0.5])
-    vg.add('gan_outer_iters', [300])
+    # vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
+    # vg.add('gan_generator_layers', [[256, 256]])
+    # vg.add('gan_discriminator_layers', [[128, 128]])
+    # vg.add('gan_noise_size', [4])
+    # vg.add('goal_noise_level', [0.5])
+    # vg.add('gan_outer_iters', [300])
 
     if args.ec2:
         vg.add('seed', range(100, 700, 100))
@@ -131,23 +147,23 @@ if __name__ == '__main__':
 
         if mode in ['ec2', 'local_docker']:
             # # choose subnet
-            # subnet = random.choice(subnets)
-            # config.AWS_REGION_NAME = subnet[:-1]
-            # config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_SECURITY_GROUP_IDS = \
-            #     config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
-            #         config.AWS_REGION_NAME]
-            # config.AWS_NETWORK_INTERFACES = [
-            #     dict(
-            #         SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
-            #         Groups=config.AWS_SECURITY_GROUP_IDS,
-            #         DeviceIndex=0,
-            #         AssociatePublicIpAddress=True,
-            #     )
-            # ]
+            subnet = random.choice(subnets)
+            config.AWS_REGION_NAME = subnet[:-1]
+            config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
+                config.AWS_REGION_NAME]
+            config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
+                config.AWS_REGION_NAME]
+            config.AWS_SECURITY_GROUP_IDS = \
+                config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
+                    config.AWS_REGION_NAME]
+            config.AWS_NETWORK_INTERFACES = [
+                dict(
+                    SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
+                    Groups=config.AWS_SECURITY_GROUP_IDS,
+                    DeviceIndex=0,
+                    AssociatePublicIpAddress=True,
+                )
+            ]
 
             run_experiment_lite(
                 # use_cloudpickle=False,

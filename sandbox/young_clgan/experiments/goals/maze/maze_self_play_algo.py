@@ -1,4 +1,6 @@
 import matplotlib
+from sandbox.young_clgan.envs.start_env import generate_starts_alice
+from sandbox.young_clgan.experiments.asym_selfplay.envs.alice_env import AliceEnv
 
 matplotlib.use('Agg')
 import os
@@ -49,13 +51,10 @@ def run_task(v):
         debug = True
     else:
         debug = False
-
     report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=3)
 
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
-
-    tf_session = tf.Session()
 
     inner_env = normalize(PointMazeEnv(maze_id=v['maze_id']))
 
@@ -63,7 +62,8 @@ def run_task(v):
                                                    center=v['goal_center'])
     env = GoalExplorationEnv(
         env=inner_env, goal_generator=uniform_goal_generator,
-        obs2goal_transform=lambda x: x[:int(len(x) / 2)],
+        #obs2goal_transform=lambda x: x[:int(len(x) / 2)],
+        obs2goal_transform=lambda x: x[:v['goal_size']],
         terminal_eps=v['terminal_eps'],
         distance_metric=v['distance_metric'],
         extend_dist_rew=v['extend_dist_rew'],
@@ -92,58 +92,49 @@ def run_task(v):
         test_and_plot_policy(policy, env, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
                              itr=outer_iter, report=report, limit=v['goal_range'], center=v['goal_center'])
 
-    # GAN
-    logger.log("Instantiating the GAN...")
-    gan_configs = {key[4:]: value for key, value in v.items() if 'GAN_' in key}
-    for key, value in gan_configs.items():
-        if value is tf.train.AdamOptimizer:
-            gan_configs[key] = tf.train.AdamOptimizer(gan_configs[key + '_stepSize'])
-        if value is tflearn.initializations.truncated_normal:
-            gan_configs[key] = tflearn.initializations.truncated_normal(stddev=gan_configs[key + '_stddev'])
-
-    gan = StateGAN(
-        state_size=v['goal_size'],
-        evaluater_size=v['num_labels'],
-        state_range=v['goal_range'],
-        state_center=v['goal_center'],
-        state_noise_level=v['goal_noise_level'],
-        generator_layers=v['gan_generator_layers'],
-        discriminator_layers=v['gan_discriminator_layers'],
-        noise_size=v['gan_noise_size'],
-        tf_session=tf_session,
-        configs=gan_configs,
-    )
-    logger.log("pretraining the GAN...")
-    if v['smart_init']:
-        feasible_goals = generate_initial_goals(env, policy, v['goal_range'], goal_center=v['goal_center'],
-                                                horizon=v['horizon'])
-        labels = np.ones((feasible_goals.shape[0], 2)).astype(np.float32)  # make them all good goals
-        plot_labeled_states(feasible_goals, labels, report=report, itr=outer_iter,
-                            limit=v['goal_range'], center=v['goal_center'], maze_id=v['maze_id'])
-
-        dis_loss, gen_loss = gan.pretrain(states=feasible_goals, outer_iters=v['gan_outer_iters'])
-        print("Loss of Gen and Dis: ", gen_loss, dis_loss)
-    else:
-        gan.pretrain_uniform()
-
-    # log first samples form the GAN
-    #initial_goals, _ = gan.sample_states_with_noise(v['num_new_goals'])
-
-    # logger.log("Labeling the initial goals")
-    # labels = label_states(initial_goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
-    #
-    # plot_labeled_states(initial_goals, labels, report=report, itr=outer_iter,
-    #                     limit=v['goal_range'], center=v['goal_center'], maze_id=v['maze_id'])
     report.new_row()
 
     all_goals = StateCollection(distance_threshold=v['coll_eps'])
 
+    # Use asymmetric self-play to run Alice to generate starts for Bob.
+    # Use a double horizon because the horizon is shared between Alice and Bob.
+    env_alice = AliceEnv(env_alice=env, env_bob=env, policy_bob=policy, max_path_length=v['alice_horizon'],
+                         alice_factor=v['alice_factor'], alice_bonus=v['alice_bonus'], gamma=1,
+                         stop_threshold=v['stop_threshold'], start_generation=False)
+
+    policy_alice = GaussianMLPPolicy(
+            env_spec=env_alice.spec,
+            hidden_sizes=(64, 64),
+            # Fix the variance since different goals will require different variances, making this parameter hard to learn.
+            learn_std=v['learn_std'],
+            adaptive_std=v['adaptive_std'],
+            std_hidden_sizes=(16, 16),  # this is only used if adaptive_std is true!
+            output_gain = v['output_gain_alice'],
+            init_std = v['policy_init_std_alice'],
+    )
+    baseline_alice = LinearFeatureBaseline(env_spec=env_alice.spec)
+
+    algo_alice = TRPO(
+        env=env_alice,
+        policy=policy_alice,
+        baseline=baseline_alice,
+        batch_size=v['pg_batch_size_alice'],
+        max_path_length=v['alice_horizon'],
+        n_itr=v['inner_iters_alice'],
+        step_size=0.01,
+        discount=v['discount_alice'],
+        plot=False,
+    )
+
+
     for outer_iter in range(1, v['outer_iters']):
 
         logger.log("Outer itr # %i" % outer_iter)
-        # Sample GAN
-        logger.log("Sampling goals from the GAN")
-        raw_goals, _ = gan.sample_states_with_noise(v['num_new_goals'])
+
+        raw_goals, t_alices = generate_starts_alice(env_alice=env_alice,
+                                       algo_alice=algo_alice,
+                                       num_new_starts=v['num_new_goals'], log_dir=log_dir, start_generation=False)
+
 
         if v['replay_buffer'] and outer_iter > 0 and all_goals.size > 0:
             old_goals = all_goals.sample(v['num_old_goals'])
@@ -151,30 +142,7 @@ def run_task(v):
         else:
             goals = raw_goals
 
-        if not debug:
-            with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
-                logger.log("Updating the environment goal generator")
-                env.update_goal_generator(
-                    UniformListStateGenerator(
-                        goals.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
-                    )
-                )
-
-                logger.log("Training the algorithm")
-                algo = TRPO(
-                    env=env,
-                    policy=policy,
-                    baseline=baseline,
-                    batch_size=v['pg_batch_size'],
-                    max_path_length=v['horizon'],
-                    n_itr=v['inner_iters'],
-                    step_size=0.01,
-                    discount=v['discount'],
-                    plot=False,
-                )
-
-                all_paths = algo.train()
-        else:
+        with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment goal generator")
             env.update_goal_generator(
                 UniformListStateGenerator(
@@ -197,14 +165,14 @@ def run_task(v):
 
             all_paths = algo.train()
 
-        #[goals, labels] = label_states_from_paths(all_paths, n_traj=v['n_traj'], key='goal_reached')
+        [goals, labels] = label_states_from_paths(all_paths, n_traj=v['n_traj'], key='goal_reached')
 
         logger.log('Generating the Heatmap...')
         test_and_plot_policy(policy, env, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
                              itr=outer_iter, report=report, limit=v['goal_range'], center=v['goal_center'])
 
-        logger.log("Labeling the goals")
-        labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
+        #logger.log("Labeling the goals")
+        #labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
 
         plot_labeled_states(goals, labels, report=report, itr=outer_iter, limit=v['goal_range'],
                             center=v['goal_center'], maze_id=v['maze_id'])
@@ -217,11 +185,6 @@ def run_task(v):
 
         labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
 
-        logger.log("Training the GAN")
-        gan.train(
-            goals, labels,
-            v['gan_outer_iters'],
-        )
 
         logger.dump_tabular(with_prefix=False)
         report.new_row()

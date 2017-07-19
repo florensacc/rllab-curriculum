@@ -21,7 +21,8 @@ class AliceEnv(ProxyEnv, Serializable):
             alice_bonus,
             alice_factor,
             gamma=0.1,
-            stop_threshold=0.9
+            stop_threshold=0.9,
+            start_generation=True
     ):
         Serializable.quick_init(self, locals())
         ProxyEnv.__init__(self, env_alice)
@@ -35,6 +36,7 @@ class AliceEnv(ProxyEnv, Serializable):
         self.alice_factor = alice_factor
         self.gamma = gamma
         self.stop_threshold = stop_threshold
+        self.start_generation = start_generation
 
 
     def reset(self, **kwargs):
@@ -54,8 +56,12 @@ class AliceEnv(ProxyEnv, Serializable):
 
     def compute_alice_reward(self, next_obs):
         alice_end_obs = next_obs
-        bob_start_state = self._obs2start_transform(alice_end_obs)
-        self.env_bob.update_start_generator(FixedStateGenerator(bob_start_state))
+        if self.start_generation:
+            bob_start_state = self._obs2start_transform(alice_end_obs)
+            self.env_bob.update_start_generator(FixedStateGenerator(bob_start_state))
+        else:
+            bob_goal_state = self._obs2goal_transform(alice_end_obs)
+            self.env_bob.update_goal_generator(FixedStateGenerator(bob_goal_state))
         path_bob = rollout(self.env_bob, self.policy_bob, max_path_length=max(5, self.max_path_length - self.time), #
                            animated=False)
         t_alice = self.time

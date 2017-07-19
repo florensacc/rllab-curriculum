@@ -176,11 +176,10 @@ def generate_starts_random(starts=None, horizon = 1, size = 1000, subsample = No
             return states
         return states[np.random.choice(np.shape(states)[0], size=subsample)]
 
+def generate_starts_alice(env_alice, algo_alice, log_dir, start_states=None, num_new_starts=10000, start_generation=True):
 
-
-def generate_starts_alice(env_alice, algo_alice, log_dir, start_states=None, num_new_starts=10000):
     asym_selfplay = AsymSelfplayBatch(algo_alice=algo_alice, env_alice=env_alice, start_states=start_states,
-                                 num_rollouts=num_new_starts, log_dir=log_dir)
+                                 num_rollouts=num_new_starts, log_dir=log_dir, start_generation=start_generation)
 
     # asym_selfplay = AsymSelfplay(algo_alice=algo_alice, algo_bob=None, env_alice=env_alice, env_bob=env_bob,
     #                              policy_alice=policy_alice, policy_bob=policy_bob, start_states=start_states,

@@ -38,7 +38,7 @@ if __name__ == '__main__':
     # setup ec2
     subnets = [
         #'us-east-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2a', 'ap-northeast-2c', 'ap-southeast-1a', 'ap-southeast-1b', 'ap-south-1a', 'ap-south-1b', 'us-east-1b', 'us-east-1c', 'us-east-1e', 'eu-west-1c', 'eu-west-1a', 'eu-west-1b'
-        'us-east-2b', 'us-east-2c', 'us-east-2a'
+        'us-east-2c', 'ap-northeast-2a', 'ap-northeast-2c', 'ap-south-1b'
     ]
     ec2_instance = args.type if args.type else 'c4.4xlarge' #'m4.10xlarge' #
     # configure instan
