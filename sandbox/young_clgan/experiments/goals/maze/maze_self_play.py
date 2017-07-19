@@ -84,7 +84,7 @@ if __name__ == '__main__':
     vg.add('add_on_policy', [True])
     # sampling params
     vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
-    vg.add('outer_iters', lambda maze_id: [400] if maze_id == 0 else [10000])
+    vg.add('outer_iters', [300]), #lambda maze_id: [400] if maze_id == 0 else [10000])
     vg.add('inner_iters', [5])
     vg.add('pg_batch_size', [20000])
     # policy initialization

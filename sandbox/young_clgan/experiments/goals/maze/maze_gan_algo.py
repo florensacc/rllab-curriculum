@@ -197,14 +197,14 @@ def run_task(v):
 
             all_paths = algo.train()
 
-        #[goals, labels] = label_states_from_paths(all_paths, n_traj=v['n_traj'], key='goal_reached')
+        [goals, labels] = label_states_from_paths(all_paths, n_traj=v['n_traj'], key='goal_reached')
 
         logger.log('Generating the Heatmap...')
         test_and_plot_policy(policy, env, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
                              itr=outer_iter, report=report, limit=v['goal_range'], center=v['goal_center'])
 
-        logger.log("Labeling the goals")
-        labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
+        # logger.log("Labeling the goals")
+        # labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
 
         plot_labeled_states(goals, labels, report=report, itr=outer_iter, limit=v['goal_range'],
                             center=v['goal_center'], maze_id=v['maze_id'])
