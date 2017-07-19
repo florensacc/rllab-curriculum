@@ -113,18 +113,18 @@ if __name__ == '__main__':
     vg.add('discount', [0.995])
     vg.add('step_size', [0.01])
     # Alice params.
-    vg.add('output_gain_alice', [0.1])
-    vg.add('policy_init_std_alice', [1])
-    vg.add('discount_alice', [0.995])
-    vg.add('alice_factor', [1])
+    vg.add('output_gain_alice', lambda output_gain: [output_gain])
+    vg.add('policy_init_std_alice', lambda policy_init_std: [policy_init_std])
+    vg.add('discount_alice', lambda discount: [discount])
     vg.add("alice_horizon", lambda horizon: [2 * horizon]) # Use 2 * horizon because time is split between Alice and Bob.
+    vg.add('alice_factor', [1])
     vg.add('alice_bonus', [0])
     vg.add('inner_iters_alice', [1])  # again we will have to divide/adjust the
     vg.add('stop_threshold', [0.99])
     if args.debug or fast_mode:
         vg.add('pg_batch_size_alice', [200])
     else:
-        vg.add('pg_batch_size_alice', [20000])
+        vg.add('pg_batch_size_alice', lambda pg_batch_size: [pg_batch_size])
 
     if args.ec2:
         vg.add('seed', range(100, 700, 100))
