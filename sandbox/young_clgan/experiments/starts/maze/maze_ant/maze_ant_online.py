@@ -11,7 +11,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.starts.maze.maze_ant.maze_ant_brownian_algo import run_task
+from sandbox.young_clgan.experiments.starts.maze.maze_ant.maze_ant_online_algo import run_task
 
 if __name__ == '__main__':
 
@@ -46,7 +46,7 @@ if __name__ == '__main__':
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
     # config.AWS_SPOT_PRICE = str(info["price"])
-    config.AWS_SPOT_PRICE = '1.0'
+    config.AWS_SPOT_PRICE = '1.1'
     n_parallel = int(info["vCPU"] / 2)  # make the default 4 if not using ec2
     args.ec2=False
     if args.ec2:
@@ -112,21 +112,21 @@ if __name__ == '__main__':
     vg.add('learn_std', [False]) #2
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995]) #1
-    # vg.add('seed_with', ['only_goods'])
-    vg.add('seed_with', ['all_previous'])
+    vg.add('seed_with', ['only_goods'])
+    #vg.add('seed_with', ['all_previous'])
     # vg.add('seed', [2,3,4])
-    vg.add('seed', [43, 13, 23, 33, 53, 63])
+    vg.add('seed', [43, 13, 23, 33, 53, 63, 73])
     # vg.add('seed', range(100, 600, 100))
     # sweeping: horizon, seed, feasibility_path_length, pg_batch_size
     # possible important: learn_std
 
     # Launching
     subnets = [
-        'us-east-1a', 'us-east-1d', 'us-east-1e'
+        "us-west-2a","us-west-2b", 'us-west-2c',
     ]
     mode = 'ec2'
-    #mode = "local"
-    exp_prefix = 'ant-startgen-goods4'
+    # mode = "local"
+    exp_prefix = 'ant-startgen-online1'
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
 
 
@@ -204,4 +204,4 @@ if __name__ == '__main__':
                 exp_prefix=exp_prefix,
                 # exp_name=exp_name,
             )
-            sys.exit()
+            # sys.exit()

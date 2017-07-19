@@ -23,6 +23,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = ''
 from rllab import config
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
@@ -87,7 +88,11 @@ def run_task(v):
         init_std=v['policy_init_std'],
     )
 
-    baseline = LinearFeatureBaseline(env_spec=env.spec)
+    #baseline = LinearFeatureBaseline(env_spec=env.spec)
+    if v["baseline"] == "MLP":
+        baseline = GaussianMLPBaseline(env_spec=env.spec)
+    else:
+        baseline = LinearFeatureBaseline(env_spec=env.spec)
 
     # load the state collection from data_upload
 
@@ -219,12 +224,14 @@ def run_task(v):
                 logger.log("More good starts than bad starts, resampling")
                 seed_starts = generate_starts(env, starts=starts, horizon=v['horizon'] * 2, subsample=v['num_new_starts'], size=10000,
                                               variance=v['brownian_variance'] * 10)
+            all_starts.append(filtered_raw_starts)
         elif v['seed_with'] == 'all_previous':
             seed_starts = starts
+            all_starts.append(starts) # changed!
         else:
             raise Exception
 
-        all_starts.append(filtered_raw_starts)
+
 
         # need to put this last! otherwise labels variable gets confused
         logger.log("Labeling on uniform starts")

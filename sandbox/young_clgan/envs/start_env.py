@@ -337,7 +337,7 @@ def find_all_feasible_states_plotting(env, seed_starts, report, distance_thresho
     report.save()
 
     no_new_states = 0
-    while no_new_states < 20:
+    while no_new_states < 30:
         iteration += 1
         logger.log("Iteration: {}".format(iteration))
         total_num_starts = all_feasible_starts.size
