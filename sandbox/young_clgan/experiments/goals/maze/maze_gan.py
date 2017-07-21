@@ -35,8 +35,7 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        'us-east-2c', 'ap-northeast-2a', 'ap-northeast-2c', 'ap-southeast-1a', 'us-east-1c', 'us-east-1b', 'us-east-1e',
-        'ap-south-1b', 'eu-west-1c', 'eu-west-1a', 'eu-west-1b'
+        'us-east-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2a', 'ap-northeast-2c'
     ]
     ec2_instance = args.type if args.type else 'c4.4xlarge' #'m4.10xlarge'
     # configure instan
@@ -55,7 +54,7 @@ if __name__ == '__main__':
         # n_parallel = multiprocessing.cpu_count()
 
     #exp_prefix = 'new-goalGAN-maze1'
-    exp_prefix = 'goal-gan-maze11-run5'
+    exp_prefix = 'goal-gan-maze11-run6'
 
     vg = VariantGenerator()
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright

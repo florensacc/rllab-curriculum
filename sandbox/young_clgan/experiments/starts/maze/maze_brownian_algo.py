@@ -1,4 +1,5 @@
 import matplotlib
+from sandbox.young_clgan.state.constant_baseline import ConstantBaseline
 
 matplotlib.use('Agg')
 import os
@@ -20,7 +21,7 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states
+from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states, label_states_from_paths
 from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator
 from sandbox.young_clgan.state.utils import StateCollection
 
@@ -42,7 +43,7 @@ def run_task(v):
     # Log performance of randomly initialized policy with FIXED goal [0.1, 0.1]
     logger.log("Initializing report and plot_policy_reward...")
     log_dir = logger.get_snapshot_dir()  # problem with logger module here!!
-    report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=4)
+    report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=5)
 
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
@@ -77,7 +78,12 @@ def run_task(v):
         init_std=v['policy_init_std'],
     )
 
-    baseline = LinearFeatureBaseline(env_spec=env.spec)
+    if v['constant_baseline']:
+        logger.log("Using constant baseline")
+        baseline = ConstantBaseline(env_spec=env.spec, value=1.0)
+    else:
+        logger.log("Using linear baseline")
+        baseline = LinearFeatureBaseline(env_spec=env.spec)
 
     # initialize all logging arrays on itr0
     outer_iter = 0
@@ -132,7 +138,17 @@ def run_task(v):
                 plot=False,
             )
 
-            algo.train()
+            trpo_paths = algo.train()
+
+        if v['use_trpo_paths']:
+            logger.log("labeling starts with trpo rollouts")
+            [starts, labels] = label_states_from_paths(trpo_paths, n_traj=2, key='goal_reached',  # using the min n_traj
+                                                                 as_goal=False, env=env)
+            paths = [path for paths in trpo_paths for path in paths]
+        else:
+            logger.log("labeling starts manually")
+            labels, paths = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'],
+                                         key='goal_reached', full_path=True)
 
         logger.log('Generating the Heatmap...')
         plot_policy_means(policy, env, sampling_res=2, report=report, limit=v['goal_range'], center=v['goal_center'])
@@ -141,7 +157,7 @@ def run_task(v):
                              itr=outer_iter, report=report, center=v['goal_center'], limit=v['goal_range'])
 
         logger.log("Labeling the starts")
-        labels = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
+        #labels = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
 
         plot_labeled_states(starts, labels, report=report, itr=outer_iter, limit=v['goal_range'],
                             center=v['goal_center'], maze_id=v['maze_id'])

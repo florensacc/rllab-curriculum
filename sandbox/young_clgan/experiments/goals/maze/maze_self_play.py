@@ -37,9 +37,7 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        # 'ap-south-1b', 'ap-northeast-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'us-west-1b', 'us-west-1a',
-        # 'ap-south-1a', 'ap-northeast-1a', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'us-east-1b'
-        'us-east-2c', 'ap-northeast-2a', 'ap-northeast-2c', 'ap-south-1b'
+        'us-east-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2a', 'ap-northeast-2c'
     ]
     ec2_instance = args.type if args.type else 'c4.4xlarge' #'m4.10xlarge'
     # configure instan
@@ -57,7 +55,7 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'goal-selfplay-maze11-run2'
+    exp_prefix = 'goal-selfplay-maze11-run3'
 
     vg = VariantGenerator()
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
@@ -70,9 +68,9 @@ if __name__ == '__main__':
     vg.add('min_reward', [0])
     vg.add('max_reward', [1])
     vg.add('distance_metric', ['L2'])
-    vg.add('extend_dist_rew', [True])  # !!!!
+    vg.add('extend_dist_rew', [False])  # !!!!
     vg.add('persistence', [1])
-    vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
+    vg.add('n_traj', [2])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('sampling_res', [2])
     vg.add('with_replacement', [False])
     vg.add('smart_init', [True])
@@ -84,7 +82,7 @@ if __name__ == '__main__':
     vg.add('add_on_policy', [True])
     # sampling params
     vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
-    vg.add('outer_iters', [300]), #lambda maze_id: [400] if maze_id == 0 else [10000])
+    vg.add('outer_iters', [300]) #lambda maze_id: [400] if maze_id == 0 else [10000])
     vg.add('inner_iters', [5])
     vg.add('pg_batch_size', [20000])
     # policy initialization
@@ -92,7 +90,7 @@ if __name__ == '__main__':
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
-    vg.add('discount', lambda horizon: [1-1.0/horizon])
+    vg.add('discount', [0.99]) #lambda horizon: [1-1.0/horizon])
     # Alice params.
     vg.add('output_gain_alice', lambda output_gain: [output_gain])
     vg.add('policy_init_std_alice', lambda policy_init_std: [policy_init_std])

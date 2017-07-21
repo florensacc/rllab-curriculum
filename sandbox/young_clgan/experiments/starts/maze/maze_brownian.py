@@ -1,4 +1,5 @@
 import os
+import random
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -17,7 +18,7 @@ from sandbox.young_clgan.experiments.starts.maze.maze_brownian_algo import run_t
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
+    parser.add_argument('--ec2', '-e', action='store_true', default=True, help="add flag to run in ec2")
     parser.add_argument('--clone', '-c', action='store_true', default=False,
                         help="add flag to copy file and checkout current")
     parser.add_argument('--local_docker', '-d', action='store_true', default=False,
@@ -34,8 +35,7 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        # 'ap-south-1b', 'ap-northeast-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'us-west-1b', 'us-west-1a',
-        # 'ap-south-1a', 'ap-northeast-1a', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'us-east-1b'
+        'us-east-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2a', 'ap-northeast-2c'
     ]
     ec2_instance = args.type if args.type else 'c4.4xlarge'
     # configure instan
@@ -53,10 +53,10 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-brownian-maze'
+    exp_prefix = 'start-brownian-maze11-run1'
 
     vg = VariantGenerator()
-    vg.add('maze_id', [0])  # default is 0
+    vg.add('maze_id', [11])  # default is 0
     vg.add('start_size', [2])  # this is the ultimate start we care about: getting the pendulum upright
     vg.add('start_range',
            lambda maze_id: [4] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
@@ -73,8 +73,8 @@ if __name__ == '__main__':
            lambda maze_id: [4] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
     vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
     # brownian params
-    vg.add('brownian_variance', [0.1, 1])
-    vg.add('brownian_horizon', [50, 100])
+    vg.add('brownian_variance', [1])
+    vg.add('brownian_horizon', [50])
     # goal-algo params
     vg.add('min_reward', [0.1])
     vg.add('max_reward', [0.9])
@@ -84,6 +84,7 @@ if __name__ == '__main__':
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('sampling_res', [2])
     vg.add('with_replacement', [True])
+    vg.add('use_trpo_paths', [True])
     # replay buffer
     vg.add('replay_buffer', [True])
     vg.add('coll_eps', [0.3])
@@ -100,6 +101,7 @@ if __name__ == '__main__':
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
+    vg.add('constant_baseline', [True, False])
 
     vg.add('seed', range(100, 700, 100))
 
@@ -124,25 +126,28 @@ if __name__ == '__main__':
           *subnets)
 
     for vv in vg.variants():
+        if args.debug:
+            run_task(vv)
+
         if mode in ['ec2', 'local_docker']:
             # # choose subnet
-            # subnet = random.choice(subnets)
-            # config.AWS_REGION_NAME = subnet[:-1]
-            # config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_SECURITY_GROUP_IDS = \
-            #     config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
-            #         config.AWS_REGION_NAME]
-            # config.AWS_NETWORK_INTERFACES = [
-            #     dict(
-            #         SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
-            #         Groups=config.AWS_SECURITY_GROUP_IDS,
-            #         DeviceIndex=0,
-            #         AssociatePublicIpAddress=True,
-            #     )
-            # ]
+            subnet = random.choice(subnets)
+            config.AWS_REGION_NAME = subnet[:-1]
+            config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
+                config.AWS_REGION_NAME]
+            config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
+                config.AWS_REGION_NAME]
+            config.AWS_SECURITY_GROUP_IDS = \
+                config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
+                    config.AWS_REGION_NAME]
+            config.AWS_NETWORK_INTERFACES = [
+                dict(
+                    SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
+                    Groups=config.AWS_SECURITY_GROUP_IDS,
+                    DeviceIndex=0,
+                    AssociatePublicIpAddress=True,
+                )
+            ]
 
             run_experiment_lite(
                 # use_cloudpickle=False,
