@@ -11,7 +11,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.starts.maze.maze_ant.maze_ant_online_algo import run_task
+from sandbox.young_clgan.experiments.starts.maze.maze_ant.maze_ant_online_tscl_algo import run_task
 
 if __name__ == '__main__':
 
@@ -102,10 +102,10 @@ if __name__ == '__main__':
     vg.add('num_old_starts', [100])
     vg.add('feasibility_path_length', [100])
     # sampling params
-    vg.add('horizon', lambda maze_id: [2000] if maze_id == 0 else [500])
+    vg.add('horizon', lambda maze_id: [2000] if maze_id == 0 else [500]) #TODO: change
     vg.add('outer_iters', lambda maze_id: [2000] if maze_id == 0 else [1000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size', [120000])
+    vg.add('pg_batch_size', [60000]) #TODO: change
     # policy initialization
     vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
@@ -124,9 +124,9 @@ if __name__ == '__main__':
     subnets = [
         "us-west-2a","us-west-2b", 'us-west-2c',
     ]
-    mode = 'ec2'
-    # mode = "local"
-    exp_prefix = 'ant-startgen-online1'
+    # mode = 'ec2'
+    mode = "local"
+    exp_prefix = 'ant-startgen-online2'
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
 
 
@@ -204,4 +204,4 @@ if __name__ == '__main__':
                 exp_prefix=exp_prefix,
                 # exp_name=exp_name,
             )
-            # sys.exit()
+            sys.exit()

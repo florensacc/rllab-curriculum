@@ -49,6 +49,7 @@ if __name__ == '__main__':
     config.AWS_SPOT_PRICE = '1.0'
     n_parallel = int(info["vCPU"] / 2)  # make the default 4 if not using ec2
     args.ec2=False
+    # args.debug=True
     if args.ec2:
         mode = 'ec2'
     elif args.local_docker:
@@ -75,6 +76,7 @@ if __name__ == '__main__':
     vg.add('goal_range',
            lambda maze_id: [4] if maze_id == 0 else [7])
     vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
+    # vg.add('terminal_eps', [0.5]) # changed!!
     vg.add('terminal_eps', [1.0])
     # brownian params
     vg.add('brownian_variance', [1])
@@ -97,36 +99,51 @@ if __name__ == '__main__':
     vg.add('with_replacement', [True])
     # replay buffer
     vg.add('replay_buffer', [True])
+    # Smart replay buffer parameters
+    vg.add('smart_replay_buffer', [True])
+    vg.add('smart_replay_abs', [True, False])
+    # vg.add('smart_replay_eps', [0.2, 0.5, 1])
+    vg.add('smart_replay_eps', [1.0]) # should break
+
     vg.add('coll_eps', [0.05]) # should try this
     vg.add('num_new_starts', [200])
     vg.add('num_old_starts', [100])
     vg.add('feasibility_path_length', [100])
     # sampling params
-    vg.add('horizon', lambda maze_id: [2000] if maze_id == 0 else [500])
+    if args.debug:
+        vg.add('horizon', lambda maze_id: [300] if maze_id == 0 else [500])
+        vg.add('pg_batch_size', [15000])
+        vg.add('inner_iters', [1])  # again we will have to divide/adjust the
+        vg.add('debug', [True])
+    else:
+        vg.add('horizon', lambda maze_id: [2000] if maze_id == 0 else [500])
+        vg.add('pg_batch_size', [120000])
+        vg.add('inner_iters', [5])  # again we will have to divide/adjust the
+        vg.add('debug', [False])
     vg.add('outer_iters', lambda maze_id: [2000] if maze_id == 0 else [1000])
-    vg.add('inner_iters', [5])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size', [120000])
+
     # policy initialization
     vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [False]) #2
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995]) #1
-    # vg.add('seed_with', ['only_goods'])
-    vg.add('seed_with', ['all_previous'])
+    vg.add('seed_with', ['only_goods'])
+    # vg.add('seed_with', ['all_previous'])
     # vg.add('seed', [2,3,4])
-    vg.add('seed', [43, 13, 23, 33, 53, 63])
+    vg.add('seed', [33, 13, 23])
     # vg.add('seed', range(100, 600, 100))
     # sweeping: horizon, seed, feasibility_path_length, pg_batch_size
     # possible important: learn_std
 
     # Launching
     subnets = [
+        "us-east-2a", "us-east-2b",
         'us-east-1a', 'us-east-1d', 'us-east-1e'
     ]
     mode = 'ec2'
-    #mode = "local"
-    exp_prefix = 'ant-startgen-goods4'
+    # mode = "local"
+    exp_prefix = 'ant-startgen-smartreplay4'
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
 
 
@@ -197,7 +214,7 @@ if __name__ == '__main__':
                 stub_method_call=run_task,
                 variant=vv,
                 mode='local',
-                n_parallel=5,
+                n_parallel=8,
                 # Only keep the snapshot parameters for the last iteration
                 snapshot_mode="last",
                 seed=vv['seed'],
