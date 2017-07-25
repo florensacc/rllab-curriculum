@@ -1,7 +1,8 @@
 import os
+import random
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
-os.environ['CUDA_VISIBLE_DEVICES'] = 0
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
 import argparse
 import sys
 from multiprocessing import cpu_count
@@ -15,7 +16,7 @@ from sandbox.young_clgan.experiments.goals.maze_ant.maze_ant_gan_algo import run
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
+    parser.add_argument('--ec2', '-e', action='store_true', default=True, help="add flag to run in ec2")
     parser.add_argument('--clone', '-c', action='store_true', default=False,
                         help="add flag to copy file and checkout current")
     parser.add_argument('--local_docker', '-d', action='store_true', default=False,
@@ -32,10 +33,9 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        # 'ap-south-1b', 'ap-northeast-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'us-west-1b', 'us-west-1a',
-        # 'ap-south-1a', 'ap-northeast-1a', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'us-east-1b'
+        'us-east-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'ap-northeast-2a', 'ap-south-1a'
     ]
-    ec2_instance = args.type if args.type else 'm4.16xlarge'
+    ec2_instance = args.type if args.type else 'c4.4xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -51,11 +51,13 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'new-goalGAN-maze-ant-largeEps-redo'
+    #exp_prefix = 'new-goalGAN-maze-ant-largeEps-redo'
+    #exp_prefix = 'goals-selfplay-maze-ant1'
+    exp_prefix = 'goals-GAN-maze-ant3'
 
     vg = VariantGenerator()
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
-    vg.add('terminal_eps', [0.5, 1])
+    vg.add('terminal_eps', [1])
     vg.add('only_feasible', [True])
     vg.add('goal_range', [5])  # this will be used also as bound of the state_space
     vg.add('goal_center', [(2, 2)])
@@ -76,7 +78,7 @@ if __name__ == '__main__':
     vg.add('add_on_policy', [True])
     # sampling params
     vg.add('horizon', [500])
-    vg.add('outer_iters', [10000])
+    vg.add('outer_iters', [350])
     vg.add('inner_iters', [5])
     vg.add('pg_batch_size', [100000])
     # policy initialization
@@ -92,7 +94,7 @@ if __name__ == '__main__':
     vg.add('goal_noise_level', [0.5])
     vg.add('gan_outer_iters', [250])
 
-    vg.add('seed', range(100, 300, 100))
+    vg.add('seed', range(100, 700, 100))
 
     # # gan_configs
     # vg.add('GAN_batch_size', [128])  # proble with repeated name!!
@@ -117,23 +119,23 @@ if __name__ == '__main__':
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
             # # choose subnet
-            # subnet = random.choice(subnets)
-            # config.AWS_REGION_NAME = subnet[:-1]
-            # config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
-            #     config.AWS_REGION_NAME]
-            # config.AWS_SECURITY_GROUP_IDS = \
-            #     config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
-            #         config.AWS_REGION_NAME]
-            # config.AWS_NETWORK_INTERFACES = [
-            #     dict(
-            #         SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
-            #         Groups=config.AWS_SECURITY_GROUP_IDS,
-            #         DeviceIndex=0,
-            #         AssociatePublicIpAddress=True,
-            #     )
-            # ]
+            subnet = random.choice(subnets)
+            config.AWS_REGION_NAME = subnet[:-1]
+            config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
+                config.AWS_REGION_NAME]
+            config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
+                config.AWS_REGION_NAME]
+            config.AWS_SECURITY_GROUP_IDS = \
+                config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
+                    config.AWS_REGION_NAME]
+            config.AWS_NETWORK_INTERFACES = [
+                dict(
+                    SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
+                    Groups=config.AWS_SECURITY_GROUP_IDS,
+                    DeviceIndex=0,
+                    AssociatePublicIpAddress=True,
+                )
+            ]
 
             run_experiment_lite(
                 # use_cloudpickle=False,

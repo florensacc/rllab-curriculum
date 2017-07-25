@@ -13,7 +13,8 @@ from sandbox.young_clgan.logging import ExperimentLogger
 
 class AsymSelfplayBatch(object):
 
-    def __init__(self, algo_alice, env_alice, start_states, log_dir, num_rollouts=10, start_generation=True):
+    def __init__(self, algo_alice, env_alice, start_states, log_dir, num_rollouts=10, start_generation=True,
+                 debug=False):
         self.algo_alice = algo_alice
         self.env_alice = env_alice
 
@@ -21,13 +22,14 @@ class AsymSelfplayBatch(object):
         self.start_states = start_states
         self.log_dir = log_dir
         self.start_generation = start_generation
+        self.debug = debug
 
     def optimize_batch(self):
 
         # get paths
         all_alice_paths = []
         self.algo_alice.current_itr = 0
-        debug = False
+        debug = self.debug
 
         if not debug:
             with ExperimentLogger(self.log_dir, 'last_alice', snapshot_mode='last', hold_outter_log=True):

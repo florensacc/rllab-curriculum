@@ -22,7 +22,7 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.state.evaluator import label_states
+from sandbox.young_clgan.state.evaluator import label_states, label_states_from_paths
 from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator
 from sandbox.young_clgan.state.generator import StateGAN
 from sandbox.young_clgan.state.utils import StateCollection
@@ -144,7 +144,8 @@ def run_task(v):
             goals = raw_goals
 
         itr_label = outer_iter  # use outer_iter to log everything or "last" to log only the last
-        with ExperimentLogger(log_dir, itr_label, snapshot_mode='last', hold_outter_log=True):
+        #with ExperimentLogger(log_dir, itr_label, snapshot_mode='last', hold_outter_log=True):
+        with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment goal generator")
             env.update_goal_generator(
                 UniformListStateGenerator(
@@ -164,21 +165,39 @@ def run_task(v):
                 plot=False,
             )
 
-            algo.train()
-            # save a pkl with uniform
-            env.update_goal_generator(UniformStateGenerator(state_size=v['goal_size'], bounds=v['goal_range'],
-                                                                  center=v['goal_center'], persistence=1))
-            logger.save_itr_params(itr_label, {"algo": algo}, pkl_prefix='unifGen_')
+            trpo_paths = algo.train()
+            # save a pkl with uniform - used for visualization
+            # Carlos: "this was saving another pkl file with the env being the uniform instead of the one with the goals being generated at that itr.
+            # Basically to visualize how it performs on the ultimate objective.
+            # but this can also be done after the fact, so you can totally get ride of those lines if you want
+            # (i was just lazy at that time and decided to not have to fiddle with the StateGenerator in the pkl file)"
+
+            # env.update_goal_generator(UniformStateGenerator(state_size=v['goal_size'], bounds=v['goal_range'],
+            #                                                       center=v['goal_center'], persistence=1))
+            # logger.save_itr_params(itr_label, {"algo": algo}, pkl_prefix='unifGen_')
+
+        if v['use_trpo_paths']:
+            logger.log("labeling starts with trpo rollouts")
+            [goals, labels] = label_states_from_paths(trpo_paths, n_traj=2, key='goal_reached',  # using the min n_traj
+                                                       as_goal=False, env=env)
+            paths = [path for paths in trpo_paths for path in paths]
+        else:
+            logger.log("labeling starts manually")
+            labels, paths = label_states(goals, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'],
+                                         key='goal_reached', full_path=True)
+
+        with logger.tabular_prefix("OnStarts_"):
+            env.log_diagnostics(paths)
 
         logger.log('Generating the Heatmap...')
         test_and_plot_policy(policy, env, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
                              itr=outer_iter, report=report, limit=v['goal_range'], center=v['goal_center'])
 
-        logger.log("Labeling the goals")
-        labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
+        #logger.log("Labeling the goals")
+        #labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
 
         plot_labeled_states(goals, labels, report=report, itr=outer_iter, limit=v['goal_range'],
-                            center=v['goal_center'])
+                            center=v['goal_center'], maze_id=v['maze_id'])
 
         # ###### extra for deterministic:
         # logger.log("Labeling the goals deterministic")
