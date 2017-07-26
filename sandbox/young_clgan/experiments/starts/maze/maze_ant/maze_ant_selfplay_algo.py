@@ -2,7 +2,7 @@ import matplotlib
 import cloudpickle
 import pickle
 
-from sandbox.young_clgan.experiments.asym_selfplay.envs.stop_action_env import AliceEnv
+from sandbox.young_clgan.experiments.asym_selfplay.envs.alice_env import AliceEnv
 from sandbox.young_clgan.logging.visualization import plot_labeled_states
 
 matplotlib.use('Agg')
@@ -96,7 +96,8 @@ def run_task(v):
 
     # create Alice
 
-    env_alice = AliceEnv(env, env, policy, v['horizon'])
+    env_alice = AliceEnv(env_alice=env, env_bob=env, policy_bob=policy, max_path_length=v['alice_horizon'], alice_factor=v['alice_factor'],
+                                       alice_bonus=v['alice_bonus'], gamma=1, stop_threshold=v['stop_threshold'])
 
     policy_alice = GaussianMLPPolicy(
         env_spec=env_alice.spec,
@@ -164,10 +165,9 @@ def run_task(v):
 
         report.save()
 
-        starts = generate_starts_alice(env_bob=env, env_alice=env_alice, policy_bob=policy, policy_alice=policy_alice,
-                                       algo_alice=algo_alice, start_states=[v['start_goal']],
-                                       num_new_starts=v['num_new_starts'], alice_factor=v['alice_factor'],
-                                       log_dir=log_dir)
+        starts, t_alices = generate_starts_alice(env_alice=env_alice,
+                                                 algo_alice=algo_alice, start_states=[v['start_goal']],
+                                                 num_new_starts=v['num_new_starts'], log_dir=log_dir)
 
         if v['filter_bad_starts']:
             logger.log("Prefilter starts: {}".format(len(starts)))
@@ -205,10 +205,12 @@ def run_task(v):
 
             trpo_paths = algo.train()
 
+        with logger.tabular_prefix('Outer_'):
+            logger.record_tabular('t_alices', np.mean(t_alices))
 
 
         logger.log("Labeling the starts")
-        [starts, labels] = label_states_from_paths(trpo_paths, n_traj=2, key='goal_reached',  # using the min n_traj
+        [starts, labels] = label_states_from_paths(trpo_paths, n_traj=v['n_traj'], key='goal_reached',  # using the min n_traj
                                                    as_goal=False, env=env)
         # labels = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
         start_classes, text_labels = convert_label(labels)
@@ -230,7 +232,7 @@ def run_task(v):
         logger.log("Labeling on uniform starts")
         with logger.tabular_prefix("Uniform_"):
             unif_starts = all_feasible_starts.sample(100)
-            mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=2, key='goal_reached',
+            mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached',
                                                  as_goals=False, full_path=True)
             env.log_diagnostics(paths)
             mean_rewards = mean_reward.reshape(-1, 1)

@@ -118,12 +118,16 @@ if __name__ == '__main__':
     vg.add('output_gain_alice', [0.1])
     vg.add('policy_init_std_alice', [1])
     vg.add('discount_alice', [0.995])
-    vg.add('alice_factor', [1])
-    vg.add('inner_iters_alice', [5])  # again we will have to divide/adjust th
-    vg.add('pg_batch_size_alice', [2000])
+    vg.add('alice_factor', [0.1])
+    vg.add("alice_horizon",
+           lambda horizon: [2 * horizon])  # Use 2 * horizon because time is split between Alice and Bob.
+    vg.add('alice_bonus', [0])
+    vg.add('inner_iters_alice', [2])  # again we will have to divide/adjust the
+    vg.add('stop_threshold', [0.99])
+    vg.add('pg_batch_size_alice', [120000])
     # vg.add('seed_with', ['all_previous'])
     # vg.add('seed', [2,3,4])
-    vg.add('seed', [43, 13, 23, 33, 53, 63, 73, 83])
+    vg.add('seed', [43, 13, 23])
     # vg.add('seed', range(100, 600, 100))
     # sweeping: horizon, seed, feasibility_path_length, pg_batch_size
     # possible important: learn_std
@@ -136,8 +140,8 @@ if __name__ == '__main__':
     subnets = [
         "us-east-1a","us-east-1b"
     ]
-    mode = 'ec2'
-    # mode = "local"
+    # mode = 'ec2'
+    mode = "local"
     exp_prefix = 'ant-startgen-selfplay1'
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
 
@@ -209,7 +213,7 @@ if __name__ == '__main__':
                 stub_method_call=run_task,
                 variant=vv,
                 mode='local',
-                n_parallel=5,
+                n_parallel=4,
                 # Only keep the snapshot parameters for the last iteration
                 snapshot_mode="last",
                 seed=vv['seed'],

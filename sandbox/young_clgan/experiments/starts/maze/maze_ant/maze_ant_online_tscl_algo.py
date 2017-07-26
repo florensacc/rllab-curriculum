@@ -112,6 +112,7 @@ def run_task(v):
     improvement_threshold = 0
     old_rewards = None
 
+    # hardest to easiest
     init_pos = [[0, 0],
                 [1, 0],
                 [2, 0],
@@ -127,7 +128,8 @@ def run_task(v):
                 ][::-1]
     for pos in init_pos:
         pos.extend([0.55, 1, 0, 0, 0, 0, 1, 0, -1, 0, -1, 0, 1, ])
-    init_pos = np.array(init_pos)
+    array_init_pos = np.array(init_pos)
+    init_pos = [tuple(pos) for pos in init_pos]
     online_start_generator = Online_TCSL(init_pos)
 
 
@@ -140,6 +142,11 @@ def run_task(v):
 
         # generate starts from the previous seed starts, which are defined below
         dist = online_start_generator.get_distribution() # added
+        logger.log(np.array_str(online_start_generator.get_q()))
+        # how to log Q values?
+        # with logger.tabular_prefix("General: "):
+        #     logger.record_tabular("Q values:", online_start_generator.get_q())
+        logger.log(np.array_str(dist))
 
         # Following code should be indented
         with ExperimentLogger(log_dir, outer_iter // 50, snapshot_mode='last', hold_outter_log=True):
@@ -169,14 +176,14 @@ def run_task(v):
 
 
         logger.log("Labeling the starts")
-        [starts, labels, mean_rewards] = label_states_from_paths(trpo_paths, n_traj=2, key='goal_reached',  # using the min n_traj
-                                                   as_goal=False, env=env, return_mean_rewards=True)
+        [starts, labels, mean_rewards, updated] = label_states_from_paths(trpo_paths, n_traj=v['n_traj'], key='goal_reached',  # using the min n_traj
+                                                   as_goal=False, env=env, return_mean_rewards=True, order_of_states=init_pos)
 
         start_classes, text_labels = convert_label(labels)
         plot_labeled_states(starts, labels, report=report, itr=outer_iter, limit=v['goal_range'],
                             center=v['goal_center'], maze_id=v['maze_id'])
 
-        online_start_generator.update_q(mean_rewards) # added
+        online_start_generator.update_q(np.array(mean_rewards), np.array(updated)) # added
         labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
 
         # append new states to list of all starts (replay buffer): Not the low reward ones!!
@@ -204,7 +211,7 @@ def run_task(v):
         logger.log("Labeling on uniform starts")
         with logger.tabular_prefix("Uniform_"):
             unif_starts = all_feasible_starts.sample(100)
-            mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=2, key='goal_reached',
+            mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached',
                                                  as_goals=False, full_path=True)
             env.log_diagnostics(paths)
             mean_rewards = mean_reward.reshape(-1, 1)
@@ -217,14 +224,14 @@ def run_task(v):
             # report.add_text("Success: " + str(np.mean(mean_reward)))
 
         with logger.tabular_prefix("Fixed_"):
-            mean_reward, paths = evaluate_states(init_pos, env, policy, v['horizon'], n_traj=5, key='goal_reached',
+            mean_reward, paths = evaluate_states(array_init_pos, env, policy, v['horizon'], n_traj=5, key='goal_reached',
                                                  as_goals=False, full_path=True)
             env.log_diagnostics(paths)
             mean_rewards = mean_reward.reshape(-1, 1)
             labels = compute_labels(mean_rewards, old_rewards=old_rewards, min_reward=min_reward, max_reward=max_reward,
                                     improvement_threshold=improvement_threshold)
             logger.log("Starts labelled")
-            plot_labeled_states(init_pos, labels, report=report, itr=outer_iter, limit=v['goal_range'],
+            plot_labeled_states(array_init_pos, labels, report=report, itr=outer_iter, limit=v['goal_range'],
                                 center=v['goal_center'], maze_id=v['maze_id'],
                                 summary_string_base='initial starts labels:\n')
             report.add_text("Fixed Success: " + str(np.mean(mean_reward)))

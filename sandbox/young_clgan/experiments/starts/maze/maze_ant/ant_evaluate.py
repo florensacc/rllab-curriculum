@@ -54,7 +54,7 @@ if __name__ == "__main__":
             env = data['env']
 
         # easiest to hardest
-        init_pos = [[3,0]]
+        init_pos = [[0,0]]
         # init_pos = [[0, 0],
         #             [1,0],
         #              [2,0],
