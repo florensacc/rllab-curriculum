@@ -24,7 +24,9 @@ class Region(object):
         self.num_goals += 1
 
     def is_too_big(self):
-        return self.num_goals > self.max_goals
+        # Split this region if it has too many goals, and if some of the goals have a positive competence!
+        # Otherwise, if the competences are all 0, then there is no point in splitting.
+        return (self.num_goals > self.max_goals and sum(self.competences) > 0)
 
     # Split this region into subregions.
     def split(self):
