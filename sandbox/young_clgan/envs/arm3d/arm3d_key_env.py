@@ -22,15 +22,15 @@ class Arm3dKeyEnv(MujocoEnv, Serializable):
             self,
             ctrl_cost_coeff=1e1,
             goal_dist=3e-2,
-            hill_lim=0.2,
+            kill_radius=0.4,
             *args, **kwargs):
         self.ctrl_cost_coeff = ctrl_cost_coeff
         super(Arm3dKeyEnv, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
         self.goal_dist = goal_dist
-        self.hill_lim = hill_lim
+        self.kill_radius = kill_radius
         self.key_hole_center = np.array([0.0, 0.3, -0.55])
-        self.ee_indices = [14, 23]
+        self.ee_indices = [14, 23] # the hill z-axis is 16
         self.frame_skip = 1
         self.init_qpos = np.array([0.1, 0.1, -1.54, -1.7, 1.54, -0.2, 0])
         self.kill_outside = False
@@ -55,14 +55,19 @@ class Arm3dKeyEnv(MujocoEnv, Serializable):
         ]).reshape(-1)
 
     @contextmanager
-    def set_kill_outside(self):
-        self.kill_outside = True
+    def set_kill_outside(self, kill_outside=True, radius=None):
+        self.kill_outside = kill_outside
+        old_kill_radius = self.kill_radius
+        if radius is not None:
+            self.kill_radius = radius
         try:
             yield
         finally:
             self.kill_outside = False
+            self.kill_radius = old_kill_radius
 
     def step(self, action):
+        # print("entering step, kill_outside is: ", self.kill_outside)
         self.forward_dynamics(action)
         next_obs = self.get_current_obs()
         lb, ub = self.action_bounds
@@ -78,7 +83,9 @@ class Arm3dKeyEnv(MujocoEnv, Serializable):
         dist_cost = np.sqrt(dist) * self.cost_params['l1'] + dist * self.cost_params['l2']
         reward = - dist_cost - ctrl_cost
         done = True if np.sqrt(dist) < self.goal_dist else False
-        if self.kill_outside and np.linalg.norm(hill_pos - self.key_hole_center) > self.hill_lim:
+        # print("making a step in the env, we have kill_outside: ", self.kill_outside)
+        if self.kill_outside and np.linalg.norm(hill_pos - self.key_hole_center) > self.kill_radius:
+        # if self.kill_outside and np.linalg.norm(hill_pos - self.goal_position[:3]) > self.kill_radius:
             print("\n****** OUT of region ******")
             done = True
         if np.isnan(reward):
