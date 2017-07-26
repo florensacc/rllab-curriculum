@@ -8,7 +8,7 @@ from rllab.misc import logger
 
 class Region(object):
 
-    def __init__(self, min_border, max_border, max_history=100, max_goals=500):
+    def __init__(self, min_border, max_border, max_history=100, max_goals=500, num_random_splits=50):
         self.states = collections.deque(maxlen=max_history)
         self.competences = collections.deque(maxlen=max_history)
         self.min_border = min_border
@@ -16,6 +16,8 @@ class Region(object):
         self.num_goals = 0
         self.max_goals = max_goals
         self.max_history = max_history
+        self.num_random_splits = num_random_splits
+
 
     # Add this state and competence to the region.
     def add_state(self, state, competence):
@@ -30,18 +32,15 @@ class Region(object):
 
     # Split this region into subregions.
     def split(self):
-        #TODO - perform a smart split.
-        # For now, just perform a single split.
-        region1_min = np.copy(self.min_border)
-        region1_max = np.copy(self.max_border)
-        region1_max[0] = (self.min_border[0] + self.max_border[0])/2 # Cut the first dimension in half.
-        region1 = Region(region1_min, region1_max, max_history=self.max_history, max_goals=self.max_goals)
+        #region1, region2 = self.hacky_split()
+        region1, region2, success = self.optimal_split()
 
-        region2_min = np.copy(self.min_border)
-        region2_min[0] = (self.min_border[0] + self.max_border[0])/2 # Cut the first dimension in half.
-        region2_max = np.copy(self.max_border)
-        region2 = Region(region2_min, region2_max, max_history=self.max_history, max_goals=self.max_goals)
+        if success:
+            self.assign_states_to_regions(region1, region2)
 
+        return [region1, region2, success]
+
+    def assign_states_to_regions(self, region1, region2):
         # Reassign all goals to one of these regions.
         for state, competence in zip(self.states, self.competences):
             if region1.contains(state):
@@ -53,8 +52,61 @@ class Region(object):
                 logger.log("Region 2: " + str(region2.min_border) + " " + str(region2.max_border))
                 raise Exception("Split region; now cannot find region for state: " + str(state))
 
+    def optimal_split(self):
+        # All split scores must be >= 0
+        max_split_score = -1
+        max_region1 = None
+        max_region2 = None
+
+        num_dim = len(self.min_border)
+        for i in range(self.num_random_splits):
+            split_dim = random.randrange(num_dim)
+            split_val = random.uniform(self.min_border[split_dim], self.max_border[split_dim])
+            region1, region2 = self.make_regions(split_dim, split_val)
+            self.assign_states_to_regions(region1, region2)
+            split_score = len(region1.states) * len(region2.states) * abs(region1.compute_interest() - region2.compute_interest())
+
+            if split_score > max_split_score:
+                max_region1 = region1
+                max_region2 = region2
+                max_split_score = split_score
+
+        if max_split_score == -1 or max_region1 is None:
+            #TODO - what to do here?
+            print("Problem - unable to find a good split!")
+            success = False
+        else:
+            success = True
+
+        return [max_region1, max_region2, success]
+
+    def make_regions(self, split_dim, split_val):
+        # For now, just perform a single split.
+        region1_min = np.copy(self.min_border)
+        region1_max = np.copy(self.max_border)
+        region1_max[split_dim] = split_val
+        region1 = Region(region1_min, region1_max, max_history=self.max_history, max_goals=self.max_goals)
+
+        region2_min = np.copy(self.min_border)
+        region2_min[split_dim] = split_val
+        region2_max = np.copy(self.max_border)
+        region2 = Region(region2_min, region2_max, max_history=self.max_history, max_goals=self.max_goals)
+
         return [region1, region2]
 
+    def hacky_split(self):
+        # For now, just perform a single split.
+        region1_min = np.copy(self.min_border)
+        region1_max = np.copy(self.max_border)
+        region1_max[0] = (self.min_border[0] + self.max_border[0])/2 # Cut the first dimension in half.
+        region1 = Region(region1_min, region1_max, max_history=self.max_history, max_goals=self.max_goals)
+
+        region2_min = np.copy(self.min_border)
+        region2_min[0] = (self.min_border[0] + self.max_border[0])/2 # Cut the first dimension in half.
+        region2_max = np.copy(self.max_border)
+        region2 = Region(region2_min, region2_max, max_history=self.max_history, max_goals=self.max_goals)
+
+        return [region1, region2]
 
     # Compute the sum of the competences in a given range.
     def compute_local_measure(self, start_index, end_index):
@@ -63,14 +115,16 @@ class Region(object):
     # Compute the derivative of competences.
     def compute_interest(self):
         num_states = len(self.states)
-        old_measure = self.compute_local_measure(0, int(num_states/2) - 1)
-        new_measure = self.compute_local_measure(int(num_states/2) + 1, num_states-1)
+        old_measure = self.compute_local_measure(0, int(num_states/2))
+        new_measure = self.compute_local_measure(int(num_states/2), num_states)
         interest = abs(old_measure - new_measure) / num_states
         return interest
 
     # Check whether this state is inside this region.
     def contains(self, state):
-        return (self.min_border.tolist() < list(state) < self.max_border.tolist())
+        #return (self.min_border.tolist() <= list(state) < self.max_border.tolist())
+        # Check whether this state is between the borders.
+        return (np.less_equal(self.min_border, state).all() and np.less_equal(state, self.max_border).all())
 
     def sample_uniform(self):
         state = []
@@ -120,11 +174,12 @@ class SaggRIAC(object):
 
             # If the region contains too many goals, split it into subregions.
             if region.is_too_big():
-                [region1, region2] = region.split()
-                # Add the subregions and delete the original region.
-                self.regions.append(region1)
-                self.regions.append(region2)
-                del self.regions[index]
+                [region1, region2, success] = region.split()
+                if success:
+                    # Add the subregions and delete the original region.
+                    self.regions.append(region1)
+                    self.regions.append(region2)
+                    del self.regions[index]
 
     # Sample states from the regions.
     def sample_states(self, num_samples):
