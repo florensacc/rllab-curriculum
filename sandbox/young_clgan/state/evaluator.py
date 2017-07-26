@@ -75,6 +75,22 @@ def parallel_map(func, iterable_object, num_processes=-1):
     process_pool.join()
     return results
 
+def compute_rewards_from_paths(all_paths, key='rewards', as_goal=True, env=None):
+    all_rewards = []
+    all_states = []
+    for paths in all_paths:
+        for path in paths:
+            reward = evaluate_path(path, key=key)
+            if as_goal:
+                state = tuple(path['env_infos']['goal'][0])
+            else:
+                state = tuple(env.transform_to_start_space(path['observations'][0]))
+
+            all_states.append(state)
+            all_rewards.append(reward)
+
+    return [all_states, all_rewards]
+
 
 def label_states_from_paths(all_paths, min_reward=0, max_reward=1, key='rewards', as_goal=True,
                  old_rewards=None, improvement_threshold=0, n_traj=1, env=None):
