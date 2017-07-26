@@ -21,6 +21,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab import config
@@ -81,12 +82,18 @@ def run_task(v):
         init_std=v['policy_init_std'],
     )
 
-    baseline = LinearFeatureBaseline(env_spec=env.spec)
+    if v['baseline'] == 'linear':
+        baseline = LinearFeatureBaseline(env_spec=env.spec)
+    elif v['baseline'] == 'g_mlp':
+        baseline = GaussianMLPBaseline(env_spec=env.spec)
 
     # load the state collection from data_upload
+    # load the state collection from data_upload
     load_dir = 'data_upload/state_collections/'
-    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states.pkl'), 'rb'))
-    print("we have %d feasible starts" % all_feasible_starts.size)
+    all_feasible_starts = pickle.load(
+        # open(osp.join(config.PROJECT_PATH, load_dir, 'key_all_feasible_states_med_rad2.pkl'), 'rb'))
+        open(osp.join(config.PROJECT_PATH, load_dir, 'key_all_feasible_04_230000.pkl'), 'rb'))
+
     uniform_start_generator = UniformListStateGenerator(state_list=all_feasible_starts.state_list)
     env.update_start_generator(uniform_start_generator)
 

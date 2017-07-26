@@ -26,11 +26,10 @@ from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
 from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states, label_states_from_paths
-from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator, \
-    StateGenerator
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator
 from sandbox.young_clgan.state.utils import StateCollection
 
-from sandbox.young_clgan.envs.start_env import generate_starts
+from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasible_states
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
 from sandbox.young_clgan.envs.arm3d.arm3d_key_env import Arm3dKeyEnv
 
@@ -52,7 +51,7 @@ def run_task(v):
     inner_env = normalize(Arm3dKeyEnv(ctrl_cost_coeff=v['ctrl_cost_coeff']))
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
-    fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
+    fixed_start_generator = FixedStateGenerator(state=v['start_goal'])
 
     env = GoalStartExplorationEnv(
         env=inner_env,
@@ -86,27 +85,45 @@ def run_task(v):
 
     # load the state collection from data_upload
     load_dir = 'data_upload/state_collections/'
-    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'key_all_feasible_states.pkl'), 'rb'))
+    all_feasible_starts = pickle.load(
+        open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states.pkl'), 'rb'))
+    # all_feasible_starts = pickle.load(
+    #     open(osp.join(config.PROJECT_PATH, load_dir, 'key_all_feasible_04_230000.pkl'), 'rb'))
+    # all_feasible_starts = pickle.load(
+    #     open(osp.join(config.PROJECT_PATH, load_dir, 'key_all_feasible_states_med_rad4.pkl'), 'rb'))
+    all_feasible_starts2 = pickle.load(
+        open(osp.join(config.PROJECT_PATH, load_dir, 'key_all_feasible_states_min_rad4.pkl'), 'rb'))
+    all_feasible_starts3 = pickle.load(
+        open(osp.join(config.PROJECT_PATH, load_dir, 'key_all_feasible_states_max_rad2.pkl'), 'rb'))
     print("we have %d feasible starts" % all_feasible_starts.size)
 
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
     brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
-    with env.set_kill_outside():
-        seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=10,  # this is smaller as they are seeds!
-                                      variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=10)
+
+    logger.log('Generating seed starts from the goal (horizon 10, subsample 600 of them)')
+    with env.set_kill_outside(radius=v['kill_radius']):
+        seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=10, # this is smaller as they are seeds!
+                                      variance=v['brownian_variance'],
+                                      subsample=v['num_new_starts'])  # , animated=True, speedup=10)
+
+    # seed_starts = all_feasible_starts.states
+    # with env.set_kill_outside(radius=0.4):
+        # find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_variance=1, animate=False)
 
     # # show where these states are:
     # shuffled_starts = np.array(all_feasible_starts.state_list)
     # np.random.shuffle(shuffled_starts)
-    # generate_starts(env, starts=shuffled_starts, horizon=100, variance=v['brownian_variance'], animated=True, speedup=10)
+    # generate_starts(env, starts=shuffled_starts, horizon=100, variance=v['brownian_variance'],
+    #                 zero_action=True, animated=True, speedup=10)
 
     for outer_iter in range(1, v['outer_iters']):
 
         logger.log("Outer itr # %i" % outer_iter)
         logger.log("Sampling starts")
 
-        with env.set_kill_outside():
-            starts = generate_starts(env, starts=seed_starts, horizon=v['brownian_horizon'], variance=v['brownian_variance'])
+        with env.set_kill_outside(radius=v['kill_radius']):
+            starts = generate_starts(env, starts=seed_starts, horizon=v['brownian_horizon'],
+                                     variance=v['brownian_variance'])
         # regularization of the brownian starts
         brownian_starts.empty()
         brownian_starts.append(starts)
@@ -116,7 +133,7 @@ def run_task(v):
             old_starts = all_starts.sample(v['num_old_starts'])
             starts = np.vstack([starts, old_starts])
 
-        with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
+        with ExperimentLogger(log_dir, 50 * (outer_iter // 50 + 1), snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment start generator")
             env.update_start_generator(
                 UniformListStateGenerator(
@@ -142,7 +159,7 @@ def run_task(v):
         if v['use_trpo_paths']:
             logger.log("labeling starts with trpo rollouts")
             [starts, labels] = label_states_from_paths(trpo_paths, n_traj=2, key='goal_reached',  # using the min n_traj
-                                                                 as_goal=False, env=env)
+                                                       as_goal=False, env=env)
             paths = [path for paths in trpo_paths for path in paths]
         else:
             logger.log("labeling starts manually")
@@ -165,11 +182,30 @@ def run_task(v):
         labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
 
         logger.log("Labeling on uniform starts")
-        with logger.tabular_prefix("Uniform_"):
-            unif_starts = all_feasible_starts.sample(1000)
+        with logger.tabular_prefix("Uniform_4med_"):
+            unif_starts = all_feasible_starts.sample(500)
+            unif_starts = np.pad(unif_starts, ((0, v['start_size'] - unif_starts.shape[1])), 'constant')
             mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=1, key='goal_reached',
                                                  as_goals=False, full_path=True)
             env.log_diagnostics(paths)
+        with logger.tabular_prefix("Uniform_4med_bis_"):
+            unif_starts = all_feasible_starts.sample(200)
+            unif_starts1bis = np.pad(unif_starts, ((0, v['start_size'] - unif_starts.shape[1])), 'constant')
+            mean_reward1bis, paths1bis = evaluate_states(unif_starts1bis, env, policy, v['horizon'], n_traj=1,
+                                                         key='goal_reached', as_goals=False, full_path=True)
+            env.log_diagnostics(paths1bis)
+        with logger.tabular_prefix("Uniform_4min_"):
+            unif_starts2 = all_feasible_starts2.sample(200)
+            unif_starts2 = np.pad(unif_starts2, ((0, v['start_size'] - unif_starts2.shape[1])), 'constant')
+            mean_reward2, paths2 = evaluate_states(unif_starts2, env, policy, v['horizon'], n_traj=1,
+                                                   key='goal_reached', as_goals=False, full_path=True)
+            env.log_diagnostics(paths2)
+        with logger.tabular_prefix("Uniform_2max_"):
+            unif_starts3 = all_feasible_starts3.sample(200)
+            unif_starts3 = np.pad(unif_starts3, ((0, v['start_size'] - unif_starts3.shape[1])), 'constant')
+            mean_reward3, paths3 = evaluate_states(unif_starts3, env, policy, v['horizon'], n_traj=1,
+                                                   key='goal_reached', as_goals=False, full_path=True)
+            env.log_diagnostics(paths3)
 
         logger.dump_tabular(with_prefix=True)
 
@@ -179,16 +215,18 @@ def run_task(v):
         all_starts.append(filtered_raw_starts)
 
         if v['seed_with'] == 'only_goods':
-            if len(filtered_raw_starts) > 0:  # add a tone of noise if all the states I had ended up being high_reward!
+            if len(filtered_raw_starts) > 0:
                 seed_starts = filtered_raw_starts
             elif np.sum(start_classes == 0) > np.sum(start_classes == 1):  # if more low reward than high reward
                 seed_starts = all_starts.sample(300)  # sample them from the replay
-            else:
-                with env.set_kill_outside():
-                    seed_starts = generate_starts(env, starts=starts, horizon=int(v['horizon'] * 10), subsample=v['num_new_starts'],
+            else:  # add a tone of noise if all the states I had ended up being high_reward!
+                with env.set_kill_outside(radius=v['kill_radius']):
+                    seed_starts = generate_starts(env, starts=starts, horizon=int(v['horizon'] * 10),
+                                                  subsample=v['num_new_starts'],
                                                   variance=v['brownian_variance'] * 10)
         elif v['seed_with'] == 'all_previous':
+            all_starts.append(starts)
             seed_starts = starts
         elif v['seed_with'] == 'on_policy':
-            with env.set_kill_outside():
+            with env.set_kill_outside(radius=v['kill_radius']):
                 seed_starts = generate_starts(env, policy, horizon=v['horizon'], subsample=v['num_new_starts'])

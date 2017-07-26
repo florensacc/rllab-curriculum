@@ -33,9 +33,9 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        'us-east-2a', 'us-east-2b', 'us-east-2c', 'ap-southeast-2c', 'ap-southeast-2b', 'eu-central-1a'
+        'us-east-2c', 'us-east-2b', 'us-east-2a', 'us-west-2a', 'us-west-2c'
     ]
-    ec2_instance = args.type if args.type else 'm4.16xlarge'
+    ec2_instance = args.type if args.type else 'm4.10xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -51,22 +51,31 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-brownian-arm3d-disc-bigBS'
+    exp_prefix = 'start-brownian-arm3d-disc-bigBS-allStartsWithFilter'
 
     vg = VariantGenerator()
-    vg.add('start_size', [7])  # this is the ultimate start we care about: getting the pendulum upright
-    vg.add('start_bounds',
-           [[(-2.2854, -.05236, -3.9, -2.3213, -3.15, -2.094, -3.15),
-             (1.714602, 1.3963, 0.0, 0.0, 3.15, 0.0, 3.15)]])
+    vg.add('start_size', [7])
+    # vg.add('start_bounds', lambda start_size:
+    #        [[(-1.1854, -.05136, -3.9, -1.3113, -3.15, -1.094, -3.15, -1, -1, -1, -1, -1, -1, -1),
+    #          (1.714601, 1.3963, 0.0, 0.0, 3.15, 0.0, 3.15, 1, 1, 1, 1, 1, 1, 1)]] if start_size == 14 else
+    #        [[(-1.1854, -.05136, -3.9, -1.3113, -3.15, -1.094, -3.15),
+    #          (1.714601, 1.3963, 0.0, 0.0, 3.15, 0.0, 3.15)]]
+    #        )
+    # vg.add('start_bounds',
+    #        [[(-2.2854, -.05236, -3.9, -2.3213, -3.15, -2.094, -3.15),
+    #          (1.714602, 1.3963, 0.0, 0.0, 3.15, 0.0, 3.15)]])
     # vg.add('start_goal', [(0.386884635, 1.13705218, -2.02754147, -1.74429440, 2.02916096, -0.873269847, 1.54785694)])
-    vg.add('start_goal', [(0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55)])
+    vg.add('start_goal', lambda start_size: [(0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0, 0, 0, 0, 0, 0)] if
+           start_size == 14 else [(0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55)])
+
     vg.add('ultimate_goal', [(0., 0.3, -0.4)])
     vg.add('goal_size', [3])
     vg.add('terminal_eps', [0.03])
+    vg.add('center_lim', [None])  # this was off, to 5!! And the other one was just None, does it mean 4 or 5?
     # brownian params
     # vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
-    vg.add('seed_with', ['all_previous', 'only_goods'])  # good from brown, onPolicy, previousBrown (ie no good)
-    vg.add('brownian_horizon', lambda seed_with: [0, 50, 500] if seed_with == 'on_policy' else [50])
+    vg.add('seed_with', ['all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
+    vg.add('brownian_horizon', [20, 50, 100])
     vg.add('brownian_variance', [1])
     vg.add('regularize_starts', [0])
     # goal-algo params
@@ -88,17 +97,17 @@ if __name__ == '__main__':
     # sampling params
     vg.add('horizon', [500])
     vg.add('outer_iters', [5000])
-    vg.add('inner_iters', [5])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size', [50000])
+    vg.add('inner_iters', [5])
+    vg.add('pg_batch_size', [100000])
     # policy initialization
     vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
-    vg.add('discount', [0.995])
+    vg.add('discount', [0.998])
     vg.add('baseline', ['g_mlp'])
 
-    vg.add('seed', range(100, 600, 100))
+    vg.add('seed', range(600, 1100, 100))
 
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))

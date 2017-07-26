@@ -161,10 +161,10 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
 
     def compute_dist_reward(self, observation):
         """ Compute the 0 or 1 reward for reaching the goal. """
-        if not self.extend_dist_rew:
-            return self.goal_weight * self.is_goal_reached(observation)
-        else:
-            return - self.dist_to_goal(observation)
+        reward = self.goal_weight * self.is_goal_reached(observation)
+        if self.extend_dist_rew:
+            reward -= self.dist_to_goal(observation)
+        return reward
 
     def dist_to_goal(self, obs):
         """ Compute the distance of the given observation to the current goal. """
