@@ -39,6 +39,8 @@ from sandbox.young_clgan.experiments.asym_selfplay.envs.alice_env import AliceEn
 from sandbox.young_clgan.state.evaluator import parallel_map, FunctionWrapper
 from sandbox.young_clgan.state.utils import StateCollection
 from sandbox.young_clgan.logging.visualization import plot_labeled_states, plot_labeled_samples
+from sandbox.young_clgan.state.evaluator import FunctionWrapper, parallel_map
+from rllab.sampler.stateful_pool import singleton_pool
 
 
 class StartEnv(Serializable):
@@ -193,11 +195,13 @@ def generate_starts_alice(env_alice, algo_alice, log_dir, start_states=None, num
     logger.log('Done generating starts by Alice')
     return (np.array(new_start_states), t_alices)
 
+
 def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsample=None, variance=1,
                     zero_action=False, animated=False, speedup=1):
     """ If policy is None, brownian motion applied """
     if starts is None or len(starts) == 0:
         starts = [env.reset()]
+    print("the starts from where we generate more is of len: ", len(starts))
     if horizon <= 1:
         states = starts  # you better give me some starts if there is no horizon!
     else:
@@ -214,37 +218,63 @@ def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsa
         if animated:
             env.render()
         while len(states) < size:
-            steps += 1
-            # print(steps)
-            if done or steps >= horizon:
-                steps = 0
-                noise = 0
-                i += 1
-                done = False
-                obs = env.reset(init_state=starts[i % n_starts])
-                # print(obs)
-                states.append(env.start_observation)
-                num_roll += 1
-                if goal_reached:
-                    num_roll_reached_goal += 1
-            else:
-                noise += np.random.randn(env.action_space.flat_dim) * variance
-                if policy:
-                    action, _ = policy.get_action(obs)
-                else:
-                    action = noise
-                if zero_action:
-                    action = np.zeros_like(action)
-                obs, _, done, env_info = env.step(action)
-                states.append(env.start_observation)
-                if done and env_info['goal_reached']:  # we don't care about goal done, otherwise will never advance!
-                    goal_reached = True
-                    done = False
             if animated:
+                steps += 1
+                if done or steps >= horizon:
+                    i += 1
+                    steps = 0
+                    noise = 0
+                    done = False
+                    obs = env.reset(init_state=starts[i % n_starts])
+                    # print(obs)
+                    states.append(env.start_observation)
+                    num_roll += 1
+                    if goal_reached:
+                        num_roll_reached_goal += 1
+                else:
+                    noise += np.random.randn(env.action_space.flat_dim) * variance
+                    if policy:
+                        action, _ = policy.get_action(obs)
+                    else:
+                        action = noise
+                    if zero_action:
+                        action = np.zeros_like(action)
+                    obs, _, done, env_info = env.step(action)
+                    states.append(env.start_observation)
+                    if done and env_info['goal_reached']:  # we don't care about goal done, otherwise will never advance!
+                        goal_reached = True
+                        done = False
                 env.render()
                 timestep = 0.05
                 time.sleep(timestep / speedup)
+            else:
+                # import pdb; pdb.set_trace()
+                brownian_state_wrapper = FunctionWrapper(
+                    brownian,
+                    env=env,
+                    kill_outside=env.kill_outside,
+                    kill_radius=env.kill_radius,  # this should be set before passing the env to generate_starts
+                    horizon=horizon,
+                    variance=variance,
+                    policy=policy,
+                )
+                parallel_starts = [starts[j % n_starts] for j in range(i,i+singleton_pool.n_parallel)]
+                # print("parallel sampling from :", parallel_starts)
+                i += singleton_pool.n_parallel
+                results = parallel_map(brownian_state_wrapper, parallel_starts)
+                new_states = np.concatenate([result[0] for result in results])
 
+                # show where these states are:
+                np.random.shuffle(new_states)  # todo: this has a prety big impoact!! Why?? (related to collection)
+                # generate_starts(env, starts=new_states, horizon=10, variance=0,
+                #                 zero_action=True, animated=True, speedup=10, size=100)
+
+                print('Just collected {} rollouts, with {} states'.format(len(results), new_states.shape))
+                states.extend(new_states.tolist())
+                print('now the states are of len: ', len(states))
+                num_roll_reached_goal += np.sum([result[1] for result in results])
+                print("num_roll_reached_goal ",  np.sum([result[1] for result in results]))
+                num_roll += len(results)
         logger.log("Generating starts, rollouts that reached goal: " + str(num_roll_reached_goal) + " out of " + str(num_roll))
     logger.log("Starts generated.")
     if subsample is None:
@@ -399,21 +429,49 @@ def find_all_feasible_states_plotting(env, seed_starts, report, distance_thresho
 
 
 
+def brownian(start, env, kill_outside, kill_radius, horizon, variance, policy=None):
+    # print("just when entering brownian, kill_outside, kill_radius; ", env.kill_outside, env.kill_radius)
+    with env.set_kill_outside(kill_outside=kill_outside, radius=kill_radius):
+        # print("starting brownian, we have kill_outside, ,kill_radius: ", env.kill_outside, env.kill_radius)
+        done = False
+        goal_reached = False
+        noise = 0
+        steps = 0
+        states = [start]
+        # print("before reset, we have kill_outside: ", env.kill_outside)
+        obs = env.reset(start)
+        while not done and steps < horizon:
+            steps += 1
+            noise += np.random.randn(env.action_space.flat_dim) * variance
+            if policy is not None:
+                action, _ = policy.get_action(obs)
+            else:
+                action = noise
+            # print("before steps, we have kill_outside: ", env.kill_outside)
+            obs, _, done, env_info = env.step(action)
+            states.append(env.start_observation)
+            if done and env_info['goal_reached']:  # we don't care about goal done, otherwise will never advance!
+                goal_reached = True
+                done = False
+    return states, goal_reached
 
-#
+
 def find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_variance=1, animate=False):
+    # print('the seed_starts are of shape: ', seed_starts.shape)
     log_dir = logger.get_snapshot_dir()
     all_feasible_starts = StateCollection(distance_threshold=distance_threshold)
     all_feasible_starts.append(seed_starts)
+    logger.log('finish appending all seed_starts')
     no_new_states = 0
     while no_new_states < 5:
         total_num_starts = all_feasible_starts.size
         starts = all_feasible_starts.sample(100)
-        new_starts = generate_starts(env, starts=starts, horizon=1000, size=100000, variance=brownian_variance,
+        new_starts = generate_starts(env, starts=starts, horizon=1000, size=10000, variance=brownian_variance,
                                      animated=animate, speedup=10)
-        all_feasible_starts.append(new_starts)
+        logger.log("Done generating new starts")
+        all_feasible_starts.append(new_starts, n_process=1)
         num_new_starts = all_feasible_starts.size - total_num_starts
-        logger.log("number of new states: " + str(num_new_starts))
+        logger.log("number of new states: {}, total_states: {}".format(num_new_starts, all_feasible_starts.size))
         if num_new_starts < 10:
             no_new_states += 1
         with open(osp.join(log_dir, 'all_feasible_states.pkl'), 'wb') as f:
