@@ -306,7 +306,7 @@ class SaggRIAC(object):
         interest_lims = (min(interests), max(interests))
         normal = pylab.Normalize(*interest_lims)
 
-        colors = pylab.cm.jet(normal(interests))
+        colors = pylab.cm.YlOrRd(normal(interests))
 
         for region, color in zip(self.regions, colors):
             lengths = region.max_border - region.min_border
@@ -315,7 +315,7 @@ class SaggRIAC(object):
 
         cax, _ = cbar.make_axes(ax)
         print("the interest lims are: ", interest_lims)
-        cb2 = cbar.ColorbarBase(cax, cmap=pylab.cm.jet, norm=normal)
+        cb2 = cbar.ColorbarBase(cax, cmap=pylab.cm.YlOrRd, norm=normal)
         ax.set_xlim(self.state_bounds[0][0], self.state_bounds[1][0])
         ax.set_ylim(self.state_bounds[0][1], self.state_bounds[1][1])
 
