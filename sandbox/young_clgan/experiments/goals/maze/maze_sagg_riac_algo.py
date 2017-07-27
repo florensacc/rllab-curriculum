@@ -39,6 +39,7 @@ from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
+
 def compute_final_states_from_paths(all_paths, as_goal=True, env=None):
     all_states = []
     for paths in all_paths:
@@ -53,6 +54,7 @@ def compute_final_states_from_paths(all_paths, as_goal=True, env=None):
 
     return all_states
 
+
 def run_task(v):
     random.seed(v['seed'])
     np.random.seed(v['seed'])
@@ -66,7 +68,8 @@ def run_task(v):
         debug = True
     else:
         debug = False
-    report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=3)
+
+    report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=5)
 
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
@@ -176,8 +179,8 @@ def run_task(v):
 
         #labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
 
-        regions_fig = sagg_riac.plot_regions(maze_id=v['maze_id'])
-        report.add_image(regions_fig, 'the number of regions is: {}'.format(len(sagg_riac.regions)))
+        sagg_riac.plot_regions_interest(maze_id=v['maze_id'], report=report)
+        sagg_riac.plot_regions_states(maze_id=v['maze_id'], report=report)
 
         plot_labeled_states(goals_with_labels, labels, report=report, itr=outer_iter, limit=v['goal_range'],
                             center=v['goal_center'], maze_id=v['maze_id'])

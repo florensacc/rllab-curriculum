@@ -17,7 +17,7 @@ from sandbox.young_clgan.experiments.goals.maze.maze_sagg_riac_algo import run_t
 
 if __name__ == '__main__':
 
-    fast_mode = True
+    fast_mode = False
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
@@ -29,7 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('--price', '-p', type=str, default='', help='set betting price')
     parser.add_argument('--subnet', '-sn', type=str, default='', help='set subnet like us-west-1a')
     parser.add_argument('--name', '-n', type=str, default='', help='set exp prefix name and new file name')
-    parser.add_argument('--debug', action='store_true', default=True, help="run code without multiprocessing")
+    parser.add_argument('--debug', action='store_true', default=False, help="run code without multiprocessing")
     args = parser.parse_args()
 
     if args.debug:
