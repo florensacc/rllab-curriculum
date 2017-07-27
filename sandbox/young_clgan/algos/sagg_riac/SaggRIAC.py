@@ -9,7 +9,7 @@ from rllab.misc import logger
 
 class Region(object):
 
-    def __init__(self, min_border, max_border, max_history=100, max_goals=500, num_random_splits=50):
+    def __init__(self, min_border, max_border, max_history=100, max_goals=500, num_random_splits=50, mode3_noise=0.1):
         self.states = collections.deque(maxlen=max_history)
         self.competences = collections.deque(maxlen=max_history)
         self.min_border = min_border
@@ -18,6 +18,7 @@ class Region(object):
         self.max_goals = max_goals
         self.max_history = max_history
         self.num_random_splits = num_random_splits
+        self.mode3_noise = mode3_noise
 
     # Add this state and competence to the region.
     def add_state(self, state, competence):
@@ -115,6 +116,10 @@ class Region(object):
     # Compute the derivative of competences.
     def compute_interest(self):
         num_states = len(self.states)
+
+        if num_states == 0:
+            return 0
+
         old_measure = self.compute_local_measure(0, int(num_states/2))
         new_measure = self.compute_local_measure(int(num_states/2), num_states)
         interest = abs(old_measure - new_measure) / num_states
@@ -135,15 +140,17 @@ class Region(object):
     def sample_mode3(self):
         # Find the lowest competence goal in this region.
         min_index, min_value = min(enumerate(self.competences), key=operator.itemgetter(1))
-        bad_goal = self.states[min_index]
+        bad_goal = np.copy(self.states[min_index])
 
         # Add noise to this goal.
-        #bad_goal +=
+        bad_goal += np.random.normal(0, self.mode3_noise, len(bad_goal))
+        return bad_goal.tolist()
 
 
 class SaggRIAC(object):
 
-    def __init__(self, state_size, state_range=None, state_center=None, state_bounds=None, max_history=100, max_goals=500):
+    def __init__(self, state_size, state_range=None, state_center=None, state_bounds=None, max_history=100,
+                 max_goals=500):
         self.mode1_p = 0.7 # Percent samples from high-interest regions
         self.mode2_p = 0.2 # Percent sampled from whole space
         self.mode3_p = 0.1 # Percent sampled from mode 3 (low-performing goals in high-interest regions)
@@ -216,7 +223,6 @@ class SaggRIAC(object):
         samples_mode3 = self.sample_mode_3(num_samples_mode3)
         all_samples += samples_mode3
 
-        # TODO - Mode 3
         return all_samples
 
     # Sample uniformly at random from the whole space.
