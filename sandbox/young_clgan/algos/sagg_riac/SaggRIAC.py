@@ -363,7 +363,7 @@ class SaggRIAC(object):
         states_per_reg_lims = (min(states_per_reg), max(states_per_reg))
         normal = pylab.Normalize(*states_per_reg_lims)
 
-        colors = pylab.cm.YlOrRd(normal(states_per_reg))
+        colors = pylab.cm.BuGn(normal(states_per_reg))
 
         for region, color in zip(self.regions, colors):
             lengths = region.max_border - region.min_border
@@ -372,7 +372,7 @@ class SaggRIAC(object):
 
         cax, _ = cbar.make_axes(ax)
         print("the interest lims are: ", states_per_reg_lims)
-        cb2 = cbar.ColorbarBase(cax, cmap=pylab.cm.YlOrRd, norm=normal)
+        cb2 = cbar.ColorbarBase(cax, cmap=pylab.cm.BuGn, norm=normal)
         ax.set_xlim(self.state_bounds[0][0], self.state_bounds[1][0])
         ax.set_ylim(self.state_bounds[0][1], self.state_bounds[1][1])
 
@@ -396,4 +396,5 @@ class SaggRIAC(object):
         if report is None:
             return regions_fig
         else:
-            report.add_image(regions_fig, 'States per region\nthe number of regions is: {}'.format(len(self.regions)))
+            report.add_image(regions_fig, 'States per region\nTotal number of states: {}'.format(
+                sum([len(region.states) for region in self.regions])))
