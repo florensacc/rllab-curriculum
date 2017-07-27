@@ -1,9 +1,14 @@
 import collections
 import random
 import operator
-
 import numpy as np
 
+from matplotlib import pyplot as plt
+import pylab
+import matplotlib.colorbar as cbar
+import matplotlib.patches as patches
+
+from sandbox.young_clgan.logging.visualization import save_image
 from rllab.misc import logger
 
 
@@ -257,22 +262,7 @@ class SaggRIAC(object):
         if len(self.regions) == 1:
             return self.sample_random_region(num_samples)
 
-        interests = []
-        for region in self.regions:
-            interests.append(region.compute_interest())
-
-        # Subtract the min interest
-        min_interest = min(interests)
-        interests -= min_interest
-
-        sum_interests = sum(interests)
-        if sum_interests == 0:
-            logger.log("All interests are " + str(min_interest))
-            return self.sample_random_region(num_samples)
-
-        # Normalize
-        interests /= sum_interests
-
+        interests = self.compute_all_interests()
         probs = interests
         num_per_regions = np.random.multinomial(num_samples, probs)
 
@@ -288,3 +278,62 @@ class SaggRIAC(object):
                 samples.append(sample)
 
         return samples
+
+    def compute_all_interests(self):
+        interests = []
+        for region in self.regions:
+            interests.append(region.compute_interest())
+
+        # Subtract the min interest
+        min_interest = min(interests)
+        interests -= min_interest
+
+        sum_interests = sum(interests)
+        if sum_interests == 0:
+            logger.log("All interests are " + str(min_interest))
+            return np.zeros(len(interests))
+
+        # Normalize
+        interests /= sum_interests
+
+        return interests
+
+
+    def plot_regions(self, maze_id=0):
+        fig, ax = plt.subplots()
+
+        interests = self.compute_all_interests()
+        interest_lims = (min(interests), max(interests))
+        normal = pylab.Normalize(*interest_lims)
+
+        colors = pylab.cm.jet(normal(interests))
+
+        for region, color in zip(self.regions, colors):
+            lengths = region.max_border - region.min_border
+            ax.add_patch(patches.Rectangle(region.min_border, *lengths, fill=True, edgecolor='k', facecolor=color))
+
+
+        cax, _ = cbar.make_axes(ax)
+        print("the interest lims are: ", interest_lims)
+        cb2 = cbar.ColorbarBase(cax, cmap=pylab.cm.jet, norm=normal)
+        ax.set_xlim(self.state_bounds[0][0], self.state_bounds[1][0])
+        ax.set_ylim(self.state_bounds[0][1], self.state_bounds[1][1])
+
+        if maze_id==0:
+            ax.add_patch(patches.Rectangle((-3, -3), 10, 2, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+            ax.add_patch(patches.Rectangle((-3, -1), 2, 6, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+            ax.add_patch(patches.Rectangle((-3, 5), 10, 2, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+            ax.add_patch(patches.Rectangle((5, -1), 2, 6, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+            ax.add_patch(patches.Rectangle((-1, 1), 4, 2, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+        elif maze_id==11:
+            ax.add_patch(patches.Rectangle((-7, 5), 14, 2, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+            ax.add_patch(patches.Rectangle((5, -5), 2, 10, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+            ax.add_patch(patches.Rectangle((-7, -7), 14, 2, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+            ax.add_patch(patches.Rectangle((-7, -5), 2, 10, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+            ax.add_patch(patches.Rectangle((-1, 1), 6, 2, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+            ax.add_patch(patches.Rectangle((-3, -3), 2, 6, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+            ax.add_patch(patches.Rectangle((-1, -3), 4, 2, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+
+        regions_fig = save_image(fig)
+        return regions_fig
+

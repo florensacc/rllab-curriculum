@@ -163,8 +163,6 @@ def run_task(v):
         #logger.log("Labeling the goals")
         #labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
 
-        plot_labeled_states(goals_with_labels, labels, report=report, itr=outer_iter, limit=v['goal_range'],
-                           center=v['goal_center'], maze_id=v['maze_id'])
 
         # ###### extra for deterministic:
         # logger.log("Labeling the goals deterministic")
@@ -180,6 +178,12 @@ def run_task(v):
         # Find final states "accidentally" reached by the agent.
         final_goals = compute_final_states_from_paths(all_paths, as_goal=True, env=env)
         sagg_riac.add_accidental_states(final_goals)
+
+        regions_fig = sagg_riac.plot_regions(maze_id=v['maze_id'])
+        report.add_image(regions_fig, 'the number of regions is: {}'.format(len(sagg_riac.regions)))
+
+        plot_labeled_states(goals_with_labels, labels, report=report, itr=outer_iter, limit=v['goal_range'],
+                            center=v['goal_center'], maze_id=v['maze_id'])
 
         logger.dump_tabular(with_prefix=False)
         report.new_row()
