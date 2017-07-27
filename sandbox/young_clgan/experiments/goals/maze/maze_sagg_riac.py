@@ -29,7 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('--price', '-p', type=str, default='', help='set betting price')
     parser.add_argument('--subnet', '-sn', type=str, default='', help='set subnet like us-west-1a')
     parser.add_argument('--name', '-n', type=str, default='', help='set exp prefix name and new file name')
-    parser.add_argument('--debug', action='store_true', default=False, help="run code without multiprocessing")
+    parser.add_argument('--debug', action='store_true', default=True, help="run code without multiprocessing")
     args = parser.parse_args()
 
     if args.debug:
@@ -64,14 +64,16 @@ if __name__ == '__main__':
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('terminal_eps', [0.3])
     vg.add('only_feasible', [True])
-    vg.add('maze_id', [11])
+    vg.add('maze_id', [0])
     vg.add('goal_range', lambda maze_id: [5] if maze_id==0 else [7])  # this will be used also as bound of the state_space
     vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id==0 else [(0,0)])
     # goal-algo params
     vg.add('min_reward', [0])
     vg.add('max_reward', [1])
     vg.add('distance_metric', ['L2'])
-    vg.add('extend_dist_rew', [False])  # !!!!
+    vg.add('extend_dist_rew', [True])  # !!!!
+    vg.add('use_competence_ratio', [True])  # !!!!
+    vg.add('goal_weight', lambda extend_dist_rew: [0] if extend_dist_rew else [1])
     vg.add('persistence', [1])
     if fast_mode:
         vg.add('n_traj', [1])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
@@ -95,6 +97,8 @@ if __name__ == '__main__':
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.99]) #lambda horizon: [1-1.0/horizon])
+    # Oudeyer params
+    vg.add('max_goals', [1000])
 
     vg.add('fast_mode', [fast_mode])
     if args.debug or fast_mode:

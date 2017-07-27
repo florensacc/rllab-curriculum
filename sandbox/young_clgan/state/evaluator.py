@@ -75,12 +75,28 @@ def parallel_map(func, iterable_object, num_processes=-1):
     process_pool.join()
     return results
 
-def compute_rewards_from_paths(all_paths, key='rewards', as_goal=True, env=None):
+def compute_rewards_from_paths(all_paths, key='rewards', as_goal=True, env=None, terminal_eps=0.1):
     all_rewards = []
     all_states = []
     for paths in all_paths:
         for path in paths:
-            reward = evaluate_path(path, key=key)
+            if key == 'competence':
+                #goal = tuple(path['env_infos']['goal'][0])
+                goal_np_array = np.array(tuple(path['env_infos']['goal'][0]))
+                start_state = np.array(tuple(env.transform_to_goal_space(path['observations'][0])))
+                end_state = np.array(tuple(env.transform_to_goal_space(path['observations'][-1])))
+                final_dist = np.linalg.norm(goal_np_array - end_state)
+                initial_dist = np.linalg.norm(start_state - goal_np_array)
+                if final_dist > initial_dist:
+                    competence = -1
+                elif final_dist < terminal_eps:
+                    competence = 0
+                else:
+                    competence = -final_dist / initial_dist
+                reward = competence
+            else:
+                reward = evaluate_path(path, key=key)
+
             if as_goal:
                 state = tuple(path['env_infos']['goal'][0])
             else:

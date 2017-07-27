@@ -83,6 +83,7 @@ def run_task(v):
         distance_metric=v['distance_metric'],
         extend_dist_rew=v['extend_dist_rew'],
         only_feasible=v['only_feasible'],
+        goal_weight=v['goal_weight'],
         terminate_env=True,
     )
 
@@ -114,7 +115,7 @@ def run_task(v):
     sagg_riac = SaggRIAC(state_size=v['goal_size'],
                          state_range=v['goal_range'],
                          state_center=v['goal_center'],
-                         max_goals=10)
+                         max_goals=v['max_goals'])
 
     for outer_iter in range(1, v['outer_iters']):
 
@@ -152,13 +153,16 @@ def run_task(v):
 
         all_paths = algo.train()
 
-        [goals, rewards] = compute_rewards_from_paths(all_paths, key='goal_reached', as_goal=True, env=env)
+        #[goals, rewards] = compute_rewards_from_paths(all_paths, key='goal_reached', as_goal=True, env=env)
+        #[goals, rewards] = compute_rewards_from_paths(all_paths, key='rewards', as_goal=True, env=env)
+        [goals, rewards] = compute_rewards_from_paths(all_paths, key='competence', as_goal=True, env=env,
+                                                      terminal_eps=v['terminal_eps'])
 
         [goals_with_labels, labels] = label_states_from_paths(all_paths, n_traj=v['n_traj'], key='goal_reached')
 
-        # logger.log('Generating the Heatmap...')
-        # test_and_plot_policy(policy, env, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
-        #                      itr=outer_iter, report=report, limit=v['goal_range'], center=v['goal_center'])
+        logger.log('Generating the Heatmap...')
+        test_and_plot_policy(policy, env, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
+                             itr=outer_iter, report=report, limit=v['goal_range'], center=v['goal_center'])
 
         #logger.log("Labeling the goals")
         #labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')
@@ -183,7 +187,7 @@ def run_task(v):
 
         # Find final states "accidentally" reached by the agent.
         final_goals = compute_final_states_from_paths(all_paths, as_goal=True, env=env)
-        sagg_riac.add_accidental_states(final_goals)
+        sagg_riac.add_accidental_states(final_goals, v['extend_dist_rew'])
 
         logger.dump_tabular(with_prefix=False)
         report.new_row()

@@ -34,9 +34,15 @@ class Region(object):
     def is_too_big(self):
         # Split this region if it has too many goals, and if some of the goals have a positive competence!
         # Otherwise, if the competences are all 0, then there is no point in splitting.
-        return (self.num_goals > self.max_goals and sum(self.competences) > 0)
+        #print("Min competence: " + str(min(self.competences)) + " max competence: " + str(max(self.competences)))
+        do_split = (self.num_goals > self.max_goals) # and sum(self.competences) > 0)
+        #if do_split:
+            #print("Splitting!")
+            #import pdb; pdb.set_trace()
+        return do_split
 
-    # Split this region into subregions.
+
+        # Split this region into subregions.
     def split(self):
         #region1, region2 = self.hacky_split()
         region1, region2, success = self.optimal_split()
@@ -183,8 +189,9 @@ class SaggRIAC(object):
 
     # Limit this sample to the boundaries of the region.
     def limit_sample(self, sample):
-        sample = min(sample, self.max_border.tolist())
-        sample = max(sample, self.min_border.tolist())
+        sample = list(np.clip(sample, self.min_border, self.max_border))
+        #sample = min(sample, self.max_border.tolist())
+        #sample = max(sample, self.min_border.tolist())
         return sample
 
     # Find the region that contains a given state.
@@ -194,9 +201,12 @@ class SaggRIAC(object):
                 return [index, region]
         raise Exception("Cannot find state: " + str(state) + " in any region!")
 
-    def add_accidental_states(self, states):
+    def add_accidental_states(self, states, extend_dist_rew):
         # Treat these accidental states as if we reached them with the highest competence.
-        competences = np.ones(len(states))
+        if extend_dist_rew:
+            competences = np.zeros(len(states))
+        else:
+            competences = np.ones(len(states))
         self.add_states(states, competences)
 
     # Add these states and competences to our list.
