@@ -1,0 +1,5 @@
+#!/bin/bash
+for i in {6..9}
+do
+	echo -e "y\n" | ec2ctl.py kill_f "start-trpo-unif-arm3d-disc-bigBS-test_2017_07_17_23_15_42_000$i";
+done

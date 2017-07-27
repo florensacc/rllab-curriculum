@@ -143,13 +143,15 @@ def run_task(v):
         if v['use_trpo_paths']:
             logger.log("labeling starts with trpo rollouts")
             [starts, labels] = label_states_from_paths(trpo_paths, n_traj=2, key='goal_reached',  # using the min n_traj
-                                                                 as_goal=False, env=env)
+                                                       as_goal=False, env=env)
             paths = [path for paths in trpo_paths for path in paths]
         else:
             logger.log("labeling starts manually")
             labels, paths = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'],
                                          key='goal_reached', full_path=True)
 
+        with logger.tabular_prefix("OnStarts_"):
+            env.log_diagnostics(paths)
         logger.log('Generating the Heatmap...')
         plot_policy_means(policy, env, sampling_res=2, report=report, limit=v['goal_range'], center=v['goal_center'])
         test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=sampling_res,
@@ -161,6 +163,8 @@ def run_task(v):
 
         plot_labeled_states(starts, labels, report=report, itr=outer_iter, limit=v['goal_range'],
                             center=v['goal_center'], maze_id=v['maze_id'])
+
+        start_classes, text_labels = convert_label(labels)
 
         # ###### extra for deterministic:
         # logger.log("Labeling the goals deterministic")
@@ -175,9 +179,17 @@ def run_task(v):
 
         # append new states to list of all starts (replay buffer): Not the low reward ones!!
         filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1]
-        if len(filtered_raw_starts) > 0:  # add a tone of noise if all the states I had ended up being high_reward!
-            seed_starts = filtered_raw_starts
-        else:
-            seed_starts = generate_starts(env, starts=starts, horizon=v['horizon'] * 2, subsample=v['num_new_starts'],
-                                          variance=v['brownian_variance'] * 10)
         all_starts.append(filtered_raw_starts)
+
+        if v['seed_with'] == 'only_goods':
+            if len(filtered_raw_starts) > 0:  # add a tone of noise if all the states I had ended up being high_reward!
+                seed_starts = filtered_raw_starts
+            elif np.sum(start_classes == 0) > np.sum(start_classes == 1):  # if more low reward than high reward
+                seed_starts = all_starts.sample(300)  # sample them from the replay
+            else:
+                seed_starts = generate_starts(env, starts=starts, horizon=int(v['horizon'] * 10), subsample=v['num_new_starts'],
+                                                  variance=v['brownian_variance'] * 10)
+        elif v['seed_with'] == 'all_previous':
+            seed_starts = starts
+        elif v['seed_with'] == 'on_policy':
+            seed_starts = generate_starts(env, policy, starts=starts, horizon=v['horizon'], subsample=v['num_new_starts'])

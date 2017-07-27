@@ -33,10 +33,11 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        'us-east-2a', 'us-east-2b', 'us-east-2c', 'us-west-2a', 'us-west-2c', 'us-west-2b', 'ap-southeast-2c',
-        'ap-southeast-2b'
+        'us-east-2c', 'us-east-2b', 'us-east-2a', 'ap-northeast-2a', 'eu-west-1a', 'eu-west-1c', 'eu-west-1b',
+        'ap-northeast-2c', 'ap-southeast-2c', 'ap-southeast-2b', 'ap-southeast-2a', 'eu-central-1c', 'us-west-2c',
+        'us-west-2b', 'us-west-2a', 'eu-central-1a'
     ]
-    ec2_instance = args.type if args.type else 'm4.10xlarge'
+    ec2_instance = args.type if args.type else 'c4.4xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -52,26 +53,24 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'start-brownian-arm3d-key'
+    exp_prefix = 'start-brownian-arm3d-key-largeBS-allStartsNoFilter'
 
     vg = VariantGenerator()
     vg.add('start_size', [7])  # this is the ultimate start we care about: getting the pendulum upright
-    vg.add('start_bounds',
-           [[(-2.2854, -.05236, -3.9, -2.3213, -3.15, -2.094, -3.15),
-             (1.714602, 1.3963, 0.0, 0.0, 3.15, 0.0, 3.15)]])
-    # vg.add('start_goal', [(1.55, 0.4, -3.75, -1.15, -10.75, -2.09, 0.05)])
-    vg.add('start_goal', [(1.55, 0.4, -3.75, -1.15, 1.81, -2.09, 0.05)])
+    vg.add('start_goal', lambda start_size: [(1.55, 0.4, -3.75, -1.15, 1.81, -2.09, 0.05)] if start_size == 7 else
+           [(1.55, 0.4, -3.75, -1.15, 1.81, -2.09, 0.05, 0, 0, 0, 0, 0, 0, 0)])
     vg.add('ultimate_goal',
-           [(0.0, 0.3, -0.7,  # first point
-             0.0, 0.3, -0.4,  # second point
-             -0.15, 0.3, -0.55)])  # third point
+           [(0.0, 0.3, -0.7,  # first point --> hill
+             0.0, 0.3, -0.4,  # second point --> top
+             -0.15, 0.3, -0.55)])  # third point --> side
     vg.add('goal_size', [9])
+    vg.add('kill_radius', [None])
     vg.add('terminal_eps', [0.03])
     vg.add('ctrl_cost_coeff', [0])
     # brownian params
-    # vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
-    vg.add('seed_with', ['on_policy'])  # good from brown, onPolicy, previousBrown (ie no good)
-    vg.add('brownian_horizon', lambda seed_with: [0, 50, 500] if seed_with == 'on_policy' else [50])
+    vg.add('seed_with', ['all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
+    # vg.add('seed_with', ['only_goods'])  # good from brown, onPolicy, previousBrown (ie no good)
+    vg.add('brownian_horizon', lambda seed_with: [50] if seed_with == 'on_policy' else [50])
     vg.add('brownian_variance', [1])
     vg.add('regularize_starts', [0])
     # goal-algo params
@@ -79,7 +78,7 @@ if __name__ == '__main__':
     vg.add('max_reward', [0.9])
     vg.add('distance_metric', ['L2'])
     vg.add('extend_dist_rew', [False])
-    vg.add('inner_weight', [0, 1])
+    vg.add('inner_weight', [0])
     vg.add('goal_weight', lambda inner_weight: [1000] if inner_weight > 0 else [1])
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
@@ -88,19 +87,21 @@ if __name__ == '__main__':
     # replay buffer
     vg.add('replay_buffer', [True])
     vg.add('coll_eps', lambda terminal_eps: [terminal_eps])
-    vg.add('num_new_starts', [200])
-    vg.add('num_old_starts', [100])
+    vg.add('num_new_starts', [600])
+    vg.add('num_old_starts', [300])
     # sampling params
     vg.add('horizon', [500])
     vg.add('outer_iters', [5000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size', [20000])
+    vg.add('pg_batch_size', [100000])
     # policy initialization
     vg.add('output_gain', [0.1])
+    vg.add('policy_hidden_sizes', [(64, 64)])
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
-    vg.add('discount', [0.995])
+    vg.add('discount', [0.998])
+    vg.add('baseline', ['g_mlp'])
 
     vg.add('seed', range(100, 600, 100))
 

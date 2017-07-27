@@ -35,7 +35,7 @@ from sandbox.young_clgan.envs.start_env import generate_starts
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
 from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy, sample_unif_feas, unwrap_maze, \
     plot_policy_means
-from sandbox.young_clgan.envs.arm3d.arm3d_key_env import Arm3dKeyEnv
+from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -52,10 +52,10 @@ def run_task(v):
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
 
-    inner_env = normalize(Arm3dKeyEnv(ctrl_cost_coeff=v['ctrl_cost_coeff']))
+    inner_env = normalize(Arm3dDiscEnv())
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
-    fixed_start_generator = FixedStateGenerator(state=v['start_out'])
+    fixed_start_generator = FixedStateGenerator(state=v['start_goal'])
 
     env = GoalStartExplorationEnv(
         env=inner_env,
@@ -88,12 +88,10 @@ def run_task(v):
         baseline = GaussianMLPBaseline(env_spec=env.spec)
 
     # load the state collection from data_upload
-    # load the state collection from data_upload
     load_dir = 'data_upload/state_collections/'
     all_feasible_starts = pickle.load(
-        # open(osp.join(config.PROJECT_PATH, load_dir, 'key_all_feasible_states_med_rad2.pkl'), 'rb'))
-        open(osp.join(config.PROJECT_PATH, load_dir, 'key_all_feasible_04_230000.pkl'), 'rb'))
-
+        open(osp.join(config.PROJECT_PATH, load_dir, 'disc_all_feasible_states_min.pkl'), 'rb'))
+    print("we have %d feasible starts" % all_feasible_starts.size)
     uniform_start_generator = UniformListStateGenerator(state_list=all_feasible_starts.state_list)
     env.update_start_generator(uniform_start_generator)
 

@@ -31,16 +31,11 @@ if __name__ == '__main__':
     if args.clone:
         autoclone.autoclone(__file__, args)
 
-    # subnets = [
-    #     'us-east-2b', 'us-east-2c', 'us-east-2a',
-    # ]
     subnets = [
         'ap-northeast-2c', 'ap-northeast-2a', 'ap-southeast-1b'
     ]
-    # subnets = [
-    #     'ap-northeast-2a', 'ap-northeast-2c', 'us-east-2b', 'ap-south-1a', 'us-east-2c', 'us-east-2a', 'ap-south-1b',
-    #     'us-east-1b', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'eu-west-1c', 'eu-west-1a', 'eu-west-1b'
-    # ]
+    # setup ec2
+    args.ec2=True
     ec2_instance = 'c4.4xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
@@ -48,8 +43,6 @@ if __name__ == '__main__':
     # config.AWS_SPOT_PRICE = str(info["price"])
     config.AWS_SPOT_PRICE = '1.0'
     n_parallel = int(info["vCPU"] / 2)  # make the default 4 if not using ec2
-    args.ec2=False
-    # args.debug=True
     if args.ec2:
         mode = 'ec2'
     elif args.local_docker:

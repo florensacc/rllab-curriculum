@@ -73,9 +73,11 @@ if __name__ == '__main__':
            lambda maze_id: [4] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
     vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
     # brownian params
+    vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
     vg.add('brownian_variance', [1])
-    vg.add('brownian_horizon', [50])
+    vg.add('brownian_horizon', [50, 100])
     # goal-algo params
+    vg.add('use_trpo_paths', [True])
     vg.add('min_reward', [0.1])
     vg.add('max_reward', [0.9])
     vg.add('distance_metric', ['L2'])
@@ -130,7 +132,7 @@ if __name__ == '__main__':
             run_task(vv)
 
         if mode in ['ec2', 'local_docker']:
-            # # choose subnet
+            # choose subnet
             subnet = random.choice(subnets)
             config.AWS_REGION_NAME = subnet[:-1]
             config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[

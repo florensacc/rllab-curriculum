@@ -6,6 +6,7 @@ import tensorflow as tf
 
 from rllab.sampler.utils import rollout
 from rllab.misc.ext import set_seed
+from sandbox.young_clgan.envs.base import FixedStateGenerator
 
 if __name__ == "__main__":
 
@@ -49,12 +50,10 @@ if __name__ == "__main__":
 
         while True:
             if args.init_state:
-                from sandbox.young_clgan.envs.base import FixedStateGenerator
                 env.update_start_generator(FixedStateGenerator(args.init_state))
             elif args.collection_file:
-                from sandbox.young_clgan.envs.base import UniformListStateGenerator
-                init_states = all_feasible_starts.sample(1000)
-                env.update_start_generator(UniformListStateGenerator(init_states))
+                init_state = all_feasible_starts.sample(1)
+                env.update_start_generator(FixedStateGenerator(init_state))
             path = rollout(env, policy, max_path_length=args.max_path_length,
                            animated=True, speedup=args.speedup)
             print(path["rewards"][-1])

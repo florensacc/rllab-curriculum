@@ -18,7 +18,7 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
 
     def __init__(self,
                  init_solved=True,
-                 center_lim=0.4,
+                 kill_radius=0.4,
                  *args, **kwargs):
 
         self.file = self.__class__.FILE
@@ -28,7 +28,7 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
         # self.init_qvel = np.zeros_like(self.init_qvel)
         # self.init_qacc = np.zeros_like(self.init_qacc)
         self.init_solved = init_solved
-        self.center_lim = center_lim
+        self.kill_radius = kill_radius
         self.kill_outside = False
 
 
@@ -41,12 +41,16 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
         ])
 
     @contextmanager
-    def set_kill_outside(self):
+    def set_kill_outside(self, kill_outside=True, radius=None):
         self.kill_outside = True
+        old_kill_radius = self.kill_radius
+        if radius is not None:
+            self.kill_radius = radius
         try:
             yield
         finally:
             self.kill_outside = False
+            self.kill_radius = old_kill_radius
 
     def step(self, action):
         self.forward_dynamics(action)
@@ -61,7 +65,7 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
         # print(ob)
         done = False
 
-        if self.kill_outside and distance_to_goal > self.center_lim:
+        if self.kill_outside and distance_to_goal > self.kill_radius:
             # print("******** OUT of region ********")
             done = True
 
