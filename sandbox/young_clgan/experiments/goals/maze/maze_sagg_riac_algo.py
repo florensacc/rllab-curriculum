@@ -39,6 +39,19 @@ from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
+def compute_final_states_from_paths(all_paths, as_goal=True, env=None):
+    all_states = []
+    for paths in all_paths:
+        for path in paths:
+            if as_goal:
+                state = tuple(env.transform_to_goal_space(path['observations'][-1]))
+            else:
+                logger.log("Not sure what to do here!!!")
+                state = tuple(env.transform_to_start_space(path['observations'][0]))
+
+            all_states.append(state)
+
+    return all_states
 
 def run_task(v):
     random.seed(v['seed'])
@@ -163,6 +176,10 @@ def run_task(v):
 
         logger.log("Updating SAGG-RIAC")
         sagg_riac.add_states(goals, rewards)
+
+        # Find final states "accidentally" reached by the agent.
+        final_goals = compute_final_states_from_paths(all_paths, as_goal=True, env=env)
+        sagg_riac.add_accidental_states(final_goals)
 
         logger.dump_tabular(with_prefix=False)
         report.new_row()

@@ -1,5 +1,6 @@
 import collections
 import random
+import operator
 
 import numpy as np
 
@@ -17,7 +18,6 @@ class Region(object):
         self.max_goals = max_goals
         self.max_history = max_history
         self.num_random_splits = num_random_splits
-
 
     # Add this state and competence to the region.
     def add_state(self, state, competence):
@@ -132,10 +132,22 @@ class Region(object):
             state.append(random.uniform(min_val, max_val))
         return state
 
+    def sample_mode3(self):
+        # Find the lowest competence goal in this region.
+        min_index, min_value = min(enumerate(self.competences), key=operator.itemgetter(1))
+        bad_goal = self.states[min_index]
+
+        # Add noise to this goal.
+        #bad_goal +=
+
 
 class SaggRIAC(object):
 
     def __init__(self, state_size, state_range=None, state_center=None, state_bounds=None, max_history=100, max_goals=500):
+        self.mode1_p = 0.7 # Percent samples from high-interest regions
+        self.mode2_p = 0.2 # Percent sampled from whole space
+        self.mode3_p = 0.1 # Percent sampled from mode 3 (low-performing goals in high-interest regions)
+
         self.max_goals = max_goals
 
         self.regions = []
@@ -154,8 +166,8 @@ class SaggRIAC(object):
         max_border = self.state_bounds[1]
 
         # Create a region to represent the entire space.
-        whole_region = Region(min_border, max_border, max_history=max_history, max_goals=self.max_goals)
-        self.regions.append(whole_region)
+        self.whole_region = Region(min_border, max_border, max_history=max_history, max_goals=self.max_goals)
+        self.regions.append(self.whole_region)
 
     # Find the region that contains a given state.
     def find_region(self, state):
@@ -163,6 +175,11 @@ class SaggRIAC(object):
             if region.contains(state):
                 return [index, region]
         raise Exception("Cannot find state: " + str(state) + " in any region!")
+
+    def add_accidental_states(self, states):
+        # Treat these accidental states as if we reached them with the highest competence.
+        competences = np.ones(len(states))
+        self.add_states(states, competences)
 
     # Add these states and competences to our list.
     def add_states(self, states, competences):
@@ -183,10 +200,32 @@ class SaggRIAC(object):
 
     # Sample states from the regions.
     def sample_states(self, num_samples):
-        # Mode 1
-        samples = self.sample_mode_1(num_samples)
 
-        # TODO - Modes 2 and 3
+        # Mode 1
+        num_samples_mode1 = int(num_samples * self.mode1_p)
+        samples_mode1 = self.sample_mode_1(num_samples_mode1)
+        all_samples = samples_mode1
+
+        # Mode 2
+        num_samples_mode2 = int(num_samples * self.mode2_p)
+        samples_mode2 = self.sample_uniform(num_samples_mode2)
+        all_samples += samples_mode2
+
+        # Mode 3
+        num_samples_mode3 = int(num_samples * self.mode3_p)
+        samples_mode3 = self.sample_mode_3(num_samples_mode3)
+        all_samples += samples_mode3
+
+        # TODO - Mode 3
+        return all_samples
+
+    # Sample uniformly at random from the whole space.
+    def sample_uniform(self, num_samples):
+        samples = []
+
+        for i in range(num_samples):
+            state = self.whole_region.sample_uniform()
+            samples.append(state)
         return samples
 
     # Temporary hack - just randomly pick a region to sample from.
@@ -199,7 +238,10 @@ class SaggRIAC(object):
             samples.append(state)
         return samples
 
-    def sample_mode_1(self, num_samples):
+    def sample_mode_3(self, num_samples):
+        return self.sample_mode_1(num_samples, mode3=True)
+
+    def sample_mode_1(self, num_samples, mode3=False):
         if len(self.regions) == 1:
             return self.sample_random_region(num_samples)
 
@@ -226,7 +268,10 @@ class SaggRIAC(object):
         for region_index, num_per_region in enumerate(num_per_regions):
             region = self.regions[region_index]
             for i in range(num_per_region):
-                sample = region.sample_uniform()
+                if mode3:
+                    sample = region.sample_mode3()
+                else:
+                    sample = region.sample_uniform()
                 samples.append(sample)
 
         return samples
