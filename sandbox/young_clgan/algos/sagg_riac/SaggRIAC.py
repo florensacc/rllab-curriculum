@@ -314,7 +314,7 @@ class SaggRIAC(object):
         return interests
 
 
-    def plot_regions(self, maze_id=0):
+    def plot_regions_interest(self, maze_id=0, report=None):
         fig, ax = plt.subplots()
 
         interests = self.compute_all_interests()
@@ -350,5 +350,50 @@ class SaggRIAC(object):
             ax.add_patch(patches.Rectangle((-1, -3), 4, 2, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
 
         regions_fig = save_image(fig)
-        return regions_fig
 
+        if report is None:
+            return regions_fig
+        else:
+            report.add_image(regions_fig, 'Interest per region:\nthe number of regions is: {}'.format(len(self.regions)))
+
+    def plot_regions_states(self, maze_id=0, report=None):
+        fig, ax = plt.subplots()
+
+        states_per_reg = [len(region.states) for region in self.regions]
+        states_per_reg_lims = (min(states_per_reg), max(states_per_reg))
+        normal = pylab.Normalize(*states_per_reg_lims)
+
+        colors = pylab.cm.YlOrRd(normal(states_per_reg))
+
+        for region, color in zip(self.regions, colors):
+            lengths = region.max_border - region.min_border
+            ax.add_patch(patches.Rectangle(region.min_border, *lengths, fill=True, edgecolor='k', facecolor=color))
+
+
+        cax, _ = cbar.make_axes(ax)
+        print("the interest lims are: ", states_per_reg_lims)
+        cb2 = cbar.ColorbarBase(cax, cmap=pylab.cm.YlOrRd, norm=normal)
+        ax.set_xlim(self.state_bounds[0][0], self.state_bounds[1][0])
+        ax.set_ylim(self.state_bounds[0][1], self.state_bounds[1][1])
+
+        if maze_id==0:
+            ax.add_patch(patches.Rectangle((-3, -3), 10, 2, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+            ax.add_patch(patches.Rectangle((-3, -1), 2, 6, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+            ax.add_patch(patches.Rectangle((-3, 5), 10, 2, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+            ax.add_patch(patches.Rectangle((5, -1), 2, 6, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+            ax.add_patch(patches.Rectangle((-1, 1), 4, 2, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+        elif maze_id==11:
+            ax.add_patch(patches.Rectangle((-7, 5), 14, 2, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+            ax.add_patch(patches.Rectangle((5, -5), 2, 10, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+            ax.add_patch(patches.Rectangle((-7, -7), 14, 2, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+            ax.add_patch(patches.Rectangle((-7, -5), 2, 10, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+            ax.add_patch(patches.Rectangle((-1, 1), 6, 2, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+            ax.add_patch(patches.Rectangle((-3, -3), 2, 6, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+            ax.add_patch(patches.Rectangle((-1, -3), 4, 2, fill=True, edgecolor="none", facecolor='0.4', alpha=0.3))
+
+        regions_fig = save_image(fig)
+
+        if report is None:
+            return regions_fig
+        else:
+            report.add_image(regions_fig, 'States per region\nthe number of regions is: {}'.format(len(self.regions)))
