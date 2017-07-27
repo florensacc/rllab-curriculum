@@ -17,7 +17,7 @@ from sandbox.young_clgan.experiments.goals.maze.maze_sagg_riac_algo import run_t
 
 if __name__ == '__main__':
 
-    fast_mode = False
+    fast_mode = True
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
@@ -71,8 +71,8 @@ if __name__ == '__main__':
     vg.add('min_reward', [0])
     vg.add('max_reward', [1])
     vg.add('distance_metric', ['L2'])
-    vg.add('extend_dist_rew', [True])  # !!!!
-    vg.add('use_competence_ratio', [True])  # !!!!
+    vg.add('extend_dist_rew', [False])  # !!!!
+    vg.add('use_competence_ratio', [False])  # !!!!
     vg.add('goal_weight', lambda extend_dist_rew: [0] if extend_dist_rew else [1])
     vg.add('persistence', [1])
     if fast_mode:
@@ -90,7 +90,7 @@ if __name__ == '__main__':
     vg.add('add_on_policy', [False]) #TODO - change back to true
     # sampling params
     vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
-    vg.add('outer_iters', [300]) #lambda maze_id: [400] if maze_id == 0 else [10000])
+    vg.add('outer_iters', [500]) #lambda maze_id: [400] if maze_id == 0 else [10000])
     # policy initialization
     vg.add('output_gain', [1])
     vg.add('policy_init_std', [1])
@@ -98,7 +98,7 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.99]) #lambda horizon: [1-1.0/horizon])
     # Oudeyer params
-    vg.add('max_goals', [100])
+    vg.add('max_goals', [500])
 
     vg.add('fast_mode', [fast_mode])
     if args.debug or fast_mode:

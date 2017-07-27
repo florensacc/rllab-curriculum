@@ -14,9 +14,13 @@ from rllab.misc import logger
 
 class Region(object):
 
-    def __init__(self, min_border, max_border, max_history=100, max_goals=500, num_random_splits=50, mode3_noise=0.1):
-        self.states = collections.deque(maxlen=max_history)
-        self.competences = collections.deque(maxlen=max_history)
+    def __init__(self, min_border, max_border, max_history=200, max_goals=500, num_random_splits=50, mode3_noise=0.1):
+        # self.states = collections.deque(maxlen=max_history)
+        # self.competences = collections.deque(maxlen=max_history)
+
+        self.states = []
+        self.competences = []
+
         self.min_border = min_border
         self.max_border = max_border
         self.num_goals = 0
@@ -131,8 +135,11 @@ class Region(object):
         if num_states == 0:
             return 0
 
-        old_measure = self.compute_local_measure(0, int(num_states/2))
-        new_measure = self.compute_local_measure(int(num_states/2), num_states)
+        old_measure = self.compute_local_measure(num_states - self.max_history, num_states - int(self.max_history/2))
+        new_measure = self.compute_local_measure(num_states - int(self.max_history/2), num_states)
+
+        # old_measure = self.compute_local_measure(0, int(num_states/2))
+        # new_measure = self.compute_local_measure(int(num_states/2), num_states)
         interest = abs(old_measure - new_measure) / num_states
         return interest
 
