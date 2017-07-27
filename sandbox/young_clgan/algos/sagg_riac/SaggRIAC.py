@@ -47,8 +47,8 @@ class Region(object):
         #region1, region2 = self.hacky_split()
         region1, region2, success = self.optimal_split()
 
-        if success:
-            self.assign_states_to_regions(region1, region2)
+        # if success:
+        #     self.assign_states_to_regions(region1, region2)
 
         return [region1, region2, success]
 

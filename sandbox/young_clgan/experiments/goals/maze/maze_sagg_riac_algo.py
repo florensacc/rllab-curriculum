@@ -155,14 +155,17 @@ def run_task(v):
 
         #[goals, rewards] = compute_rewards_from_paths(all_paths, key='goal_reached', as_goal=True, env=env)
         #[goals, rewards] = compute_rewards_from_paths(all_paths, key='rewards', as_goal=True, env=env)
-        [goals, rewards] = compute_rewards_from_paths(all_paths, key='competence', as_goal=True, env=env,
-                                                      terminal_eps=v['terminal_eps'])
+        if v['use_competence_ratio']:
+            [goals, rewards] = compute_rewards_from_paths(all_paths, key='competence', as_goal=True, env=env,
+                                                          terminal_eps=v['terminal_eps'])
+        else:
+            [goals, rewards] = compute_rewards_from_paths(all_paths, key='rewards', as_goal=True, env=env)
 
         [goals_with_labels, labels] = label_states_from_paths(all_paths, n_traj=v['n_traj'], key='goal_reached')
 
-        logger.log('Generating the Heatmap...')
-        test_and_plot_policy(policy, env, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
-                             itr=outer_iter, report=report, limit=v['goal_range'], center=v['goal_center'])
+        # logger.log('Generating the Heatmap...')
+        # test_and_plot_policy(policy, env, max_reward=v['max_reward'], sampling_res=sampling_res, n_traj=v['n_traj'],
+        #                      itr=outer_iter, report=report, limit=v['goal_range'], center=v['goal_center'])
 
         #logger.log("Labeling the goals")
         #labels = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached')

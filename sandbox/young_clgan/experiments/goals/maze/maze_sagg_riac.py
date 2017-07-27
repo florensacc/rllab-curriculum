@@ -98,7 +98,7 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.99]) #lambda horizon: [1-1.0/horizon])
     # Oudeyer params
-    vg.add('max_goals', [1000])
+    vg.add('max_goals', [100])
 
     vg.add('fast_mode', [fast_mode])
     if args.debug or fast_mode:
