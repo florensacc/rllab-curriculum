@@ -264,25 +264,30 @@ class SaggRIAC(object):
 
         interests = self.compute_all_interests()
         probs = interests
+
+        if sum(probs) == 0:
+            return self.sample_uniform(num_samples)
+
         num_per_regions = np.random.multinomial(num_samples, probs)
 
         samples = []
         for region_index, num_per_region in enumerate(num_per_regions):
-            region = self.regions[region_index]
-            for i in range(num_per_region):
-                if mode3:
-                    sample = region.sample_mode3()
-                    sample = self.limit_sample(sample)
-                else:
-                    sample = region.sample_uniform()
-                samples.append(sample)
+            if num_per_region > 0:
+                region = self.regions[region_index]
+                for i in range(num_per_region):
+                    if mode3:
+                        sample = region.sample_mode3()
+                        sample = self.limit_sample(sample)
+                    else:
+                        sample = region.sample_uniform()
+                    samples.append(sample)
 
         return samples
 
     def compute_all_interests(self):
-        interests = []
+        interests = np.array([])
         for region in self.regions:
-            interests.append(region.compute_interest())
+            interests = np.append(interests, region.compute_interest())
 
         # Subtract the min interest
         min_interest = min(interests)
