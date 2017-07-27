@@ -169,12 +169,18 @@ class SaggRIAC(object):
             self.state_bounds = np.array(state_bounds)
             self.state_range = self.state_bounds[1] - self.state_bounds[0]
 
-        min_border = self.state_bounds[0]
-        max_border = self.state_bounds[1]
+        self.min_border = self.state_bounds[0]
+        self.max_border = self.state_bounds[1]
 
         # Create a region to represent the entire space.
-        self.whole_region = Region(min_border, max_border, max_history=max_history, max_goals=self.max_goals)
+        self.whole_region = Region(self.min_border, self.max_border, max_history=max_history, max_goals=self.max_goals)
         self.regions.append(self.whole_region)
+
+    # Limit this sample to the boundaries of the region.
+    def limit_sample(self, sample):
+        sample = min(sample, self.max_border.tolist())
+        sample = max(sample, self.min_border.tolist())
+        return sample
 
     # Find the region that contains a given state.
     def find_region(self, state):
@@ -276,6 +282,7 @@ class SaggRIAC(object):
             for i in range(num_per_region):
                 if mode3:
                     sample = region.sample_mode3()
+                    sample = self.limit_sample(sample)
                 else:
                     sample = region.sample_uniform()
                 samples.append(sample)

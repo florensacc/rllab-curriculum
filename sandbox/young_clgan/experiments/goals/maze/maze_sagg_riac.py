@@ -64,7 +64,7 @@ if __name__ == '__main__':
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('terminal_eps', [0.3])
     vg.add('only_feasible', [True])
-    vg.add('maze_id', [0])
+    vg.add('maze_id', [11])
     vg.add('goal_range', lambda maze_id: [5] if maze_id==0 else [7])  # this will be used also as bound of the state_space
     vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id==0 else [(0,0)])
     # goal-algo params
