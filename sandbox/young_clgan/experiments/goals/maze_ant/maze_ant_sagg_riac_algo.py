@@ -35,7 +35,7 @@ from sandbox.young_clgan.state.utils import StateCollection
 
 from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, generate_initial_goals
 from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy  # TODO: make this external to maze env
-from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
+from sandbox.young_clgan.envs.maze.maze_ant.ant_maze_env import AntMazeEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -74,13 +74,12 @@ def run_task(v):
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
 
-    inner_env = normalize(PointMazeEnv(maze_id=v['maze_id']))
+    inner_env = normalize(AntMazeEnv(maze_id=v['maze_id']))
 
     uniform_goal_generator = UniformStateGenerator(state_size=v['goal_size'], bounds=v['goal_range'],
                                                    center=v['goal_center'])
     env = GoalExplorationEnv(
         env=inner_env, goal_generator=uniform_goal_generator,
-        #obs2goal_transform=lambda x: x[:int(len(x) / 2)],
         obs2goal_transform=lambda x: x[:v['goal_size']],
         terminal_eps=v['terminal_eps'],
         distance_metric=v['distance_metric'],
@@ -110,8 +109,6 @@ def run_task(v):
                              itr=outer_iter, report=report, limit=v['goal_range'], center=v['goal_center'])
 
     report.new_row()
-
-    all_goals = StateCollection(distance_threshold=v['coll_eps'])
 
     sagg_riac = SaggRIAC(state_size=v['goal_size'],
                          state_range=v['goal_range'],

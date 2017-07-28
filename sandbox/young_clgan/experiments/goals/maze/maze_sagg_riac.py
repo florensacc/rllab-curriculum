@@ -99,6 +99,7 @@ if __name__ == '__main__':
     vg.add('discount', [0.99]) #lambda horizon: [1-1.0/horizon])
     # Oudeyer params
     vg.add('max_goals', [500])
+    vg.add('max_history', [100])
 
     vg.add('fast_mode', [fast_mode])
     if args.debug or fast_mode:

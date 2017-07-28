@@ -13,7 +13,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.goals.maze.maze_sagg_riac_algo import run_task
+from sandbox.young_clgan.experiments.goals.maze_ant.maze_ant_sagg_riac_algo import run_task
 
 if __name__ == '__main__':
 
@@ -40,8 +40,8 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        'us-east-2c', 'us-east-2b', 'us-east-2a', 'eu-central-1b', 'eu-central-1a', 'eu-central-1c', 'ap-southeast-2c',
-        'ap-southeast-2b', 'ap-southeast-2a'
+        'us-east-2c', 'us-east-2b', 'us-east-2a', 'eu-central-1b', 'eu-central-1a', 'ap-southeast-2c',
+        'ap-southeast-2b', 'ap-southeast-2a', 'us-west-2b', 'us-west-2c', 'eu-west-1b'
     ]
     ec2_instance = args.type if args.type else 'm4.4xlarge' #'m4.10xlarge'
     # configure instan
@@ -59,11 +59,11 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'goal-sagg-riac-maze0-bis'
+    exp_prefix = 'goal-sagg-riac-maze-ant'
 
     vg = VariantGenerator()
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
-    vg.add('terminal_eps', [0.3])
+    vg.add('terminal_eps', [1])
     vg.add('only_feasible', [True])
     vg.add('maze_id', [0])
     vg.add('goal_range', lambda maze_id: [5] if maze_id==0 else [7])  # this will be used also as bound of the state_space
@@ -73,7 +73,7 @@ if __name__ == '__main__':
     vg.add('max_reward', [1])
     vg.add('distance_metric', ['L2'])
     vg.add('extend_dist_rew', [False])  # !!!!
-    vg.add('use_competence_ratio', [False])  # !!!!
+    vg.add('use_competence_ratio', [False, True])  # !!!!
     vg.add('goal_weight', lambda extend_dist_rew: [0] if extend_dist_rew else [1])
     vg.add('persistence', [1])
     if fast_mode:
@@ -81,6 +81,7 @@ if __name__ == '__main__':
     else:
         vg.add('n_traj', [1])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('sampling_res', [2])
+    vg.add('with_replacement', [False])
     vg.add('num_new_goals', [300]) #TODO - change back to 200 when we restore replay buffer
     # # replay buffer
     # vg.add('num_old_goals', [0])    #TODO - change back to 100 when we restore replay buffer
@@ -97,8 +98,8 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.99]) #lambda horizon: [1-1.0/horizon])
     # Oudeyer params
-    vg.add('max_goals', [100, 200, 300])
-    vg.add('max_history', [100])
+    vg.add('max_goals', [100, 500])
+    vg.add('max_history', [100, 50])
 
     vg.add('fast_mode', [fast_mode])
     if args.debug or fast_mode:
