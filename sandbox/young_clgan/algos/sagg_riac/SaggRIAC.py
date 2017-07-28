@@ -14,7 +14,7 @@ from rllab.misc import logger
 
 class Region(object):
 
-    def __init__(self, min_border, max_border, max_history=200, max_goals=500, num_random_splits=50, mode3_noise=0.1):
+    def __init__(self, min_border, max_border, max_history=500, max_goals=500, num_random_splits=50, mode3_noise=0.1):
         # self.states = collections.deque(maxlen=max_history)
         # self.competences = collections.deque(maxlen=max_history)
 

@@ -13,11 +13,11 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.goals.maze.maze_sagg_riac_algo import run_task
+from sandbox.young_clgan.experiments.goals.maze_ant.maze_ant_sagg_riac_algo import run_task
 
 if __name__ == '__main__':
 
-    fast_mode = True
+    fast_mode = False
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
@@ -40,9 +40,10 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        'us-east-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2a', 'ap-northeast-2c'
+        'us-east-2c', 'us-east-2b', 'us-east-2a', 'eu-central-1b', 'eu-central-1a', 'ap-southeast-2c',
+        'ap-southeast-2b', 'ap-southeast-2a', 'us-west-2b', 'us-west-2c', 'eu-west-1b'
     ]
-    ec2_instance = args.type if args.type else 'c4.4xlarge' #'m4.10xlarge'
+    ec2_instance = args.type if args.type else 'm4.4xlarge' #'m4.10xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -58,11 +59,11 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'goal-sagg-riac-maze11-run1'
+    exp_prefix = 'goal-sagg-riac-maze-ant'
 
     vg = VariantGenerator()
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
-    vg.add('terminal_eps', [0.3])
+    vg.add('terminal_eps', [1])
     vg.add('only_feasible', [True])
     vg.add('maze_id', [0])
     vg.add('goal_range', lambda maze_id: [5] if maze_id==0 else [7])  # this will be used also as bound of the state_space
@@ -72,23 +73,22 @@ if __name__ == '__main__':
     vg.add('max_reward', [1])
     vg.add('distance_metric', ['L2'])
     vg.add('extend_dist_rew', [False])  # !!!!
-    vg.add('use_competence_ratio', [False])  # !!!!
+    vg.add('use_competence_ratio', [False, True])  # !!!!
     vg.add('goal_weight', lambda extend_dist_rew: [0] if extend_dist_rew else [1])
     vg.add('persistence', [1])
     if fast_mode:
         vg.add('n_traj', [1])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     else:
-        vg.add('n_traj', [2])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
+        vg.add('n_traj', [1])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('sampling_res', [2])
     vg.add('with_replacement', [False])
-    vg.add('smart_init', [True])
-    # replay buffer
-    vg.add('replay_buffer', [False]) #TODO - try with replay buffer
-    vg.add('coll_eps', [0.3])
     vg.add('num_new_goals', [300]) #TODO - change back to 200 when we restore replay buffer
-    vg.add('num_old_goals', [0])    #TODO - change back to 100 when we restore replay buffer
-    vg.add('add_on_policy', [False]) #TODO - change back to true
-    # sampling params
+    # # replay buffer
+    # vg.add('num_old_goals', [0])    #TODO - change back to 100 when we restore replay buffer
+    # vg.add('replay_buffer', [False]) #TODO - try with replay buffer
+    vg.add('coll_eps', [0])
+    # vg.add('add_on_policy', [False]) #TODO - change back to true
+    # # sampling params
     vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
     vg.add('outer_iters', [500]) #lambda maze_id: [400] if maze_id == 0 else [10000])
     # policy initialization
@@ -98,8 +98,8 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.99]) #lambda horizon: [1-1.0/horizon])
     # Oudeyer params
-    vg.add('max_goals', [500])
-    vg.add('max_history', [100])
+    vg.add('max_goals', [100, 500])
+    vg.add('max_history', [100, 50])
 
     vg.add('fast_mode', [fast_mode])
     if args.debug or fast_mode:
@@ -107,36 +107,12 @@ if __name__ == '__main__':
         vg.add('inner_iters', [1])
     else:
         vg.add('pg_batch_size', [20000])
-        vg.add('inner_iters', [5])
-
-    # gan configs
-    # vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
-    # vg.add('gan_generator_layers', [[256, 256]])
-    # vg.add('gan_discriminator_layers', [[128, 128]])
-    # vg.add('gan_noise_size', [4])
-    # vg.add('goal_noise_level', [0.5])
-    # vg.add('gan_outer_iters', [300])
+        vg.add('inner_iters', [1, 5])
 
     if args.ec2:
-        vg.add('seed', range(100, 700, 100))
+        vg.add('seed', range(100, 400, 100))
     else:
         vg.add('seed', [100])
-
-    #vg.add('seed', range(0, 1000, 100))
-
-    # # gan_configs
-    # vg.add('GAN_batch_size', [128])  # proble with repeated name!!
-    # vg.add('GAN_generator_activation', ['relu'])
-    # vg.add('GAN_discriminator_activation', ['relu'])
-    # vg.add('GAN_generator_optimizer', [tf.train.AdamOptimizer])
-    # vg.add('GAN_generator_optimizer_stepSize', [0.001])
-    # vg.add('GAN_discriminator_optimizer', [tf.train.AdamOptimizer])
-    # vg.add('GAN_discriminator_optimizer_stepSize', [0.001])
-    # vg.add('GAN_generator_weight_initializer', [tflearn.initializations.truncated_normal])
-    # vg.add('GAN_generator_weight_initializer_stddev', [0.05])
-    # vg.add('GAN_discriminator_weight_initializer', [tflearn.initializations.truncated_normal])
-    # vg.add('GAN_discriminator_weight_initializer_stddev', [0.02])
-    # vg.add('GAN_discriminator_batch_noise_stddev', [1e-2])
 
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
