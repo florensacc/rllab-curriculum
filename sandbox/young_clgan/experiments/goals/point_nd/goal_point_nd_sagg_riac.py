@@ -296,7 +296,7 @@ def run_task(v):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ec2', '-e', action='store_true', default=True, help="add flag to run in ec2")
+    parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
     parser.add_argument('--clone', '-c', action='store_true', default=False,
                         help="add flag to copy file and checkout current")
     parser.add_argument('--local_docker', '-d', action='store_true', default=False,
@@ -348,7 +348,7 @@ if __name__ == '__main__':
     vg = VariantGenerator()
     # # GeneratorEnv params
     #vg.add('goal_size', [2, 3, 4, 5, 6])
-    vg.add('goal_size', [5])
+    vg.add('goal_size', [2])
     vg.add('terminal_eps', lambda goal_size: [math.sqrt(goal_size) / math.sqrt(2) * 0.3])
     vg.add('only_feasible', [True])
     vg.add('goal_range', [5])  # this will be used also as bound of the state_space
@@ -400,6 +400,24 @@ if __name__ == '__main__':
 
 
         if mode in ['ec2', 'local_docker']:
+            # # choose subnet
+            subnet = random.choice(subnets)
+            config.AWS_REGION_NAME = subnet[:-1]
+            config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
+                config.AWS_REGION_NAME]
+            config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
+                config.AWS_REGION_NAME]
+            config.AWS_SECURITY_GROUP_IDS = \
+                config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
+                    config.AWS_REGION_NAME]
+            config.AWS_NETWORK_INTERFACES = [
+                dict(
+                    SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
+                    Groups=config.AWS_SECURITY_GROUP_IDS,
+                    DeviceIndex=0,
+                    AssociatePublicIpAddress=True,
+                )
+            ]
 
             run_experiment_lite(
                 # use_cloudpickle=False,
