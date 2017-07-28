@@ -79,7 +79,7 @@ def save_image(fig=None, fname=None):
 
 
 def plot_labeled_states(states, labels, convert_labels=convert_label, report=None,
-                        itr=0, limit=None, center=None, maze_id=None, summary_string_base='Labels of goals:\n '):
+                        itr=0, limit=None, center=None, maze_id=None, summary_string_base=None):
     goal_classes, text_labels = convert_labels(labels)
     total_goals = labels.shape[0]
     goal_class_frac = OrderedDict()  # this needs to be an ordered dict!! (for the log tabular)
@@ -92,6 +92,8 @@ def plot_labeled_states(states, labels, convert_labels=convert_label, report=Non
         samples=states, sample_classes=goal_classes, text_labels=text_labels, limit=limit,
         center=center, maze_id=maze_id,
     )
+    if summary_string_base is None:
+        summary_string_base = 'Labels for {} goals:\n'.format(len(states))
     summary_string = summary_string_base
     for key, value in goal_class_frac.items():
         summary_string += key + ' frac: ' + str(value) + '\n'
@@ -99,7 +101,7 @@ def plot_labeled_states(states, labels, convert_labels=convert_label, report=Non
 
 
 def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers=None, fname=None, limit=None,
-                         center=None, size=1000, colors=('r', 'g', 'b'), bounds=None, maze_id=None):
+                         center=None, size=1000, colors=('r', 'g', 'b', 'o', 'k'), bounds=None, maze_id=None):
     """
     :param samples: 
     :param sample_classes: numerical value of the class

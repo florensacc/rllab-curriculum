@@ -124,11 +124,14 @@ def label_states_from_paths(all_paths, min_reward=0, max_reward=1, key='rewards'
                 state_dict[state] = [reward]
 
     states = []
+    unlabeled_state = []
     mean_rewards = []
     for state, rewards in state_dict.items():
         if len(rewards) >= n_traj:
             states.append(list(state))
             mean_rewards.append(np.mean(rewards))
+        else:
+            unlabeled_state.append(list(state))
 
     # Make this a vertical list.
     mean_rewards = np.array(mean_rewards).reshape(-1, 1)
@@ -211,6 +214,8 @@ def convert_label(labels):
                 labels[:, 2] == False
             )
         ] = 3
+    if np.shape(labels)[-1] == 4:
+        new_labels = 4 * np.ones_like(new_labels)
 
     return new_labels, classes
 
@@ -268,6 +273,7 @@ def evaluate_state(state, env, policy, horizon, n_traj=1, full_path=False, key='
 
     return mean_reward
 
+
 def evaluate_state_env(env, policy, horizon, n_states=10, n_traj=1, n_processes=-1, **kwargs):
     evaluate_env_wrapper = FunctionWrapper(
         rollout,
@@ -277,6 +283,7 @@ def evaluate_state_env(env, policy, horizon, n_states=10, n_traj=1, n_processes=
 
     # paths = [rollout(env=env, agent=policy, max_path_length=horizon) for _ in range(n_states)]
     env.log_diagnostics(paths, n_traj=n_traj, **kwargs)
+
 
 def evaluate_path(path, full_path=False, key='rewards', aggregator=np.sum):
     if not full_path:
