@@ -38,9 +38,9 @@ class Arm3dKeyEnv(MujocoEnv, Serializable):
         theta = -np.pi / 2
         d = 0.15
         self.goal_position = np.array(
-            [0.0, 0.3, -0.55 - d,
-             0.0, 0.3, -0.25 - d,
-             0.0 + 0.15 * np.sin(theta), 0.3 + 0.15 * np.cos(theta), -0.4 - d])
+            [0.0, 0.3, -0.55 - d,  # heel
+             0.0, 0.3, -0.25 - d,  # top
+             0.0 + 0.15 * np.sin(theta), 0.3 + 0.15 * np.cos(theta), -0.4 - d])  # side
         self.cost_params = {
             'wp': np.array([1, 1, 1, 1, 1, 1, 1, 1, 1]),
             'l1': 0.1,

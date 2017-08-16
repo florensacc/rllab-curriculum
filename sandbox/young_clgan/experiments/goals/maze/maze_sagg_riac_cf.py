@@ -40,7 +40,7 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        'us-east-2c', 'us-east-2b', 'us-east-2a', 'eu-central-1b', 'eu-central-1a', 'eu-central-1c', 'ap-southeast-2c',
+        'us-east-2c', 'us-east-2b', 'us-east-2a', 'eu-central-1b', 'eu-central-1a', 'ap-southeast-2c',
         'ap-southeast-2b', 'ap-southeast-2a'
     ]
     ec2_instance = args.type if args.type else 'm4.4xlarge' #'m4.10xlarge'
@@ -59,7 +59,7 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'goal-sagg-riac-maze0-bis'
+    exp_prefix = 'goal-sagg-riac-maze11'
 
     vg = VariantGenerator()
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
@@ -73,7 +73,7 @@ if __name__ == '__main__':
     vg.add('max_reward', [1])
     vg.add('distance_metric', ['L2'])
     vg.add('extend_dist_rew', [False])  # !!!!
-    vg.add('use_competence_ratio', [False])  # !!!!
+    vg.add('use_competence_ratio', [False, True])  # !!!!
     vg.add('goal_weight', lambda extend_dist_rew: [0] if extend_dist_rew else [1])
     vg.add('persistence', [1])
     if fast_mode:
@@ -86,10 +86,11 @@ if __name__ == '__main__':
     # vg.add('num_old_goals', [0])    #TODO - change back to 100 when we restore replay buffer
     # vg.add('replay_buffer', [False]) #TODO - try with replay buffer
     vg.add('coll_eps', [0])
+    vg.add('with_replacement', [False])
     # vg.add('add_on_policy', [False]) #TODO - change back to true
     # # sampling params
     vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
-    vg.add('outer_iters', [500]) #lambda maze_id: [400] if maze_id == 0 else [10000])
+    vg.add('outer_iters', [300]) #lambda maze_id: [400] if maze_id == 0 else [10000])
     # policy initialization
     vg.add('output_gain', [1])
     vg.add('policy_init_std', [1])
@@ -97,7 +98,7 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.99]) #lambda horizon: [1-1.0/horizon])
     # Oudeyer params
-    vg.add('max_goals', [100, 200, 300])
+    vg.add('max_goals', [100, 250, 500])
     vg.add('max_history', [100])
 
     vg.add('fast_mode', [fast_mode])
@@ -106,7 +107,7 @@ if __name__ == '__main__':
         vg.add('inner_iters', [1])
     else:
         vg.add('pg_batch_size', [20000])
-        vg.add('inner_iters', [1, 5])
+        vg.add('inner_iters', [5])
 
     if args.ec2:
         vg.add('seed', range(100, 400, 100))

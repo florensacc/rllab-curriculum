@@ -111,8 +111,6 @@ def run_task(v):
 
     report.new_row()
 
-    all_goals = StateCollection(distance_threshold=v['coll_eps'])
-
     sagg_riac = SaggRIAC(state_size=v['goal_size'],
                          state_range=v['goal_range'],
                          state_center=v['goal_center'],

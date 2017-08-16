@@ -40,10 +40,10 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        'us-east-2c', 'us-east-2b', 'us-east-2a', 'eu-central-1b', 'eu-central-1a', 'ap-southeast-2c',
-        'ap-southeast-2b', 'ap-southeast-2a', 'us-west-2b', 'us-west-2c', 'eu-west-1b'
+        'us-east-2c', 'us-east-2a', 'us-east-2b', 'ap-northeast-2a', 'us-east-1a', 'us-east-1e', 'us-east-1b',
+        'us-east-1d', 'eu-west-1b', 'eu-west-1c', 'eu-west-1a'
     ]
-    ec2_instance = args.type if args.type else 'm4.4xlarge' #'m4.10xlarge'
+    ec2_instance = args.type if args.type else 'c4.4xlarge' #'m4.10xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -98,7 +98,7 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.99]) #lambda horizon: [1-1.0/horizon])
     # Oudeyer params
-    vg.add('max_goals', [100, 500])
+    vg.add('max_goals', [100, 250, 500])
     vg.add('max_history', [100, 50])
 
     vg.add('fast_mode', [fast_mode])
@@ -107,7 +107,7 @@ if __name__ == '__main__':
         vg.add('inner_iters', [1])
     else:
         vg.add('pg_batch_size', [20000])
-        vg.add('inner_iters', [1, 5])
+        vg.add('inner_iters', [5])
 
     if args.ec2:
         vg.add('seed', range(100, 400, 100))
