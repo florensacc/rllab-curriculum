@@ -97,10 +97,10 @@ def run_task(v):
     logger.log("Filtered seed starts: {}".format(len(seed_starts)))
 
     # with env.set_kill_outside():
-    feasible_states = find_all_feasible_states_plotting(env, seed_starts, report, distance_threshold=0.15, brownian_variance=1, size=8000,
+    feasible_states = find_all_feasible_states_plotting(env, seed_starts, report, distance_threshold=0.1, brownian_variance=1, size=8000,
                                                         animate=True,  limit = v['goal_range'],
                                                         check_feasible=True,
-                                                        check_feasible_path_length=100,
+                                                        check_feasible_path_length=500,
                                   center = v['goal_center'])
     return
 
@@ -143,9 +143,9 @@ for vv in vg.variants():
         seed=vv['seed'],
         stub_method_call=run_task,
         use_gpu=False,
-        exp_prefix="ant_find_startsbest",
+        exp_prefix="ant_find_starts_best",
         mode="local",
-        n_parallel=2,
+        n_parallel=4,
 
     )
 

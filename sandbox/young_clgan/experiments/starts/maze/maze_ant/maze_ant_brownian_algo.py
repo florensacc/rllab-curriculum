@@ -103,12 +103,13 @@ def run_task(v):
 
     # load the state collection from data_upload
 
-    all_starts = StateCollection(distance_threshold=v['coll_eps'], states_transform=lambda x: x[:, :2])
     if v['smart_replay_buffer']:
         all_starts = SmartStateCollection(distance_threshold=v['coll_eps'], states_transform=lambda x: x[:, :2],
                                           abs=v["smart_replay_abs"],
                                           eps=v["smart_replay_eps"]
                                           )
+    else:
+        all_starts = StateCollection(distance_threshold=v['coll_eps'], states_transform=lambda x: x[:, :2])
     # brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
     # with env.set_kill_outside():
     # initial brownian horizon and size are pretty important
@@ -216,12 +217,14 @@ def run_task(v):
 
 
         logger.log("Labeling the starts")
-        [starts, labels] = label_states_from_paths(trpo_paths, n_traj=v['n_traj'], key='goal_reached',  # using the min n_traj
-                                                   as_goal=False, env=env)
 
         if v['smart_replay_buffer']:
             [starts, labels, mean_rewards] = label_states_from_paths(trpo_paths, n_traj=v['n_traj'], key='goal_reached',
                                                    as_goal=False, env=env, return_mean_rewards=True)
+        else:
+            [starts, labels] = label_states_from_paths(trpo_paths, n_traj=v['n_traj'], key='goal_reached',
+                                                       # using the min n_traj
+                                                       as_goal=False, env=env)
 
         start_classes, text_labels = convert_label(labels)
         plot_labeled_states(starts, labels, report=report, itr=outer_iter, limit=v['goal_range'],

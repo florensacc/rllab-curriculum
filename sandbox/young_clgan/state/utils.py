@@ -74,7 +74,7 @@ class StateCollection(object):
             self.state_list.extend(states)
             self.transformed_state_list.extend(transformed_states)
             assert(len(self.state_list) == len(self.transformed_state_list))
-            return states # modifed to return added states
+        return states # modifed to return added states
 
     def append(self, states):
         if self.states_transform:
@@ -88,11 +88,93 @@ class StateCollection(object):
                     indices = np.amin(dists, axis=0) > self.distance_threshold
                     states = states[indices, :]
             self.state_list.extend(states)
-            return states # modifed to return added states
+        return states # modifed to return added states
 
     @property
     def states(self):
         return np.array(self.state_list)
+
+class SmartStateCollection(StateCollection):
+    # should be used same as before, just need to update Q values
+    #TODO: update alpha smartly
+    def __init__(self, eps = 0.5, alpha = 0.3, abs = True, *args, **kwargs):
+        self.eps = eps # percentage of random
+        self.alpha = alpha
+        self.abs = abs
+        self.q_vals = {} #TODO: smarter way to keep list sorted, maybe priority queue?
+        # use heapq https://stackoverflow.com/questions/7197315/5-maximum-values-in-a-python-dictionary if slow
+        self.prev_vals = {}
+        super(SmartStateCollection, self).__init__(*args, **kwargs)
+
+    def update_starts(self, states, rewards, only_good = True, logger = None):
+        old_states, old_rewards, new_states, new_rewards = [], [], [], []
+        for i in range(len(states)):
+            state = states[i]
+            reward = rewards[i]
+            if only_good:
+                # TODO: set option
+                # intuition is that we don't want states that we already master
+                if reward < 0.02 or reward > 0.98:
+                    continue
+            # check if state shows up
+            if len(self.state_list) > 0 and np.sum(np.all(state == self.state_list, axis = 1)) > 0:
+                old_states.append(state)
+                old_rewards.append(reward)
+            else:
+                new_states.append(state)
+                new_rewards.append(reward)
+        if logger is not None:
+            logger.log("Total states: {}  New states: {}".format(len(states), len(new_states)))
+        self.append(new_states, new_rewards)
+        self.update_q(old_states, old_rewards)
+
+    def append(self, states, rewards):
+        zero_index = 0 # check on np.argmax
+        added_states = super(SmartStateCollection, self).append(states)
+        for state in added_states:
+            index = np.argmax(np.all(states == state, axis =1)) # should only get one index
+            if index == 0:
+                zero_index += 1
+            reward = rewards[index]
+            self.q_vals[tuple(state)] = self.alpha * reward # TODO: not sure what the initialization should be, is there alpha term?
+            self.prev_vals[tuple(state)] = reward
+        assert (zero_index < 2)
+
+    def sample(self, size, replace=False, replay_noise=0):
+        size_random_samples = int(size * self.eps)
+        size_good_samples = size - size_random_samples
+        print("Random starts: {}".format(size_random_samples))
+        states = sample_matrix_row(np.array(self.state_list), size_random_samples, replace)
+        if size_good_samples == 0:
+            return states # fully uniform states
+        if self.abs:
+            good_states = sorted(self.q_vals, key= lambda k: abs(self.q_vals[k]), reverse=True)[:size_good_samples]
+        else:
+            good_states = sorted(self.q_vals, key=self.q_vals.get, reverse=True)[:size_good_samples]
+        good_states = np.array(good_states)
+        return np.concatenate((states, good_states))
+        # if replay_noise > 0:
+        #     states += replay_noise * np.random.randn(*states.shape)
+        # return states
+
+    def update_q(self, states, rewards):
+        # updated should be true if there are enough samples
+        previous_values = np.array([self.prev_vals[tuple(state)] for state in states])
+        curr_q_values =  np.array([self.q_vals[tuple(state)] for state in states])
+        improvement = rewards - previous_values
+        new_values = self.alpha * improvement + (1 - self.alpha) * curr_q_values
+
+        for i in range(len(states)):
+            # if updated[i]:
+            self.q_vals[tuple(states[i])] = new_values[i]
+            self.prev_vals[tuple(states[i])] = rewards[i]
+
+
+
+
+
+
+
 
 
 def sample_matrix_row(M, size, replace=False):

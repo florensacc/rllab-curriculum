@@ -3,13 +3,14 @@ from rllab.misc import tensor_utils
 import time
 
 
-def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1, init_state=None):
+def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1, init_state=None, no_action = False):
     observations = []
     actions = []
     rewards = []
     agent_infos = []
     env_infos = []
     dones = []
+    # no_action = True
     if init_state is not None:
         o = env.reset(init_state)
     else:
@@ -20,6 +21,8 @@ def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1, init_
         env.render()
     while path_length < max_path_length:
         a, agent_info = agent.get_action(o)
+        if no_action:
+            a = np.zeros_like(a)
         next_o, r, d, env_info = env.step(a)
         observations.append(env.observation_space.flatten(o))
         rewards.append(r)

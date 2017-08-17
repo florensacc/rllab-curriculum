@@ -1,7 +1,7 @@
 import os
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
-os.environ['CUDA_VISIBLE_DEVICES'] = 0
+# os.environ['CUDA_VISIBLE_DEVICES'] = 0
 import argparse
 import sys
 from multiprocessing import cpu_count
@@ -92,8 +92,8 @@ if __name__ == '__main__':
     vg.add('goal_noise_level', [0.5])
     vg.add('gan_outer_iters', [250])
 
-    vg.add('seed', range(100, 300, 100))
-
+    # vg.add('seed', range(100, 300, 100))
+    vg.add('seed', [10])
     # # gan_configs
     # vg.add('GAN_batch_size', [128])  # proble with repeated name!!
     # vg.add('GAN_generator_activation', ['relu'])

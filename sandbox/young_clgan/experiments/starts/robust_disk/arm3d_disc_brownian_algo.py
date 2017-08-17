@@ -2,7 +2,10 @@ import matplotlib
 import cloudpickle
 import pickle
 
-from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
+from sandbox.young_clgan.envs.action_limited_env import ActionLimitedEnv
+from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
+from sandbox.young_clgan.envs.arm3d.arm3d_wrapper_env import RobustDiskWrapperEnv
+from sandbox.young_clgan.experiments.starts.robust_disk.disk_generate_states_env import DiskGenerateStatesEnv
 
 matplotlib.use('Agg')
 import os
@@ -33,7 +36,7 @@ from sandbox.young_clgan.state.utils import StateCollection, SmartStateCollectio
 
 from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasible_states
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
-from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
+from sandbox.young_clgan.envs.arm3d.arm3d_disc_robust_env import Arm3dDiscRobustEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -53,6 +56,7 @@ def run_task(v):
     report.add_text(format_dict(v))
 
     inner_env = normalize(Arm3dDiscEnv())
+    gen_states_env = DiskGenerateStatesEnv()
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
     fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
@@ -62,7 +66,7 @@ def run_task(v):
         start_generator=fixed_start_generator,
         obs2start_transform=lambda x: x[:v['start_size']],
         goal_generator=fixed_goal_generator,
-        obs2goal_transform=lambda x: x[-1 * v['goal_size']:],
+        obs2goal_transform=lambda x: x[-1 * v['goal_size']:], # changed!
         terminal_eps=v['terminal_eps'],
         distance_metric=v['distance_metric'],
         extend_dist_rew=v['extend_dist_rew'],
@@ -70,7 +74,7 @@ def run_task(v):
         goal_weight=v['goal_weight'],
         terminate_env=True,
     )
-    print(env.spec)
+
     policy = GaussianMLPPolicy(
         env_spec=env.spec,
         hidden_sizes=(64, 64),
@@ -82,11 +86,7 @@ def run_task(v):
         init_std=v['policy_init_std'],
     )
 
-    if v['baseline'] == 'linear':
-        baseline = LinearFeatureBaseline(env_spec=env.spec)
-    elif v['baseline'] == 'g_mlp':
-        baseline = GaussianMLPBaseline(env_spec=env.spec)
-
+    baseline = LinearFeatureBaseline(env_spec=env.spec)
 
     # load the state collection from data_upload
     load_dir = 'data_upload/state_collections/'
@@ -103,7 +103,7 @@ def run_task(v):
         all_starts = StateCollection(distance_threshold=v['coll_eps'])
     brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
     with env.set_kill_outside():
-        seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=10,  # this is smaller as they are seeds!
+        seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=v['brownian_horizon'], animated=False,
                                       variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=1)
 
     # with env.set_kill_outside():
@@ -119,8 +119,13 @@ def run_task(v):
         logger.log("Outer itr # %i" % outer_iter)
         logger.log("Sampling starts")
 
+        all_starts.states.dump("/home/michael/rllab_goal_rl/data/check_buffer/buffer_states.pkl")
+
         with env.set_kill_outside():
-            starts = generate_starts(env, starts=seed_starts, horizon=v['brownian_horizon'], variance=v['brownian_variance'])
+            starts = generate_starts(gen_states_env, starts=seed_starts, horizon=v['brownian_horizon'],
+                                     variance=v['brownian_variance'],
+                                     animated=False,
+                                     )
 
         # regularization of the brownian starts
         brownian_starts.empty()
@@ -128,10 +133,12 @@ def run_task(v):
         starts = brownian_starts.sample(size=v['num_new_starts'])
 
         if v['replay_buffer'] and outer_iter > 0 and all_starts.size > 0:
+            # can squeeze here
             old_starts = all_starts.sample(v['num_old_starts'])
             starts = np.vstack([starts, old_starts])
 
-        with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
+        # todo: indent!!
+        with ExperimentLogger(log_dir, outer_iter // 10, snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment start generator")
             env.update_start_generator(
                 UniformListStateGenerator(
@@ -153,6 +160,7 @@ def run_task(v):
             )
 
             trpo_paths = algo.train()
+
 
         if v['use_trpo_paths']:
             logger.log("labeling starts with trpo rollouts")
@@ -207,13 +215,13 @@ def run_task(v):
                 seed_starts = all_starts.sample(300)  # sample them from the replay
             else:
                 with env.set_kill_outside():
-                    seed_starts = generate_starts(env, starts=starts, horizon=int(v['horizon'] * 10), subsample=v['num_new_starts'],
+                    seed_starts = generate_starts(gen_states_env, starts=starts, horizon=int(v['horizon'] * 10), subsample=v['num_new_starts'],
                                                   variance=v['brownian_variance'] * 10)
         elif v['seed_with'] == 'all_previous':
             seed_starts = starts
         elif v['seed_with'] == 'on_policy':
             with env.set_kill_outside():
-                seed_starts = generate_starts(env, policy, horizon=v['horizon'], subsample=v['num_new_starts'])
+                seed_starts = generate_starts(gen_states_env, policy, horizon=v['horizon'], subsample=v['num_new_starts'])
 
 
         # update replay buffer!

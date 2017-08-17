@@ -151,7 +151,7 @@ def run_task(v):
         logger.log("Labeling on uniform starts")
         with logger.tabular_prefix("Uniform_"):
             unif_starts = all_feasible_starts.sample(100)
-            mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=v['n_traj'], key='goal_reached',
+            mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=3, key='goal_reached',
                                                  as_goals=False, full_path=True)
             env.log_diagnostics(paths)
             mean_rewards = mean_reward.reshape(-1, 1)

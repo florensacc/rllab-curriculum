@@ -42,7 +42,7 @@ class MujocoEnv(Env):
                   help='Noise added to the controls, which will be '
                        'proportional to the action bounds')
     def __init__(self, action_noise=0.0, file_path=None, template_args=None,
-        random_init_state=True,
+        random_init_state=False,
     ):
     #Haoran: even if random_init_state
         # compile template
@@ -113,6 +113,7 @@ class MujocoEnv(Env):
         return self.action_space.bounds
 
     def reset_mujoco(self, init_state=None):
+        # init_state = (0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0)
         if init_state is None:
             if self.random_init_state:
                 self.model.data.qpos = self.init_qpos + \
@@ -198,6 +199,7 @@ class MujocoEnv(Env):
 
     def forward_dynamics(self, action):
         self.model.data.ctrl = self.inject_action_noise(action)
+        # self.model.data.ctrl = action
         for _ in range(self.frame_skip):
             self.model.step()
         self.model.forward()

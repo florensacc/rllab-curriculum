@@ -152,7 +152,7 @@ def plot_heatmap(rewards, goals, prefix='', spacing=1, show_heatmap=True, maze_i
         plt.show()
     return fig
 
-def plot_pushing(policy, env, report, bounds, center, itr, max_path_length = 100, half_grid_size = 0.02, n_traj = 6):
+def plot_pushing(policy, env, report, bounds, center, itr, max_path_length = 100, half_grid_size = 0.02, n_traj = 10):
     # get the block pushing environment
     # base_env = env
     # while hasattr(base_env, 'wrapped_env'):

@@ -11,7 +11,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.starts.maze.maze_ant.maze_ant_brownian_algo import run_task
+from sandbox.young_clgan.experiments.starts.robust_disk.arm3d_disc_brownian_algo import run_task
 
 if __name__ == '__main__':
 
@@ -31,25 +31,21 @@ if __name__ == '__main__':
     if args.clone:
         autoclone.autoclone(__file__, args)
 
-    # subnets = [
-    #     'us-east-2b', 'us-east-2c', 'us-east-2a',
-    # ]
+    # setup ec2
     subnets = [
-        'ap-northeast-2c', 'ap-northeast-2a', 'ap-southeast-1b'
+        "us-east-2a", "us-east-2b",
+        'us-east-1a', 'us-east-1d', 'us-east-1e'
     ]
     # subnets = [
     #     'ap-northeast-2a', 'ap-northeast-2c', 'us-east-2b', 'ap-south-1a', 'us-east-2c', 'us-east-2a', 'ap-south-1b',
     #     'us-east-1b', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'eu-west-1c', 'eu-west-1a', 'eu-west-1b'
     # ]
-    ec2_instance = 'c4.4xlarge'
+    ec2_instance = args.type if args.type else 'c4.4xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
-    # config.AWS_SPOT_PRICE = str(info["price"])
-    config.AWS_SPOT_PRICE = '1.0'
+    config.AWS_SPOT_PRICE = str(info["price"])
     n_parallel = int(info["vCPU"] / 2)  # make the default 4 if not using ec2
-    args.ec2=False
-    # args.debug=True
     if args.ec2:
         mode = 'ec2'
     elif args.local_docker:
@@ -60,101 +56,74 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
+
     vg = VariantGenerator()
-    vg.add('maze_id', [0])  # default is 0
-    vg.add('start_size', [15])  # this is the ultimate start we care about: getting the pendulum upright
-    vg.add('start_goal', [[0, 4, 0.55, 1, 0, 0, 0, 0, 1, 0, -1, 0, -1, 0, 1,]])
-    vg.add('start_range',
-           lambda maze_id: [4] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
-    # vg.add('start_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
-    vg.add('start_center', lambda maze_id, start_size: [(2, 2)] if maze_id == 0 and start_size == 2
-                                                else [(2, 2, 0, 0)] if maze_id == 0 and start_size == 4
-                                                else [(0, 0)] if start_size == 2
-                                                else [(0, 0, 0, 0)])
-    vg.add('ultimate_goal', lambda maze_id: [(0, 4)] if maze_id == 0 else [(2, 4), (0, 0)] if maze_id == 12 else [(4, 4)])
-    vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
-    vg.add('goal_range',
-           lambda maze_id: [4] if maze_id == 0 else [7])
-    vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
-    # vg.add('terminal_eps', [0.5]) # changed!!
-    vg.add('terminal_eps', [1.0])
+    vg.add('start_size', [9])
+    # vg.add('start_bounds',
+    #        [[(-2.2854, -.05236, -3.9, -2.3213, -3.15, -2.094, -3.15, 0, 0),
+    #          (1.714602, 1.3963, 0.0, 0.0, 3.15, 0.0, 3.15, 0, 0)]])
+    # vg.add('start_goal', [(0.386884635, 1.13705218, -2.02754147, -1.74429440, 2.02916096, -0.873269847, 1.54785694)])
+    vg.add('start_goal', [(0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0)])
+    vg.add('ultimate_goal', [(0., 0.3, -0.4)])
+    vg.add('goal_size', [3]) # changed
+    vg.add('terminal_eps', [0.03])
     # brownian params
+    # vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
+    vg.add('seed_with', ['only_goods'])  # good from brown, onPolicy, previousBrown (ie no good)
+    # vg.add('brownian_horizon', lambda seed_with: [0, 50, 500] if seed_with == 'on_policy' else [50, 500])
+    vg.add('brownian_horizon', [100])
     vg.add('brownian_variance', [1])
-    vg.add('initial_brownian_horizon', [200])
-    vg.add('brownian_horizon', [50])
-    vg.add('baseline', ["MLP"])
+    vg.add('regularize_starts', [0])
     # goal-algo params
     vg.add('min_reward', [0.1])
     vg.add('max_reward', [0.9])
     vg.add('distance_metric', ['L2'])
-    vg.add('extend_dist_rew', [False])  # !!!!
-    vg.add('inner_weight', [0]) #TODO: try different inner weights
+    vg.add('extend_dist_rew', [False])
+    vg.add('inner_weight', [0])
     vg.add('goal_weight', lambda inner_weight: [1000] if inner_weight > 0 else [1])
-    vg.add('regularize_starts', [0])
-
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
-    vg.add('filter_bad_starts', [False])
-    vg.add('sampling_res', [2])
     vg.add('with_replacement', [True])
+    vg.add('use_trpo_paths', [True])
     # replay buffer
-    vg.add('replay_buffer', [True])
-    # Smart replay buffer parameters
-    vg.add('smart_replay_buffer', [True])
-    vg.add('smart_replay_abs', [True, False])
-    vg.add('smart_replay_eps', [0.2, 0.5, 1])
 
-    vg.add('coll_eps', [0.05]) # should try this
+    vg.add('replay_buffer', [True])  # todo: attention!!
+    vg.add('coll_eps', lambda terminal_eps: [terminal_eps])
     vg.add('num_new_starts', [200])
     vg.add('num_old_starts', [100])
-    vg.add('feasibility_path_length', [100])
+    vg.add('smart_replay_buffer', [True])
+    vg.add('smart_replay_abs', [True])
+    # vg.add('smart_replay_abs', [True, False])
+    # vg.add('smart_replay_eps', [0.2, 0.5, 1])
+    vg.add('smart_replay_eps', [0.5])
+    # vg.add('smart_replay_eps', [1.0])  # should break
     # sampling params
-    if args.debug:
-        vg.add('horizon', lambda maze_id: [300] if maze_id == 0 else [500])
-        vg.add('pg_batch_size', [15000])
-        vg.add('inner_iters', [1])  # again we will have to divide/adjust the
-        vg.add('debug', [True])
-    else:
-        vg.add('horizon', lambda maze_id: [2000] if maze_id == 0 else [500])
-        vg.add('pg_batch_size', [120000])
-        vg.add('inner_iters', [5])  # again we will have to divide/adjust the
-        vg.add('debug', [False])
-    vg.add('outer_iters', lambda maze_id: [2000] if maze_id == 0 else [1000])
-
+    vg.add('horizon', [500])
+    vg.add('outer_iters', [5000])
+    vg.add('inner_iters', [5])  # again we will have to divide/adjust the
+    vg.add('pg_batch_size', [20000])
     # policy initialization
     vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
-    vg.add('learn_std', [False]) #2
+    vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
-    vg.add('discount', [0.995]) #1
-    vg.add('seed_with', ['only_goods'])
-    # vg.add('seed_with', ['all_previous'])
-    # vg.add('seed', [2,3,4])
-    vg.add('seed', [33, 13, 23])
+    vg.add('discount', [0.995])
+
     # vg.add('seed', range(100, 600, 100))
-    # sweeping: horizon, seed, feasibility_path_length, pg_batch_size
-    # possible important: learn_std
+    vg.add('seed', [13,23,33])
 
+    exp_prefix = 'start-smartreplay-arm3d-disk-robust4'
     # Launching
-    subnets = [
-        "us-east-2a", "us-east-2b",
-        'us-east-1a', 'us-east-1d', 'us-east-1e'
-    ]
-    mode = 'ec2'
-    # mode = "local"
-    exp_prefix = 'ant-startgen-smartreplay4'
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
+    print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
+                                                                                   config.AWS_SPOT_PRICE, n_parallel),
+          *subnets)
+    # mode = "ec2"
 
-
+    mode="local"
     for vv in vg.variants():
-        # import pdb; pdb.set_trace()
-        print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
-                                                                                       config.AWS_SPOT_PRICE,
-                                                                                       n_parallel),
-              *subnets)
-
         if mode in ['ec2', 'local_docker']:
-
+            # choose subnet
             subnet = random.choice(subnets)
             config.AWS_REGION_NAME = subnet[:-1]
             config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
@@ -203,7 +172,6 @@ if __name__ == '__main__':
                 ],
                 # terminate_machine=False,
             )
-            # sys.exit()
             if mode == 'local_docker':
                 sys.exit()
         else:
@@ -213,11 +181,12 @@ if __name__ == '__main__':
                 stub_method_call=run_task,
                 variant=vv,
                 mode='local',
-                n_parallel=8,
+                n_parallel=6,
                 # Only keep the snapshot parameters for the last iteration
                 snapshot_mode="last",
                 seed=vv['seed'],
                 exp_prefix=exp_prefix,
+                plot=True,
                 # exp_name=exp_name,
             )
             sys.exit()

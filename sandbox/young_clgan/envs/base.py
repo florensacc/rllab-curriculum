@@ -60,6 +60,32 @@ class UniformListStateGenerator(StateGenerator, Serializable):
         self.persist_count += 1
         return self.state
 
+class ListStateGenerator(StateGenerator, Serializable):
+    """ Generating goals uniformly from a goal list. """
+
+    def __init__(self, state_list, dist = None, persistence=1):
+        Serializable.quick_init(self, locals())
+        self.state_list = state_list
+        self.num_states = len(self.state_list)
+        self.state_size = np.size(self.state_list[0])  # assumes all goals have same dim as first in list
+        self.persistence = persistence
+        self.persist_count = 0
+        assert(len(dist) == len(state_list))
+        # assert(np.sum(dist) == 1)
+        self.dist = dist
+        self.unused_states = [state for state in state_list]
+        random.seed()
+        super(ListStateGenerator, self).__init__()
+
+        #TODO: write something that just updates probabilities?
+
+    def update(self, *args, **kwargs):
+        if self.persist_count % self.persistence == 0:
+            self._state = self.state_list[np.random.choice(np.arange(self.num_states), p = self.dist)]
+            self.persist_count = 0
+        self.persist_count += 1
+        return self.state
+
 
 class UniformStateGenerator(StateGenerator, Serializable):
     """ Generating goals uniformly from a goal list. """

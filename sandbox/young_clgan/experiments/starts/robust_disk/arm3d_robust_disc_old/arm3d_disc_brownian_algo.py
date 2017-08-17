@@ -2,7 +2,9 @@ import matplotlib
 import cloudpickle
 import pickle
 
-from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
+from sandbox.young_clgan.envs.action_limited_env import ActionLimitedEnv
+from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
+from sandbox.young_clgan.envs.arm3d.arm3d_wrapper_env import RobustDiskWrapperEnv
 
 matplotlib.use('Agg')
 import os
@@ -33,7 +35,7 @@ from sandbox.young_clgan.state.utils import StateCollection, SmartStateCollectio
 
 from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasible_states
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
-from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
+from sandbox.young_clgan.envs.arm3d.arm3d_disc_robust_env import Arm3dDiscRobustEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -52,7 +54,9 @@ def run_task(v):
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
 
-    inner_env = normalize(Arm3dDiscEnv())
+    inner_env = normalize(RobustDiskWrapperEnv(env = Arm3dDiscEnv()))
+    # inner_env = normalize(Arm3dDiscRobustEnv())
+    # inner_env2 = ActionLimitedEnv(inner_env)
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
     fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
@@ -70,7 +74,7 @@ def run_task(v):
         goal_weight=v['goal_weight'],
         terminate_env=True,
     )
-    print(env.spec)
+
     policy = GaussianMLPPolicy(
         env_spec=env.spec,
         hidden_sizes=(64, 64),
@@ -82,11 +86,7 @@ def run_task(v):
         init_std=v['policy_init_std'],
     )
 
-    if v['baseline'] == 'linear':
-        baseline = LinearFeatureBaseline(env_spec=env.spec)
-    elif v['baseline'] == 'g_mlp':
-        baseline = GaussianMLPBaseline(env_spec=env.spec)
-
+    baseline = LinearFeatureBaseline(env_spec=env.spec)
 
     # load the state collection from data_upload
     load_dir = 'data_upload/state_collections/'
@@ -105,6 +105,8 @@ def run_task(v):
     with env.set_kill_outside():
         seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=10,  # this is smaller as they are seeds!
                                       variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=1)
+    # generate starts should
+
 
     # with env.set_kill_outside():
     #     find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_variance=1, animate=False)

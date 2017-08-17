@@ -41,12 +41,12 @@ if __name__ == '__main__':
     #     'ap-northeast-2a', 'ap-northeast-2c', 'us-east-2b', 'ap-south-1a', 'us-east-2c', 'us-east-2a', 'ap-south-1b',
     #     'us-east-1b', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'eu-west-1c', 'eu-west-1a', 'eu-west-1b'
     # ]
-    ec2_instance = 'c4.8xlarge'
+    ec2_instance = 'c4.4xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
     # config.AWS_SPOT_PRICE = str(info["price"])
-    config.AWS_SPOT_PRICE = '1.50'
+    config.AWS_SPOT_PRICE = '1.00'
     n_parallel = int(info["vCPU"] / 2)  # make the default 4 if not using ec2
     args.ec2=False
     if args.ec2:
@@ -118,16 +118,15 @@ if __name__ == '__main__':
     vg.add('output_gain_alice', [0.1])
     vg.add('policy_init_std_alice', [1])
     vg.add('discount_alice', [0.995])
-    vg.add('alice_factor', [0.1])
-    vg.add("alice_horizon",
-           lambda horizon: [2 * horizon])  # Use 2 * horizon because time is split between Alice and Bob.
+    vg.add('alice_factor', [1])
+    vg.add("alice_horizon", lambda horizon: [2 * horizon])  # Use 2 * horizon because time is split between Alice and Bob.
     vg.add('alice_bonus', [0])
-    vg.add('inner_iters_alice', [2])  # again we will have to divide/adjust the
+    vg.add('inner_iters_alice', [1])  # again we will have to divide/adjust the
     vg.add('stop_threshold', [0.99])
     vg.add('pg_batch_size_alice', [120000])
     # vg.add('seed_with', ['all_previous'])
     # vg.add('seed', [2,3,4])
-    vg.add('seed', [43, 13, 23])
+    vg.add('seed', [43, 13, 23, 33, 53, 63 ,73])
     # vg.add('seed', range(100, 600, 100))
     # sweeping: horizon, seed, feasibility_path_length, pg_batch_size
     # possible important: learn_std
@@ -138,11 +137,11 @@ if __name__ == '__main__':
     # ]
 
     subnets = [
-        "us-east-1a","us-east-1b"
+        'us-east-2a', 'us-east-2b', 'us-east-2c', 'us-east-1e', 'us-east-1b', 'us-east-1a',
     ]
-    # mode = 'ec2'
-    mode = "local"
-    exp_prefix = 'ant-startgen-selfplay1'
+    mode = 'ec2'
+    # mode = "local"
+    exp_prefix = 'ant-startgen-selfplay3'
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
 
 

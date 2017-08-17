@@ -129,7 +129,15 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
     def reset(self, reset_goal=True, **kwargs):  # allows to pass init_state if needed
         if reset_goal:
             self.update_goal()
-        return self.append_goal_observation(ProxyEnv.reset(self, goal=self.current_goal, **kwargs))  # the wrapped env needs to use or ignore it
+        ret = self.append_goal_observation(ProxyEnv.reset(self, goal=self.current_goal, **kwargs))  # the wrapped env needs to use or ignore it
+
+        # used by disk environment
+        if 'init_state' in kwargs and len(kwargs['init_state']) == 9:
+            delta = tuple(kwargs['init_state'][-2:])  # joint position is in terms of amount moved
+            original_goal = self.wrapped_env.model.data.site_xpos[-1]
+            new_goal = delta[0] + original_goal[0], delta[1] + original_goal[1], original_goal[2] # z dim unchanged
+            self.update_goal(new_goal)
+        return ret
 
     def step(self, action):
         observation, reward, done, info = ProxyEnv.step(self, action)
@@ -144,6 +152,9 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         if self.terminate_env and self.is_goal_reached(observation):  # if the inner env is done it will stay done.
             # print("\n*******done**********\n")
             # print("the dist in the goal env is: ", dist)
+            # print("done!")
+            # print(self.dist_to_goal(observation))
+            # sys.exit(0)
             done = True
         return (
             self.append_goal_observation(observation),

@@ -37,10 +37,7 @@ from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStat
 from sandbox.young_clgan.state.generator import StateGAN
 from sandbox.young_clgan.state.utils import StateCollection
 
-import tensorflow as tf
-import tflearn
-# stub(globals())
-#TODO: figure out crown goal generator
+
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -61,7 +58,7 @@ def run_task(v):
     # need to use run_experiment_lite for log_dir not to be none
     if log_dir is None:
         log_dir = "/home/michael/"
-    report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=2)
+    report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=3)
     logger.log(osp.join(log_dir, 'report.html'))
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
@@ -80,6 +77,7 @@ def run_task(v):
         qvel_init_std=0, #0.01,
         # pos_normal_sample_std=.01, # ignored i think?
         fixed_target = init_hand, # sets the initial position of the hand to 0.6 0.3
+        random_angle=v['random_angle'],
         # allow_random_restarts=True, #ignored i think?
     ))
 
@@ -114,18 +112,11 @@ def run_task(v):
     plot_pushing(policy, env, report, bounds=(v['lego_init_lower'], v['lego_init_upper']),
                                                     center=v['lego_init_center'], itr=outer_iter)
 
-
-    all_starts = StateCollection(distance_threshold=v['coll_eps'])
-    # random gaussian from goal to generate starts, TODO: sigma and size should be parameters
-    seed_starts = generate_starts_random(starts=[np.array(v['lego_target'][:2])], size = 1000, subsample=v['num_new_starts'], sigma = 0.03,
-                                            center=v['lego_init_center'][:2], range_lower=v['lego_init_lower'][:2], range_upper=v['lego_init_upper'][:2], noise="gaussian")
-    labels = label_states(seed_starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
-    plot_labeled_states(seed_starts, labels, report=report, itr=outer_iter,
-                        limit=v['lego_init_upper'][0] + 0.02, # provides some slack
-                        center=v['lego_init_center'][:2][::-1], maze_id=-1)
     sigma = v['sigma']
-    report.new_row()
-
+    all_starts = StateCollection(distance_threshold=v['coll_eps'])
+    # generate starting positions with Gaussian noise
+    seed_starts = generate_starts_random(starts=[np.array(v['lego_target'][:2])], size = 1000, subsample=v['num_new_starts'], sigma = sigma,
+                                            center=v['lego_target'][:2], range_lower=v['lego_init_lower'][:2], range_upper=v['lego_init_upper'][:2], noise="gaussian")
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
     for outer_iter in range(1, v['outer_iters']):
@@ -135,12 +126,11 @@ def run_task(v):
         starts = generate_starts_random(starts=seed_starts, size=1000, subsample=v['num_new_starts'], sigma=sigma * 3,
                                         center=v['lego_init_center'][:2], range_lower=v['lego_init_lower'][:2], range_upper=v['lego_init_upper'][:2],
                                         noise="gaussian")
-
+        # PLOT BEFORE TRAINING
         labels = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
         plot_labeled_states(starts, labels, report=report, itr=outer_iter,
-                            limit=v['lego_init_upper'][0] + 0.02,  # add limit in later
+                            limit=v['lego_init_upper'][0],  # add limit in later
                             center=v['lego_init_center'][:2][::-1], maze_id=-1)
-        report.save()
 
         if v['replay_buffer'] and outer_iter > 0 and all_starts.size > 0:
             old_starts = all_starts.sample(v['num_old_starts'])
@@ -175,6 +165,11 @@ def run_task(v):
 
             algo.train()
 
+        labels = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
+        plot_labeled_states(starts, labels, report=report, itr=outer_iter,
+                            limit=v['lego_init_upper'][0] + 0.02,  # add limit in later
+                            center=v['lego_init_center'][:2][::-1], maze_id=-1)
+
         logger.log("Generating heat map")
         plot_pushing(policy, env, report, bounds=(v['lego_init_lower'], v['lego_init_upper']),
                      center=v['lego_init_center'], itr=outer_iter)
@@ -184,7 +179,6 @@ def run_task(v):
         logger.dump_tabular(with_prefix=False)
         report.new_row()
 
-        # TODO: should probably choose ones with middleish reward?
         filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1] # high reward starts
         if len(filtered_raw_starts) > 0:  # add a tone of noise if all the states I had ended up being high_reward!
             seed_starts = filtered_raw_starts
@@ -192,6 +186,7 @@ def run_task(v):
             seed_starts = generate_starts_random(starts=seed_starts, size=1000, subsample=v['num_new_starts'], sigma=sigma * 3,
                                         center=v['lego_init_center'][:2], range_lower=v['lego_init_lower'][:2], range_upper=v['lego_init_upper'][:2],
                                         noise="gaussian")
+        logger.log("Number of good starts: {}".format(filtered_raw_starts))
         all_starts.append(filtered_raw_starts)
 
 
@@ -202,23 +197,18 @@ vg.add('seed', [1])
 # vg.add('seed', [2,12,22,32,42])
 
 # Environment parameters
-vg.add('init_hand', [[0.6,  0.27,  0.5025],])
+vg.add('init_hand', [[0.6,  0.4,  0.5025],])
 vg.add('lego_target', [(0.6, 0.15, 0.5025),])
-vg.add('lego_init_center', [(0.6, 0.15, 0.5025),])
-vg.add('lego_init_lower', [(-0.1, -0.02, 0),])
-vg.add('lego_init_upper', [(0.1, 0.1, 0),])
-
-# vg.add('init_hand', [[0.6,  0.25,  0.5025],])
-# vg.add('lego_target', [(0.6, 0.05, 0.5025),])
-# vg.add('lego_init_center', [(0.6, 0.15, 0.5025),])
-# vg.add('lego_init_lower', [(-0.06, -0.06, 0),])
-# vg.add('lego_init_upper', [(0.06, 0.06, 0),])
+vg.add('lego_init_center', [(0.6, 0.25, 0.5025),])
+vg.add('lego_init_lower', [(-0.2, -0.1, 0),])
+vg.add('lego_init_upper', [(0.2, 0.1, 0),])
+#todo: plot target
 
 # Optimizer parameters
 vg.add('inner_iters', [5])
-vg.add('outer_iters', [300])
+vg.add('outer_iters', [6000])
 vg.add('batch_size', [15000])
-vg.add('max_path_length', [150]) #TODO: make longer?
+vg.add('max_path_length', [70]) #TODO: make longer?
 
 # Goal generation parameters
 vg.add('terminal_eps', [0.03])
@@ -238,7 +228,8 @@ vg.add('num_old_starts', [100])
 vg.add('coll_eps', [0.03])
 vg.add('horizon', [100])
 vg.add('n_traj', [5])
-vg.add('sigma', [0.03])
+vg.add('sigma', [0.02])
+vg.add('random_angle', [False])
 
 # start generator
 vg.add('persistence', [1])
@@ -253,28 +244,13 @@ for vv in vg.variants():
         variant=vv,
         # Number of parallel workers for sampling
         # n_parallel=32,
-        n_parallel=12, # use cpu_count in the future
+        n_parallel=3, # use cpu_count in the future
         snapshot_mode="last",
         seed=vv['seed'],
         mode="local",
         # mode="ec2",
-        exp_prefix="hand_env76",
+        exp_prefix="blockpushing1",
         # exp_name= "decaying-decaying-gamma" + str(t),
         # plot=True,
     )
 
-
-# add more stuff
-    # test_and_plot_policy(policy,
-    #                      env,
-    #                      as_goals=False,
-    #                      # max_reward=v['max_reward'], #unused?
-    #                      sampling_res=sampling_res,
-    #                      n_traj=3,
-    #                      itr=outer_iter,
-    #                      report=report,
-    #                      limit=0.5, # make parameter
-    #                      center=v['lego_init_center'][:2],
-    #                      bounds=((v['lego_init_lower'][:2], v['lego_init_upper'][:2])),
-    #                      )
-    # plot_policy_means(policy, env, sampling_res=2, report=report, limit=v['start_range'], center=v['start_center'])s

@@ -124,7 +124,7 @@ if __name__ == "__main__":
     # pkl_file = "upload/fixed-arm-position-ctrl-tip-no-random-restarts/fixed-arm-position-ctrl-tip-no-random-restarts1/params.pkl"
     # pkl_file = "data/s3/train-Lego/RSS/fine-tune-just-distance-different-orient-no-time/fine-tune-just-distance-different-orient-no-time/params.pkl"
     # pkl_file = "data/s3/train-Lego/RSS/fine-tune-just-distance-n-control/fine-tune-just-distance-n-control/params.pkl"
-    pkl_file = "data/local/train-Lego/IROS/3Dangle/exp_2/params.pkl"
+    # pkl_file = "data/local/train-Lego/IROS/3Dangle/exp_2/params.pkl"
     # pkl_file = "data/s3/train-Lego/RSS/fine-tune-just-distance-different-orient-no-time/fine-tune-just-distance-different-orient-no-time/params.pkl"
     # pkl_file = "data/local/train-Lego/RSS/baseline/lego_hand_no_torque_limitation/params.pkl"
     # pkl_file = "data/s3/train-Lego/RSS/position-control-different-orientation/position-control-different-orientation/params.pkl"
@@ -216,7 +216,7 @@ if __name__ == "__main__":
             # pkl_path="/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/state/random_random_pixel_penalty_p0005_d_06_reward_distance_1_angle_02_crown_normal_sample_001_50000/params.pkl"
             # json_path=json_path,
             # npz_path=npz_path,
-            pkl_path=pkl_file,
+            # pkl_path=pkl_file,
             )
 
 
