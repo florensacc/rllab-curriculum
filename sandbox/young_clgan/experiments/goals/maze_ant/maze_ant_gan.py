@@ -2,11 +2,8 @@ import os
 import random
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
-<<<<<<< HEAD
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
-=======
-# os.environ['CUDA_VISIBLE_DEVICES'] = 0
->>>>>>> robust-disk
+
 import argparse
 import sys
 from multiprocessing import cpu_count
