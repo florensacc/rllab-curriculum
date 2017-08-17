@@ -117,28 +117,28 @@ def run_task(v):
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
     for outer_iter in range(1, v['outer_iters']):
-        #with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
-        logger.log("Outer itr # %i" % outer_iter)
-        algo = TRPO(
-            env=env,
-            policy=policy,
-            baseline=baseline,
-            batch_size=v['batch_size'],
-            max_path_length=v['max_path_length'],  #100 #making path length longer is fine because of early termination
-            n_itr=v['inner_iters'],
-            discount=v['discount'],
-            gae_lambda=0.98,
-            step_size=0.01,
-            # goal_generator=goal_generator,
-            action_limiter=None,
-            optimizer_args={'subsample_factor': 0.1},
-            )
+        with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
+            logger.log("Outer itr # %i" % outer_iter)
+            algo = TRPO(
+                env=env,
+                policy=policy,
+                baseline=baseline,
+                batch_size=v['batch_size'],
+                max_path_length=v['max_path_length'],  #100 #making path length longer is fine because of early termination
+                n_itr=v['inner_iters'],
+                discount=v['discount'],
+                gae_lambda=0.98, #todo: can consider changing
+                step_size=0.01,
+                # goal_generator=goal_generator,
+                action_limiter=None,
+                optimizer_args={'subsample_factor': 0.1},
+                )
 
-        algo.train()
+            algo.train()
 
-        plot_pushing(policy, env, report, bounds=(v['lego_init_lower'], v['lego_init_upper']),
-                         center=v['lego_init_center'], itr=outer_iter)
-        report.save()
+            plot_pushing(policy, env, report, bounds=(v['lego_init_lower'], v['lego_init_upper']),
+                             center=v['lego_init_center'], itr=outer_iter)
+            report.save()
 
 
 vg = VariantGenerator()
@@ -167,7 +167,7 @@ vg.add('max_path_length', [80])
 vg.add('discount', [0.95])
 
 # Goal generation parameters
-vg.add('terminal_eps', [0.03])
+vg.add('terminal_eps', [0.05])
 vg.add('extend_distance_rew', [False])
 vg.add('terminate_env', [True]) #TODO: maybe do not allow to terminate early??
 
@@ -175,8 +175,8 @@ vg.add('terminate_env', [True]) #TODO: maybe do not allow to terminate early??
 vg.add('inner_weight', [1])
 vg.add('goal_weight', [0])
 
-# mode = "local_docker"
-mode = "ec2"
+mode = "local"
+# mode = "ec2"
 ec2_instance = 'c4.4xlarge'
 info = config.INSTANCE_TYPE_INFO[ec2_instance]
 config.AWS_INSTANCE_TYPE = ec2_instance
@@ -233,12 +233,12 @@ for vv in vg.variants():
             seed=vv['seed'],
             mode="local",
             # mode="ec2",
-            exp_prefix="handbenchmark11",
+            exp_prefix="handbenchmark16",
             # exp_prefix="handbenchmarkdebug",
             # exp_name= "decaying-decaying-gamma" + str(t),
             # plot=True,
         )
-        # sys.exit()
+        sys.exit()
 
 
 # add more stuff

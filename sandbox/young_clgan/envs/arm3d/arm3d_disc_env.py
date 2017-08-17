@@ -13,15 +13,12 @@ from contextlib import contextmanager
 
 
 class Arm3dDiscEnv(MujocoEnv, Serializable):
-    
     FILE = "arm3d_disc.xml"
 
     def __init__(self,
                  init_solved=True,
                  kill_radius=0.4,
                  *args, **kwargs):
-
-        self.file = self.__class__.FILE
         MujocoEnv.__init__(self, *args, **kwargs)
         Serializable.quick_init(self, locals())
 
@@ -30,6 +27,7 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
         self.init_solved = init_solved
         self.kill_radius = kill_radius
         self.kill_outside = False
+        # print("yo!")
 
 
     @overrides
@@ -37,7 +35,7 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
         return np.concatenate([
             self.model.data.qpos.flat, #[:self.model.nq // 2],
             self.model.data.qvel.flat, #[:self.model.nq // 2],
-            self.model.data.site_xpos[0],
+            self.model.data.site_xpos[0], # disc position
         ])
 
     @contextmanager
@@ -52,10 +50,20 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
             self.kill_outside = False
             self.kill_radius = old_kill_radius
 
+    def reset(self, init_state=None, *args, **kwargs):
+        # init_state = (0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0) # TODO: used for debugging only!
+        ret = super(Arm3dDiscEnv, self).reset(init_state, *args, **kwargs)
+        # self.current_goal = self.model.data.geom_xpos[-1][:2]
+        # print(self.current_goal) # I think this is the location of the peg
+        return ret
+
     def step(self, action):
+        # print(action.shape)
         self.forward_dynamics(action)
         distance_to_goal = self.get_distance_to_goal()
         reward = -distance_to_goal
+        # print(self.model.data.site_xpos[1])
+        # print(self.model.data.qpos[-2:])
 
         # if distance_to_goal < 0.03:
         #     print("inside the PR2DiscEnv, the dist is: {}, goal_pos is: {}".format(distance_to_goal, self.get_goal_position()))
@@ -103,12 +111,13 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
         return self.model.data.site_xpos[0]
 
     def get_goal_position(self):
-        return self.model.data.site_xpos[1]
+        # return self.model.data.site_xpos[1]
+        return self.model.data.xpos[-1] + np.array([0, 0, 0.05]) # this allows position to be changed todo: check this
 
     def get_vec_to_goal(self):
         disc_pos = self.get_disc_position()
         goal_pos = self.get_goal_position()
-        return disc_pos - goal_pos
+        return disc_pos - goal_pos # note: great place for breakpoint!
 
     def get_distance_to_goal(self):
         vec_to_goal = self.get_vec_to_goal()

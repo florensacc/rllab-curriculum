@@ -2,11 +2,7 @@ import os
 import random
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
-<<<<<<< HEAD
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
-=======
-# os.environ['CUDA_VISIBLE_DEVICES'] = 0
->>>>>>> robust-disk
 import argparse
 import sys
 from multiprocessing import cpu_count
@@ -15,12 +11,12 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.goals.maze_ant.maze_ant_gan_algo import run_task
+from sandbox.young_clgan.experiments.starts.robust_disk.arm3d_robust_disc_old.arm3d_disc_trpo_algo import run_task
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ec2', '-e', action='store_true', default=True, help="add flag to run in ec2")
+    parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
     parser.add_argument('--clone', '-c', action='store_true', default=False,
                         help="add flag to copy file and checkout current")
     parser.add_argument('--local_docker', '-d', action='store_true', default=False,
@@ -37,7 +33,8 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        'us-east-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'ap-northeast-2a', 'ap-south-1a'
+        'ap-northeast-2a', 'ap-northeast-2c', 'us-east-2c', 'us-east-2b', 'us-east-2a', 'us-east-1a', 'us-east-1d',
+        'us-east-1e', 'eu-west-1a', 'eu-west-1c', 'eu-west-1b', 'us-east-1b'
     ]
     ec2_instance = args.type if args.type else 'c4.4xlarge'
     # configure instan
@@ -55,66 +52,42 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    #exp_prefix = 'new-goalGAN-maze-ant-largeEps-redo'
-    #exp_prefix = 'goals-selfplay-maze-ant1'
-    exp_prefix = 'goals-GAN-maze-ant3'
-
     vg = VariantGenerator()
-    vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
-    vg.add('terminal_eps', [1])
-    vg.add('only_feasible', [True])
-    vg.add('goal_range', [5])  # this will be used also as bound of the state_space
-    vg.add('goal_center', [(2, 2)])
+    vg.add('start_size', [7])  # this is the ultimate start we care about: getting the pendulum upright
+    vg.add('start_bounds',  #TODO: get this from the env
+           [[(-2.2854, -.05236, -3.9, -2.3213, -3.15, -2.094, -3.15),
+             (1.714602, 1.3963, 0.0, 0.0, 3.15, 0.0, 3.15)]])
+    vg.add('start_goal', [(0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55)])
+    vg.add('ultimate_goal', [(0., 0.3, -0.4)])
+    vg.add('goal_size', [3])
+    vg.add('terminal_eps', [0.03])
+    vg.add('ctrl_cost_coeff', [0])
     # goal-algo params
-    vg.add('min_reward', [0])
-    vg.add('max_reward', [1])
+    vg.add('min_reward', [0.1])
+    vg.add('max_reward', [0.9])
     vg.add('distance_metric', ['L2'])
     vg.add('extend_dist_rew', [False])
+    vg.add('inner_weight', [0])
+    vg.add('goal_weight', [1000])
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
-    vg.add('with_replacement', [False])
-    vg.add('smart_init', [True])
-    # replay buffer
-    vg.add('replay_buffer', [True])
-    vg.add('coll_eps', [0.3])
-    vg.add('num_new_goals', [200])
-    vg.add('num_old_goals', [100])
-    vg.add('add_on_policy', [True])
+    vg.add('with_replacement', [True])
     # sampling params
     vg.add('horizon', [500])
-    vg.add('outer_iters', [350])
-    vg.add('inner_iters', [5])
-    vg.add('pg_batch_size', [100000])
+    vg.add('outer_iters', [5000])
+    vg.add('inner_iters', [5])  # again we will have to divide/adjust the
+    vg.add('pg_batch_size', [20000, 50000])
     # policy initialization
-    vg.add('output_gain', [1])
+    vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
-    vg.add('learn_std', [True])
+    vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
-    # gan configs
-    vg.add('num_labels', [1])  # 1 for single label, 2 for high/low and 3 for learnability
-    vg.add('gan_generator_layers', [[256, 256]])
-    vg.add('gan_discriminator_layers', [[128, 128]])
-    vg.add('gan_noise_size', [4])
-    vg.add('goal_noise_level', [0.5])
-    vg.add('gan_outer_iters', [250])
+    vg.add('discount', [0.998])
+    vg.add('baseline', ['linear', 'g_mlp'])
 
-    vg.add('seed', range(100, 700, 100))
+    vg.add('seed', range(100, 600, 100))
 
-
-    # # gan_configs
-    # vg.add('GAN_batch_size', [128])  # proble with repeated name!!
-    # vg.add('GAN_generator_activation', ['relu'])
-    # vg.add('GAN_discriminator_activation', ['relu'])
-    # vg.add('GAN_generator_optimizer', [tf.train.AdamOptimizer])
-    # vg.add('GAN_generator_optimizer_stepSize', [0.001])
-    # vg.add('GAN_discriminator_optimizer', [tf.train.AdamOptimizer])
-    # vg.add('GAN_discriminator_optimizer_stepSize', [0.001])
-    # vg.add('GAN_generator_weight_initializer', [tflearn.initializations.truncated_normal])
-    # vg.add('GAN_generator_weight_initializer_stddev', [0.05])
-    # vg.add('GAN_discriminator_weight_initializer', [tflearn.initializations.truncated_normal])
-    # vg.add('GAN_discriminator_weight_initializer_stddev', [0.02])
-    # vg.add('GAN_discriminator_batch_noise_stddev', [1e-2])
-
+    exp_prefix = 'start-trpo-unif-arm3d-disc-debug5'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
@@ -123,7 +96,7 @@ if __name__ == '__main__':
 
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
-            # # choose subnet
+            # choose subnet
             subnet = random.choice(subnets)
             config.AWS_REGION_NAME = subnet[:-1]
             config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
@@ -174,15 +147,17 @@ if __name__ == '__main__':
             if mode == 'local_docker':
                 sys.exit()
         else:
+            # run_task(vv)
             run_experiment_lite(
                 # use_cloudpickle=False,
                 stub_method_call=run_task,
                 variant=vv,
                 mode='local',
-                n_parallel=n_parallel,
+                n_parallel=6,
                 # Only keep the snapshot parameters for the last iteration
                 snapshot_mode="last",
                 seed=vv['seed'],
                 exp_prefix=exp_prefix,
+                plot = True,
                 # exp_name=exp_name,
             )

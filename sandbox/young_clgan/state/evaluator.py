@@ -109,7 +109,8 @@ def compute_rewards_from_paths(all_paths, key='rewards', as_goal=True, env=None,
 
 
 def label_states_from_paths(all_paths, min_reward=0, max_reward=1, key='rewards', as_goal=True,
-                 old_rewards=None, improvement_threshold=0, n_traj=1, env=None):
+                 old_rewards=None, improvement_threshold=0, n_traj=1, env=None, return_mean_rewards = False,
+                            order_of_states = None):
     state_dict = {}
     for paths in all_paths:
         for path in paths:
@@ -126,12 +127,23 @@ def label_states_from_paths(all_paths, min_reward=0, max_reward=1, key='rewards'
     states = []
     unlabeled_state = []
     mean_rewards = []
-    for state, rewards in state_dict.items():
-        if len(rewards) >= n_traj:
-            states.append(list(state))
-            mean_rewards.append(np.mean(rewards))
-        else:
-            unlabeled_state.append(list(state))
+
+    if order_of_states is None:
+        for state, rewards in state_dict.items():
+            if len(rewards) >= n_traj:
+                states.append(list(state))
+                mean_rewards.append(np.mean(rewards))
+    # case where you want states returned in a specific order (useful for TSCL)
+    else:
+        updated = []
+        for state in order_of_states:
+            states.append(state)
+            if state not in state_dict or len(state_dict[tuple(state)]) < n_traj:
+                mean_rewards.append(0)
+                updated.append(False)
+            else:
+                mean_rewards.append(np.mean(state_dict[tuple(state)]))
+                updated.append(True)
 
     # Make this a vertical list.
     mean_rewards = np.array(mean_rewards).reshape(-1, 1)
@@ -140,7 +152,10 @@ def label_states_from_paths(all_paths, min_reward=0, max_reward=1, key='rewards'
                             improvement_threshold=improvement_threshold)
 
     states = np.array(states)
-
+    if return_mean_rewards:
+        if order_of_states is not None:
+            return [states, labels, mean_rewards, updated] # updated is used for curriculum learning
+        return [states, labels, mean_rewards]
     return [states, labels]
 
 

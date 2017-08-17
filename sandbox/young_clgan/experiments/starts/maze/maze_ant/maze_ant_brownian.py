@@ -95,8 +95,7 @@ if __name__ == '__main__':
     # Smart replay buffer parameters
     vg.add('smart_replay_buffer', [True])
     vg.add('smart_replay_abs', [True, False])
-    # vg.add('smart_replay_eps', [0.2, 0.5, 1])
-    vg.add('smart_replay_eps', [1.0]) # should break
+    vg.add('smart_replay_eps', [0.2, 0.5, 1])
 
     vg.add('coll_eps', [0.05]) # should try this
     vg.add('num_new_starts', [200])

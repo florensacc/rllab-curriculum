@@ -111,7 +111,7 @@
             <joint type="free" />
             <site name="lego_target" pos="0 0 0" size="0.005"/>
 
-            <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>  #mass was 0.00001
+            <inertial pos="0 0 0" mass="0.01" diaginertia="0.01 0.01 0.01"/>  #mass was 0.00001
             <geom name="brick" pos="0 0 0" type="box" size="0.0975 0.0475 0.0325" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
 
         </body>

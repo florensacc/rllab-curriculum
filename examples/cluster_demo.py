@@ -1,4 +1,6 @@
 import os
+import random
+
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 
 from rllab.algos.trpo import TRPO
@@ -8,7 +10,7 @@ from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.envs.mujoco.swimmer_env import SwimmerEnv
-
+from rllab import config
 import sys
 
 
@@ -40,6 +42,26 @@ def run_task(v):
 
 for step_size in [0.01, 0.05, 0.1]:
     for seed in [1, 11, 21, 31, 41]:
+        subnets = [
+             "us-east-1d",
+        ]
+        subnet = random.choice(subnets)
+        config.AWS_REGION_NAME = subnet[:-1]
+        config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
+            config.AWS_REGION_NAME]
+        config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
+            config.AWS_REGION_NAME]
+        config.AWS_SECURITY_GROUP_IDS = \
+            config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
+                config.AWS_REGION_NAME]
+        config.AWS_NETWORK_INTERFACES = [
+            dict(
+                SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
+                Groups=config.AWS_SECURITY_GROUP_IDS,
+                DeviceIndex=0,
+                AssociatePublicIpAddress=True,
+            )
+        ]
         run_experiment_lite(
             run_task,
             exp_prefix="first_exp",
@@ -50,8 +72,8 @@ for step_size in [0.01, 0.05, 0.1]:
             # Specifies the seed for the experiment. If this is not provided, a random seed
             # will be used
             seed=seed,
-            # mode="local",
             mode="ec2",
+            # mode="local_docker",
             variant=dict(step_size=step_size, seed=seed)
             # plot=True,
             # terminate_machine=False,

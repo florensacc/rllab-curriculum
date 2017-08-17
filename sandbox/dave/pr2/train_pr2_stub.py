@@ -16,8 +16,8 @@ from rllab.misc.instrument import VariantGenerator, variant
 
 
 # from sandbox.dave.rllab.envs.mujoco.pr2_env_lego import Pr2EnvLego
-# from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_position import Pr2EnvLego
-from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_hand import Pr2EnvLego
+from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_position import Pr2EnvLego
+# from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_hand import Pr2EnvLego
 # from sandbox.dave.rllab.envs.mujoco.pr2_env_reach import Pr2EnvLego
 # from sandbox.dave.rllab.envs.mujoco.pr2_env_lego_position_different_objects import Pr2EnvLego
 from rllab import config
@@ -46,11 +46,11 @@ def run_task(v):
         pos_normal_sample=True,
         qvel_init_std=0, #0.01,
         pos_normal_sample_std=.01,  #0.5
-        fixed_target = init_hand,
+        # fixed_target = init_hand,
         # use_depth=True,
         # use_vision=True,
         allow_random_restarts=True,
-        random_noise=v['random_noise'],
+        # random_noise=v['random_noise'],
         # tip=t,
         # tau=t,
         # crop=True,
@@ -83,7 +83,7 @@ def run_task(v):
         action_limiter=None,
         optimizer_args={'subsample_factor': 0.1},
         # discount_weights={'angle': 0.1, 'tip': .1},
-        # plot=True,
+        plot=True,
         # Uncomment both lines (this and the plot parameter below) to enable plotting
         )
 
@@ -106,7 +106,7 @@ vg.add('max_path_length', [30, 50, 100])
 vg.add('random_noise', [False])
 #exp_name = "exp4"
 for vv in vg.variants():
-    #run_task(vv)
+    run_task(vv)
 
     run_experiment_lite(
         # algo.train(),

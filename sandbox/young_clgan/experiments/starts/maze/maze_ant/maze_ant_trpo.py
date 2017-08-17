@@ -41,12 +41,12 @@ if __name__ == '__main__':
     #     'ap-northeast-2a', 'ap-northeast-2c', 'us-east-2b', 'ap-south-1a', 'us-east-2c', 'us-east-2a', 'ap-south-1b',
     #     'us-east-1b', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'eu-west-1c', 'eu-west-1a', 'eu-west-1b'
     # ]
-    ec2_instance = 'c4.8xlarge'
+    ec2_instance = 'c4.4xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
     # config.AWS_SPOT_PRICE = str(info["price"])
-    config.AWS_SPOT_PRICE = '1.50'
+    config.AWS_SPOT_PRICE = '1.00'
     n_parallel = int(info["vCPU"] / 2)  # make the default 4 if not using ec2
     args.ec2=False
     if args.ec2:
@@ -112,19 +112,19 @@ if __name__ == '__main__':
     vg.add('learn_std', [False]) #2
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995]) #1
-    # vg.add('seed', [2,3,4])
-    vg.add('seed', [43, 13, 23, 33, 53, 63, 73, 83])
+    # vg.add('seed', [83, 93])
+    vg.add('seed', [43, 13, 23, 33, 53, 63, 73])
     # vg.add('seed', range(100, 600, 100))
     # sweeping: horizon, seed, feasibility_path_length, pg_batch_size
     # possible important: learn_std
 
     # Launching
     subnets = [
-        'us-west-2a', 'us-west-2b', 'us-west-2c'
+        'us-east-2a', 'us-east-2b', 'us-east-2c', 'us-east-1e', 'us-east-1b', 'us-east-1a',
     ]
     mode = 'ec2'
-    #mode = "local"
-    exp_prefix = 'ant-startgen-trpo2'
+    # mode = "local"
+    exp_prefix = 'ant-startgen-trpo4'
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
 
 

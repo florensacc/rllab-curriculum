@@ -43,6 +43,10 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             crop=True,
             fixed_target = None,
             no_action = False,
+            reward_function = "shaped",
+            gamma=0.95,
+            phi_positive = True,
+            random_angle= True,
             *args, **kwargs):
 
         self.action_penalty_weight = action_penalty_weight
@@ -94,6 +98,10 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.use_baseline = False
         self.fixed_target = fixed_target
         self.no_action = no_action
+        self.reward_function = reward_function
+        self.gamma = gamma
+        self.phi_positive = phi_positive
+        self.random_angle = random_angle
 
         super(Pr2EnvLego, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
@@ -149,6 +157,20 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         return np.dot(vec_to_goal, vec_tip_to_lego) / (
             np.linalg.norm(vec_to_goal[:2]) * np.linalg.norm(vec_tip_to_lego[:2]))
 
+    def compute_phi(self):
+        vec_tip_to_lego = self.get_vec_tip_to_lego()
+        distance_tip_to_lego_previous = np.linalg.norm(vec_tip_to_lego)
+        reward_tip_previous = - self.distance_tip_lego_penalty_weight * distance_tip_to_lego_previous
+        cos_angle_previous = self.get_cos_vecs()
+        reward_angle_previous = - self.angle_penalty_weight * cos_angle_previous
+        phi = reward_tip_previous + reward_angle_previous
+        # assert(phi < 0)
+        if self.phi_positive:
+            return - phi
+        else:
+            return phi
+
+
     def step(self, action):
         if self.no_action:
             action = np.zeros_like(action)
@@ -162,37 +184,41 @@ class Pr2EnvLego(MujocoEnv, Serializable):
             else:
                 action = self.model.data.qpos[:2, 0]
 
+        # default action limit is 3, this is to double check
+        action_limit = self.action_limit * np.ones(self.action_space.shape)
+        action = np.maximum(action, -action_limit)
+        action = np.minimum(action, action_limit)
+
         vec_to_goal_previous = self.get_vec_to_goal()
         distance_tip_to_goal_previous = np.linalg.norm(vec_to_goal_previous)
 
+        phi_prev = self.compute_phi()
         self.forward_dynamics(action)
+        phi_curr = self.compute_phi()
 
         vec_tip_to_lego = self.get_vec_tip_to_lego()
         vec_to_goal = self.get_vec_to_goal()
         distance_to_goal = np.linalg.norm(vec_to_goal)
         distance_tip_to_lego = np.linalg.norm(vec_tip_to_lego)
-
-
         tip_position = self.get_tip_position()
         lego_position = self.get_lego_position()
         vec_tip_to_lego2 = lego_position - tip_position
-        #
-
-        if self.t >= 1.4:
-            self.stop = True
-        # print(self.t)
-
 
         # Penalize the robot for being far from the goal and for having the arm far from the lego.
         reward_dist = - distance_to_goal
         reward_tip = - self.distance_tip_lego_penalty_weight * distance_tip_to_lego
-        #logger.log("reward_tip: " + str(reward_tip))
 
         cos_angle = self.get_cos_vecs()
-        reward_angle = - self.angle_penalty_weight * cos_angle
+        reward_angle = - self.angle_penalty_weight * (cos_angle - 1)
+        reward_ctrl = - self.action_penalty_weight * np.square(action).sum()
 
-        reward = reward_dist
-        # reward = reward_dist + reward_angle + reward_tip
+        # reward = reward_dist
+        if self.reward_function == "shaped":
+            reward = reward_dist + reward_ctrl + self.gamma * phi_curr - phi_prev
+        elif self.reward_function == "dense":
+            reward = reward_dist + reward_ctrl + reward_angle + reward_tip
+        else:
+            reward = reward_dist
         # reward = reward_tip
         # reward = reward_tip + 2
         state = self._state
@@ -230,24 +256,39 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         lego_dims = 6
         self.t = 0
         self.stop = False
-        # print(self.error/100)
-        # self.error = np.zeros((7,))
         qpos = copy.copy(self.model.data.qpos)
 
-        # Following code generates the position of the lego
+        # Generates the position of the lego
+        # init_state = [0.6, 0.3]
         if init_state is not None:
-            # import pdb; pdb.set_trace()\
+            init_state = list(init_state)
+            # init_state only passes in (x, y) or (x, y, z), we need to append the rest of joints
+            if self.random_angle:
+                self.theta = np.random.uniform(0, 2 * np.pi)
+                quat = [np.cos(self.theta / 2), 0, 0, np.sin(self.theta / 2)]
+            else:
+                quat = [1, 0, 0, 0]
             if len(init_state) == 2:
-                init_state = np.append(init_state, (0.5025, 1, 0, 0, 0))
+                init_state.extend([0.5025])
+                init_state.extend(quat)
+                init_state = np.array(init_state)
             elif len(init_state) == 3:
-                init_state = np.append(init_state, (1, 0, 0, 0))
+                init_state.extend(quat)
+                init_state = np.array(init_state)
             else:
                 raise Exception
+            self.lego = init_state
             qpos[-goal_dims - lego_dims - 1:-goal_dims] = init_state[:, None]
         else:
             # import pdb; pdb.set_trace()
             lego_position = self.get_lego_position()
             if self._lego_generator is not None:
+                # self.theta, self.lego = self._lego_generator.generate_goal(lego_position)
+                # # self.theta = np.random.uniform(0, 2 * np.pi)
+                # quat = np.array([np.cos(self.theta / 2), 0, 0, np.sin(self.theta / 2)]) + np.random.randn(4, ) * 0.0005
+                # self.lego = np.concatenate([self.lego[:3], quat])
+                # qpos[-goal_dims - lego_dims - 1:-goal_dims, 0] = self.lego # ignasi's code
+
                 self.old_generators_used += 1
                 self.lego = self._lego_generator.generate_goal(lego_position)
                 qpos[-goal_dims - lego_dims - 1:-goal_dims] = self.lego[:, None]
@@ -266,7 +307,9 @@ class Pr2EnvLego(MujocoEnv, Serializable):
                 qpos[-goal_dims:] = self.goal[:goal_dims, None]
             else:
                 print("No goal generator!")
-        #
+
+        # If in the future, we wanted to generate the position of the hand, the best way is probably to pass it in via
+        # init_state and then to check the length of init_state
 
         if self.fixed_target is not None:
             init_hand = self.fixed_target
@@ -292,10 +335,10 @@ class Pr2EnvLego(MujocoEnv, Serializable):
 
         self.first_time = False
         # Apply a force in the Lego block
-        xfrc = np.zeros(self.model.data.xfrc_applied.shape)
-        xfrc[-2, 2] = -0.981
+        # xfrc = np.zeros(self.model.data.xfrc_applied.shape)
+        # xfrc[-2, 2] = -0.981
         # xfrc[13, 2] = - 9.81 * 0.0917
-        self.model.data.xfrc_applied = xfrc
+        # self.model.data.xfrc_applied = xfrc
         # stiffness = np.random.uniform(0,10)
         # self.model.data.jnt_stiffness = np.array([stiffness]*14)[:, None]
         # Viewer
