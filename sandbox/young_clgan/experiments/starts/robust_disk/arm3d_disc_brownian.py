@@ -33,7 +33,7 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        "us-east-2a", "us-east-2b",
+        # "us-east-2a", "us-east-2b",
         'us-east-1a', 'us-east-1d', 'us-east-1e'
     ]
     # subnets = [
@@ -71,8 +71,8 @@ if __name__ == '__main__':
     # vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
     vg.add('seed_with', ['only_goods'])  # good from brown, onPolicy, previousBrown (ie no good)
     # vg.add('brownian_horizon', lambda seed_with: [0, 50, 500] if seed_with == 'on_policy' else [50, 500])
-    vg.add('brownian_horizon', [100])
-    vg.add('brownian_variance', [1])
+    vg.add('brownian_horizon', [100, 300])
+    vg.add('brownian_variance', [1, 2])
     vg.add('regularize_starts', [0])
     # goal-algo params
     vg.add('min_reward', [0.1])
@@ -112,14 +112,13 @@ if __name__ == '__main__':
     # vg.add('seed', range(100, 600, 100))
     vg.add('seed', [13,23,33])
 
-    exp_prefix = 'start-smartreplay-arm3d-disk-robust4'
+    exp_prefix = 'start-smartreplay-arm3d-disk-robust3'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
     # mode = "ec2"
-
     mode="local"
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
@@ -172,8 +171,9 @@ if __name__ == '__main__':
                 ],
                 # terminate_machine=False,
             )
-            if mode == 'local_docker':
-                sys.exit()
+            #sys.exit()
+            # if mode == 'local_docker':
+            #     sys.exit()
         else:
             # run_task(vv)
             run_experiment_lite(
@@ -181,7 +181,7 @@ if __name__ == '__main__':
                 stub_method_call=run_task,
                 variant=vv,
                 mode='local',
-                n_parallel=6,
+                n_parallel=2,
                 # Only keep the snapshot parameters for the last iteration
                 snapshot_mode="last",
                 seed=vv['seed'],

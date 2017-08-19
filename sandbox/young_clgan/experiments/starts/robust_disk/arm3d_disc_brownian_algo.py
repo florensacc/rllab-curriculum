@@ -119,7 +119,8 @@ def run_task(v):
         logger.log("Outer itr # %i" % outer_iter)
         logger.log("Sampling starts")
 
-        all_starts.states.dump("/home/michael/rllab_goal_rl/data/check_buffer/buffer_states.pkl")
+        all_starts.states.dump(osp.join(log_dir, 'buffer_states.pkl'))
+        # all_starts.states.dump("/home/michael/rllab_goal_rl/data/check_buffer/buffer_states.pkl")
 
         with env.set_kill_outside():
             starts = generate_starts(gen_states_env, starts=seed_starts, horizon=v['brownian_horizon'],
