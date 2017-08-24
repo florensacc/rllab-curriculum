@@ -116,19 +116,19 @@ class StateCollection(object):
             assert(len(self.state_list) == len(self.transformed_state_list))
         return states # modifed to return added states
 
-    def append(self, states):
-        if self.states_transform:
-            return self.append_states_transform(states)
-        if len(states) > 0:
-            states = np.array(states)
-            if self.distance_threshold is not None and self.distance_threshold > 0:
-                states = self._process_states(states)
-                if len(self.state_list) > 0:
-                    dists = scipy.spatial.distance.cdist(self.state_list, states)
-                    indices = np.amin(dists, axis=0) > self.distance_threshold
-                    states = states[indices, :]
-            self.state_list.extend(states)
-        return states # modifed to return added states
+    # def append(self, states):
+    #     if self.states_transform:
+    #         return self.append_states_transform(states)
+    #     if len(states) > 0:
+    #         states = np.array(states)
+    #         if self.distance_threshold is not None and self.distance_threshold > 0:
+    #             states = self._process_states(states)
+    #             if len(self.state_list) > 0:
+    #                 dists = scipy.spatial.distance.cdist(self.state_list, states)
+    #                 indices = np.amin(dists, axis=0) > self.distance_threshold
+    #                 states = states[indices, :]
+    #         self.state_list.extend(states)
+    #     return states # modifed to return added states
 
     @property
     def states(self):

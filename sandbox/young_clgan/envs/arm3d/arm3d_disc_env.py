@@ -50,6 +50,10 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
             self.kill_outside = False
             self.kill_radius = old_kill_radius
 
+    @property
+    def start_observation(self):
+        return np.copy(self.model.data.qpos).flatten()
+
     def reset(self, init_state=None, *args, **kwargs):
         # init_state = (0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0) # TODO: used for debugging only!
         ret = super(Arm3dDiscEnv, self).reset(init_state, *args, **kwargs)
@@ -73,46 +77,21 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
         # print(ob)
         done = False
 
-        if self.kill_outside and distance_to_goal > self.kill_radius:
-            # print("******** OUT of region ********")
+        if self.kill_outside and (distance_to_goal > self.kill_radius):
+            print("******** OUT of region ********")
             done = True
 
         return Step(
             ob, reward, done,
         )
 
-    # @overrides
-    # def reset(self, **kwargs):
-    #
-    #     solved_qpos = [1.09725987, 0.70068112, -2.26654845, -1.65700369, 2.58752605, -2.12087312, 2.11059846]
-    #
-    #     # if 'goal' in kwargs:
-    #     #     goal = np.array(kwargs['goal']).flatten()
-    #     # else:
-    #     #     goal = np.array([0, 0])
-    #
-    #     if self.init_solved is not None and self.init_solved:
-    #         init_qpos = np.array(solved_qpos)
-    #     else:
-    #         init_qpos = np.copy(self.init_qpos)
-    #     init_qvel = np.copy(self.init_qvel)
-    #     init_qvel[:] = 0
-    #
-    #     # if 'goal' in kwargs and kwargs['goal'] is not None:
-    #     #     init_qpos[self.model.nq // 2:, 0] = kwargs['goal']
-    #
-    #     self.set_state(init_qpos, init_qvel)
-    #     self.current_com = self.model.data.com_subtree[0]
-    #     self.dcom = np.zeros_like(self.current_com)
-    #
-    #     return self.get_current_obs()
 
     def get_disc_position(self):
         return self.model.data.site_xpos[0]
 
     def get_goal_position(self):
-        # return self.model.data.site_xpos[1]
-        return self.model.data.xpos[-1] + np.array([0, 0, 0.05]) # this allows position to be changed todo: check this
+        return self.model.data.site_xpos[1]
+        # return self.model.data.xpos[-1] + np.array([0, 0, 0.05]) # this allows position to be changed todo: check this
 
     def get_vec_to_goal(self):
         disc_pos = self.get_disc_position()

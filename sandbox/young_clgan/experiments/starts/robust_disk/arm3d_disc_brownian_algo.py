@@ -2,6 +2,8 @@ import matplotlib
 import cloudpickle
 import pickle
 
+from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
+from rllab.policies.gaussian_gru_policy import GaussianGRUPolicy
 from sandbox.young_clgan.envs.action_limited_env import ActionLimitedEnv
 from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
 from sandbox.young_clgan.envs.arm3d.arm3d_wrapper_env import RobustDiskWrapperEnv
@@ -56,7 +58,6 @@ def run_task(v):
     report.add_text(format_dict(v))
 
     inner_env = normalize(Arm3dDiscEnv())
-    gen_states_env = DiskGenerateStatesEnv()
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
     fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
@@ -75,22 +76,38 @@ def run_task(v):
         terminate_env=True,
     )
 
-    policy = GaussianMLPPolicy(
-        env_spec=env.spec,
-        hidden_sizes=(64, 64),
-        # Fix the variance since different goals will require different variances, making this parameter hard to learn.
-        learn_std=v['learn_std'],
-        adaptive_std=v['adaptive_std'],
-        std_hidden_sizes=(16, 16),  # this is only used if adaptive_std is true!
-        output_gain=v['output_gain'],
-        init_std=v['policy_init_std'],
-    )
+    if v['move_peg']:
+        gen_states_env = DiskGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'], kill_radius=v['kill_radius'])
+    else:
+        # cannot move the peg
+        gen_states_env = Arm3dDiscEnv()
 
-    baseline = LinearFeatureBaseline(env_spec=env.spec)
+    if v['policy'] == 'mlp':
+        policy = GaussianMLPPolicy(
+            env_spec=env.spec,
+            hidden_sizes=(64, 64),
+            # Fix the variance since different goals will require different variances, making this parameter hard to learn.
+            learn_std=v['learn_std'],
+            adaptive_std=v['adaptive_std'],
+            std_hidden_sizes=(16, 16),  # this is only used if adaptive_std is true!
+            output_gain=v['output_gain'],
+            init_std=v['policy_init_std'],
+        )
+    elif v['policy'] == 'recurrent':
+        policy = GaussianGRUPolicy(
+            env_spec=env.spec,
+            hidden_sizes=(64, 64),
+            learn_std=v['learn_std'],
+        )
+
+    if v['baseline'] == 'linear':
+        baseline = LinearFeatureBaseline(env_spec=env.spec)
+    elif v['baseline'] == 'g_mlp':
+        baseline = GaussianMLPBaseline(env_spec=env.spec)
 
     # load the state collection from data_upload
-    load_dir = 'data_upload/state_collections/'
-    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'disc_all_feasible_states_min.pkl'), 'rb'))
+    load_dir = 'data_upload/peg/euclidian_joint_distance'
+    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states.pkl'), 'rb'))
     print("we have %d feasible starts" % all_feasible_starts.size)
 
 
@@ -106,8 +123,12 @@ def run_task(v):
         seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=v['brownian_horizon'], animated=False,
                                       variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=1)
 
-    # with env.set_kill_outside():
-    #     find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_variance=1, animate=False)
+    if v['generating_test_set']:
+        with env.set_kill_outside():
+            find_all_feasible_states(gen_states_env, seed_starts, distance_threshold=0.1,
+                                     brownian_variance=1, animate=False, max_states=v['max_gen_states'],
+                                     horizon=500)
+            import sys; sys.exit(0)
 
     # show where these states are:
     # shuffled_starts = np.array(all_feasible_starts.state_list)

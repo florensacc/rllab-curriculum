@@ -324,7 +324,7 @@ def find_all_feasible_states_plotting(env, seed_starts, report, distance_thresho
                                       num_samples = 100, limit = None, center = None, fast = True, check_feasible = True,
                                       check_feasible_path_length=50):
     """
-
+    Generates states for two maze environments (ant and swimmer)
     :param env:
     :param seed_starts:
     :param report:
@@ -450,23 +450,31 @@ def brownian(start, env, kill_outside, kill_radius, horizon, variance, policy=No
             # print("before steps, we have kill_outside: ", env.kill_outside)
             obs, _, done, env_info = env.step(action)
             states.append(env.start_observation)
-            if done and env_info['goal_reached']:  # we don't care about goal done, otherwise will never advance!
+            if done and 'goal_reached' in env_info and env_info['goal_reached']:  # we don't care about goal done, otherwise will never advance!
                 goal_reached = True
                 done = False
     return states, goal_reached
 
 
-def find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_variance=1, animate=False):
+def find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_variance=1, animate=False,
+                             max_states = None, horizon = 1000, states_transform = None):
+    # states_transform is optional transform of states
     # print('the seed_starts are of shape: ', seed_starts.shape)
     log_dir = logger.get_snapshot_dir()
-    all_feasible_starts = StateCollection(distance_threshold=distance_threshold)
+    if states_transform is not None:
+        all_feasible_starts = StateCollection(distance_threshold=distance_threshold, states_transform=states_transform)
+    else:
+        all_feasible_starts = StateCollection(distance_threshold=distance_threshold)
     all_feasible_starts.append(seed_starts)
     logger.log('finish appending all seed_starts')
     no_new_states = 0
     while no_new_states < 5:
         total_num_starts = all_feasible_starts.size
+        if max_states is not None:
+            if total_num_starts > max_states:
+                return
         starts = all_feasible_starts.sample(100)
-        new_starts = generate_starts(env, starts=starts, horizon=1000, size=10000, variance=brownian_variance,
+        new_starts = generate_starts(env, starts=starts, horizon=horizon, size=10000, variance=brownian_variance,
                                      animated=animate, speedup=10)
         logger.log("Done generating new starts")
         all_feasible_starts.append(new_starts, n_process=1)

@@ -71,8 +71,8 @@ if __name__ == '__main__':
     # vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
     vg.add('seed_with', ['only_goods'])  # good from brown, onPolicy, previousBrown (ie no good)
     # vg.add('brownian_horizon', lambda seed_with: [0, 50, 500] if seed_with == 'on_policy' else [50, 500])
-    vg.add('brownian_horizon', [100, 300])
-    vg.add('brownian_variance', [1, 2])
+    vg.add('brownian_horizon', [300])
+    vg.add('brownian_variance', [2])
     vg.add('regularize_starts', [0])
     # goal-algo params
     vg.add('min_reward', [0.1])
@@ -91,7 +91,8 @@ if __name__ == '__main__':
     vg.add('coll_eps', lambda terminal_eps: [terminal_eps])
     vg.add('num_new_starts', [200])
     vg.add('num_old_starts', [100])
-    vg.add('smart_replay_buffer', [True])
+    vg.add('smart_replay_buffer', [False])
+    # vg.add('smart_replay_buffer', [True])
     vg.add('smart_replay_abs', [True])
     # vg.add('smart_replay_abs', [True, False])
     # vg.add('smart_replay_eps', [0.2, 0.5, 1])
@@ -101,24 +102,36 @@ if __name__ == '__main__':
     vg.add('horizon', [500])
     vg.add('outer_iters', [5000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size', [20000])
+    vg.add('pg_batch_size', [100000])
     # policy initialization
     vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
+    vg.add('baseline', ["g_mlp"])
+    vg.add('policy', ['recurrent'])
+    # vg.add('policy', ['recurrent', 'mlp'])
 
     # vg.add('seed', range(100, 600, 100))
     vg.add('seed', [13,23,33])
 
-    exp_prefix = 'start-smartreplay-arm3d-disk-robust3'
+    vg.add('generating_test_set', [False])
+    vg.add('move_peg', [False]) # whether or not to move peg
+    vg.add('kill_radius', [0.4])
+    vg.add('kill_peg_radius', [0.05])
+    vg.add('max_gen_states', [500000])
+    vg.add('peg_positions', [(7,8)])  # joint numbers for peg
+    vg.add('peg_scaling', [10]) # multiplicative factor to peg position
+
+    exp_prefix = "robust-disk-test"
+    # exp_prefix = 'robust-disk-gen-states-radius0.5-size500'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
-    # mode = "ec2"
+    mode = "ec2"
     mode="local"
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
@@ -181,7 +194,7 @@ if __name__ == '__main__':
                 stub_method_call=run_task,
                 variant=vv,
                 mode='local',
-                n_parallel=2,
+                n_parallel=3,
                 # Only keep the snapshot parameters for the last iteration
                 snapshot_mode="last",
                 seed=vv['seed'],
