@@ -1,19 +1,17 @@
-import matplotlib
-import cloudpickle
 import pickle
 
+import matplotlib
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.policies.gaussian_gru_policy import GaussianGRUPolicy
-from sandbox.young_clgan.envs.action_limited_env import ActionLimitedEnv
-from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
-from sandbox.young_clgan.envs.arm3d.arm3d_wrapper_env import RobustDiskWrapperEnv
-from sandbox.young_clgan.experiments.starts.robust_disk.disk_generate_states_env import DiskGenerateStatesEnv
+#from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
+# modified to make changes to the environment
+from sandbox.young_clgan.robust_disk.envs.arm3d_disc_env import Arm3dDiscEnv
+from sandbox.young_clgan.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
 
 matplotlib.use('Agg')
 import os
 import os.path as osp
 import random
-import time
 import numpy as np
 
 from rllab.misc import logger
@@ -31,14 +29,12 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states, label_states_from_paths, \
-    compute_labels
-from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator
+from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states, label_states_from_paths
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator
 from sandbox.young_clgan.state.utils import StateCollection, SmartStateCollection
 
 from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasible_states
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
-from sandbox.young_clgan.envs.arm3d.arm3d_disc_robust_env import Arm3dDiscRobustEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -99,7 +95,7 @@ def run_task(v):
             hidden_sizes=(64, 64),
             learn_std=v['learn_std'],
         )
-
+    #
     if v['baseline'] == 'linear':
         baseline = LinearFeatureBaseline(env_spec=env.spec)
     elif v['baseline'] == 'g_mlp':
@@ -124,10 +120,23 @@ def run_task(v):
                                       variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=1)
 
     if v['generating_test_set']:
+        # change distance metric for states generated
+        if v['peg_positions']:
+            def states_transform(x):
+                y = list(x)
+                for joint in (7,8):
+                    y[joint] *= 10
+                # for joint in v['peg_positions']:
+                #     y[joint] *= v['peg_scaling']
+                return y
+        else:
+            states_transform = None
         with env.set_kill_outside():
             find_all_feasible_states(gen_states_env, seed_starts, distance_threshold=0.1,
                                      brownian_variance=1, animate=False, max_states=v['max_gen_states'],
-                                     horizon=500)
+                                     horizon=500,
+                                     states_transform= states_transform
+                                     )
             import sys; sys.exit(0)
 
     # show where these states are:

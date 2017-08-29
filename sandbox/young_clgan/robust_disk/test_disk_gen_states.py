@@ -1,14 +1,9 @@
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
-from examples.point_env import PointEnv
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import run_experiment_lite, VariantGenerator
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
-from sandbox.young_clgan.envs.action_limited_env import ActionLimitedEnv
-from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
-from sandbox.young_clgan.envs.arm3d.arm3d_move_peg_env import Arm3dMovePegEnv
-from sandbox.young_clgan.envs.arm3d.arm3d_wrapper_env import RobustDiskWrapperEnv
-from sandbox.young_clgan.experiments.starts.robust_disk.disk_generate_states_env import DiskGenerateStatesEnv
+from sandbox.young_clgan.robust_disk.envs import DiskGenerateStatesEnv
 
 """
 Allows for testing of Brownian motion.

@@ -11,7 +11,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.starts.robust_disk.arm3d_disc_brownian_algo import run_task
+from sandbox.young_clgan.robust_disk.arm3d_disc_brownian_algo import run_task
 
 if __name__ == '__main__':
 
@@ -91,7 +91,7 @@ if __name__ == '__main__':
     vg.add('coll_eps', lambda terminal_eps: [terminal_eps])
     vg.add('num_new_starts', [200])
     vg.add('num_old_starts', [100])
-    vg.add('smart_replay_buffer', [False])
+    vg.add('smart_replay_buffer', [True])
     # vg.add('smart_replay_buffer', [True])
     vg.add('smart_replay_abs', [True])
     # vg.add('smart_replay_abs', [True, False])
@@ -110,22 +110,23 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
     vg.add('baseline', ["g_mlp"])
-    vg.add('policy', ['recurrent'])
+    # vg.add('policy', ['recurrent'])
+    vg.add('policy', ['mlp'])
     # vg.add('policy', ['recurrent', 'mlp'])
 
     # vg.add('seed', range(100, 600, 100))
     vg.add('seed', [13,23,33])
 
-    vg.add('generating_test_set', [False])
-    vg.add('move_peg', [False]) # whether or not to move peg
+    vg.add('generating_test_set', [False]) #TODO can change
+    vg.add('move_peg', [True]) # whether or not to move peg
     vg.add('kill_radius', [0.4])
     vg.add('kill_peg_radius', [0.05])
-    vg.add('max_gen_states', [500000])
+    vg.add('max_gen_states', [300000])
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position
 
-    exp_prefix = "robust-disk-test"
-    # exp_prefix = 'robust-disk-gen-states-radius0.5-size500'
+    exp_prefix = "robust-disk-test2"
+    # exp_prefix = 'robust-disk-gen-states-density2'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
@@ -188,7 +189,7 @@ if __name__ == '__main__':
             # if mode == 'local_docker':
             #     sys.exit()
         else:
-            # run_task(vv)
+            run_task(vv)
             run_experiment_lite(
                 # use_cloudpickle=False,
                 stub_method_call=run_task,
