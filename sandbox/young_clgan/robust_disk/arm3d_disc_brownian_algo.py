@@ -92,7 +92,7 @@ def run_task(v):
     elif v['policy'] == 'recurrent':
         policy = GaussianGRUPolicy(
             env_spec=env.spec,
-            hidden_sizes=(64, 64),
+            hidden_sizes=(128,),
             learn_std=v['learn_std'],
         )
     #

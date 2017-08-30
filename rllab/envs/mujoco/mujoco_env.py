@@ -218,6 +218,21 @@ class MujocoEnv(Env):
             self.viewer.set_window_title(config["title"])
         return self.viewer
 
+    def setup_camera(self, cam_pos=None, viewer = None):
+        """Setup camera
+        """
+        if cam_pos is None:
+            cam_pos = self._params["cam_pos"]
+        if viewer is None:
+            viewer = self._viewer
+        viewer.cam.lookat[0] = cam_pos[0]
+        viewer.cam.lookat[1] = cam_pos[1]
+        viewer.cam.lookat[2] = cam_pos[2]
+        viewer.cam.distance = cam_pos[3]
+        viewer.cam.elevation = cam_pos[4]
+        viewer.cam.azimuth = cam_pos[5]
+        viewer.cam.trackbodyid = -1
+
     def render(self, close=False, mode='human', config=None):
         if mode == 'human':
             viewer = self.get_viewer(config=config)

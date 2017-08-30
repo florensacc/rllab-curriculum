@@ -91,7 +91,7 @@ if __name__ == '__main__':
     vg.add('coll_eps', lambda terminal_eps: [terminal_eps])
     vg.add('num_new_starts', [200])
     vg.add('num_old_starts', [100])
-    vg.add('smart_replay_buffer', [True])
+    vg.add('smart_replay_buffer', [False])
     # vg.add('smart_replay_buffer', [True])
     vg.add('smart_replay_abs', [True])
     # vg.add('smart_replay_abs', [True, False])
@@ -118,14 +118,14 @@ if __name__ == '__main__':
     vg.add('seed', [13,23,33])
 
     vg.add('generating_test_set', [False]) #TODO can change
-    vg.add('move_peg', [True]) # whether or not to move peg
+    vg.add('move_peg', [True, False]) # whether or not to move peg
     vg.add('kill_radius', [0.4])
     vg.add('kill_peg_radius', [0.05])
     vg.add('max_gen_states', [300000])
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position
 
-    exp_prefix = "robust-disk-test2"
+    exp_prefix = "robust-disk-test3"
     # exp_prefix = 'robust-disk-gen-states-density2'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
@@ -189,13 +189,13 @@ if __name__ == '__main__':
             # if mode == 'local_docker':
             #     sys.exit()
         else:
-            run_task(vv)
+            # run_task(vv)
             run_experiment_lite(
                 # use_cloudpickle=False,
                 stub_method_call=run_task,
                 variant=vv,
                 mode='local',
-                n_parallel=3,
+                n_parallel=8,
                 # Only keep the snapshot parameters for the last iteration
                 snapshot_mode="last",
                 seed=vv['seed'],

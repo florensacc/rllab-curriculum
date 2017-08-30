@@ -35,7 +35,7 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
         return np.concatenate([
             self.model.data.qpos.flat, #[:self.model.nq // 2],
             self.model.data.qvel.flat, #[:self.model.nq // 2],
-            self.model.data.site_xpos[0], # disc position
+            # self.model.data.site_xpos[0], # disc position
         ])
 
     @contextmanager

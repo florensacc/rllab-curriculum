@@ -30,97 +30,98 @@ from sandbox.young_clgan.robust_disk.envs.arm3d_disc_env import Arm3dDiscEnv
 
 from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasible_states
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
+from sandbox.young_clgan.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
 
 
 def run_task(v):
     random.seed(v['seed'])
     np.random.seed(v['seed'])
 
-    inner_env = normalize(Arm3dDiscEnv())
-
-    fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
-    fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
-
-    env = GoalStartExplorationEnv(
-        env=inner_env,
-        start_generator=fixed_start_generator,
-        obs2start_transform=lambda x: x[:v['start_size']],
-        goal_generator=fixed_goal_generator,
-        obs2goal_transform=lambda x: x[-1 * v['goal_size']:], # changed!
-        terminal_eps=v['terminal_eps'],
-        distance_metric=v['distance_metric'],
-        extend_dist_rew=v['extend_dist_rew'],
-        inner_weight=v['inner_weight'],
-        goal_weight=v['goal_weight'],
-        terminate_env=True,
-    )
+    # inner_env = normalize(Arm3dDiscEnv())
+    #
+    # fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
+    # fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
+    #
+    # env = GoalStartExplorationEnv(
+    #     env=inner_env,
+    #     start_generator=fixed_start_generator,
+    #     obs2start_transform=lambda x: x[:v['start_size']],
+    #     goal_generator=fixed_goal_generator,
+    #     obs2goal_transform=lambda x: x[-1 * v['goal_size']:], # changed!
+    #     terminal_eps=v['terminal_eps'],
+    #     distance_metric=v['distance_metric'],
+    #     extend_dist_rew=v['extend_dist_rew'],
+    #     inner_weight=v['inner_weight'],
+    #     goal_weight=v['goal_weight'],
+    #     terminate_env=True,
+    # )
+    #
+    #
+    # if v['policy'] == 'mlp':
+    #     policy = GaussianMLPPolicy(
+    #         env_spec=env.spec,
+    #         hidden_sizes=(64, 64),
+    #         # Fix the variance since different goals will require different variances, making this parameter hard to learn.
+    #         learn_std=v['learn_std'],
+    #         adaptive_std=v['adaptive_std'],
+    #         std_hidden_sizes=(16, 16),  # this is only used if adaptive_std is true!
+    #         output_gain=v['output_gain'],
+    #         init_std=v['policy_init_std'],
+    #     )
+    # elif v['policy'] == 'recurrent':
+    #     policy = GaussianGRUPolicy(
+    #         env_spec=env.spec,
+    #         hidden_sizes=(64, 64),
+    #         learn_std=v['learn_std'],
+    #     )
+    # #
+    # if v['baseline'] == 'linear':
+    #     baseline = LinearFeatureBaseline(env_spec=env.spec)
+    # elif v['baseline'] == 'g_mlp':
+    #     baseline = GaussianMLPBaseline(env_spec=env.spec)
+    #
+    # # load the state collection from data_upload
+    # load_dir = 'data_upload/peg/euclidian_joint_distance'
+    # all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states.pkl'), 'rb'))
+    # print("we have %d feasible starts" % all_feasible_starts.size)
+    #
+    #
+    # if v['smart_replay_buffer']:
+    #     all_starts = SmartStateCollection(distance_threshold=v['coll_eps'],
+    #                                       abs=v["smart_replay_abs"],
+    #                                       eps=v["smart_replay_eps"]
+    #                                       )
+    # else:
+    #     all_starts = StateCollection(distance_threshold=v['coll_eps'])
+    # brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
 
     if v['move_peg']:
         gen_states_env = DiskGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'], kill_radius=v['kill_radius'])
     else:
         # cannot move the peg
         gen_states_env = Arm3dDiscEnv()
-
-    if v['policy'] == 'mlp':
-        policy = GaussianMLPPolicy(
-            env_spec=env.spec,
-            hidden_sizes=(64, 64),
-            # Fix the variance since different goals will require different variances, making this parameter hard to learn.
-            learn_std=v['learn_std'],
-            adaptive_std=v['adaptive_std'],
-            std_hidden_sizes=(16, 16),  # this is only used if adaptive_std is true!
-            output_gain=v['output_gain'],
-            init_std=v['policy_init_std'],
-        )
-    elif v['policy'] == 'recurrent':
-        policy = GaussianGRUPolicy(
-            env_spec=env.spec,
-            hidden_sizes=(64, 64),
-            learn_std=v['learn_std'],
-        )
-    #
-    if v['baseline'] == 'linear':
-        baseline = LinearFeatureBaseline(env_spec=env.spec)
-    elif v['baseline'] == 'g_mlp':
-        baseline = GaussianMLPBaseline(env_spec=env.spec)
-
-    # load the state collection from data_upload
-    load_dir = 'data_upload/peg/euclidian_joint_distance'
-    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states.pkl'), 'rb'))
-    print("we have %d feasible starts" % all_feasible_starts.size)
-
-
-    if v['smart_replay_buffer']:
-        all_starts = SmartStateCollection(distance_threshold=v['coll_eps'],
-                                          abs=v["smart_replay_abs"],
-                                          eps=v["smart_replay_eps"]
-                                          )
-    else:
-        all_starts = StateCollection(distance_threshold=v['coll_eps'])
-    brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
-    with env.set_kill_outside():
+    with gen_states_env.set_kill_outside():
         seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=v['brownian_horizon'], animated=False,
                                       variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=1)
 
-    if v['generating_test_set']:
-        # change distance metric for states generated
-        if v['peg_positions']:
-            def states_transform(x):
-                y = list(x)
-                for joint in (7,8):
-                    y[joint] *= 10
-                # for joint in v['peg_positions']:
-                #     y[joint] *= v['peg_scaling']
-                return y
-        else:
-            states_transform = None
-        with env.set_kill_outside():
-            find_all_feasible_states(gen_states_env, seed_starts, distance_threshold=0.1,
-                                     brownian_variance=1, animate=False, max_states=v['max_gen_states'],
-                                     horizon=500,
-                                     states_transform= states_transform
-                                     )
-            import sys; sys.exit(0)
+
+    if v['peg_positions']:
+        def states_transform(x):
+            y = list(x)
+            for joint in (7,8):
+                y[joint] *= 10
+            # for joint in v['peg_positions']:
+            #     y[joint] *= v['peg_scaling']
+            return y
+    else:
+        states_transform = None
+    with gen_states_env.set_kill_outside():
+        find_all_feasible_states(gen_states_env, seed_starts, distance_threshold=0.1,
+                                 brownian_variance=1, animate=False, max_states=v['max_gen_states'],
+                                 horizon=500,
+                                 # states_transform= states_transform
+                                 )
+        import sys; sys.exit(0)
 
 if __name__ == '__main__':
 
@@ -231,22 +232,28 @@ if __name__ == '__main__':
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position
 
-    exp_prefix = "robust-disk-test2"
-
+    # exp_prefix = "robust-disk-test2"
+    exp_prefix = 'uniform200-mass300000'
+    # Launching
+    print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
+    print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
+                                                                                   config.AWS_SPOT_PRICE, n_parallel),
+          *subnets)
+    mode = "ec2"
     mode="local"
+    for vv in vg.variants():
 
-    run_task(vv)
-    run_experiment_lite(
-        # use_cloudpickle=False,
-        stub_method_call=run_task,
-        variant=vv,
-        mode='local',
-        n_parallel=3,
-        # Only keep the snapshot parameters for the last iteration
-        snapshot_mode="last",
-        seed=vv['seed'],
-        exp_prefix=exp_prefix,
-        plot=True,
-        # exp_name=exp_name,
-    )
-    sys.exit()
+        # run_task(vv)
+        run_experiment_lite(
+            # use_cloudpickle=False,
+            stub_method_call=run_task,
+            variant=vv,
+            mode='local',
+            n_parallel=3,
+            # Only keep the snapshot parameters for the last iteration
+            snapshot_mode="last",
+            seed=vv['seed'],
+            exp_prefix=exp_prefix,
+            plot=True,
+            # exp_name=exp_name,
+        )
