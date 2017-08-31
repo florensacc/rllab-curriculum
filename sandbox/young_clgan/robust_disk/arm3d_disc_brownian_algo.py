@@ -70,6 +70,7 @@ def run_task(v):
         inner_weight=v['inner_weight'],
         goal_weight=v['goal_weight'],
         terminate_env=True,
+        append_goal_to_observation = False, # prevents goal environment from appending observation
     )
 
     if v['move_peg']:
@@ -115,9 +116,11 @@ def run_task(v):
     else:
         all_starts = StateCollection(distance_threshold=v['coll_eps'])
     brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
-    with env.set_kill_outside():
+    with gen_states_env.set_kill_outside():
         seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=v['brownian_horizon'], animated=False,
-                                      variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=1)
+                                      variance=v['brownian_variance'], subsample=v['num_new_starts']
+                                      )
+                                      #   , animated=True, speedup=1)
 
     if v['generating_test_set']:
         # change distance metric for states generated
@@ -131,7 +134,7 @@ def run_task(v):
                 return y
         else:
             states_transform = None
-        with env.set_kill_outside():
+        with gen_states_env.set_kill_outside():
             find_all_feasible_states(gen_states_env, seed_starts, distance_threshold=0.1,
                                      brownian_variance=1, animate=False, max_states=v['max_gen_states'],
                                      horizon=500,
@@ -139,10 +142,6 @@ def run_task(v):
                                      )
             import sys; sys.exit(0)
 
-    # show where these states are:
-    # shuffled_starts = np.array(all_feasible_starts.state_list)
-    # np.random.shuffle(shuffled_starts)
-    # generate_starts(env, starts=shuffled_starts, horizon=100, variance=v['brownian_variance'], animated=True, speedup=10)
 
     for outer_iter in range(1, v['outer_iters']):
 
@@ -245,13 +244,13 @@ def run_task(v):
             elif np.sum(start_classes == 0) > np.sum(start_classes == 1):  # if more low reward than high reward
                 seed_starts = all_starts.sample(300)  # sample them from the replay
             else:
-                with env.set_kill_outside():
+                with gen_states_env.set_kill_outside():
                     seed_starts = generate_starts(gen_states_env, starts=starts, horizon=int(v['horizon'] * 10), subsample=v['num_new_starts'],
                                                   variance=v['brownian_variance'] * 10)
         elif v['seed_with'] == 'all_previous':
             seed_starts = starts
         elif v['seed_with'] == 'on_policy':
-            with env.set_kill_outside():
+            with gen_states_env.set_kill_outside():
                 seed_starts = generate_starts(gen_states_env, policy, horizon=v['horizon'], subsample=v['num_new_starts'])
 
 

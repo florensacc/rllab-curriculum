@@ -91,7 +91,7 @@
             <geom name="w2" rgba="0.8 0.2 0.8 1" type="box" size="0.4 0.4 0.025" contype="1" conaffinity="1" />
 
             <body name="peg" pos="0.0 0.0 0.0">
-                <geom name="peg_geom" rgba="0.8 0.6 0.6 1" type="cylinder" fromto="0 0 0 0 0 0.3" size="0.028" density="300000" contype="1" conaffinity="1" />
+                <geom name="peg_geom" rgba="0.8 0.6 0.6 1" type="cylinder" fromto="0 0 0 0 0 0.3" size="0.028" density="1000000" contype="1" conaffinity="1" />
                 <joint pos="0 0 0" type="slide" name="slider1" axis="1 0 0" damping="0.5" range="-0.2 0.2" />
                 <joint pos="0 0 0" type="slide" name="slider2" axis="0 1 0" damping="0.5" range="-0.2 0.2" />
             </body>

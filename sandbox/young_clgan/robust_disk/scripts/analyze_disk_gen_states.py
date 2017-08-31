@@ -17,11 +17,15 @@ import os
 """
 Various utils to inspect/evaluate generated states
 """
+
 NUM_GRID = 5
 # put good trained policy below
-POLICY_PATH = "data/s3/robust-disk-test/robust-disk-test_2017_08_23_09_58_01_0001/itr_160/params.pkl"
+POLICY_PATH = "data/s3/robust-disk-test/robust-disk-test_2017_08_23_09_58_01_0001/itr_150/params.pkl"
+# POLICY_PATH = "data/s3/robust-disk-test/robust-disk-test_2017_08_23_17_06_26_0001/itr_150/params.pkl"
+
 NUM_TIME_STEPS = 500
-NUM_STATES = 20
+NUM_STATES = 30
+
 
 def partition_sampled_states(states, lb, spacing, num_grid = NUM_GRID, transform = lambda x: x[-2:]):
     """
@@ -67,7 +71,7 @@ def trim_data_set(data, max_states = 2000):
         pickle.dump(trimmed_set, f)
     return
 
-def grid_and_analyze_grid(data, rollouts = False, save_images = False):
+def grid_and_analyze_grid(data, rollouts = False, save_images = False, file_name = 'success_breakdown.csv'):
     # Iterates through points in the grid and performs rollouts to estimate percentage of success
 
 
@@ -87,7 +91,7 @@ def grid_and_analyze_grid(data, rollouts = False, save_images = False):
 
 
 
-    with open('data/success_breakdown.csv', 'w', newline='') as csvfile:
+    with open('data/' + file_name, 'w', newline='') as csvfile:
         csvwriter = csv.writer(csvfile)
         csvwriter.writerow(["i", "j", "num_states", "success"])
         for i in range(NUM_GRID):
@@ -144,7 +148,7 @@ def plot_peg_position_density(data):
     fig, ax = plt.subplots()
     heatmap, xedges, yedges = np.histogram2d(x_peg,
                                              y_peg,
-                                             bins=[5, 5])
+                                             bins=[10, 10])
     heatmap /= np.sum(heatmap)
     # Plot peg density
     # eventual todo? we can use grid_states to plot density heatmap
@@ -191,8 +195,6 @@ def show_generated_states(data):
 
 
 
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('file', type=str,
@@ -209,7 +211,7 @@ if __name__ == "__main__":
     peg_joints = 7, 8
 
     # trim_data_set(data)
-    # grid_and_analyze_grid(data, rollouts=True, save_images=True)
+    # grid_and_analyze_grid(data, rollouts=True, save_images=False, file_name="success_breakdown_new.csv")
     #
     plot_peg_position_density(data)
     plot_joint_variations()

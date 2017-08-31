@@ -10,7 +10,7 @@ from sandbox.young_clgan.envs.base import FixedStateGenerator, UniformListStateG
 import csv
 
 """
-Evaluates new files on old test set
+Useful script for evaluating policy on old test sets
 """
 
 def eval_old_test_set(env, policy, starts, num_rollouts = 1000, max_path_length = 500):

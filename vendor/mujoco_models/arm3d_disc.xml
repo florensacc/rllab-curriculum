@@ -109,6 +109,7 @@
 
             <!--puts joints on peg-->
             <body name="peg" pos="0.0 0.0 0.0">
+                <!--huge density to prevent arm from moving peg-->
                 <geom name="peg_geom" rgba="0.545098 0.270588 0.07450987 1" type="cylinder" fromto="0 0 0 0 0 0.3" size="0.028" density="2000000000" contype="1" conaffinity="1" />
                 <joint pos="0 0 0" type="slide" name="slider1" axis="1 0 0" damping="0.5" range="-0.2 0.2" />
                 <joint pos="0 0 0" type="slide" name="slider2" axis="0 1 0" damping="0.5" range="-0.2 0.2" />
