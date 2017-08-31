@@ -82,16 +82,17 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
             done = True
 
         return Step(
-            ob, reward, done,
+            ob, reward, done, distance=distance_to_goal
         )
 
 
     def get_disc_position(self):
         return self.model.data.site_xpos[0]
 
+    # this allows position to be changed todo: check this whenever goal is changing / no reward for reaching goal
     def get_goal_position(self):
-        return self.model.data.site_xpos[1]
-        # return self.model.data.xpos[-1] + np.array([0, 0, 0.05]) # this allows position to be changed todo: check this
+        # return self.model.data.site_xpos[1]
+        return self.model.data.xpos[-1] + np.array([0, 0, 0.05])
 
     def get_vec_to_goal(self):
         disc_pos = self.get_disc_position()

@@ -62,7 +62,7 @@ class GoalEnv(Serializable):
 class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
     def __init__(self, env, goal_generator, obs2goal_transform=None, terminal_eps=0.05, only_feasible=False,
                  terminate_env=False, goal_bounds=None, distance_metric='L2', extend_dist_rew=False, goal_weight=1,
-                 inner_weight=0, append_transformed_obs=False, **kwargs):
+                 inner_weight=0, append_transformed_obs=False, append_goal_to_observation=True, **kwargs):
         """
         This environment wraps around a normal environment to facilitate goal based exploration.
         Initial position based experiments should not use this class.
@@ -99,6 +99,7 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         self.inner_weight = inner_weight
         
         self.append_transformed_obs = append_transformed_obs
+        self.append_goal_to_observation = append_goal_to_observation
 
         # TODO fix this
         if self.goal_bounds is None:
@@ -129,8 +130,11 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
     def reset(self, reset_goal=True, **kwargs):  # allows to pass init_state if needed
         if reset_goal:
             self.update_goal()
-        ret = self.append_goal_observation(ProxyEnv.reset(self, goal=self.current_goal, **kwargs))  # the wrapped env needs to use or ignore it
-
+        #default behavior
+        if self.append_goal_to_observation:
+            ret = self.append_goal_observation(ProxyEnv.reset(self, goal=self.current_goal, **kwargs))  # the wrapped env needs to use or ignore it
+        else:
+            ret = ProxyEnv.reset(self, goal=self.current_goal, **kwargs)
         # used by disk environment # todo: make more generalizable!
         if 'init_state' in kwargs and len(kwargs['init_state']) == 9:
             delta = tuple(kwargs['init_state'][-2:])  # joint position is in terms of amount moved
@@ -142,9 +146,15 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
     def step(self, action):
         observation, reward, done, info = ProxyEnv.step(self, action)
         info['reward_inner'] = reward_inner = self.inner_weight * reward
-        info['distance'] = dist = self.dist_to_goal(observation)
-        info['reward_dist'] = reward_dist = self.compute_dist_reward(observation)
-        info['goal_reached'] = 1.0 * self.is_goal_reached(observation)
+        if 'distance' not in info:
+            info['distance'] = dist = self.dist_to_goal(observation)
+            info['reward_dist'] = reward_dist = self.compute_dist_reward(observation)
+            info['goal_reached'] = 1.0 * self.is_goal_reached(observation)
+        else:
+            # modified so that inner environment can pass in goal via step
+            dist = info['distance']
+            info['goal_reached'] = 1.0 * (dist < self.terminal_eps)
+            info['reward_dist'] = reward_dist = info['goal_reached'] * self.goal_weight
         info['goal'] = self.current_goal
         # print(reward_dist)
         # print(reward_inner)
@@ -156,8 +166,10 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
             # print(self.dist_to_goal(observation))
             # sys.exit(0)
             done = True
+        if self.append_goal_to_observation:
+            observation = self.append_goal_to_observation(observation)
         return (
-            self.append_goal_observation(observation),
+            observation,
             reward_dist + reward_inner,
             done,
             info
@@ -199,7 +211,10 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         obj = self
         while hasattr(obj, "wrapped_env"):  # try to go through "Normalize and Proxy and whatever wrapper"
             obj = obj.wrapped_env
-        return self.append_goal_observation(obj.get_current_obs())
+        if self.append_goal_to_observation:
+            return self.append_goal_observation(obj.get_current_obs())
+        else:
+            return obj.get_current_obs()
 
     @overrides
     @property

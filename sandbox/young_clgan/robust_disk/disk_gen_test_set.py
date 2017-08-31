@@ -32,68 +32,14 @@ from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasibl
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
 from sandbox.young_clgan.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
 
+"""
+Generates the test set
+"""
 
 def run_task(v):
     random.seed(v['seed'])
     np.random.seed(v['seed'])
 
-    # inner_env = normalize(Arm3dDiscEnv())
-    #
-    # fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
-    # fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
-    #
-    # env = GoalStartExplorationEnv(
-    #     env=inner_env,
-    #     start_generator=fixed_start_generator,
-    #     obs2start_transform=lambda x: x[:v['start_size']],
-    #     goal_generator=fixed_goal_generator,
-    #     obs2goal_transform=lambda x: x[-1 * v['goal_size']:], # changed!
-    #     terminal_eps=v['terminal_eps'],
-    #     distance_metric=v['distance_metric'],
-    #     extend_dist_rew=v['extend_dist_rew'],
-    #     inner_weight=v['inner_weight'],
-    #     goal_weight=v['goal_weight'],
-    #     terminate_env=True,
-    # )
-    #
-    #
-    # if v['policy'] == 'mlp':
-    #     policy = GaussianMLPPolicy(
-    #         env_spec=env.spec,
-    #         hidden_sizes=(64, 64),
-    #         # Fix the variance since different goals will require different variances, making this parameter hard to learn.
-    #         learn_std=v['learn_std'],
-    #         adaptive_std=v['adaptive_std'],
-    #         std_hidden_sizes=(16, 16),  # this is only used if adaptive_std is true!
-    #         output_gain=v['output_gain'],
-    #         init_std=v['policy_init_std'],
-    #     )
-    # elif v['policy'] == 'recurrent':
-    #     policy = GaussianGRUPolicy(
-    #         env_spec=env.spec,
-    #         hidden_sizes=(64, 64),
-    #         learn_std=v['learn_std'],
-    #     )
-    # #
-    # if v['baseline'] == 'linear':
-    #     baseline = LinearFeatureBaseline(env_spec=env.spec)
-    # elif v['baseline'] == 'g_mlp':
-    #     baseline = GaussianMLPBaseline(env_spec=env.spec)
-    #
-    # # load the state collection from data_upload
-    # load_dir = 'data_upload/peg/euclidian_joint_distance'
-    # all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states.pkl'), 'rb'))
-    # print("we have %d feasible starts" % all_feasible_starts.size)
-    #
-    #
-    # if v['smart_replay_buffer']:
-    #     all_starts = SmartStateCollection(distance_threshold=v['coll_eps'],
-    #                                       abs=v["smart_replay_abs"],
-    #                                       eps=v["smart_replay_eps"]
-    #                                       )
-    # else:
-    #     all_starts = StateCollection(distance_threshold=v['coll_eps'])
-    # brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
 
     if v['move_peg']:
         gen_states_env = DiskGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'], kill_radius=v['kill_radius'])

@@ -102,6 +102,7 @@ if __name__ == '__main__':
     vg.add('horizon', [500])
     vg.add('outer_iters', [5000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
+    # vg.add('pg_batch_size', [100000])
     vg.add('pg_batch_size', [100000])
     # policy initialization
     vg.add('output_gain', [0.1])
@@ -125,7 +126,7 @@ if __name__ == '__main__':
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position
 
-    exp_prefix = "robust-disk-test3"
+    exp_prefix = "robust-disk-test4"
     # exp_prefix = 'robust-disk-gen-states-density2'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
@@ -133,7 +134,7 @@ if __name__ == '__main__':
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
     mode = "ec2"
-    mode="local"
+    # mode="local"
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
             # choose subnet
