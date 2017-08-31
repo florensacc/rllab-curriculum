@@ -73,6 +73,7 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
         #     print("inside the PR2DiscEnv, the dist is: {}, goal_pos is: {}".format(distance_to_goal, self.get_goal_position()))
             # print("Qpos: " + str(self.model.data.qpos))
 
+        # print(distance_to_goal)
         ob = self.get_current_obs()
         # print(ob)
         done = False
