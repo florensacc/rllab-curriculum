@@ -33,7 +33,7 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        "us-east-2c", "us-east-2b",
+        "us-east-2c", "us-east-2b", "us-east-2a"
         # 'us-east-1a', 'us-east-1d', 'us-east-1e'
     ]
     # subnets = [
@@ -99,7 +99,7 @@ if __name__ == '__main__':
     vg.add('smart_replay_eps', [0.5])
     # vg.add('smart_replay_eps', [1.0])  # should break
     # sampling params
-    vg.add('horizon', [500])
+    vg.add('horizon', [1000]) # MULTIPLE
     vg.add('outer_iters', [5000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
     vg.add('pg_batch_size', [100000])
@@ -116,7 +116,7 @@ if __name__ == '__main__':
     # vg.add('policy', ['recurrent', 'mlp'])
 
     # vg.add('seed', range(100, 600, 100))
-    vg.add('seed', [13,23,33])
+    vg.add('seed', [14,23,33])
 
     vg.add('generating_test_set', [False]) #TODO can change
     vg.add('move_peg', [True, False]) # whether or not to move peg
@@ -125,16 +125,18 @@ if __name__ == '__main__':
     vg.add('max_gen_states', [300000])
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position
+    vg.add('action_penalty_inner_weight', [1e-5, 1e-6])
+    vg.add('action_penalty', [1])
 
-    exp_prefix = "robust-disk-test5"
+    exp_prefix = "robust-disk-test8"
     # exp_prefix = 'robust-disk-gen-states-density2'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
-    mode = "ec2"
-    # mode="local"
+    # mode = "ec2"
+    mode="local"
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
             # choose subnet
@@ -196,7 +198,7 @@ if __name__ == '__main__':
                 stub_method_call=run_task,
                 variant=vv,
                 mode='local',
-                n_parallel=8,
+                n_parallel=1,
                 # Only keep the snapshot parameters for the last iteration
                 snapshot_mode="last",
                 seed=vv['seed'],

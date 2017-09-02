@@ -53,7 +53,11 @@ def run_task(v):
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
 
-    inner_env = normalize(Arm3dDiscEnv())
+    if v['action_penalty']:
+        inner_env = normalize(Arm3dDiscEnv(action_penalty=True, action_torque_lambda=v['action_penalty']))
+        v['inner_weight'] = v['action_penalty_inner_weight']
+    else:
+        inner_env = normalize(Arm3dDiscEnv())
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
     fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
@@ -104,7 +108,9 @@ def run_task(v):
 
     # load the state collection from data_upload
     load_dir = 'data_upload/peg/euclidian_joint_distance'
+    load_dir2 = 'data_upload/best_500000.pkl'
     all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states.pkl'), 'rb'))
+    all_feasible_starts2 = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir2), 'rb'))
     print("we have %d feasible starts" % all_feasible_starts.size)
 
 
@@ -167,9 +173,7 @@ def run_task(v):
             old_starts = all_starts.sample(v['num_old_starts'])
             starts = np.vstack([starts, old_starts])
 
-        # todo: indent!!
-        with ExperimentLogger(log_dir, outer_iter // 10, snapshot_mode='last', hold_outter_log=True):
-            logger.log("Updating the environment start generator")
+        if log_dir == "/home/michael": # hack to make debugging easier
             env.update_start_generator(
                 UniformListStateGenerator(
                     starts.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
@@ -190,6 +194,29 @@ def run_task(v):
             )
 
             trpo_paths = algo.train()
+        else:
+            with ExperimentLogger(log_dir, outer_iter // 10, snapshot_mode='last', hold_outter_log=True):
+                logger.log("Updating the environment start generator")
+                env.update_start_generator(
+                    UniformListStateGenerator(
+                        starts.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
+                    )
+                )
+
+                logger.log("Training the algorithm")
+                algo = TRPO(
+                    env=env,
+                    policy=policy,
+                    baseline=baseline,
+                    batch_size=v['pg_batch_size'],
+                    max_path_length=v['horizon'],
+                    n_itr=v['inner_iters'],
+                    step_size=0.01,
+                    discount=v['discount'],
+                    plot=False,
+                )
+
+                trpo_paths = algo.train()
 
 
         if v['use_trpo_paths']:
@@ -226,6 +253,12 @@ def run_task(v):
         logger.log("Labeling on uniform starts")
         with logger.tabular_prefix("Uniform_"):
             unif_starts = all_feasible_starts.sample(1000)
+            mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=1, key='goal_reached',
+                                                 as_goals=False, full_path=True)
+            env.log_diagnostics(paths)
+
+        with logger.tabular_prefix("NewUniform_"):
+            unif_starts = all_feasible_starts2.sample(1000)
             mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=1, key='goal_reached',
                                                  as_goals=False, full_path=True)
             env.log_diagnostics(paths)

@@ -168,18 +168,18 @@ if __name__ == '__main__':
     # vg.add('policy', ['recurrent', 'mlp'])
 
     # vg.add('seed', range(100, 600, 100))
-    vg.add('seed', [13,23,33])
+    vg.add('seed', [13])
 
     vg.add('generating_test_set', [False]) #TODO can change
     vg.add('move_peg', [True]) # whether or not to move peg
-    vg.add('kill_radius', [0.4])
+    vg.add('kill_radius', [0.3])
     vg.add('kill_peg_radius', [0.05])
-    vg.add('max_gen_states', [300000])
+    vg.add('max_gen_states', [500000])
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position
 
     # exp_prefix = "robust-disk-test2"
-    exp_prefix = 'uniform200-mass300000'
+    exp_prefix = 'gen500_radius0.3'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,

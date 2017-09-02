@@ -18,6 +18,8 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
     def __init__(self,
                  init_solved=True,
                  kill_radius=0.4,
+                 action_penalty = False,
+                 action_torque_lambda = 1,
                  *args, **kwargs):
         MujocoEnv.__init__(self, *args, **kwargs)
         Serializable.quick_init(self, locals())
@@ -27,14 +29,16 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
         self.init_solved = init_solved
         self.kill_radius = kill_radius
         self.kill_outside = False
+        self.action_penalty = action_penalty
+        self.action_torque_lambda = action_torque_lambda
         # print("yo!")
 
 
     @overrides
     def get_current_obs(self):
         return np.concatenate([
-            self.model.data.qpos.flat, #[:self.model.nq // 2],
-            self.model.data.qvel.flat, #[:self.model.nq // 2],
+            self.model.data.qpos.flat[:-2], #[:self.model.nq // 2],
+            self.model.data.qvel.flat[:-2], #[:self.model.nq // 2],
             # self.model.data.site_xpos[0], # disc position
         ])
 
@@ -65,9 +69,19 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
         # print(action.shape)
         self.forward_dynamics(action)
         distance_to_goal = self.get_distance_to_goal()
-        reward = -distance_to_goal
+        action_norm = np.linalg.norm(action)
+        velocity_norm = np.linalg.norm(self.model.data.qvel)
+        if self.action_penalty:
+            reward = -(self.action_torque_lambda * action_norm + velocity_norm)
+        else: # I don't think this even matters
+            reward = -distance_to_goal
         # print(self.model.data.site_xpos[1])
         # print(self.model.data.qpos[-2:])
+        # peg should not move
+        curr_qvel = list(self.model.data.qvel)
+        curr_qvel[-2] = 0
+        curr_qvel[-1] = 0
+        self.model.data.qvel = curr_qvel
 
         # if distance_to_goal < 0.03:
         #     print("inside the PR2DiscEnv, the dist is: {}, goal_pos is: {}".format(distance_to_goal, self.get_goal_position()))
@@ -83,7 +97,7 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
             done = True
 
         return Step(
-            ob, reward, done, distance=distance_to_goal
+            ob, reward, done, distance=distance_to_goal, action_norm=action_norm, velocity_norm=velocity_norm,
         )
 
 
@@ -111,6 +125,15 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
         self.model.data.qvel = qvel
         # self.model._compute_subtree() #pylint: disable=W0212
         self.model.forward()
+
+    # want to get some idea of action_norm and velocity_norm
+
+    def log_diagnostics(self, paths):
+        action_norms = [path["env_infos"]["action_norm"] for path in paths]
+        logger.record_tabular('dist_x', np.mean([np.mean(d) for d in action_norms]))
+
+        velocity_norms = [path["env_infos"]["velocity_norm"] for path in paths]
+        logger.record_tabular('dist_x', np.mean([np.mean(d) for d in velocity_norms]))
         
     # def is_feasible(self, goal):
     #     return np.all(np.logical_and(self.goal_lb <= goal, goal <= self.goal_ub))
