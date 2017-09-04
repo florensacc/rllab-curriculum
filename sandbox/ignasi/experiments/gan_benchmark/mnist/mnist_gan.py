@@ -17,8 +17,8 @@ from tensorflow.examples.tutorials.mnist import input_data
 
 from rllab.misc import logger
 
-from sandbox.young_clgan.gan.gan import FCGAN
-from sandbox.young_clgan.logging import HTMLReport, format_dict
+from sandbox.ignasi.gan.gan import FCGAN
+from sandbox.ignasi.logging import HTMLReport, format_dict
 from rllab.misc.instrument import run_experiment_lite, VariantGenerator
 
 

@@ -4,8 +4,8 @@ from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import run_experiment_lite
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
-from sandbox.young_clgan.envs.arm3d.arm3d_key_env import Arm3dKeyEnv
+from sandbox.ignasi.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
+from sandbox.ignasi.envs.arm3d.arm3d_key_env import Arm3dKeyEnv
 
 exp_prefix = 'key_insertion1'
 

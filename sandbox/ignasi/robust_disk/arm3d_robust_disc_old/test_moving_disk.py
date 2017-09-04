@@ -3,8 +3,8 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from examples.point_env import PointEnv
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
-from sandbox.young_clgan.envs.action_limited_env import ActionLimitedEnv
-from sandbox.young_clgan.envs.arm3d.arm3d_disc_robust_env import Arm3dDiscRobustEnv
+from sandbox.ignasi.envs.action_limited_env import ActionLimitedEnv
+from sandbox.ignasi.envs.arm3d.arm3d_disc_robust_env import Arm3dDiscRobustEnv
 
 inner_env = normalize(Arm3dDiscRobustEnv())
 env = ActionLimitedEnv(inner_env)

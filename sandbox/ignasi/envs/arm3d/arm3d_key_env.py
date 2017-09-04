@@ -9,8 +9,8 @@ from rllab.core.serializable import Serializable
 from rllab.misc import logger
 from rllab.misc import autoargs
 from contextlib import contextmanager
-from sandbox.young_clgan.state.utils import StateCollection
-from sandbox.young_clgan.envs.start_env import generate_starts
+from sandbox.ignasi.state.utils import StateCollection
+from sandbox.ignasi.envs.start_env import generate_starts
 
 
 class Arm3dKeyEnv(MujocoEnv, Serializable):

@@ -12,8 +12,8 @@ import matplotlib.colorbar as cbar
 from mpl_toolkits.mplot3d import Axes3D
 
 
-from sandbox.young_clgan.state.evaluator import evaluate_states
-from sandbox.young_clgan.logging.visualization import save_image
+from sandbox.ignasi.state.evaluator import evaluate_states
+from sandbox.ignasi.logging.visualization import save_image
 
 
 def plot_policy_performance(policy, env, horizon, n_samples=200, n_traj=5, fname=None, key='goal_reached'):

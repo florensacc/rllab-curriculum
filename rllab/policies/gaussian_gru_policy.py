@@ -24,6 +24,7 @@ class GaussianGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
             learn_std=True,
             init_std=1.0,
             output_nonlinearity=None,
+            trunc_steps=20,
     ):
         """
         :param env_spec: A spec for the env.
@@ -48,6 +49,7 @@ class GaussianGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
             hidden_dim=hidden_sizes[0],
             hidden_nonlinearity=hidden_nonlinearity,
             output_nonlinearity=output_nonlinearity,
+            trunc_steps=trunc_steps
         )
 
         l_mean = mean_network.output_layer

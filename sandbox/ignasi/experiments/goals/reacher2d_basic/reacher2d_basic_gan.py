@@ -1,4 +1,4 @@
-from sandbox.young_clgan.utils import set_env_no_gpu, format_experiment_prefix
+from sandbox.ignasi.utils import set_env_no_gpu, format_experiment_prefix
 
 set_env_no_gpu()
 
@@ -21,21 +21,21 @@ from rllab import config
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 
-from sandbox.young_clgan.envs.reacher.reacher2d_basic_env import Reacher2DEnv
+from sandbox.ignasi.envs.reacher.reacher2d_basic_env import Reacher2DEnv
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, evaluate_goal_env, generate_initial_goals
-from sandbox.young_clgan.envs.base import FixedStateGenerator, UniformStateGenerator, UniformListStateGenerator
+from sandbox.ignasi.envs.goal_env import GoalExplorationEnv, evaluate_goal_env, generate_initial_goals
+from sandbox.ignasi.envs.base import FixedStateGenerator, UniformStateGenerator, UniformListStateGenerator
 
-from sandbox.young_clgan.state.evaluator import *
-from sandbox.young_clgan.state.generator import StateGAN
-# from sandbox.young_clgan.lib.goal.utils import *
-from sandbox.young_clgan.logging.html_report import format_dict, HTMLReport
-from sandbox.young_clgan.logging.visualization import *
-from sandbox.young_clgan.logging.logger import ExperimentLogger
-from sandbox.young_clgan.experiments.goals.reacher2d_basic.utils import plot_policy_performance, plot_generator_samples
-from sandbox.young_clgan.state.utils import StateCollection
+from sandbox.ignasi.state.evaluator import *
+from sandbox.ignasi.state.generator import StateGAN
+# from sandbox.ignasi.lib.goal.utils import *
+from sandbox.ignasi.logging.html_report import format_dict, HTMLReport
+from sandbox.ignasi.logging.visualization import *
+from sandbox.ignasi.logging.logger import ExperimentLogger
+from sandbox.ignasi.experiments.goals.reacher2d_basic.utils import plot_policy_performance, plot_generator_samples
+from sandbox.ignasi.state.utils import StateCollection
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 

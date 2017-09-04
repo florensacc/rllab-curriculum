@@ -1,5 +1,5 @@
 from __future__ import print_function
-from sandbox.young_clgan.envs.block_pushing.mujoco_env import MujocoEnv
+from sandbox.ignasi.envs.block_pushing.mujoco_env import MujocoEnv
 import numpy as np
 from sandbox.dave.pr2.action_limiter import FixedActionLimiter
 from scipy.misc import imsave

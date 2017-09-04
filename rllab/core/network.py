@@ -114,7 +114,7 @@ class GRULayer(L.Layer):
     def __init__(self, incoming, num_units, hidden_nonlinearity,
                  gate_nonlinearity=LN.sigmoid, name=None,
                  W_init=LI.GlorotUniform(), b_init=LI.Constant(0.),
-                 hidden_init=LI.Constant(0.), hidden_init_trainable=True):
+                 hidden_init=LI.Constant(0.), hidden_init_trainable=True, trunc_steps=20):
 
         if hidden_nonlinearity is None:
             hidden_nonlinearity = LN.identity
@@ -146,6 +146,7 @@ class GRULayer(L.Layer):
         self.gate_nonlinearity = gate_nonlinearity
         self.num_units = num_units
         self.nonlinearity = hidden_nonlinearity
+        self.trunc_steps = trunc_steps
 
     def step(self, x, hprev):
         r = self.gate_nonlinearity(x.dot(self.W_xr) + hprev.dot(self.W_hr) + self.b_r)
@@ -168,7 +169,8 @@ class GRULayer(L.Layer):
         h0s = TT.tile(TT.reshape(self.h0, (1, self.num_units)), (n_batches, 1))
         # flatten extra dimensions
         shuffled_input = input.dimshuffle(1, 0, 2)
-        hs, _ = theano.scan(fn=self.step, sequences=[shuffled_input], outputs_info=h0s)
+        hs, _ = theano.scan(fn=self.step, sequences=[shuffled_input],
+                            outputs_info=h0s, truncate_gradient=self.trunc_steps)
         shuffled_hs = hs.dimshuffle(1, 0, 2)
         return shuffled_hs
 
@@ -183,7 +185,7 @@ class GRUStepLayer(L.MergeLayer):
 
     def get_output_shape_for(self, input_shapes):
         n_batch = input_shapes[0]
-        return n_batch, self._gru_layer.num_units
+        return n_batch + (self._gru_layer.num_units,)
 
     def get_output_for(self, inputs, **kwargs):
         x, hprev = inputs
@@ -194,7 +196,7 @@ class GRUStepLayer(L.MergeLayer):
 
 class GRUNetwork(object):
     def __init__(self, input_shape, output_dim, hidden_dim, hidden_nonlinearity=LN.rectify,
-                 output_nonlinearity=None, name=None, input_var=None, input_layer=None):
+                 output_nonlinearity=None, name=None, input_var=None, input_layer=None, trunc_steps=20):
         if input_layer is None:
             l_in = L.InputLayer(shape=(None, None) + input_shape, input_var=input_var, name="input")
         else:
@@ -202,7 +204,7 @@ class GRUNetwork(object):
         l_step_input = L.InputLayer(shape=(None,) + input_shape)
         l_step_prev_hidden = L.InputLayer(shape=(None, hidden_dim))
         l_gru = GRULayer(l_in, num_units=hidden_dim, hidden_nonlinearity=hidden_nonlinearity,
-                         hidden_init_trainable=False)
+                         hidden_init_trainable=False, trunc_steps=trunc_steps)
         l_gru_flat = L.ReshapeLayer(
             l_gru, shape=(-1, hidden_dim)
         )

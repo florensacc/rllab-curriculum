@@ -11,10 +11,10 @@ import tflearn
 from collections import OrderedDict
 
 from rllab.misc import logger
-from sandbox.young_clgan.logging import HTMLReport
-from sandbox.young_clgan.logging import format_dict
-from sandbox.young_clgan.logging.logger import ExperimentLogger
-from sandbox.young_clgan.logging.visualization import plot_labeled_states
+from sandbox.ignasi.logging import HTMLReport
+from sandbox.ignasi.logging import format_dict
+from sandbox.ignasi.logging.logger import ExperimentLogger
+from sandbox.ignasi.logging.visualization import plot_labeled_states
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -24,15 +24,15 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.state.evaluator import label_states
-from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, \
+from sandbox.ignasi.state.evaluator import label_states
+from sandbox.ignasi.envs.base import UniformListStateGenerator, UniformStateGenerator, \
     FixedStateGenerator
-from sandbox.young_clgan.state.generator import StateGAN
-from sandbox.young_clgan.state.utils import StateCollection
+from sandbox.ignasi.state.generator import StateGAN
+from sandbox.ignasi.state.utils import StateCollection
 
-from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, generate_initial_goals
-from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy  # TODO: make this external to maze env
-from sandbox.young_clgan.envs.maze.maze_ant.ant_maze_env import AntMazeEnv
+from sandbox.ignasi.envs.goal_env import GoalExplorationEnv, generate_initial_goals
+from sandbox.ignasi.envs.maze.maze_evaluate import test_and_plot_policy  # TODO: make this external to maze env
+from sandbox.ignasi.envs.maze.maze_ant.ant_maze_env import AntMazeEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 

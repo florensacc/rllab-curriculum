@@ -10,7 +10,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.young_clgan.experiments.goals.maze_swim.maze_swim_gan_algo import run_task
+from sandbox.ignasi.experiments.goals.maze_swim.maze_swim_gan_algo import run_task
 
 if __name__ == '__main__':
 

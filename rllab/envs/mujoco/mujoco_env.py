@@ -71,6 +71,9 @@ class MujocoEnv(Env):
         self.init_qvel = self.model.data.qvel
         self.init_qacc = self.model.data.qacc
         self.init_ctrl = self.model.data.ctrl
+        self.init_damping = (self.model.dof_damping[:, 0]).copy()
+        self.init_armature = (self.model.dof_armature[:, 0]).copy()
+        self.init_frictionloss = (self.model.dof_frictionloss[:, 0]).copy()
         self.qpos_dim = self.init_qpos.size
         self.qvel_dim = self.init_qvel.size
         self.ctrl_dim = self.init_ctrl.size
@@ -136,6 +139,7 @@ class MujocoEnv(Env):
                     datum = getattr(self, 'init_' + datum_name)
                 setattr(self.model.data, datum_name, datum)
                 start += datum_dim
+                self.model.forward()
         # print("inside mujoco reset: ", self.model.data.qpos, self.model.data.qvel, self.model.data.qacc, self.model.data.ctrl)
 
     @overrides

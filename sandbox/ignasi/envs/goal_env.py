@@ -24,7 +24,7 @@ from rllab.sampler.utils import rollout
 from rllab.spaces.box import Box
 from rllab.misc.overrides import overrides
 
-from sandbox.young_clgan.envs.base import StateGenerator, UniformListStateGenerator, \
+from sandbox.ignasi.envs.base import StateGenerator, UniformListStateGenerator, \
     UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv
 
 

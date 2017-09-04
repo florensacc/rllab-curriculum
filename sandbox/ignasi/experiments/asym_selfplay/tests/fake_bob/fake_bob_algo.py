@@ -1,8 +1,8 @@
 import matplotlib
 
 from examples.point_env import PointEnv
-from sandbox.young_clgan.experiments.asym_selfplay.envs.alice_env import AliceEnv
-from sandbox.young_clgan.experiments.asym_selfplay.envs.alice_fake_env import AliceFakeEnv
+from sandbox.ignasi.experiments.asym_selfplay.envs.alice_env import AliceEnv
+from sandbox.ignasi.experiments.asym_selfplay.envs.alice_fake_env import AliceFakeEnv
 
 matplotlib.use('Agg')
 import os
@@ -11,9 +11,9 @@ import random
 import numpy as np
 
 from rllab.misc import logger
-from sandbox.young_clgan.logging import HTMLReport
-from sandbox.young_clgan.logging import format_dict
-from sandbox.young_clgan.experiments.asym_selfplay.tests.fake_bob.visualization import plot_labeled_states
+from sandbox.ignasi.logging import HTMLReport
+from sandbox.ignasi.logging import format_dict
+from sandbox.ignasi.experiments.asym_selfplay.tests.fake_bob.visualization import plot_labeled_states
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -23,11 +23,11 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.envs.base import UniformStateGenerator, FixedStateGenerator
+from sandbox.ignasi.envs.base import UniformStateGenerator, FixedStateGenerator
 
-from sandbox.young_clgan.envs.start_env import generate_starts_alice
-from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
-from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
+from sandbox.ignasi.envs.start_env import generate_starts_alice
+from sandbox.ignasi.envs.goal_start_env import GoalStartExplorationEnv
+from sandbox.ignasi.envs.maze.point_maze_env import PointMazeEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 

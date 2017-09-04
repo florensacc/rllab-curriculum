@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 import scipy.misc
-from sandbox.young_clgan.state.evaluator import parallel_map, disable_cuda_initializer
+from sandbox.ignasi.state.evaluator import parallel_map, disable_cuda_initializer
 
 
 class StateCollection(object):

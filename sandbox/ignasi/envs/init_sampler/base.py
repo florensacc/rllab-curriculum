@@ -17,7 +17,7 @@ from rllab.envs.base import Step
 from rllab.misc import autoargs
 from rllab.misc import logger
 from rllab.misc.overrides import overrides
-from sandbox.young_clgan.state.selectors import FixedStateSelector
+from sandbox.ignasi.state.selectors import FixedStateSelector
 
 
 class InitBase(Serializable):

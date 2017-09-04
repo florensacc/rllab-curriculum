@@ -1,7 +1,7 @@
 import os
 import datetime
 import rllab.misc.logger
-from sandbox.young_clgan.utils import AttrDict
+from sandbox.ignasi.utils import AttrDict
 
 
 class InnerExperimentLogger(object):

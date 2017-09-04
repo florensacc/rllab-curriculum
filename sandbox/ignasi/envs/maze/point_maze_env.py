@@ -1,5 +1,5 @@
-from sandbox.young_clgan.envs.maze.maze_env import MazeEnv
-from sandbox.young_clgan.envs.maze.point_env import PointEnv
+from sandbox.ignasi.envs.maze.maze_env import MazeEnv
+from sandbox.ignasi.envs.maze.point_env import PointEnv
 
 
 class PointMazeEnv(MazeEnv):

@@ -5,8 +5,8 @@ from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from sandbox.dave.rllab.goal_generators.pr2_goal_generators import PR2FixedGoalGenerator
 from sandbox.dave.rllab.lego_generators.pr2_lego_generators import PR2LegoFixedBlockGenerator
-from sandbox.young_clgan.envs.action_limited_env import ActionLimitedEnv
-from sandbox.young_clgan.envs.block_pushing.pr2_env_lego_hand import Pr2EnvLego
+from sandbox.ignasi.envs.action_limited_env import ActionLimitedEnv
+from sandbox.ignasi.envs.block_pushing.pr2_env_lego_hand import Pr2EnvLego
 import numpy as np
 
 init_hand = np.array([0.6,  0.4,  0.5025])

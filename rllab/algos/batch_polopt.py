@@ -113,9 +113,10 @@ class BatchPolopt(RLAlgorithm):
     def shutdown_worker(self):
         self.sampler.shutdown_worker()
 
-    def train(self):
+    def train(self, already_init=False):
         self.start_worker()
-        self.init_opt()
+        if not already_init:
+            self.init_opt()
         all_paths = []
         for itr in range(self.current_itr, self.n_itr):
             with logger.prefix('itr #%d | ' % itr):

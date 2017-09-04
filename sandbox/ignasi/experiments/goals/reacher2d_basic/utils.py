@@ -9,8 +9,8 @@ from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 
-from sandbox.young_clgan.state.evaluator import evaluate_states
-from sandbox.young_clgan.logging.visualization import save_image
+from sandbox.ignasi.state.evaluator import evaluate_states
+from sandbox.ignasi.logging.visualization import save_image
 
 
 

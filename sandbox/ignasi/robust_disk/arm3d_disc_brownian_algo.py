@@ -3,10 +3,12 @@ import pickle
 import matplotlib
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.policies.gaussian_gru_policy import GaussianGRUPolicy
-#from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
+#from sandbox.ignasi.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
 # modified to make changes to the environment
-from sandbox.young_clgan.robust_disk.envs.arm3d_disc_env import Arm3dDiscEnv
-from sandbox.young_clgan.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
+from sandbox.ignasi.robust_disk.envs.arm3d_disc_env import Arm3dDiscEnv
+from sandbox.ignasi.envs.pr2.pr2_gear import Pr2GearEnv as Arm3dDiscEnv
+
+from sandbox.ignasi.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
 
 matplotlib.use('Agg')
 import os
@@ -16,9 +18,9 @@ import numpy as np
 
 from rllab.misc import logger
 from collections import OrderedDict
-from sandbox.young_clgan.logging import HTMLReport
-from sandbox.young_clgan.logging import format_dict
-from sandbox.young_clgan.logging.logger import ExperimentLogger
+from sandbox.ignasi.logging import HTMLReport
+from sandbox.ignasi.logging import format_dict
+from sandbox.ignasi.logging.logger import ExperimentLogger
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -28,13 +30,14 @@ from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
+from rllab.policies.gaussian_gru_policy import GaussianGRUPolicy
 
-from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states, label_states_from_paths
-from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator
-from sandbox.young_clgan.state.utils import StateCollection, SmartStateCollection
+from sandbox.ignasi.state.evaluator import convert_label, label_states, evaluate_states, label_states_from_paths
+from sandbox.ignasi.envs.base import UniformListStateGenerator, FixedStateGenerator
+from sandbox.ignasi.state.utils import StateCollection, SmartStateCollection
 
-from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasible_states
-from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
+from sandbox.ignasi.envs.start_env import generate_starts, find_all_feasible_states
+from sandbox.ignasi.envs.goal_start_env import GoalStartExplorationEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -47,7 +50,7 @@ def run_task(v):
     logger.log("Initializing report...")
     log_dir = logger.get_snapshot_dir()  # problem with logger module here!!
     if log_dir is None:
-        log_dir = "/home/michael"
+        log_dir = "/home/ignasi"
     report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=4)
 
     report.add_header("{}".format(EXPERIMENT_TYPE))
@@ -93,7 +96,7 @@ def run_task(v):
     elif v['policy'] == 'recurrent':
         policy = GaussianGRUPolicy(
             env_spec=env.spec,
-            hidden_sizes=(128,),
+            hidden_sizes=(32,),
             learn_std=v['learn_std'],
         )
     #
@@ -103,7 +106,7 @@ def run_task(v):
         baseline = GaussianMLPBaseline(env_spec=env.spec)
 
     # load the state collection from data_upload
-    load_dir = 'data_upload/peg/euclidian_joint_distance'
+    load_dir = 'data_upload/peg'
     all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states.pkl'), 'rb'))
     print("we have %d feasible starts" % all_feasible_starts.size)
 
@@ -117,7 +120,7 @@ def run_task(v):
         all_starts = StateCollection(distance_threshold=v['coll_eps'])
     brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
     with gen_states_env.set_kill_outside():
-        seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=v['brownian_horizon'], animated=False,
+        seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=v['brownian_horizon'], animated=False, speedup=100,
                                       variance=v['brownian_variance'], subsample=v['num_new_starts']
                                       )
                                       #   , animated=True, speedup=1)
@@ -142,6 +145,17 @@ def run_task(v):
                                      )
             import sys; sys.exit(0)
 
+    algo = TRPO(
+        env=env,
+        policy=policy,
+        baseline=baseline,
+        batch_size=v['pg_batch_size'],
+        max_path_length=v['horizon'],
+        n_itr=v['inner_iters'],
+        step_size=0.01,
+        discount=v['discount'],
+        plot=False,
+    )
 
     for outer_iter in range(1, v['outer_iters']):
 
@@ -177,19 +191,9 @@ def run_task(v):
             )
 
             logger.log("Training the algorithm")
-            algo = TRPO(
-                env=env,
-                policy=policy,
-                baseline=baseline,
-                batch_size=v['pg_batch_size'],
-                max_path_length=v['horizon'],
-                n_itr=v['inner_iters'],
-                step_size=0.01,
-                discount=v['discount'],
-                plot=False,
-            )
 
-            trpo_paths = algo.train()
+            algo.current_itr = 0
+            trpo_paths = algo.train(already_init=outer_iter > 1)
 
 
         if v['use_trpo_paths']:

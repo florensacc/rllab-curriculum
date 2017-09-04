@@ -3,7 +3,7 @@ import numpy as np
 from rllab.envs.mujoco.maze.point_maze_env import PointMazeEnv
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.sampler.utils import rollout
-from sandbox.young_clgan.experiments.asym_selfplay.envs.alice_env import AliceEnv
+from sandbox.ignasi.experiments.asym_selfplay.envs.alice_env import AliceEnv
 
 
 def update_rewards(agent1_paths, agent2_paths, gamma):

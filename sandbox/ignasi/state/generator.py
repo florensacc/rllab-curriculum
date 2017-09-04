@@ -1,8 +1,8 @@
 import numpy as np
 from rllab.misc.overrides import overrides
-from sandbox.young_clgan.gan.gan import FCGAN
-from sandbox.young_clgan.state.utils import sample_matrix_row
-from sandbox.young_clgan.logging.visualization import plot_labeled_states
+from sandbox.ignasi.gan.gan import FCGAN
+from sandbox.ignasi.state.utils import sample_matrix_row
+from sandbox.ignasi.logging.visualization import plot_labeled_states
 
 
 class StateGenerator(object):

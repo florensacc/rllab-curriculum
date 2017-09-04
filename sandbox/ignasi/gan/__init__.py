@@ -1,4 +1,4 @@
-from sandbox.young_clgan.gan.gan import FCGAN
+from sandbox.ignasi.gan.gan import FCGAN
 
 export = [
     FCGAN,

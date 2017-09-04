@@ -72,12 +72,12 @@ class MjViewer(object):
             self.autoscale()
 
     def autoscale(self):
-        self.cam.lookat[0] = self.model.stat.center[0]
-        self.cam.lookat[1] = self.model.stat.center[1]
-        self.cam.lookat[2] = self.model.stat.center[2]
-        self.cam.distance = 0.5 * self.model.stat.extent
-        self.cam.camid = -1
-        self.cam.trackbodyid = 1
+        # self.cam.lookat[0] = self.model.stat.center[0]
+        # self.cam.lookat[1] = self.model.stat.center[1]
+        # self.cam.lookat[2] = self.model.stat.center[2]
+        # self.cam.distance = 0.5 * self.model.stat.extent
+        # self.cam.camid = -1
+        # self.cam.trackbodyid = 1
         width, height = self.get_dimensions()
         mjlib.mjv_updateCameraPose(byref(self.cam), width*1.0/height)
 

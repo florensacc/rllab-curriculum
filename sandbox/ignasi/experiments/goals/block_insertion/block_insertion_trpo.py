@@ -1,4 +1,4 @@
-from sandbox.young_clgan.utils import set_env_no_gpu, format_experiment_prefix
+from sandbox.ignasi.utils import set_env_no_gpu, format_experiment_prefix
 set_env_no_gpu()
 
 import argparse
@@ -16,18 +16,18 @@ from sandbox.carlos_snn.autoclone import autoclone
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 
-from sandbox.young_clgan.envs.block_insertion.block_insertion_env import BLOCK_INSERTION_ENVS
+from sandbox.ignasi.envs.block_insertion.block_insertion_env import BLOCK_INSERTION_ENVS
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, evaluate_goal_env
-from sandbox.young_clgan.envs.base import UniformStateGenerator
+from sandbox.ignasi.envs.goal_env import GoalExplorationEnv, evaluate_goal_env
+from sandbox.ignasi.envs.base import UniformStateGenerator
 
-from sandbox.young_clgan.state.evaluator import *
-from sandbox.young_clgan.logging.html_report import format_dict, HTMLReport
-from sandbox.young_clgan.logging.visualization import *
-from sandbox.young_clgan.logging.logger import ExperimentLogger
-from sandbox.young_clgan.envs.block_insertion.utils import plot_policy_performance, plot_policy_performance_sliced
+from sandbox.ignasi.state.evaluator import *
+from sandbox.ignasi.logging.html_report import format_dict, HTMLReport
+from sandbox.ignasi.logging.visualization import *
+from sandbox.ignasi.logging.logger import ExperimentLogger
+from sandbox.ignasi.envs.block_insertion.utils import plot_policy_performance, plot_policy_performance_sliced
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 

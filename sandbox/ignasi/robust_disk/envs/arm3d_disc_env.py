@@ -56,6 +56,20 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
 
     def reset(self, init_state=None, *args, **kwargs):
         # init_state = (0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0) # TODO: used for debugging only!
+        # dim = len(self.init_damping)
+        # damping = np.maximum(0, np.random.multivariate_normal(self.init_damping, 2 * np.eye(dim)))
+        # armature = np.maximum(0, np.random.multivariate_normal(self.init_armature, 2 * np.eye(dim)))
+        # frictionloss = np.maximum(0, np.random.multivariate_normal(self.init_frictionloss, 2 * np.eye(dim)))
+        # self.model.dof_damping = damping[:, None]
+        # self.model.dof_frictionloss = frictionloss[:, None]
+        # self.model.dof_armature = armature[:, None]
+        # xfrc = np.zeros_like(self.model.data.xfrc_applied)
+        # Add the weight of the can
+        # id_tool = self.model.body_names.index('tool')
+        # xfrc[id_tool, 2] = - 9.81 * np.random.uniform(0.05, 0.5)
+        # self.model.data.xfrc_applied = xfrc
+        # id_sensor = self.model.body_names.index('r_gripper_palm_link')
+        # xfrc[id_sensor, 2] = - 9.81 * np.random.uniform(0.01, 0.1)
         ret = super(Arm3dDiscEnv, self).reset(init_state, *args, **kwargs)
         # self.current_goal = self.model.data.geom_xpos[-1][:2]
         # print(self.current_goal) # I think this is the location of the peg
@@ -77,6 +91,7 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
         ob = self.get_current_obs()
         # print(ob)
         done = False
+        # import pdb; pdb.set_trace()
 
         if self.kill_outside and (distance_to_goal > self.kill_radius):
             print("******** OUT of region ********")
@@ -107,6 +122,7 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
 
     def set_state(self, qpos, qvel):
         #assert qpos.shape == (self.model.nq, 1) and qvel.shape == (self.model.nv, 1)
+        print('SET STATE')
         self.model.data.qpos = qpos
         self.model.data.qvel = qvel
         # self.model._compute_subtree() #pylint: disable=W0212

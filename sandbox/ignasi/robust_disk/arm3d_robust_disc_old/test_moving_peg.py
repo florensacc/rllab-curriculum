@@ -4,10 +4,10 @@ from examples.point_env import PointEnv
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import run_experiment_lite, VariantGenerator
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
-from sandbox.young_clgan.envs.action_limited_env import ActionLimitedEnv
-from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
-from sandbox.young_clgan.envs.arm3d.arm3d_move_peg_env import Arm3dMovePegEnv
-from sandbox.young_clgan.envs.arm3d.arm3d_wrapper_env import RobustDiskWrapperEnv
+from sandbox.ignasi.envs.action_limited_env import ActionLimitedEnv
+from sandbox.ignasi.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
+from sandbox.ignasi.envs.arm3d.arm3d_move_peg_env import Arm3dMovePegEnv
+from sandbox.ignasi.envs.arm3d.arm3d_wrapper_env import RobustDiskWrapperEnv
 
 
 def run_task(v):
