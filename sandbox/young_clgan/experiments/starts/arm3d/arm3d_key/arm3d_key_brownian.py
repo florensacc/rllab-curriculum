@@ -92,8 +92,8 @@ if __name__ == '__main__':
     # sampling params
     vg.add('horizon', [500])
     vg.add('outer_iters', [5000])
-    vg.add('inner_iters', [5])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size', [100000])
+    vg.add('inner_iters', [2])  # again we will have to divide/adjust the
+    vg.add('pg_batch_size', [10000])
     # policy initialization
     vg.add('output_gain', [0.1])
     vg.add('policy_hidden_sizes', [(64, 64)])
