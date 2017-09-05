@@ -145,7 +145,6 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
 
     def step(self, action):
         observation, reward, done, info = ProxyEnv.step(self, action)
-        import pdb; pdb.set_trace()
         info['reward_inner'] = reward_inner = self.inner_weight * reward
         # print(reward_inner)
         if 'distance' not in info:

@@ -32,9 +32,9 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
   @overrides
   def get_current_obs(self):
     return np.concatenate([
-      self.model.data.qpos.flat,  # [:self.model.nq // 2],
-      self.model.data.qvel.flat,  # [:self.model.nq // 2],
-      # self.model.data.site_xpos[0], # disc position
+      self.model.data.qpos.flat,     # [:self.model.nq // 2],
+      self.model.data.qvel.flat,     # [:self.model.nq // 2],
+      self.model.data.site_xpos[0],  # disc position
     ])
 
   @contextmanager

@@ -79,7 +79,7 @@ def run_task(v):
         gen_states_env = DiskGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'], kill_radius=v['kill_radius'])
     else:
         # cannot move the peg
-        gen_states_env = Pr2DiskEnv()
+        gen_states_env = env
 
     if v['policy'] == 'mlp':
         policy = GaussianMLPPolicy(
