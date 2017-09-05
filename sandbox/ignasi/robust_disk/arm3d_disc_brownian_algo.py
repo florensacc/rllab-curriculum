@@ -123,7 +123,7 @@ def run_task(v):
         seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=v['brownian_horizon'], animated=False, speedup=100,
                                       variance=v['brownian_variance'], subsample=v['num_new_starts']
                                       )
-                                      #   , animated=True, speedup=1)
+                                      #   animated=True, speedup=1)
 
     if v['generating_test_set']:
         # change distance metric for states generated

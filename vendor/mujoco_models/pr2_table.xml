@@ -20,7 +20,7 @@
 				coordinate="local"
 				angle="radian"/>
 
-	<option timestep="0.05" gravity="0 0 0" collision="all"/>
+	<option timestep="0.005" gravity="0 0 0" collision="all"/>
 	<asset>
 		<mesh file="pr2/base_L.stl"/>
 		<mesh file="pr2/caster_L.stl"/>
@@ -62,10 +62,10 @@
 		<pair geom1="base" geom2="r_forearm"/>
 		<pair geom1="base" geom2="l_forearm"/>
 		<pair geom1="table_geom" geom2="l_forearm"/>
-		<pair geom1="wc1" geom2="cyl"/>
+		<!--pair geom1="wc1" geom2="cyl"/>
 		<pair geom1="wc2" geom2="cyl"/>
 		<pair geom1="wc3" geom2="cyl"/>
-		<pair geom1="wc4" geom2="cyl"/>
+		<pair geom1="wc4" geom2="cyl"/-->
           <!--<pair geom1="l_gripper_l_finger_tip" geom2="brick"/>
         <pair geom1="l_gripper_r_finger_tip" geom2="brick"/>
         <pair geom1="l_forearm" geom2="brick"/>
@@ -245,12 +245,37 @@
                                                                 <geom name="geom60" type="box" pos="0 0 0" size="0.0005 0.0005 0.0005" />
                                                             </body>
                                                             <body name="l_gripper_tool_frame" pos="0.18 0 0" euler="1.5707963267948966 0 0">
+                                                                     <!--body name="gear"  pos ="0.06 0.0075 0">
+                                                                            <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>
+                                                                            <geom name="gear_1" pos="0 0 0" euler="0 0 0" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                            <geom name="gear_2" pos="0 0 0" euler="0 0 0.3249" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                            <geom name="gear_3" pos="0 0 0" euler="0 0 0.6498" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                            <geom name="gear_4" pos="0 0 0" euler="0 0 0.9747" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                            <geom name="gear_5" pos="0 0 0" euler="0 0 1.2996" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                            <geom name="gear_6" pos="0 0 0" euler="0 0 1.6245" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                            <geom name="gear_7" pos="0 0 0" euler="0 0 1.9495" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                            <geom name="gear_8" pos="0 0 0" euler="0 0 2.2744" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                            <geom name="gear_9" pos="0 0 0" euler="0 0 2.5993" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                            <geom name="gear_10" pos="0 0 0" euler="0 0 2.9242" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                            <geom name="gear_11" pos="0 0 0" euler="0 0 3.2491" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                            <geom name="gear_12" pos="0 0 0" euler="0 0 3.5741" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                            <geom name="gear_13" pos="0 0 0" euler="0 0 3.8990" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                            <geom name="gear_14" pos="0 0 0" euler="0 0 4.2239" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                            <geom name="gear_15" pos="0 0 0" euler="0 0 4.5488" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                            <geom name="gear_16" pos="0 0 0" euler="0 0 4.8737" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                            <geom name="gear_17" pos="0 0 0" euler="0 0 5.1987" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                            <geom name="gear_18" pos="0 0 0" euler="0 0 5.5236" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                            <geom name="gear_19" pos="0 0 0" euler="0 0 5.8485" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                            <geom name="gear_20" pos="0 0 0" euler="0 0 6.17347" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                            <geom name="gear_21" pos="0 0 0" euler="0 0 6.49839" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
+                                                                        </body-->
                                                                 <body name="gear" pos="0.06 0 0">
                                                                     <geom name="wc1" pos="0 0.0475 0" rgba="0.2 0.2 0.8 1" type="box" size="0.08 0.0325 0.008"/>
                                                                     <geom name="wc2" pos="0 -0.0475 0" rgba="0.2 0.2 0.8 1" type="box" size="0.08 0.0325 0.008"/>
                                                                     <geom name="wc3" pos="0.0475 0 0" rgba="0.2 0.2 0.8 1" type="box" size="0.0325 0.015 0.008" />
                                                                     <geom name="wc4" pos="-0.0475 0 0" rgba="0.2 0.2 0.8 1" type="box" size="0.0325 0.015 0.008" />
                                                                 </body>
+
                                                             </body>
                                                                 <body name="l_gripper_l_finger_link" pos="0.07691 0.01 0">
                                                                 <inertial pos="0.03598 0.0173 -0.00164" quat="0.574440 0.429111 0.518782 0.465562" mass="0.17126" diaginertia="0.000198 0.000181 0.000077" />
@@ -491,13 +516,13 @@
 
     </worldbody>
 <actuator>
-    <motor joint="l_shoulder_pan_joint" ctrlrange="-0.1 0.1" ctrllimited="true"/>
-    <motor joint="l_shoulder_lift_joint" ctrlrange="-0.1 0.1" ctrllimited="true"/>
-    <motor joint="l_upper_arm_roll_joint" ctrlrange="-0.1 0.1" ctrllimited="true"/>
-    <motor joint="l_elbow_flex_joint" ctrlrange="-0.1 0.1" ctrllimited="true"/>
-    <motor joint="l_forearm_roll_joint" ctrlrange="-0.1 0.1" ctrllimited="true"/>
-    <motor joint="l_wrist_flex_joint" ctrlrange="-0.1 0.1" ctrllimited="true"/>
-    <motor joint="l_wrist_roll_joint" ctrlrange="-0.1 0.1" ctrllimited="true"/>
+    <motor joint="l_shoulder_pan_joint" ctrlrange="-0.5 0.5" ctrllimited="true"/>
+    <motor joint="l_shoulder_lift_joint" ctrlrange="-0.5 0.5" ctrllimited="true"/>
+    <motor joint="l_upper_arm_roll_joint" ctrlrange="-0.5 0.5" ctrllimited="true"/>
+    <motor joint="l_elbow_flex_joint" ctrlrange="-0.5 0.5" ctrllimited="true"/>
+    <motor joint="l_forearm_roll_joint" ctrlrange="-0.5 0.5" ctrllimited="true"/>
+    <motor joint="l_wrist_flex_joint" ctrlrange="-0.5 0.5" ctrllimited="true"/>
+    <motor joint="l_wrist_roll_joint" ctrlrange="-0.5 0.5" ctrllimited="true"/>
     <!--general site="lego_target" gear="0 0 -1 0 0 0" dynprm="0 0 0" gainprm="0 0 0" biastype="affine" biasprm="0.981 0 0"/-->
 </actuator>
 </mujoco>

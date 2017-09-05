@@ -200,7 +200,7 @@ if __name__ == '__main__':
                 stub_method_call=run_task,
                 variant=vv,
                 mode='local',
-                n_parallel=1,
+                n_parallel=n_parallel,
                 # Only keep the snapshot parameters for the last iteration
                 snapshot_mode="last",
                 seed=vv['seed'],

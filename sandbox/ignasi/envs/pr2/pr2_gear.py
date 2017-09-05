@@ -79,7 +79,6 @@ class Pr2GearEnv(MujocoEnv, Serializable):
     reward = -distance_to_goal
     ob = self.get_current_obs()
     done = False
-    print(distance_to_goal)
 
     if self.kill_outside and (distance_to_goal > self.kill_radius):
       print("******** OUT of region ********")
