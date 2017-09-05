@@ -1,5 +1,4 @@
 data
-data_upload
 upload
 *.pyc
 *-checkpoint.ipynb
