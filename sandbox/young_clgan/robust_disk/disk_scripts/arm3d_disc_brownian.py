@@ -119,24 +119,26 @@ if __name__ == '__main__':
     vg.add('seed', [14,23,33])
 
     vg.add('generating_test_set', [False]) #TODO can change
-    vg.add('move_peg', [True, False]) # whether or not to move peg
+    vg.add('move_peg', [True]) # whether or not to move peg
     vg.add('kill_radius', [0.4])
     vg.add('kill_peg_radius', [0.05])
     vg.add('max_gen_states', [300000])
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position
-    vg.add('action_penalty_inner_weight', [1e-5, 1e-6])
+    vg.add('action_penalty_inner_weight', [0, 1e-6])
     vg.add('action_penalty', [1])
 
-    exp_prefix = "robust-disk-test8"
+    vg.add('random_torques', [True, False])
+
+    exp_prefix = "robust-disk-test9"
     # exp_prefix = 'robust-disk-gen-states-density2'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
-    # mode = "ec2"
-    mode="local"
+    mode = "ec2"
+    # mode="local"
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
             # choose subnet
@@ -198,7 +200,7 @@ if __name__ == '__main__':
                 stub_method_call=run_task,
                 variant=vv,
                 mode='local',
-                n_parallel=1,
+                n_parallel=8,
                 # Only keep the snapshot parameters for the last iteration
                 snapshot_mode="last",
                 seed=vv['seed'],

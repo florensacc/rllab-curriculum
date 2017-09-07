@@ -137,19 +137,19 @@
         </body>
 
         <body name="wa1" pos="0.256 0.3 -0.62">
-            <geom name="wa1" rgba="0.5 0.2 0.8 0.5" type="box" size="0.143 0.469 0.025" contype="1" conaffinity="1" />
+            <geom name="wa1" rgba="0.2 1 1 0.5" type="box" size="0.143 0.469 0.025" contype="1" conaffinity="1" />
         </body>
 
         <body name="wa2" pos="-0.216 0.3 -0.62">
-            <geom name="wa2" rgba="0.5 0.2 0.8 0.5" type="box" size="0.183 0.469 0.025" contype="1" conaffinity="1" />
+            <geom name="wa2" rgba="0.2 1 1 0.5" type="box" size="0.183 0.469 0.025" contype="1" conaffinity="1" />
         </body>
 
         <body name="wa3" pos="0.0 0.586 -0.62">
-            <geom name="wa3" rgba="0.5 0.2 0.8 0.5" type="box" size="0.032 0.183 0.025" contype="1" conaffinity="1" />
+            <geom name="wa3" rgba="0.2 1 1 0.5" type="box" size="0.032 0.183 0.025" contype="1" conaffinity="1" />
         </body>
 
         <body name="wa4" pos="0.0 0.084 -0.62">
-            <geom name="wa4" rgba="0.5 0.2 0.8 0.5" type="box" size="0.032 0.19 0.025" contype="1" conaffinity="1" />  <!--<0.19 was 0.183>-->
+            <geom name="wa4" rgba="0.2 1 1 0.5" type="box" size="0.032 0.19 0.025" contype="1" conaffinity="1" />  <!--<0.19 was 0.183>-->
         </body>
 
         <body name="wb1" pos="0.0 0.38 -0.648">

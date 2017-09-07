@@ -1,6 +1,5 @@
 import os
 import random
-import os.path as osp
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -12,62 +11,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-import random
-import numpy as np
-
-from rllab.misc import logger
-from collections import OrderedDict
-from sandbox.young_clgan.logging import HTMLReport
-from sandbox.young_clgan.logging import format_dict
-from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
-from rllab.envs.normalized_env import normalize
-from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
-
-from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states, label_states_from_paths
-from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator
-from sandbox.young_clgan.state.utils import StateCollection, SmartStateCollection
-from sandbox.young_clgan.robust_disk.envs.arm3d_disc_env import Arm3dDiscEnv
-
-from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasible_states
-from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
-from sandbox.young_clgan.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
-
-"""
-Generates the test set
-"""
-
-def run_task(v):
-    random.seed(v['seed'])
-    np.random.seed(v['seed'])
-
-
-    if v['move_peg']:
-        gen_states_env = DiskGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'], kill_radius=v['kill_radius'])
-    else:
-        # cannot move the peg
-        gen_states_env = Arm3dDiscEnv()
-    with gen_states_env.set_kill_outside():
-        seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=v['brownian_horizon'], animated=False,
-                                      variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=1)
-
-
-    if v['peg_positions']:
-        def states_transform(x):
-            y = list(x)
-            for joint in (7,8):
-                y[joint] *= 10
-            # for joint in v['peg_positions']:
-            #     y[joint] *= v['peg_scaling']
-            return y
-    else:
-        states_transform = None
-    with gen_states_env.set_kill_outside():
-        find_all_feasible_states(gen_states_env, seed_starts, distance_threshold=0.1,
-                                 brownian_variance=1, animate=False, max_states=v['max_gen_states'],
-                                 horizon=500,
-                                 # states_transform= states_transform
-                                 )
-        import sys; sys.exit(0)
+from sandbox.young_clgan.robust_disk.disk_scripts.arm3d_disc_brownian_algo import run_task
 
 if __name__ == '__main__':
 
@@ -89,8 +33,8 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        # "us-east-2a", "us-east-2b",
-        'us-east-1a', 'us-east-1d', 'us-east-1e'
+        "us-east-2c", "us-east-2b", "us-east-2a"
+        # 'us-east-1a', 'us-east-1d', 'us-east-1e'
     ]
     # subnets = [
     #     'ap-northeast-2a', 'ap-northeast-2c', 'us-east-2b', 'ap-south-1a', 'us-east-2c', 'us-east-2a', 'ap-south-1b',
@@ -115,7 +59,10 @@ if __name__ == '__main__':
 
     vg = VariantGenerator()
     vg.add('start_size', [9])
-
+    # vg.add('start_bounds',
+    #        [[(-2.2854, -.05236, -3.9, -2.3213, -3.15, -2.094, -3.15, 0, 0),
+    #          (1.714602, 1.3963, 0.0, 0.0, 3.15, 0.0, 3.15, 0, 0)]])
+    # vg.add('start_goal', [(0.386884635, 1.13705218, -2.02754147, -1.74429440, 2.02916096, -0.873269847, 1.54785694)])
     vg.add('start_goal', [(0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0)])
     vg.add('ultimate_goal', [(0., 0.3, -0.4)])
     vg.add('goal_size', [3]) # changed
@@ -144,7 +91,7 @@ if __name__ == '__main__':
     vg.add('coll_eps', lambda terminal_eps: [terminal_eps])
     vg.add('num_new_starts', [200])
     vg.add('num_old_starts', [100])
-    vg.add('smart_replay_buffer', [True])
+    vg.add('smart_replay_buffer', [False])
     # vg.add('smart_replay_buffer', [True])
     vg.add('smart_replay_abs', [True])
     # vg.add('smart_replay_abs', [True, False])
@@ -152,10 +99,11 @@ if __name__ == '__main__':
     vg.add('smart_replay_eps', [0.5])
     # vg.add('smart_replay_eps', [1.0])  # should break
     # sampling params
-    vg.add('horizon', [500])
+    vg.add('horizon', [1000]) # MULTIPLE
     vg.add('outer_iters', [5000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
     vg.add('pg_batch_size', [100000])
+    # vg.add('pg_batch_size', [50000, 100000])
     # policy initialization
     vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
@@ -168,38 +116,96 @@ if __name__ == '__main__':
     # vg.add('policy', ['recurrent', 'mlp'])
 
     # vg.add('seed', range(100, 600, 100))
-    vg.add('seed', [13])
+    vg.add('seed', [14,23,33])
 
     vg.add('generating_test_set', [False]) #TODO can change
     vg.add('move_peg', [True]) # whether or not to move peg
-    vg.add('kill_radius', [0.3])
+    vg.add('kill_radius', [0.4])
     vg.add('kill_peg_radius', [0.05])
-    vg.add('max_gen_states', [500000])
+    vg.add('max_gen_states', [300000])
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position
+    vg.add('action_penalty_inner_weight', [0, 1e-6])
+    vg.add('action_penalty', [1])
 
-    # exp_prefix = "robust-disk-test2"
-    exp_prefix = 'gen500_radius0.3'
+    vg.add('random_torques', [True, False])
+
+    exp_prefix = "robust-disk-test9"
+    # exp_prefix = 'robust-disk-gen-states-density2'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
     mode = "ec2"
-    mode="local"
+    # mode="local"
     for vv in vg.variants():
+        if mode in ['ec2', 'local_docker']:
+            # choose subnet
+            subnet = random.choice(subnets)
+            config.AWS_REGION_NAME = subnet[:-1]
+            config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
+                config.AWS_REGION_NAME]
+            config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
+                config.AWS_REGION_NAME]
+            config.AWS_SECURITY_GROUP_IDS = \
+                config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
+                    config.AWS_REGION_NAME]
+            config.AWS_NETWORK_INTERFACES = [
+                dict(
+                    SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
+                    Groups=config.AWS_SECURITY_GROUP_IDS,
+                    DeviceIndex=0,
+                    AssociatePublicIpAddress=True,
+                )
+            ]
 
-        # run_task(vv)
-        run_experiment_lite(
-            # use_cloudpickle=False,
-            stub_method_call=run_task,
-            variant=vv,
-            mode='local',
-            n_parallel=3,
-            # Only keep the snapshot parameters for the last iteration
-            snapshot_mode="last",
-            seed=vv['seed'],
-            exp_prefix=exp_prefix,
-            plot=True,
-            # exp_name=exp_name,
-        )
+            run_experiment_lite(
+                # use_cloudpickle=False,
+                stub_method_call=run_task,
+                variant=vv,
+                mode=mode,
+                # Number of parallel workers for sampling
+                n_parallel=n_parallel,
+                # Only keep the snapshot parameters for the last iteration
+                snapshot_mode="last",
+                seed=vv['seed'],
+                # plot=True,
+                exp_prefix=exp_prefix,
+                # exp_name=exp_name,
+                # for sync the pkl file also during the training
+                sync_s3_pkl=True,
+                # sync_s3_png=True,
+                sync_s3_html=True,
+                # # use this ONLY with ec2 or local_docker!!!
+                pre_commands=[
+                    'export MPLBACKEND=Agg',
+                    'pip install --upgrade pip',
+                    'pip install --upgrade -I tensorflow',
+                    'pip install git+https://github.com/tflearn/tflearn.git',
+                    'pip install dominate',
+                    'pip install multiprocessing_on_dill',
+                    'pip install scikit-image',
+                    'conda install numpy -n rllab3 -y',
+                ],
+                # terminate_machine=False,
+            )
+            #sys.exit()
+            # if mode == 'local_docker':
+            #     sys.exit()
+        else:
+            # run_task(vv)
+            run_experiment_lite(
+                # use_cloudpickle=False,
+                stub_method_call=run_task,
+                variant=vv,
+                mode='local',
+                n_parallel=8,
+                # Only keep the snapshot parameters for the last iteration
+                snapshot_mode="last",
+                seed=vv['seed'],
+                exp_prefix=exp_prefix,
+                plot=True,
+                # exp_name=exp_name,
+            )
+            sys.exit()

@@ -54,10 +54,10 @@ def run_task(v):
     report.add_text(format_dict(v))
 
     if v['action_penalty']:
-        inner_env = normalize(Arm3dDiscEnv(action_penalty=True, action_torque_lambda=v['action_penalty']))
+        inner_env = normalize(Arm3dDiscEnv(action_penalty=True, action_torque_lambda=v['action_penalty'], random_torques=v['random_torques']))
         v['inner_weight'] = v['action_penalty_inner_weight']
     else:
-        inner_env = normalize(Arm3dDiscEnv())
+        inner_env = normalize(Arm3dDiscEnv(random_torques=v['random_torques']))
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
     fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
