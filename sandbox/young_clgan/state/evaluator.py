@@ -160,7 +160,7 @@ def label_states_from_paths(all_paths, min_reward=0, max_reward=1, key='rewards'
 
 
 def label_states(states, env, policy, horizon, as_goals=True, min_reward=0.1, max_reward=0.9, key='rewards',
-                 old_rewards=None, improvement_threshold=0, n_traj=1, n_processes=-1, full_path=False):
+                 old_rewards=None, improvement_threshold=0.1, n_traj=1, n_processes=-1, full_path=False, return_rew=False):
     logger.log("Labelling starts")
     result = evaluate_states(
         states, env, policy, horizon, as_goals=as_goals,
@@ -179,17 +179,19 @@ def label_states(states, env, policy, horizon, as_goals=True, min_reward=0.1, ma
 
     if full_path:
         return labels, paths
+    elif return_rew:
+        return labels, mean_rewards
     return labels
 
 
-def compute_labels(mean_rewards, old_rewards=None, min_reward=0, max_reward=1, improvement_threshold=0):
+def compute_labels(mean_rewards, old_rewards=None, min_reward=0.1, max_reward=0.9, improvement_threshold=0.1):
     logger.log("Computing state labels")
     if old_rewards is not None:
         old_rewards = old_rewards.reshape(-1, 1)
         labels = np.hstack(
             [mean_rewards > min_reward,  # np.zeros_like(mean_rewards > min_reward, dtype=float), #
              mean_rewards < max_reward,  # np.zeros_like(mean_rewards < max_reward, dtype=float),  #
-             mean_rewards - old_rewards >= improvement_threshold
+             np.abs(mean_rewards - old_rewards) >= improvement_threshold
              # np.zeros_like(mean_rewards - old_rewards >= improvement_threshold, dtype=float),
              #
              ]
@@ -215,7 +217,7 @@ def convert_label(labels):
         # 1: r'High rewards: $\bar{R}>R_{\max}$',
         1: 'High rewards',
         2: 'Good goals',
-        3: 'Unlearnable',
+        3: 'Performance Variation',
         4: 'Other',
     })
     new_labels = 4 * np.ones(labels.shape[0], dtype=int)
@@ -224,10 +226,11 @@ def convert_label(labels):
     new_labels[labels[:, 1] == False] = 1
     if np.shape(labels)[-1] == 3:
         new_labels[
-            np.logical_and(
-                np.logical_and(labels[:, 0], labels[:, 1]),
-                labels[:, 2] == False
-            )
+            labels[:, -1] == True
+            # np.logical_and(
+                # np.logical_and(labels[:, 0], labels[:, 1]),
+                # labels[:, 2] == False
+            # )
         ] = 3
     if np.shape(labels)[-1] == 4:
         new_labels = 4 * np.ones_like(new_labels)

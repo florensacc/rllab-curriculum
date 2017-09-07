@@ -101,7 +101,7 @@ def plot_labeled_states(states, labels, convert_labels=convert_label, report=Non
 
 
 def plot_labeled_samples(samples, sample_classes=None, text_labels=None, markers=None, fname=None, limit=None,
-                         center=None, size=1000, colors=('r', 'g', 'b', 'o', 'k'), bounds=None, maze_id=None):
+                         center=None, size=1000, colors=('r', 'g', 'b', 'm', 'k'), bounds=None, maze_id=None):
     """
     :param samples: 
     :param sample_classes: numerical value of the class

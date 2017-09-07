@@ -17,7 +17,7 @@ from sandbox.young_clgan.experiments.goals.maze_ant.maze_ant_gan_algo import run
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ec2', '-e', action='store_true', default=True, help="add flag to run in ec2")
+    parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
     parser.add_argument('--clone', '-c', action='store_true', default=False,
                         help="add flag to copy file and checkout current")
     parser.add_argument('--local_docker', '-d', action='store_true', default=False,
@@ -34,9 +34,9 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        'us-east-2a', 'us-east-2b', 'us-east-2c', 'ap-northeast-2c', 'ap-northeast-2a', 'ap-south-1a'
+        'us-east-2b', 'us-east-2c', 'us-east-2a', 'eu-central-1b', 'eu-central-1a'
     ]
-    ec2_instance = args.type if args.type else 'c4.4xlarge'
+    ec2_instance = args.type if args.type else 'm4.4xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -52,11 +52,10 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    #exp_prefix = 'new-goalGAN-maze-ant-largeEps-redo'
-    #exp_prefix = 'goals-selfplay-maze-ant1'
-    exp_prefix = 'goals-GAN-maze-ant3'
+    exp_prefix = 'new2-goals-GAN-maze-ant-variation'
 
     vg = VariantGenerator()
+    vg.add('maze_id', [0])
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('terminal_eps', [1])
     vg.add('only_feasible', [True])
@@ -71,6 +70,8 @@ if __name__ == '__main__':
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('with_replacement', [False])
     vg.add('smart_init', [True])
+    vg.add('label_with_variation', [True])
+    vg.add('use_trpo_paths', lambda label_with_variation: [False] if label_with_variation else [False, True])
     # replay buffer
     vg.add('replay_buffer', [True])
     vg.add('coll_eps', [0.3])
@@ -79,7 +80,7 @@ if __name__ == '__main__':
     vg.add('add_on_policy', [True])
     # sampling params
     vg.add('horizon', [500])
-    vg.add('outer_iters', [350])
+    vg.add('outer_iters', [500])
     vg.add('inner_iters', [5])
     vg.add('pg_batch_size', [100000])
     # policy initialization
@@ -95,7 +96,7 @@ if __name__ == '__main__':
     vg.add('goal_noise_level', [0.5])
     vg.add('gan_outer_iters', [250])
 
-    vg.add('seed', range(100, 700, 100))
+    vg.add('seed', range(1000, 2000, 100))
 
 
     # # gan_configs

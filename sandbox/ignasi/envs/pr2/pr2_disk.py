@@ -12,8 +12,8 @@ from rllab.misc.overrides import overrides
 from contextlib import contextmanager
 
 
-class Pr2GearEnv(MujocoEnv, Serializable):
-  FILE = "pr2_table.xml"
+class Pr2DiskEnv(MujocoEnv, Serializable):
+  FILE = "pr2_disk.xml"
 
   def __init__(self,
                init_solved=True,
@@ -32,9 +32,9 @@ class Pr2GearEnv(MujocoEnv, Serializable):
   @overrides
   def get_current_obs(self):
     return np.concatenate([
-      self.model.data.qpos.flat,  # [:self.model.nq // 2],
-      self.model.data.qvel.flat,  # [:self.model.nq // 2],
-      # self.model.data.site_xpos[0], # disc position
+      self.model.data.qpos.flat,     # [:self.model.nq // 2],
+      self.model.data.qvel.flat,     # [:self.model.nq // 2],
+      self.model.data.site_xpos[0],  # disc position
     ])
 
   @contextmanager
@@ -67,7 +67,7 @@ class Pr2GearEnv(MujocoEnv, Serializable):
     # id_tool = self.model.body_names.index('gear')
     # xfrc[id_tool, 2] = - 9.81 * np.random.uniform(0.05, 0.5)
     # self.model.data.xfrc_applied = xfrc
-    ret = super(Pr2GearEnv, self).reset(init_state, *args, **kwargs)
+    ret = super(Pr2DiskEnv, self).reset(init_state, *args, **kwargs)
     # self.current_goal = self.model.data.geom_xpos[-1][:2]
     # print(self.current_goal) # I think this is the location of the peg
     return ret
@@ -79,6 +79,7 @@ class Pr2GearEnv(MujocoEnv, Serializable):
     reward = -distance_to_goal
     ob = self.get_current_obs()
     done = False
+    print("dist_to_goal: {}, rew: {}, next_obs: {}".format(distance_to_goal, reward, ob))
 
     if self.kill_outside and (distance_to_goal > self.kill_radius):
       print("******** OUT of region ********")
@@ -92,13 +93,13 @@ class Pr2GearEnv(MujocoEnv, Serializable):
     id_gear = self.model.body_names.index('gear')
     return self.model.data.xpos[id_gear]
 
-
   def get_goal_position(self):
     return np.array([0.4146814, 0.47640087, 0.5305665])
 
   def get_vec_to_goal(self):
     disc_pos = self.get_disc_position()
     goal_pos = self.get_goal_position()
+    print("disc pos: {}, goal_pos: {}".format(disc_pos, goal_pos))
     return disc_pos - goal_pos  # note: great place for breakpoint!
 
   def get_distance_to_goal(self):

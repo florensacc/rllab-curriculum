@@ -40,8 +40,9 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        'us-east-2c', 'us-east-2a', 'us-east-2b', 'ap-northeast-2a', 'us-east-1a', 'us-east-1e', 'us-east-1b',
-        'us-east-1d', 'eu-west-1b', 'eu-west-1c', 'eu-west-1a'
+        'ap-southeast-1b', 'ap-south-1a', 'us-east-2c', 'us-east-2a', 'us-east-2b', 'ap-northeast-2a',
+        'ap-northeast-2c', 'ap-south-1b', 'us-east-1a', 'us-east-1b', 'us-east-1d', 'sa-east-1a', 'ap-northeast-1a',
+        'us-east-1e', 'us-east-1f', 'eu-west-1b'
     ]
     ec2_instance = args.type if args.type else 'c4.4xlarge' #'m4.10xlarge'
     # configure instan
@@ -59,7 +60,7 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'goal-sagg-riac-maze-ant'
+    exp_prefix = 'new2-goal-sagg-riac-maze-ant'
 
     vg = VariantGenerator()
     vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
@@ -73,13 +74,13 @@ if __name__ == '__main__':
     vg.add('max_reward', [1])
     vg.add('distance_metric', ['L2'])
     vg.add('extend_dist_rew', [False])  # !!!!
-    vg.add('use_competence_ratio', [False, True])  # !!!!
+    vg.add('use_competence_ratio', [False])  # !!!!
     vg.add('goal_weight', lambda extend_dist_rew: [0] if extend_dist_rew else [1])
     vg.add('persistence', [1])
     if fast_mode:
         vg.add('n_traj', [1])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     else:
-        vg.add('n_traj', [1])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
+        vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('sampling_res', [2])
     vg.add('with_replacement', [False])
     vg.add('num_new_goals', [300]) #TODO - change back to 200 when we restore replay buffer
@@ -89,7 +90,7 @@ if __name__ == '__main__':
     vg.add('coll_eps', [0])
     # vg.add('add_on_policy', [False]) #TODO - change back to true
     # # sampling params
-    vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
+    vg.add('horizon', [500])
     vg.add('outer_iters', [500]) #lambda maze_id: [400] if maze_id == 0 else [10000])
     # policy initialization
     vg.add('output_gain', [1])
@@ -98,19 +99,19 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.99]) #lambda horizon: [1-1.0/horizon])
     # Oudeyer params
-    vg.add('max_goals', [100, 250, 500])
-    vg.add('max_history', [100, 50])
+    vg.add('max_goals', [250])
+    vg.add('max_history', [100])
 
     vg.add('fast_mode', [fast_mode])
     if args.debug or fast_mode:
         vg.add('pg_batch_size', [20000])
         vg.add('inner_iters', [1])
     else:
-        vg.add('pg_batch_size', [20000])
+        vg.add('pg_batch_size', [100000])
         vg.add('inner_iters', [5])
 
     if args.ec2:
-        vg.add('seed', range(100, 400, 100))
+        vg.add('seed', range(500, 1200, 100))
     else:
         vg.add('seed', [100])
 

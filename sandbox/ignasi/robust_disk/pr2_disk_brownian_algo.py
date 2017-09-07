@@ -3,10 +3,9 @@ import pickle
 import matplotlib
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.policies.gaussian_gru_policy import GaussianGRUPolicy
-#from sandbox.ignasi.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
+
 # modified to make changes to the environment
-from sandbox.ignasi.robust_disk.envs.arm3d_disc_env import Arm3dDiscEnv
-from sandbox.ignasi.envs.pr2.pr2_gear import Pr2GearEnv as Arm3dDiscEnv
+from sandbox.ignasi.envs.pr2.pr2_disk import Pr2DiskEnv
 
 from sandbox.ignasi.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
 
@@ -56,7 +55,7 @@ def run_task(v):
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
 
-    inner_env = normalize(Arm3dDiscEnv())
+    inner_env = normalize(Pr2DiskEnv())
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
     fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
@@ -76,11 +75,11 @@ def run_task(v):
         append_goal_to_observation = False, # prevents goal environment from appending observation
     )
 
-    if v['move_peg']:
+    if v['move_peg']:  # todo: change this to the PR2 model
         gen_states_env = DiskGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'], kill_radius=v['kill_radius'])
     else:
         # cannot move the peg
-        gen_states_env = Arm3dDiscEnv()
+        gen_states_env = env
 
     if v['policy'] == 'mlp':
         policy = GaussianMLPPolicy(
@@ -120,8 +119,8 @@ def run_task(v):
         all_starts = StateCollection(distance_threshold=v['coll_eps'])
     brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
     with gen_states_env.set_kill_outside():
-        seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=v['brownian_horizon'], animated=False, speedup=100,
-                                      variance=v['brownian_variance'], subsample=v['num_new_starts']
+        seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=100 * v['brownian_horizon'], animated=True, speedup=100,
+                                      variance=v['brownian_variance'], subsample=v['num_new_starts'], zero_action=True
                                       )
                                       #   animated=True, speedup=1)
 

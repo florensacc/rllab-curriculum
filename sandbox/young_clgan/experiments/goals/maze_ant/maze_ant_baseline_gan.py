@@ -56,12 +56,12 @@ if __name__ == '__main__':
     exp_prefix = 'new-baselineGAN-maze-ant'
 
     vg = VariantGenerator()
-    vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
-    vg.add('terminal_eps', [0.5, 1])
-    vg.add('only_feasible', [True])
     vg.add('maze_id', [0])
-    vg.add('goal_range', lambda maze_id: [5] if maze_id==0 else [7])  # this will be used also as bound of the state_space
-    vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id==0 else [(0,0)])
+    vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
+    vg.add('terminal_eps', [1])
+    vg.add('only_feasible', [True])
+    vg.add('goal_range', lambda maze_id: [5])  # this will be used also as bound of the state_space
+    vg.add('goal_center', [(2, 2)])
     # goal-algo params
     vg.add('min_reward', [0])
     vg.add('max_reward', [1])
@@ -70,9 +70,9 @@ if __name__ == '__main__':
     vg.add('persistence', [1])
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('with_replacement', [False])
-    vg.add('smart_init', [False])
+    vg.add('smart_init', [True])
     # replay buffer
-    vg.add('replay_buffer', [False])
+    vg.add('replay_buffer', [True])
     vg.add('coll_eps', [0.3])
     vg.add('num_new_goals', [200])
     vg.add('num_old_goals', [100])

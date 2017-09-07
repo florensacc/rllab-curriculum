@@ -11,7 +11,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.ignasi.robust_disk.arm3d_disc_brownian_algo import run_task
+from sandbox.ignasi.robust_disk.pr2_disk_brownian_algo import run_task
 
 if __name__ == '__main__':
 

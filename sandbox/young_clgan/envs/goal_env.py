@@ -158,7 +158,7 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
             info['reward_dist'] = reward_dist = info['goal_reached'] * self.goal_weight
             # print(dist)
 
-            # print(info['goal_reached'])
+            print(info['goal_reached'])
             # print(done)
         info['goal'] = self.current_goal
         # print(reward_dist)
