@@ -471,12 +471,9 @@
             <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>
             <geom name="base_obj" pos="0 0 0.02" type="box" size="0.03 0.03 0.02" rgba="1 0 0 1" contype="1" conaffinity="1"/>
             <body name="cyl" pos="0 0 0.04">
-                <!--geom name="base_obj" pos="0 0 0" mesh="base_plate" rgba="1 1 0 1" solref="0.001 1" contype="1" conaffinity="1" solimp="0.999 0.999 0.001"/-->
                 <geom name="cyl" pos="0 0 0.0325" type="cylinder" size="0.0125 0.0325" rgba="1 1 0 1" solref="0.001 1" solimp="0.999 0.999 0.001" contype="1" conaffinity="1"/>
-                <!--joint pos="0 0 0" type="slide" name="slider1" axis="0 0 1" damping="0.0" range="-4 4" /-->
             </body>
         </body>
-
 
         <!--<body name="OBJ_brick1" pos ="0.6 0.2 0.5249">
             <joint type="free" />
@@ -520,13 +517,13 @@
 
     </worldbody>
 <actuator>
-    <motor joint="l_shoulder_pan_joint" ctrlrange="-0.5 0.5" ctrllimited="true"/>
-    <motor joint="l_shoulder_lift_joint" ctrlrange="-0.5 0.5" ctrllimited="true"/>
-    <motor joint="l_upper_arm_roll_joint" ctrlrange="-0.5 0.5" ctrllimited="true"/>
-    <motor joint="l_elbow_flex_joint" ctrlrange="-0.5 0.5" ctrllimited="true"/>
-    <motor joint="l_forearm_roll_joint" ctrlrange="-0.5 0.5" ctrllimited="true"/>
-    <motor joint="l_wrist_flex_joint" ctrlrange="-0.5 0.5" ctrllimited="true"/>
-    <motor joint="l_wrist_roll_joint" ctrlrange="-0.5 0.5" ctrllimited="true"/>
+    <motor joint="l_shoulder_pan_joint" ctrlrange="-1 1" ctrllimited="true"/>
+    <motor joint="l_shoulder_lift_joint" ctrlrange="-1 1" ctrllimited="true"/>
+    <motor joint="l_upper_arm_roll_joint" ctrlrange="-1 1" ctrllimited="true"/>
+    <motor joint="l_elbow_flex_joint" ctrlrange="-1 1" ctrllimited="true"/>
+    <motor joint="l_forearm_roll_joint" ctrlrange="-1 1" ctrllimited="true"/>
+    <motor joint="l_wrist_flex_joint" ctrlrange="-1 1" ctrllimited="true"/>
+    <motor joint="l_wrist_roll_joint" ctrlrange="-1 1" ctrllimited="true"/>
     <!--general site="lego_target" gear="0 0 -1 0 0 0" dynprm="0 0 0" gainprm="0 0 0" biastype="affine" biasprm="0.981 0 0"/-->
 </actuator>
 </mujoco>
