@@ -1,6 +1,6 @@
 import matplotlib
-from sandbox.ignasi.envs.start_env import generate_starts_alice
-from sandbox.ignasi.experiments.asym_selfplay.envs.alice_env import AliceEnv
+from sandbox.young_clgan.envs.start_env import generate_starts_alice
+from sandbox.young_clgan.experiments.asym_selfplay.envs.alice_env import AliceEnv
 
 matplotlib.use('Agg')
 import os
@@ -13,10 +13,10 @@ import tflearn
 from collections import OrderedDict
 
 from rllab.misc import logger
-from sandbox.ignasi.logging import HTMLReport
-from sandbox.ignasi.logging import format_dict
-from sandbox.ignasi.logging.logger import ExperimentLogger
-from sandbox.ignasi.logging.visualization import plot_labeled_states
+from sandbox.young_clgan.logging import HTMLReport
+from sandbox.young_clgan.logging import format_dict
+from sandbox.young_clgan.logging.logger import ExperimentLogger
+from sandbox.young_clgan.logging.visualization import plot_labeled_states
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -26,14 +26,14 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.ignasi.state.evaluator import label_states, label_states_from_paths
-from sandbox.ignasi.envs.base import UniformListStateGenerator, UniformStateGenerator
-from sandbox.ignasi.state.generator import StateGAN
-from sandbox.ignasi.state.utils import StateCollection
+from sandbox.young_clgan.state.evaluator import label_states, label_states_from_paths
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator
+from sandbox.young_clgan.state.generator import StateGAN
+from sandbox.young_clgan.state.utils import StateCollection
 
-from sandbox.ignasi.envs.goal_env import GoalExplorationEnv, generate_initial_goals
-from sandbox.ignasi.envs.maze.maze_evaluate import test_and_plot_policy  # TODO: make this external to maze env
-from sandbox.ignasi.envs.maze.point_maze_env import PointMazeEnv
+from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, generate_initial_goals
+from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy  # TODO: make this external to maze env
+from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 

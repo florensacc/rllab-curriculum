@@ -10,7 +10,7 @@ from rllab.misc import logger
 from rllab.spaces.box import Box
 from rllab.misc.overrides import overrides
 
-from sandbox.ignasi.envs.goal_env import GoalEnv
+from sandbox.young_clgan.envs.goal_env import GoalEnv
 
 
 

@@ -6,7 +6,7 @@ import tensorflow as tf
 
 from rllab.sampler.utils import rollout
 from rllab.misc.ext import set_seed
-from sandbox.ignasi.envs.base import FixedStateGenerator
+from sandbox.young_clgan.envs.base import FixedStateGenerator
 
 def ant_evaluate(env, policy, init_state = None, max_path_length = 2000, animated = True, speedup = 2):
     if init_state is not None:

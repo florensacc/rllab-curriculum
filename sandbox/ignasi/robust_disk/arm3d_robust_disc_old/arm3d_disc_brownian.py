@@ -11,7 +11,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.ignasi.robust_disk.arm3d_robust_disc_old.arm3d_disc_brownian_algo import run_task
+from sandbox.young_clgan.robust_disk.arm3d_robust_disc_old.arm3d_disc_brownian_algo import run_task
 
 if __name__ == '__main__':
 
@@ -103,6 +103,7 @@ if __name__ == '__main__':
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
     vg.add('pg_batch_size', [20000])
     # policy initialization
+    vg.add('policy', ['recurrent'])
     vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [False])

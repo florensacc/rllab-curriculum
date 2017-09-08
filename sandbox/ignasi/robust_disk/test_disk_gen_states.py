@@ -3,7 +3,7 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import run_experiment_lite, VariantGenerator
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
-from sandbox.ignasi.robust_disk.envs import DiskGenerateStatesEnv
+from sandbox.young_clgan.robust_disk.envs import DiskGenerateStatesEnv
 
 """
 Allows for testing of Brownian motion.

@@ -6,8 +6,8 @@ import tensorflow as tf
 
 from rllab.sampler.utils import rollout
 from rllab.misc.ext import set_seed
-from sandbox.ignasi.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
-from sandbox.ignasi.envs.base import FixedStateGenerator
+from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
+from sandbox.young_clgan.envs.base import FixedStateGenerator
 import numpy as np
 import csv
 

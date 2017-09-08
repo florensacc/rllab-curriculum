@@ -6,9 +6,9 @@ from rllab.envs.mujoco.maze.point_maze_env import PointMazeEnv
 from rllab.misc import logger
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.sampler.utils import rollout
-from sandbox.ignasi.envs.base import UniformListStateGenerator, FixedStateGenerator
-from sandbox.ignasi.experiments.asym_selfplay.envs.alice_env import AliceEnv
-from sandbox.ignasi.logging import ExperimentLogger
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator
+from sandbox.young_clgan.experiments.asym_selfplay.envs.alice_env import AliceEnv
+from sandbox.young_clgan.logging import ExperimentLogger
 
 
 class AsymSelfplayBatch(object):

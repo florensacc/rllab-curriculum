@@ -2,8 +2,8 @@ import matplotlib
 import cloudpickle
 import pickle
 
-from sandbox.ignasi.experiments.asym_selfplay.algos.online_tscl import Online_TCSL
-from sandbox.ignasi.logging.visualization import plot_labeled_states
+from sandbox.young_clgan.experiments.asym_selfplay.algos.online_tscl import Online_TCSL
+from sandbox.young_clgan.logging.visualization import plot_labeled_states
 
 matplotlib.use('Agg')
 import os
@@ -14,9 +14,9 @@ import numpy as np
 
 from rllab.misc import logger
 from collections import OrderedDict
-from sandbox.ignasi.logging import HTMLReport
-from sandbox.ignasi.logging import format_dict
-from sandbox.ignasi.logging.logger import ExperimentLogger
+from sandbox.young_clgan.logging import HTMLReport
+from sandbox.young_clgan.logging import format_dict
+from sandbox.young_clgan.logging.logger import ExperimentLogger
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -28,18 +28,18 @@ from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.ignasi.state.evaluator import convert_label, label_states, evaluate_states, label_states_from_paths, \
+from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states, label_states_from_paths, \
     compute_labels
-from sandbox.ignasi.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator, \
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator, \
     ListStateGenerator
-from sandbox.ignasi.state.utils import StateCollection
+from sandbox.young_clgan.state.utils import StateCollection
 
-from sandbox.ignasi.envs.start_env import generate_starts, find_all_feasible_states, check_feasibility, \
+from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasible_states, check_feasibility, \
     parallel_check_feasibility
-from sandbox.ignasi.envs.goal_start_env import GoalStartExplorationEnv
-from sandbox.ignasi.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
-from sandbox.ignasi.envs.maze.maze_ant.ant_maze_start_env import AntMazeEnv
-from sandbox.ignasi.envs.maze.maze_evaluate import test_and_plot_policy, sample_unif_feas, unwrap_maze, \
+from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
+from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
+from sandbox.young_clgan.envs.maze.maze_ant.ant_maze_start_env import AntMazeEnv
+from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy, sample_unif_feas, unwrap_maze, \
     plot_policy_means
 
 
@@ -102,7 +102,7 @@ def run_task(v):
 
     # can also filter these starts optionally
 
-    load_dir = 'sandbox/ignasi/experiments/starts/maze/maze_ant/'
+    load_dir = 'sandbox/young_clgan/experiments/starts/maze/maze_ant/'
     all_feasible_starts = pickle.load(
         open(osp.join(config.PROJECT_PATH, load_dir, 'good_all_feasible_starts.pkl'), 'rb'))
     logger.log("We have %d feasible starts" % all_feasible_starts.size)

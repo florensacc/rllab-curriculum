@@ -4,7 +4,7 @@ from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import run_experiment_lite
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.ignasi.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
+from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
 
 exp_prefix = 'disc_insertion1'
 

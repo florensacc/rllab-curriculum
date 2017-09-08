@@ -11,7 +11,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.ignasi.experiments.starts.arm3d.arm3d_key.arm3d_key_brownian_algo import run_task
+from sandbox.young_clgan.experiments.starts.arm3d.arm3d_key.arm3d_key_brownian_algo import run_task
 
 if __name__ == '__main__':
 

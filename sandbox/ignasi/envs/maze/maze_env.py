@@ -8,14 +8,14 @@ from rllab import spaces
 from rllab.envs.base import Step
 from rllab.envs.proxy_env import ProxyEnv
 # from rllab.envs.mujoco.maze.maze_env_utils import construct_maze
-from sandbox.ignasi.envs.maze.maze_env_utils import construct_maze
+from sandbox.young_clgan.envs.maze.maze_env_utils import construct_maze
 from rllab.envs.mujoco.mujoco_env import MODEL_DIR, BIG
 from rllab.envs.mujoco.maze.maze_env_utils import ray_segment_intersect, point_distance
 from rllab.core.serializable import Serializable
 from rllab.misc.overrides import overrides
 
 from rllab.misc import logger
-from sandbox.ignasi.envs.goal_env import GoalEnv, GoalExplorationEnv
+from sandbox.young_clgan.envs.goal_env import GoalEnv, GoalExplorationEnv
 
 
 class MazeEnv(ProxyEnv, Serializable):

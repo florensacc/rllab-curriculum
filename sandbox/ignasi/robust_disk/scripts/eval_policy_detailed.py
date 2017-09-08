@@ -6,7 +6,7 @@ import tensorflow as tf
 
 from rllab.sampler.utils import rollout
 from rllab.misc.ext import set_seed
-from sandbox.ignasi.envs.base import FixedStateGenerator, UniformListStateGenerator
+from sandbox.young_clgan.envs.base import FixedStateGenerator, UniformListStateGenerator
 import csv
 
 """

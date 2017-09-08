@@ -9,7 +9,7 @@ import time
 from rllab.sampler.utils import rollout
 from rllab.misc import logger
 
-from sandbox.ignasi.envs.base import FixedStateGenerator
+from sandbox.young_clgan.envs.base import FixedStateGenerator
 
 class FunctionWrapper(object):
     """Wrap a function for use with parallelized map.

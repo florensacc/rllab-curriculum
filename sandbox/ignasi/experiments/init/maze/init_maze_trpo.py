@@ -19,22 +19,22 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab import config
 from rllab.misc.instrument import VariantGenerator
 
-from sandbox.ignasi.utils import format_experiment_prefix
+from sandbox.young_clgan.utils import format_experiment_prefix
 
-from sandbox.ignasi.state.selectors import UniformStateSelector, UniformListStateSelector, FixedStateSelector
-from sandbox.ignasi.envs.init_sampler.base import  InitIdxEnv
-from sandbox.ignasi.logging.inner_logger import InnerExperimentLogger
+from sandbox.young_clgan.state.selectors import UniformStateSelector, UniformListStateSelector, FixedStateSelector
+from sandbox.young_clgan.envs.init_sampler.base import  InitIdxEnv
+from sandbox.young_clgan.logging.inner_logger import InnerExperimentLogger
 from sandbox.carlos_snn.autoclone import autoclone
 
-from sandbox.ignasi.envs.maze.maze_evaluate import test_and_plot_policy  # this used for both init and goal
-from sandbox.ignasi.envs.maze.point_maze_env import PointMazeEnv
-from sandbox.ignasi.logging import HTMLReport
-from sandbox.ignasi.logging import format_dict
-from sandbox.ignasi.logging.visualization import save_image, plot_labeled_samples
-from sandbox.ignasi.envs.base import FixedStateGenerator
+from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy  # this used for both init and goal
+from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
+from sandbox.young_clgan.logging import HTMLReport
+from sandbox.young_clgan.logging import format_dict
+from sandbox.young_clgan.logging.visualization import save_image, plot_labeled_samples
+from sandbox.young_clgan.envs.base import FixedStateGenerator
 
-from sandbox.ignasi.logging.logger import ExperimentLogger
-from sandbox.ignasi.state.evaluator import label_states, convert_label
+from sandbox.young_clgan.logging.logger import ExperimentLogger
+from sandbox.young_clgan.state.evaluator import label_states, convert_label
 from rllab.misc import logger
 
 

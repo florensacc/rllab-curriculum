@@ -1,4 +1,4 @@
-from sandbox.ignasi.envs.block_insertion.block_insertion_env import BLOCK_INSERTION_ENVS
+from sandbox.young_clgan.envs.block_insertion.block_insertion_env import BLOCK_INSERTION_ENVS
 import numpy as np
 
 inner_env = BLOCK_INSERTION_ENVS[0]()

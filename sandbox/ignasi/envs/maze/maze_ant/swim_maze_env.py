@@ -1,5 +1,5 @@
-from sandbox.ignasi.envs.maze.maze_env import MazeEnv
-from sandbox.ignasi.envs.maze.maze_swim.swimmer_env import SwimmerEnv
+from sandbox.young_clgan.envs.maze.maze_env import MazeEnv
+from sandbox.young_clgan.envs.maze.maze_swim.swimmer_env import SwimmerEnv
 
 
 class SwimmerMazeEnv(MazeEnv):

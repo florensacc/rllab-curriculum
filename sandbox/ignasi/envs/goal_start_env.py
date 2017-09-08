@@ -24,11 +24,11 @@ from rllab.sampler.utils import rollout
 from rllab.spaces.box import Box
 from rllab.misc.overrides import overrides
 
-from sandbox.ignasi.envs.base import StateGenerator, UniformListStateGenerator, \
+from sandbox.young_clgan.envs.base import StateGenerator, UniformListStateGenerator, \
     UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv
 
-from sandbox.ignasi.envs.goal_env import GoalExplorationEnv
-from sandbox.ignasi.envs.start_env import StartEnv, StartExplorationEnv
+from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv
+from sandbox.young_clgan.envs.start_env import StartEnv, StartExplorationEnv
 
 
 class GoalStartExplorationEnv(StartEnv, GoalExplorationEnv, Serializable):

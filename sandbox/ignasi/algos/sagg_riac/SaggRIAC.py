@@ -8,7 +8,7 @@ import pylab
 import matplotlib.colorbar as cbar
 import matplotlib.patches as patches
 
-from sandbox.ignasi.logging.visualization import save_image
+from sandbox.young_clgan.logging.visualization import save_image
 from rllab.misc import logger
 
 

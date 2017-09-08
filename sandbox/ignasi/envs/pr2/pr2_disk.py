@@ -20,6 +20,7 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
                kill_radius=0.4,
                *args, **kwargs):
     MujocoEnv.__init__(self, *args, **kwargs)
+    self.frame_skip = 5
     Serializable.quick_init(self, locals())
 
     # self.init_qvel = np.zeros_like(self.init_qvel)
@@ -63,11 +64,14 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
     self.model.dof_damping = damping[:, None]
     self.model.dof_frictionloss = frictionloss[:, None]
     self.model.dof_armature = armature[:, None]
-    # xfrc = np.zeros_like(self.model.data.xfrc_applied)
-    # id_tool = self.model.body_names.index('gear')
-    # xfrc[id_tool, 2] = - 9.81 * np.random.uniform(0.05, 0.5)
-    # self.model.data.xfrc_applied = xfrc
+    xfrc = np.zeros_like(self.model.data.xfrc_applied)
+    id_tool = self.model.body_names.index('gear')
+    xfrc[id_tool, 2] = - 9.81 * np.random.uniform(0.05, 0.5)
+    self.model.data.xfrc_applied = xfrc
     ret = super(Pr2DiskEnv, self).reset(init_state, *args, **kwargs)
+    # geom_pos = self.model.body_pos.copy()
+    # geom_pos[-2,:] += np.array([0,0,10])
+    # self.model.body_pos = geom_pos
     # self.current_goal = self.model.data.geom_xpos[-1][:2]
     # print(self.current_goal) # I think this is the location of the peg
     return ret
@@ -79,7 +83,7 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
     reward = -distance_to_goal
     ob = self.get_current_obs()
     done = False
-    print("dist_to_goal: {}, rew: {}, next_obs: {}".format(distance_to_goal, reward, ob))
+    # print("dist_to_goal: {}, rew: {}, next_obs: {}".format(distance_to_goal, reward, ob))
 
     if self.kill_outside and (distance_to_goal > self.kill_radius):
       print("******** OUT of region ********")
@@ -99,7 +103,7 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
   def get_vec_to_goal(self):
     disc_pos = self.get_disc_position()
     goal_pos = self.get_goal_position()
-    print("disc pos: {}, goal_pos: {}".format(disc_pos, goal_pos))
+    # print("disc pos: {}, goal_pos: {}".format(disc_pos, goal_pos))
     return disc_pos - goal_pos  # note: great place for breakpoint!
 
   def get_distance_to_goal(self):
@@ -108,7 +112,7 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
 
   def set_state(self, qpos, qvel):
     # assert qpos.shape == (self.model.nq, 1) and qvel.shape == (self.model.nv, 1)
-    print('SET STATE')
+    # print('SET STATE')
     self.model.data.qpos = qpos
     self.model.data.qvel = qvel
     # self.model._compute_subtree() #pylint: disable=W0212

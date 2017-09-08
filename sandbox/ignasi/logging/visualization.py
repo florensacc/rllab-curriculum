@@ -6,8 +6,8 @@ import numpy as np
 import scipy.misc
 from collections import OrderedDict
 
-from sandbox.ignasi.state.evaluator import evaluate_states, convert_label
-from sandbox.ignasi.envs.base import FixedStateGenerator
+from sandbox.young_clgan.state.evaluator import evaluate_states, convert_label
+from sandbox.young_clgan.envs.base import FixedStateGenerator
 from rllab.misc import logger
 
 import matplotlib as mpl

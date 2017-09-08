@@ -1,9 +1,9 @@
 import sys
 from rllab.misc import logger
-from sandbox.ignasi.logging import HTMLReport
-from sandbox.ignasi.logging import format_dict
-from sandbox.ignasi.logging.logger import ExperimentLogger
-from sandbox.ignasi.logging.visualization import plot_labeled_states
+from sandbox.young_clgan.logging import HTMLReport
+from sandbox.young_clgan.logging import format_dict
+from sandbox.young_clgan.logging.logger import ExperimentLogger
+from sandbox.young_clgan.logging.visualization import plot_labeled_states
 
 
 from sandbox.dave.pr2.action_limiter import FixedActionLimiter
@@ -20,22 +20,22 @@ from sandbox.dave.rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 # from sandbox.dave.rllab.policies.gaussian_mlp_policy_tanh import GaussianMLPPolicy
 from rllab.misc.instrument import VariantGenerator, variant
 
-from sandbox.ignasi.envs.block_pushing.pr2_env_lego_hand import Pr2EnvLego
+from sandbox.young_clgan.envs.block_pushing.pr2_env_lego_hand import Pr2EnvLego
 from rllab import config
 import os
 import random
 import os.path as osp
 import numpy as np
-from sandbox.ignasi.envs.start_env import generate_starts
-from sandbox.ignasi.envs.goal_start_env import GoalStartExplorationEnv
-from sandbox.ignasi.envs.block_pushing.pushing_evaluate import test_and_plot_policy, plot_policy_means, plot_heatmap, plot_pushing
-from sandbox.ignasi.logging.visualization import save_image
+from sandbox.young_clgan.envs.start_env import generate_starts
+from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
+from sandbox.young_clgan.envs.block_pushing.pushing_evaluate import test_and_plot_policy, plot_policy_means, plot_heatmap, plot_pushing
+from sandbox.young_clgan.logging.visualization import save_image
 
 
-from sandbox.ignasi.state.evaluator import label_states
-from sandbox.ignasi.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator
-from sandbox.ignasi.state.generator import StateGAN
-from sandbox.ignasi.state.utils import StateCollection
+from sandbox.young_clgan.state.evaluator import label_states
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator
+from sandbox.young_clgan.state.generator import StateGAN
+from sandbox.young_clgan.state.utils import StateCollection
 # stub(globals())
 #TODO: figure out crown goal generator
 
@@ -99,7 +99,7 @@ def run_task(v):
         goal_weight = v['goal_weight'],
     )
 
-    # Follows Ignasi's code
+    # Follows young_clgan's code
     policy = GaussianMLPPolicy(
         env_spec=env.spec,
         # The neural network policy should have n hidden layers, each with k hidden units.

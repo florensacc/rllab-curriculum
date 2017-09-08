@@ -7,9 +7,9 @@ import numpy as np
 import math
 import random
 
-from sandbox.ignasi.envs.base import StateGenerator
-from sandbox.ignasi.envs.goal_env import GoalEnv
-from sandbox.ignasi.envs.rewards import linear_threshold_reward
+from sandbox.young_clgan.envs.base import StateGenerator
+from sandbox.young_clgan.envs.goal_env import GoalEnv
+from sandbox.young_clgan.envs.rewards import linear_threshold_reward
 
 
 class PointEnv(GoalEnv, MujocoEnv, Serializable):

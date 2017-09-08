@@ -30,16 +30,16 @@ from rllab.sampler.utils import rollout
 from rllab.spaces.box import Box
 from rllab.misc.overrides import overrides
 
-from sandbox.ignasi.envs.base import StateGenerator, UniformListStateGenerator, \
+from sandbox.young_clgan.envs.base import StateGenerator, UniformListStateGenerator, \
     UniformStateGenerator, FixedStateGenerator, StateAuxiliaryEnv
-from sandbox.ignasi.experiments.asym_selfplay.algos.asym_selfplay import AsymSelfplay
+from sandbox.young_clgan.experiments.asym_selfplay.algos.asym_selfplay import AsymSelfplay
 
-from sandbox.ignasi.experiments.asym_selfplay.algos.asym_selfplay_batch import AsymSelfplayBatch
-from sandbox.ignasi.experiments.asym_selfplay.envs.alice_env import AliceEnv
-from sandbox.ignasi.state.evaluator import parallel_map, FunctionWrapper
-from sandbox.ignasi.state.utils import StateCollection
-from sandbox.ignasi.logging.visualization import plot_labeled_states, plot_labeled_samples
-from sandbox.ignasi.state.evaluator import FunctionWrapper, parallel_map
+from sandbox.young_clgan.experiments.asym_selfplay.algos.asym_selfplay_batch import AsymSelfplayBatch
+from sandbox.young_clgan.experiments.asym_selfplay.envs.alice_env import AliceEnv
+from sandbox.young_clgan.state.evaluator import parallel_map, FunctionWrapper
+from sandbox.young_clgan.state.utils import StateCollection
+from sandbox.young_clgan.logging.visualization import plot_labeled_states, plot_labeled_samples
+from sandbox.young_clgan.state.evaluator import FunctionWrapper, parallel_map
 from rllab.sampler.stateful_pool import singleton_pool
 
 

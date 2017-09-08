@@ -10,7 +10,7 @@ from rllab.misc import logger
 from rllab.spaces.box import Box
 from rllab.misc.overrides import overrides
 
-from sandbox.ignasi.envs.block_insertion.base import BlockInsertionEnvBase
+from sandbox.young_clgan.envs.block_insertion.base import BlockInsertionEnvBase
 
 
 class BlockInsertionEnv1(BlockInsertionEnvBase):

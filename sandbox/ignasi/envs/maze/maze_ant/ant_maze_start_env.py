@@ -1,6 +1,6 @@
-from sandbox.ignasi.envs.maze.maze_env import MazeEnv
-from sandbox.ignasi.envs.maze.maze_ant.ant_env import AntEnv
-# from sandbox.ignasi.envs.maze.maze_ant.ant_target_env import AntEnv
+from sandbox.young_clgan.envs.maze.maze_env import MazeEnv
+from sandbox.young_clgan.envs.maze.maze_ant.ant_env import AntEnv
+# from sandbox.young_clgan.envs.maze.maze_ant.ant_target_env import AntEnv
 
 
 class AntMazeEnv(MazeEnv):

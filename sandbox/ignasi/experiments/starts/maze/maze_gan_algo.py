@@ -9,10 +9,10 @@ import tensorflow as tf
 import tflearn
 
 from rllab.misc import logger
-from sandbox.ignasi.logging import HTMLReport
-from sandbox.ignasi.logging import format_dict
-from sandbox.ignasi.logging.logger import ExperimentLogger
-from sandbox.ignasi.logging.visualization import plot_labeled_states
+from sandbox.young_clgan.logging import HTMLReport
+from sandbox.young_clgan.logging import format_dict
+from sandbox.young_clgan.logging.logger import ExperimentLogger
+from sandbox.young_clgan.logging.visualization import plot_labeled_states
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -22,16 +22,16 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
-from sandbox.ignasi.state.evaluator import label_states, label_states_from_paths
-from sandbox.ignasi.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator
-from sandbox.ignasi.state.generator import StateGAN
-from sandbox.ignasi.state.utils import StateCollection
+from sandbox.young_clgan.state.evaluator import label_states, label_states_from_paths
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator
+from sandbox.young_clgan.state.generator import StateGAN
+from sandbox.young_clgan.state.utils import StateCollection
 
-from sandbox.ignasi.envs.goal_env import GoalExplorationEnv, generate_initial_goals, generate_brownian_goals
-from sandbox.ignasi.envs.start_env import generate_starts
-from sandbox.ignasi.envs.goal_start_env import GoalStartExplorationEnv
-from sandbox.ignasi.envs.maze.maze_evaluate import test_and_plot_policy, plot_policy_means
-from sandbox.ignasi.envs.maze.point_maze_env import PointMazeEnv
+from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv, generate_initial_goals, generate_brownian_goals
+from sandbox.young_clgan.envs.start_env import generate_starts
+from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
+from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy, plot_policy_means
+from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 

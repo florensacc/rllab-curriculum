@@ -22,20 +22,20 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 
-from sandbox.ignasi.logging import *
-from sandbox.ignasi.logging import HTMLReport, format_dict
-from sandbox.ignasi.logging.visualization import save_image, plot_labeled_samples
-from sandbox.ignasi.logging.inner_logger import InnerExperimentLogger
+from sandbox.young_clgan.logging import *
+from sandbox.young_clgan.logging import HTMLReport, format_dict
+from sandbox.young_clgan.logging.visualization import save_image, plot_labeled_samples
+from sandbox.young_clgan.logging.inner_logger import InnerExperimentLogger
 
-from sandbox.ignasi.envs.maze.point_maze_env import PointMazeEnv
-from sandbox.ignasi.envs.init_sampler.base import InitIdxEnv, generate_initial_inits
-from sandbox.ignasi.state.generator import CrossEntropyStateGenerator
-from sandbox.ignasi.state.evaluator import label_states, convert_label
-from sandbox.ignasi.state.utils import StateCollection
-from sandbox.ignasi.state.selectors import UniformStateSelector, UniformListStateSelector, FixedStateSelector
-from sandbox.ignasi.envs.base import FixedStateGenerator  # kept for the point-mass env...
+from sandbox.young_clgan.envs.maze.point_maze_env import PointMazeEnv
+from sandbox.young_clgan.envs.init_sampler.base import InitIdxEnv, generate_initial_inits
+from sandbox.young_clgan.state.generator import CrossEntropyStateGenerator
+from sandbox.young_clgan.state.evaluator import label_states, convert_label
+from sandbox.young_clgan.state.utils import StateCollection
+from sandbox.young_clgan.state.selectors import UniformStateSelector, UniformListStateSelector, FixedStateSelector
+from sandbox.young_clgan.envs.base import FixedStateGenerator  # kept for the point-mass env...
 
-from sandbox.ignasi.envs.maze.maze_evaluate import test_and_plot_policy  # this used for both init and goal
+from sandbox.young_clgan.envs.maze.maze_evaluate import test_and_plot_policy  # this used for both init and goal
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 

@@ -13,10 +13,10 @@ import matplotlib.patches as patches
 
 from rllab.sampler.utils import rollout
 from rllab.misc import logger
-from sandbox.ignasi.envs.base import FixedStateGenerator
-# from sandbox.ignasi.state.selectors import FixedStateSelector
-from sandbox.ignasi.state.evaluator import evaluate_states
-from sandbox.ignasi.logging.visualization import save_image
+from sandbox.young_clgan.envs.base import FixedStateGenerator
+# from sandbox.young_clgan.state.selectors import FixedStateSelector
+from sandbox.young_clgan.state.evaluator import evaluate_states
+from sandbox.young_clgan.logging.visualization import save_image
 from random import uniform
 
 quick_test = False
@@ -430,10 +430,10 @@ def plot_policy_values(env, baseline, sampling_res=2, report=None, center=None, 
 
 
 def main():
-    # pkl_file = "sandbox/ignasi/experiments/point_maze/experiment_data/cl_gan_maze/2017-02-20_22-43-48_dav2/log/itr_129/itr_9.pkl"
-    #    pkl_file = "sandbox/ignasi/experiments/point_maze/experiment_data/cl_gan_maze/2017-02-21_15-30-36_dav2/log/itr_69/itr_4.pkl"
-    #    pkl_file = "sandbox/ignasi/experiments/point_maze/experiment_data/cl_gan_maze/2017-02-21_22-49-03_dav2/log/itr_199/itr_4.pkl"
-    # pkl_file = "sandbox/ignasi/experiments/point_maze/experiment_data/cl_gan_maze/2017-02-22_13-06-53_dav2/log/itr_119/itr_4.pkl"
+    # pkl_file = "sandbox/young_clgan/experiments/point_maze/experiment_data/cl_gan_maze/2017-02-20_22-43-48_dav2/log/itr_129/itr_9.pkl"
+    #    pkl_file = "sandbox/young_clgan/experiments/point_maze/experiment_data/cl_gan_maze/2017-02-21_15-30-36_dav2/log/itr_69/itr_4.pkl"
+    #    pkl_file = "sandbox/young_clgan/experiments/point_maze/experiment_data/cl_gan_maze/2017-02-21_22-49-03_dav2/log/itr_199/itr_4.pkl"
+    # pkl_file = "sandbox/young_clgan/experiments/point_maze/experiment_data/cl_gan_maze/2017-02-22_13-06-53_dav2/log/itr_119/itr_4.pkl"
     # pkl_file = "data/local/goalGAN-maze30/goalGAN-maze30_2017_02_24_01_44_03_0001/itr_27/itr_4.pkl"
     pkl_file = "/home/davheld/repos/goalgen/rllab_goal_rl/data/s3/goalGAN-maze11/goalGAN-maze11_2017_02_23_01_06_12_0005/itr_199/itr_4.pkl"
 

@@ -16,8 +16,8 @@ import matplotlib.pyplot as plt
 
 from rllab.misc import logger
 
-from sandbox.ignasi.gan.gan import FCGAN, batch_feed_array
-from sandbox.ignasi.logging import HTMLReport, format_dict
+from sandbox.young_clgan.gan.gan import FCGAN, batch_feed_array
+from sandbox.young_clgan.logging import HTMLReport, format_dict
 from rllab.misc.instrument import run_experiment_lite, VariantGenerator
 
 

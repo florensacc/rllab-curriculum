@@ -6,11 +6,11 @@ from rllab.envs.normalized_env import normalize
 from rllab.misc import logger
 from rllab.misc.instrument import stub, run_experiment_lite, VariantGenerator
 from rllab.mujoco_py.mjlib import osp
-from sandbox.ignasi.envs.base import FixedStateGenerator
-from sandbox.ignasi.envs.goal_start_env import GoalStartExplorationEnv
-from sandbox.ignasi.envs.start_env import find_all_feasible_states_plotting, generate_starts
-from sandbox.ignasi.logging import HTMLReport
-from sandbox.ignasi.envs.maze.maze_swim.swim_maze_env import SwimmerMazeEnv
+from sandbox.young_clgan.envs.base import FixedStateGenerator
+from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
+from sandbox.young_clgan.envs.start_env import find_all_feasible_states_plotting, generate_starts
+from sandbox.young_clgan.logging import HTMLReport
+from sandbox.young_clgan.envs.maze.maze_swim.swim_maze_env import SwimmerMazeEnv
 
 
 def run_task(v):

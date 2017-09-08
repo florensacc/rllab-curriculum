@@ -8,7 +8,7 @@ from rllab.sampler.utils import rollout
 from rllab.spaces.box import Box
 from rllab.misc.overrides import overrides
 from rllab.envs.base import Step
-from sandbox.ignasi.envs.base import FixedStateGenerator
+from sandbox.young_clgan.envs.base import FixedStateGenerator
 
 
 class AliceFakeEnv(ProxyEnv, Serializable):
