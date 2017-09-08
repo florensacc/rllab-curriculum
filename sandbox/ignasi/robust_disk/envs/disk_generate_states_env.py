@@ -13,7 +13,7 @@ from contextlib import contextmanager
 
 
 class DiskGenerateStatesEnv(MujocoEnv, Serializable):
-    FILE = "disk_generate_states.xml"
+    FILE = "pr2_disk_w_joints.xml"
 
     def __init__(self,
                  init_solved=False,
@@ -25,7 +25,7 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
         MujocoEnv.__init__(self, *args, **kwargs)
         Serializable.quick_init(self, locals())
 
-        self.original_position = np.copy(self.model.data.site_xpos[-1][:2]) # should be (0, 0.3)
+        self.original_position = np.copy(self.model.data.xpos[-1][:2]) # should be (0, 0.3)
         self.evaluate = evaluate
         self.init_solved = init_solved
         self.kill_radius = kill_radius
@@ -68,7 +68,7 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
         done = False
         distance_to_goal = self.get_distance_to_goal()
         reward = 0
-
+        # print(self.get_peg_displacement())
         # print(distance_to_goal, self.get_peg_displacement()) # useful for debugging
         if self.kill_outside and (
                 distance_to_goal > self.kill_radius or self.get_peg_displacement() > self.kill_peg_radius):
@@ -79,17 +79,24 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
             ob, reward, done,
         )
 
+    #todo: should be good
     def get_peg_displacement(self):
         # geom of peg moves
-        self.curr_position = np.array(self.model.data.geom_xpos[-1][:2])
+        self.curr_position = np.array(self.model.data.xpos[-1][:2])
         return np.linalg.norm(self.curr_position - self.original_position)
 
+    #todo: should be good
     def get_disc_position(self):
-        return self.model.data.site_xpos[0]
+        # return self.model.data.geom_xpos[-1] - np.array([0, 0, 0.0125])
+        # return self.model.data.site_xpos[0]
+        id_gear = self.model.body_names.index('gear')
+        return self.model.data.xpos[id_gear]
 
+    #todo: should be good
     def get_goal_position(self):
         # return self.model.data.site_xpos[1] # old goal positions, should be (0, 0.3, -0.4)
-        return self.model.data.xpos[-1] + np.array([0, 0, 0.05]) # this allows position to be changed todo: check this
+        return self.model.data.geom_xpos[-1] - np.array([0, 0, 0.0125])
+        # return self.model.data.xpos[-1] + np.array([0, 0, 0.05]) # this allows position to be changed todo: check this
 
     def get_vec_to_goal(self):
         disc_pos = self.get_disc_position()

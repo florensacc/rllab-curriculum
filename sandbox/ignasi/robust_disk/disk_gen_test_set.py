@@ -50,17 +50,17 @@ def run_task(v):
         seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=v['brownian_horizon'], animated=False,
                                       variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=1)
 
-
-    if v['peg_positions']:
-        def states_transform(x):
-            y = list(x)
-            for joint in (7,8):
-                y[joint] *= 10
-            # for joint in v['peg_positions']:
-            #     y[joint] *= v['peg_scaling']
-            return y
-    else:
-        states_transform = None
+    #
+    # if v['peg_positions']:
+    #     def states_transform(x):
+    #         y = list(x)
+    #         for joint in (7,8):
+    #             y[joint] *= 10
+    #         # for joint in v['peg_positions']:
+    #         #     y[joint] *= v['peg_scaling']
+    #         return y
+    # else:
+    #     states_transform = None
     with gen_states_env.set_kill_outside():
         find_all_feasible_states(gen_states_env, seed_starts, distance_threshold=0.1,
                                  brownian_variance=1, animate=False, max_states=v['max_gen_states'],
@@ -116,8 +116,10 @@ if __name__ == '__main__':
     vg = VariantGenerator()
     vg.add('start_size', [9])
 
-    vg.add('start_goal', [(0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0)])
-    vg.add('ultimate_goal', [(0., 0.3, -0.4)])
+    # changed
+    vg.add('start_goal', [(1.42616709, -0.01514247, 2.64956251, -1.88308175, 4.79495397, -1.05910442, -1.339634, 0, 0)])  # added two coordinates
+    # vg.add('start_goal', [(1.42616709, -0.01514247, 2.64956251, -1.88308175, 4.79495397, -1.05910442, -1.339634, 0.4146814, 0.47640087)]) # added two coordinates
+    vg.add('ultimate_goal', [(0.4146814, 0.47640087, 0.5305665)])
     vg.add('goal_size', [3]) # changed
     vg.add('terminal_eps', [0.03])
     # brownian params
@@ -172,14 +174,15 @@ if __name__ == '__main__':
 
     vg.add('generating_test_set', [False]) #TODO can change
     vg.add('move_peg', [True]) # whether or not to move peg
-    vg.add('kill_radius', [0.4])
+    vg.add('kill_radius', [3])
     vg.add('kill_peg_radius', [0.05])
-    vg.add('max_gen_states', [300000])
-    vg.add('peg_positions', [(7,8)])  # joint numbers for peg
-    vg.add('peg_scaling', [10]) # multiplicative factor to peg position
+    vg.add('max_gen_states', [50000])
+    # vg.add('peg_positions', [(7,8)])  # joint numbers for peg
+    # vg.add('peg_scaling', [10]) # multiplicative factor to peg position
 
     # exp_prefix = "robust-disk-test2"
-    exp_prefix = 'uniform200-mass300000'
+    # exp_prefix = 'uniform200-mass300000'
+    exp_prefix = "test50000"
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,

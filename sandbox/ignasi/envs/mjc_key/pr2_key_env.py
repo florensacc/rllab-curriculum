@@ -40,7 +40,7 @@ class PR2KeyEnv(MujocoEnv, Serializable):
         return np.concatenate([
             self.model.data.qpos.flat,
             self.model.data.qvel.flat,
-            self.model.data.site_xpos.flat,
+            # self.model.data.site_xpos.flat, #todo: check what this is
         ]).reshape(-1)
 
     def step(self, action):

@@ -214,7 +214,7 @@ if __name__ == "__main__":
     # grid_and_analyze_grid(data, rollouts=True, save_images=False, file_name="success_breakdown_new.csv")
     #
     plot_peg_position_density(data)
-    plot_joint_variations()
+    plot_joint_variations(data)
     show_generated_states(data)
 
 
