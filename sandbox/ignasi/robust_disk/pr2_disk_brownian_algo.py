@@ -97,7 +97,7 @@ def run_task(v):
             env_spec=env.spec,
             hidden_sizes=(32,),
             learn_std=v['learn_std'],
-            trunc_steps=100,
+            trunc_steps=v['trunc_steps'],
         )
     #
     if v['baseline'] == 'linear':

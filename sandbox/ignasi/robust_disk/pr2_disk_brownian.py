@@ -113,6 +113,7 @@ if __name__ == '__main__':
     # vg.add('policy', ['recurrent'])
     vg.add('policy', ['recurrent'])
     # vg.add('policy', ['recurrent', 'mlp'])
+    vg.add('trunc_steps', [30])
 
     # vg.add('seed', range(100, 600, 100))
     vg.add('seed', [13,23,33, 43, 53])
@@ -125,15 +126,15 @@ if __name__ == '__main__':
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position
 
-    exp_prefix = "random/100_path"
+    exp_prefix = "random/50_path"
     # exp_prefix = 'robust-disk-gen-states-density2'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
-    mode = "ec2"
-    # mode="local"
+    # mode = "ec2"
+    mode="local"
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
             # choose subnet
