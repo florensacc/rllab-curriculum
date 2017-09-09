@@ -175,9 +175,9 @@ if __name__ == '__main__':
     # vg.add('seed', range(100, 600, 100))
     vg.add('seed', [13,23,33])
 
-    vg.add('generating_test_set', [False]) #TODO can change
-    vg.add('move_peg', [True]) # whether or not to move peg
-    vg.add('kill_radius', [0.5])
+    vg.add('generating_test_set', [True])  #TODO can change
+    vg.add('move_peg', [True])  # whether or not to move peg
+    vg.add('kill_radius', [3])
     vg.add('kill_peg_radius', [0.05])
     vg.add('max_gen_states', [50000])
     # vg.add('peg_positions', [(7,8)])  # joint numbers for peg

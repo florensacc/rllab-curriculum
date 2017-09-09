@@ -5,7 +5,7 @@ from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.policies.gaussian_gru_policy import GaussianGRUPolicy
 
 # modified to make changes to the environment
-from sandbox.ignasi.envs.pr2.pr2_disk import Pr2DiskEnv
+from sandbox.ignasi.envs.pr2.pr2_disk_env import Pr2DiskEnv
 
 from sandbox.young_clgan.robust_disk.envs.disk_generate_states_env_old import DiskGenerateStatesEnv
 
@@ -107,8 +107,15 @@ def run_task(v):
 
     # load the state collection from data_upload
     load_dir = 'data_upload/peg'
-    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states.pkl'), 'rb'))
-    print("we have %d feasible starts" % all_feasible_starts.size)
+    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states_.pkl'), 'rb'))
+
+    # # show where these states are:
+    # shuffled_starts = np.array(all_feasible_starts.state_list)
+    # np.random.shuffle(shuffled_starts)
+    # generate_starts(env, starts=shuffled_starts, horizon=100, variance=v['brownian_variance'],
+    #                 animated=True, speedup=10,
+    #                 zero_action=True,
+    #                 )
 
 
     if v['smart_replay_buffer']:
@@ -120,16 +127,20 @@ def run_task(v):
         all_starts = StateCollection(distance_threshold=v['coll_eps'])
     brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
     with gen_states_env.set_kill_outside():
-        seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=v['brownian_horizon'], animated=False, speedup=100,
-                                      variance=v['brownian_variance'], subsample=v['num_new_starts'], zero_action=False,                                      )
-                                      #   animated=True, speedup=1)
+        seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=100 * v['brownian_horizon'],
+                                      variance=v['brownian_variance'], subsample=v['num_new_starts']  # , zero_action=True
+                                      )
+                                        # animated=True, speedup=1)
+
+    # with env.set_kill_outside():
+    #     find_all_feasible_states(gen_states_env, seed_starts, distance_threshold=0.1, brownian_variance=1, animate=False)
 
     if v['generating_test_set']:
         # change distance metric for states generated
         if v['peg_positions']:
             def states_transform(x):
                 y = list(x)
-                for joint in (7,8):
+                for joint in (7, 8):
                     y[joint] *= 10
                 # for joint in v['peg_positions']:
                 #     y[joint] *= v['peg_scaling']
@@ -137,10 +148,11 @@ def run_task(v):
         else:
             states_transform = None
         with gen_states_env.set_kill_outside():
+            print("generating dataset!")
             find_all_feasible_states(gen_states_env, seed_starts, distance_threshold=0.1,
                                      brownian_variance=1, animate=False, max_states=v['max_gen_states'],
                                      horizon=500,
-                                     states_transform= states_transform
+                                     states_transform=states_transform
                                      )
             import sys; sys.exit(0)
 
