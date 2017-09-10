@@ -119,7 +119,7 @@ if __name__ == '__main__':
     vg.add('seed', [13, 23,33, 43])
 
     vg.add('generating_test_set', [False]) #TODO can change
-    vg.add('move_peg', [False]) # whether or not to move peg
+    vg.add('move_peg', [True]) # whether or not to move peg
     vg.add('kill_radius', [0.4])
     vg.add('kill_peg_radius', [0.05])
     vg.add('max_gen_states', [300])
@@ -133,8 +133,7 @@ if __name__ == '__main__':
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
-    mode = "ec2"
-    # mode="local"
+
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
             # choose subnet
