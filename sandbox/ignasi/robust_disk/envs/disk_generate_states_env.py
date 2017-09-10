@@ -53,7 +53,7 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
     def start_observation(self):
         return np.copy(self.model.data.qpos).flatten()
 
-    def reset(self, init_state=None, *args, **kwargs):
+    def reset(self, init_state=None, *args, **kwargs):  # todo: init_state should have (joints, peg, phy)
         self.init_peg_pos = np.random.multivariate_normal((0,0), 0.01*np.eye(2)) + self.model.data.qpos[-2:,0]
         # init_state = (0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0)
         ret = super(DiskGenerateStatesEnv, self).reset(init_state, *args, **kwargs)
@@ -74,7 +74,7 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
         # print(distance_to_goal, self.get_peg_displacement()) # useful for debugging
         if self.kill_outside and (
                 distance_to_goal > self.kill_radius or self.get_peg_displacement() > self.kill_peg_radius):
-            # print("******** OUT of region ********")
+            print("******** OUT of region ********")
             done = True
 
         return Step(
