@@ -7,7 +7,7 @@ from rllab.policies.gaussian_gru_policy import GaussianGRUPolicy
 # modified to make changes to the environment
 from sandbox.ignasi.envs.pr2.pr2_disk_env import Pr2DiskEnv
 
-from sandbox.young_clgan.robust_disk.envs.disk_generate_states_env_old import DiskGenerateStatesEnv
+from sandbox.ignasi.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
 
 matplotlib.use('Agg')
 import os
@@ -76,7 +76,20 @@ def run_task(v):
     )
 
     if v['move_peg']:  # todo: change this to the PR2 model
-        gen_states_env = DiskGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'], kill_radius=v['kill_radius'])
+        gen_states_env = GoalStartExplorationEnv(
+            env= DiskGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'], kill_radius=v['kill_radius']),
+            start_generator=fixed_start_generator,
+            obs2start_transform=lambda x: x[:v['start_size']],
+            goal_generator=fixed_goal_generator,
+            obs2goal_transform=lambda x: x[-1 * v['goal_size']:], # changed!
+            terminal_eps=v['terminal_eps'],
+            distance_metric=v['distance_metric'],
+            extend_dist_rew=v['extend_dist_rew'],
+            inner_weight=v['inner_weight'],
+            goal_weight=v['goal_weight'],
+            terminate_env=True,
+            append_goal_to_observation = False, # prevents goal environment from appending observation
+        )
     else:
         # cannot move the peg
         gen_states_env = env
@@ -106,8 +119,9 @@ def run_task(v):
         baseline = GaussianMLPBaseline(env_spec=env.spec)
 
     # load the state collection from data_upload
-    load_dir = 'data_upload/peg'
-    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states_.pkl'), 'rb'))
+    # load_dir = 'data_upload/peg'
+    load_dir = "data_upload/pr2_peg"
+    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states.pkl'), 'rb'))
 
     # # show where these states are:
     # shuffled_starts = np.array(all_feasible_starts.state_list)
@@ -128,7 +142,9 @@ def run_task(v):
     brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
     with gen_states_env.set_kill_outside():
         seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=100 * v['brownian_horizon'],
-                                      variance=v['brownian_variance'], subsample=v['num_new_starts']  # , zero_action=True
+                                      variance=v['brownian_variance'], subsample=v['num_new_starts'],  # , zero_action=True
+                                      animated=True,
+                                      # speedup =10,
                                       )
                                         # animated=True, speedup=1)
 

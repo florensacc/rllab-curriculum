@@ -96,10 +96,11 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
 
     #todo: should be good
     def get_goal_position(self):
-        id_peg = self.model.body_names.index('cyl')
+        return self.model.data.site_xpos[-1]  # note, slightly different from previous, set to bottom of peg
+        # id_peg = self.model.body_names.index('cyl')
         # return self.model.data.site_xpos[1] # old goal positions, should be (0, 0.3, -0.4)
-        return self.model.data.xpos[id_peg]
-        # return self.model.data.xpos[-1] + np.array([0, 0, 0.05]) # this allows position to be changed todo: check this
+        # return self.model.data.xpos[id_peg]
+
 
     def get_vec_to_goal(self):
         disc_pos = self.get_disc_position()
