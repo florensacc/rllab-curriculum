@@ -35,13 +35,14 @@ from sandbox.ignasi.robust_disk.envs.disk_generate_states_env import DiskGenerat
 Generates the test set
 """
 
+
 def run_task(v):
     random.seed(v['seed'])
     np.random.seed(v['seed'])
 
     inner_env = normalize(DiskGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'], kill_radius=v['kill_radius']))
 
-    fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
+    fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])  # todo: the goal is not fixed!! It's only important for logging though
     fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
 
     gen_states_env = GoalStartExplorationEnv(
@@ -49,28 +50,31 @@ def run_task(v):
         start_generator=fixed_start_generator,
         obs2start_transform=lambda x: x[:v['start_size']],
         goal_generator=fixed_goal_generator,
-        obs2goal_transform=lambda x: x[-1 * v['goal_size']:], # changed!
+        obs2goal_transform=lambda x: x[-1 * v['goal_size']:],  # changed!
         terminal_eps=v['terminal_eps'],
         distance_metric=v['distance_metric'],
         extend_dist_rew=v['extend_dist_rew'],
         inner_weight=v['inner_weight'],
         goal_weight=v['goal_weight'],
         terminate_env=True,
-        append_goal_to_observation = False, # prevents goal environment from appending observation
+        append_goal_to_observation=False,  # prevents goal environment from appending observation
     )
-
 
     with gen_states_env.set_kill_outside():
         seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=v['brownian_horizon'],
-                                      animated=True, speedup=100,zero_action=True,
-                                      variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=1)
+                                      # animated=True, speedup=100,  # zero_action=True,
+                                      variance=v['brownian_variance'],
+                                      subsample=v['num_new_starts'])  # , animated=True, speedup=1)
 
         find_all_feasible_states(gen_states_env, seed_starts, distance_threshold=0.1,
-                                 brownian_variance=1, animate=False, max_states=v['max_gen_states'],
+                                 brownian_variance=1, max_states=v['max_gen_states'],
                                  horizon=500,
+                                 # animate=True, speedup=100,
                                  # states_transform= states_transform
                                  )
-        import sys; sys.exit(0)
+        import sys;
+        sys.exit(0)
+
 
 if __name__ == '__main__':
 
@@ -115,15 +119,15 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-
     vg = VariantGenerator()
     vg.add('start_size', [9])
 
     # changed
-    vg.add('start_goal', [[ 1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335,-0.90467269, -1.56926878]])  # added two coordinates
+    vg.add('start_goal', [[1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335, -0.90467269,
+                           -1.56926878, 0, 0]])  # added two coordinates
     # vg.add('start_goal', [(1.42616709, -0.01514247, 2.64956251, -1.88308175, 4.79495397, -1.05910442, -1.339634, 0.4146814, 0.47640087)]) # added two coordinates
     vg.add('ultimate_goal', [(0.4146814, 0.47640087, 0.5305665)])
-    vg.add('goal_size', [3]) # changed
+    vg.add('goal_size', [3])  # changed
     vg.add('terminal_eps', [0.03])
     # brownian params
     # vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
@@ -173,12 +177,12 @@ if __name__ == '__main__':
     # vg.add('policy', ['recurrent', 'mlp'])
 
     # vg.add('seed', range(100, 600, 100))
-    vg.add('seed', [13,23,33])
+    vg.add('seed', [13, 23, 33])
 
-    vg.add('generating_test_set', [True])  #TODO can change
+    vg.add('generating_test_set', [True])  # TODO can change
     vg.add('move_peg', [True])  # whether or not to move peg
-    vg.add('kill_radius', [3])
-    vg.add('kill_peg_radius', [0.05])
+    vg.add('kill_radius', [0.4])
+    vg.add('kill_peg_radius', [0.04])
     vg.add('max_gen_states', [50000])
     # vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     # vg.add('peg_scaling', [10]) # multiplicative factor to peg position
@@ -191,10 +195,8 @@ if __name__ == '__main__':
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
-    mode = "ec2"
-    mode="local"
-    for vv in vg.variants():
 
+    for vv in vg.variants():
         # run_task(vv)
         run_experiment_lite(
             # use_cloudpickle=False,
