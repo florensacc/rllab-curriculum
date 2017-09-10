@@ -54,6 +54,7 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
         return np.copy(self.model.data.qpos).flatten()
 
     def reset(self, init_state=None, *args, **kwargs):
+        self.init_peg_pos = np.random.multivariate_normal((0,0), 0.01*np.eye(2)) + self.model.data.qpos[-2:,0]
         # init_state = (0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0)
         ret = super(DiskGenerateStatesEnv, self).reset(init_state, *args, **kwargs)
         return ret
@@ -61,6 +62,7 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
     def step(self, action):
 
         # done is always False
+        action[-2:] = self.init_peg_pos
         if self.evaluate:
             action = np.zeros_like(action)
         self.forward_dynamics(action)
@@ -76,7 +78,7 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
             done = True
 
         return Step(
-            ob, reward, done,
+            ob, reward, done, distance=distance_to_goal,
         )
 
     #todo: should be good
@@ -94,8 +96,9 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
 
     #todo: should be good
     def get_goal_position(self):
+        id_peg = self.model.body_names.index('cyl')
         # return self.model.data.site_xpos[1] # old goal positions, should be (0, 0.3, -0.4)
-        return self.model.data.geom_xpos[-1] - np.array([0, 0, 0.0125])
+        return self.model.data.xpos[id_peg]
         # return self.model.data.xpos[-1] + np.array([0, 0, 0.05]) # this allows position to be changed todo: check this
 
     def get_vec_to_goal(self):
