@@ -61,7 +61,8 @@ def run_task(v):
 
 
     with gen_states_env.set_kill_outside():
-        seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=v['brownian_horizon'], animated=False,
+        seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=v['brownian_horizon'],
+                                      animated=True, speedup=100,zero_action=True,
                                       variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=1)
 
         find_all_feasible_states(gen_states_env, seed_starts, distance_threshold=0.1,
@@ -119,7 +120,7 @@ if __name__ == '__main__':
     vg.add('start_size', [9])
 
     # changed
-    vg.add('start_goal', [(1.42616709, -0.01514247, 2.64956251, -1.88308175, 4.79495397, -1.05910442, -1.339634, 0, 0)])  # added two coordinates
+    vg.add('start_goal', [[ 1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335,-0.90467269, -1.56926878]])  # added two coordinates
     # vg.add('start_goal', [(1.42616709, -0.01514247, 2.64956251, -1.88308175, 4.79495397, -1.05910442, -1.339634, 0.4146814, 0.47640087)]) # added two coordinates
     vg.add('ultimate_goal', [(0.4146814, 0.47640087, 0.5305665)])
     vg.add('goal_size', [3]) # changed

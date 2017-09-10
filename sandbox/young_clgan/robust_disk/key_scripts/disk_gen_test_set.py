@@ -30,7 +30,7 @@ from sandbox.young_clgan.robust_disk.envs.arm3d_disc_env import Arm3dDiscEnv
 
 from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasible_states
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
-from sandbox.young_clgan.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
+from sandbox.young_clgan.robust_disk.envs.disk_generate_states_env_old import DiskGenerateStatesEnv
 
 """
 Generates the test set

@@ -6,7 +6,7 @@ from rllab.policies.gaussian_gru_policy import GaussianGRUPolicy
 #from sandbox.young_clgan.envs.arm3d.arm3d_disc_env import Arm3dDiscEnv
 # modified to make changes to the environment
 from sandbox.young_clgan.robust_disk.envs.arm3d_disc_env import Arm3dDiscEnv
-from sandbox.young_clgan.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
+from sandbox.young_clgan.robust_disk.envs.disk_generate_states_env_old import DiskGenerateStatesEnv
 
 matplotlib.use('Agg')
 import os

@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.sampler.utils import rollout
-from sandbox.young_clgan.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
+from sandbox.young_clgan.robust_disk.envs.disk_generate_states_env_old import DiskGenerateStatesEnv
 from sandbox.young_clgan.envs.base import FixedStateGenerator
 import sys
 import scipy.misc
