@@ -6,7 +6,10 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 # from sandbox.young_clgan.robust_disk.envs import DiskGenerateStatesEnv
 
 from sandbox.young_clgan.robust_disk.envs.arm3d_disc_env import Arm3dDiscEnv
+from sandbox.young_clgan.robust_disk.envs.pr2_key_env import PR2_key_env
 """
+Script for launching an environment
+
 Allows for testing of Brownian motion.
 Set init_state in reset to init_state = (0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0)
 in disk_generate_states_env
@@ -18,7 +21,8 @@ the forcerange in xml file, and the density of the peg will allow for different 
 
 def run_task(v):
     # env = normalize(DiskGenerateStatesEnv())
-    env = normalize(Arm3dDiscEnv(random_torques=False))
+    # env = normalize(Arm3dDiscEnv(random_torques=False))
+    env = normalize(PR2_key_env())
     # env = normalize(Arm3dDiscEnv(random_torques=True)) # "normal" disk environment
 
     # These two environments below test training a policy that moves the peg to a particular point
@@ -30,7 +34,7 @@ def run_task(v):
     )
     baseline = LinearFeatureBaseline(env_spec=env.spec)
     if 'max_path_length' not in v:
-        v['max_path_length'] = 300
+        v['max_path_length'] = 2000
     algo = TRPO(
         env=env,
         policy=policy,

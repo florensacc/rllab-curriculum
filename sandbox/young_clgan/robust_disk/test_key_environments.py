@@ -6,7 +6,8 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 # from sandbox.young_clgan.robust_disk.envs import DiskGenerateStatesEnv
 
 from sandbox.young_clgan.robust_disk.envs.arm3d_disc_env import Arm3dDiscEnv
-from sandbox.young_clgan.envs.arm3d.arm3d_key_env import Arm3dKeyEnv
+from sandbox.young_clgan.robust_disk.envs.pr2_key_env import PR2_key_env
+from sandbox.young_clgan.robust_disk.envs.find_init_key_pr2 import InitPR2_key_env
 """
 Script for launching an environment
 
@@ -21,8 +22,13 @@ the forcerange in xml file, and the density of the peg will allow for different 
 
 def run_task(v):
     # env = normalize(DiskGenerateStatesEnv())
-    env = normalize(Arm3dDiscEnv(random_torques=False))
-    env = normalize(Arm3dKeyEnv())
+    # env = normalize(Arm3dDiscEnv(random_torques=False))
+    if 'shift_val' not in v:
+        v["shift_val"] = -0.1
+    # env = normalize(PR2_key_env(
+    #     shift_val=v["shift_val"]
+    # ))
+    env = normalize(InitPR2_key_env())
     # env = normalize(Arm3dDiscEnv(random_torques=True)) # "normal" disk environment
 
     # These two environments below test training a policy that moves the peg to a particular point
@@ -31,6 +37,7 @@ def run_task(v):
 
     policy = GaussianMLPPolicy(
         env_spec=env.spec,
+        hidden_sizes=(64, 64),
     )
     baseline = LinearFeatureBaseline(env_spec=env.spec)
     if 'max_path_length' not in v:
@@ -40,28 +47,30 @@ def run_task(v):
         policy=policy,
         baseline=baseline,
         plot=True,
-        n_itr=400,
+        n_itr=200,
         max_path_length=v['max_path_length'],
-        batch_size=10000,
+        batch_size=3000,
+        # batch_size=40000,
     )
     algo.train()
 
 run_task({})
 vg = VariantGenerator()
-vg.add('max_path_length', [300, 500])
+# vg.add('max_path_length', [700])
+# vg.add('shift_val', [0, 0.05, 0.1, 0.15])
 for vv in vg.variants():
     run_experiment_lite(
         run_task,
         variant=vv,
         # Number of parallel workers for sampling
-        n_parallel=4,
+        n_parallel=6,
         # Only keep the snapshot parameters for the last iteration
         snapshot_mode="last",
         # Specifies the seed for the experiment. If this is not provided, a random seed
         # will be used
         seed=2,
-        exp_prefix="testpeg10",
+        exp_prefix="key28",
         # variant=dict(),
-        plot=True,
+        plot=False,
     )
 

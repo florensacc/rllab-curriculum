@@ -20,6 +20,7 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
                  kill_radius=0.4,
                  action_penalty = False,
                  action_torque_lambda = 1,
+                 random_torques = False,
                  *args, **kwargs):
         MujocoEnv.__init__(self, *args, **kwargs)
         Serializable.quick_init(self, locals())
@@ -31,6 +32,9 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
         self.kill_outside = False
         self.action_penalty = action_penalty
         self.action_torque_lambda = action_torque_lambda
+        self.random_torques = random_torques
+        if self.random_torques:
+            import random
         # print("yo!")
 
 
@@ -66,6 +70,7 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
         return ret
 
     def step(self, action):
+        # action = np.zeros_like(action)
         # print(action.shape)
         self.forward_dynamics(action)
         distance_to_goal = self.get_distance_to_goal()
@@ -78,10 +83,20 @@ class Arm3dDiscEnv(MujocoEnv, Serializable):
         # print(self.model.data.site_xpos[1])
         # print(self.model.data.qpos[-2:])
         # peg should not move
+        # print(self.model.data.xfrc_applied)
         curr_qvel = list(self.model.data.qvel)
         curr_qvel[-2] = 0
         curr_qvel[-1] = 0
         self.model.data.qvel = curr_qvel
+
+        if self.random_torques:
+            xfrc = np.zeros(self.model.data.xfrc_applied.shape)
+
+            torque_applied = random.uniform(-1, 1)
+            self.joint = random.randint(0, 6) # inclusive
+            self.coord = random.randint(0, 5)
+            xfrc[self.joint, self.coord] = torque_applied
+            self.model.data.xfrc_applied = xfrc
 
         # if distance_to_goal < 0.03:
         #     print("inside the PR2DiscEnv, the dist is: {}, goal_pos is: {}".format(distance_to_goal, self.get_goal_position()))

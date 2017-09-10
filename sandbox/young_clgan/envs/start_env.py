@@ -383,7 +383,7 @@ def find_all_feasible_states_plotting(env, seed_starts, report, distance_thresho
         new_starts = generate_starts(env, starts=starts, horizon=horizon, size=size, variance=brownian_variance,
                                      animated=animate, speedup=50)
         # filters starts so that we only keep the good starts
-        if check_feasible:
+        if check_feasible: # used for ant maze environment, where we ant to run no_action
             logger.log("Prefilteredstarts: {}".format(len(new_starts)))
             new_starts = parallel_check_feasibility(env=env, starts=new_starts, max_path_length=check_feasible_path_length)
             # new_starts = [start for start in new_starts if check_feasibility(env, start, check_feasible_path_length)]

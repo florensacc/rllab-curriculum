@@ -13,8 +13,9 @@ from sandbox.young_clgan.state.utils import StateCollection
 from sandbox.young_clgan.envs.start_env import generate_starts
 
 
-class Arm3dKeyEnv(MujocoEnv, Serializable):
-    FILE = 'arm3d_key_tight.xml'
+class PR2_key_env(MujocoEnv, Serializable):
+    # FILE = 'arm3d_key_tight.xml'
+    FILE = "pr2_key.xml"
 
     @autoargs.arg('ctrl_cost_coeff', type=float,
                   help='cost coefficient for controls')
@@ -23,9 +24,11 @@ class Arm3dKeyEnv(MujocoEnv, Serializable):
             ctrl_cost_coeff=1e1,
             goal_dist=3e-2,
             kill_radius=0.4,
+            shift_val = 0.0,
             *args, **kwargs):
+        self.shift_val = shift_val
         self.ctrl_cost_coeff = ctrl_cost_coeff
-        super(Arm3dKeyEnv, self).__init__(*args, **kwargs)
+        super(PR2_key_env, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
         self.goal_dist = goal_dist
         self.kill_radius = kill_radius
@@ -47,11 +50,14 @@ class Arm3dKeyEnv(MujocoEnv, Serializable):
             'l2': 10.0,
             'alpha': 1e-5}
 
+
     def get_current_obs(self):
         return np.concatenate([
             self.model.data.qpos.flat,
             self.model.data.qvel.flat,
-            self.model.data.site_xpos.flat,
+            self.model.data.site_xpos[0].flat,
+            self.model.data.site_xpos[1].flat
+            # self.model.data.site_xpos.flat,
         ]).reshape(-1)
 
     @contextmanager
@@ -68,6 +74,18 @@ class Arm3dKeyEnv(MujocoEnv, Serializable):
 
     def step(self, action):
         # print("entering step, kill_outside is: ", self.kill_outside)
+        # action = np.zeros_like(action)
+
+        # xfrc = np.zeros_like(self.model.data.xfrc_applied)
+        # id_kh = self.model.body_names.index('keyhole')
+        # xfrc[id_kh, 2] = -9.81 * 1
+        # self.model.data.xfrc_applied = xfrc
+
+        # print(self.model.data.xfrc_applied
+        if len(action) == 9:
+            action[-2] = 0
+            action[-1] = 0
+
         self.forward_dynamics(action)
         next_obs = self.get_current_obs()
         lb, ub = self.action_bounds
@@ -78,27 +96,54 @@ class Arm3dKeyEnv(MujocoEnv, Serializable):
         # todo also check the meaning of alpha
         # key_position = self.get_body_com('key_head1')
         # ee_position = self.model.data.site_xpos[0]
-        ee_position = next_obs[self.ee_indices[0]:self.ee_indices[1]]
-        hill_pos = np.array(ee_position[:3])
-        dist = np.sum(np.square(self.goal_position - ee_position) * self.cost_params['wp'])
-        dist_cost = np.sqrt(dist) * self.cost_params['l1'] + dist * self.cost_params['l2']
-        reward = - dist_cost - ctrl_cost
-        done = True if np.sqrt(dist) < self.goal_dist else False
-        # print("making a step in the env, we have kill_outside: ", self.kill_outside)
-        if self.kill_outside and np.linalg.norm(hill_pos - self.key_hole_center) > self.kill_radius:
-        # if self.kill_outside and np.linalg.norm(hill_pos - self.goal_position[:3]) > self.kill_radius:
-            print("\n****** OUT of region ******")
-            done = True
-        if np.isnan(reward):
-            reward = -100
-        return Step(next_obs, reward, done)
 
-    def reset(self, init_state=None):
-        xfrc = self.model.data.xfrc_applied().copy()
-        id_kh = self.model.data.body_names.index('keyhole')
-        xfrc[id_kh, 2] = -9.81 * 0.1
-        self.model.data.xfrc_applied = xfrc
-        super(Arm3dKeyEnv).reset(init_state=init_state)
+        # top_of_key = self.model.data.xpos[self.model.body_names.index('key')]
+        velocity = np.linalg.norm(self.model.data.qvel)
+        reward_velocity = velocity * 1e-4
+        key_pos = self.model.data.site_xpos[0]
+        goal_pos = self.model.data.site_xpos[-1]
+        reward_distance = np.linalg.norm(key_pos - goal_pos) #+ np.linalg.norm(key_pos[:2] - goal_pos[:2]) * 3 # want to make sure XY is correct
+        reward = - (reward_distance + reward_velocity)
+        # print(top_of_key, key_pos, goal_pos, reward)
+        done = False
+        # todo: uncomment below til step
+        # ee_position = next_obs[self.ee_indices[0]:self.ee_indices[1]]
+        # hill_pos = np.array(ee_position[:3])
+        # dist = np.sum(np.square(self.goal_position - ee_position) * self.cost_params['wp'])
+        # dist_cost = np.sqrt(dist) * self.cost_params['l1'] + dist * self.cost_params['l2']
+        # reward = - dist_cost - ctrl_cost
+        # done = True if np.sqrt(dist) < self.goal_dist else False
+        #
+        # # print("making a step in the env, we have kill_outside: ", self.kill_outside)
+        # if self.kill_outside and np.linalg.norm(hill_pos - self.key_hole_center) > self.kill_radius:
+        # # if self.kill_outside and np.linalg.norm(hill_pos - self.goal_position[:3]) > self.kill_radius:
+        #     print("\n****** OUT of region ******")
+        #     done = True
+        # if np.isnan(reward):
+        #     reward = -100
+        return Step(next_obs, reward, done, velocity = velocity, reward_distance=reward_distance)
+
+    def log_diagnostics(self, paths):
+        velocities = [path["env_infos"]["velocity"] for path in paths]
+        logger.record_tabular('velocity', np.mean([np.mean(d) for d in velocities]))
+        rd = [path["env_infos"]["reward_distance"] for path in paths]
+        logger.record_tabular('reward_distance', np.mean([d[-1] for d in rd]))
+
+    def reset(self, init_state=None, *args, **kwargs):
+        # init_state = [0.32735376160809521, -0.52170347540410189, 2.0336760360359354, -1.8511337078149441, 1.3562810265832648,
+        #  -0.95029451024504419, -2.0000607832102406, -0.10000008191586322, 2.2566119141622387e-07]
+        # init_state = (0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55)
+
+        if init_state is None and abs(self.shift_val) > 1e-4:
+            init_state = np.zeros(9)
+            init_state[-2] = self.shift_val # moves in plane parallel to robot
+        # init_state = (0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0) # TODO: used for debugging only!
+        ret = super(PR2_key_env, self).reset(init_state, *args, **kwargs)
+        return ret
+        # xfrc = np.zeros_like(self.model.data.xfrc_applied)
+        # id_kh = self.model.body_names.index('keyhole')
+        # xfrc[id_kh, 2] = -9.81 * 0.1
+        # self.model.data.xfrc_applied = xfrc
 
 
 def find_out_feasible_states(env, log_dir, distance_threshold=0.1, brownian_variance=1, animate=False):
