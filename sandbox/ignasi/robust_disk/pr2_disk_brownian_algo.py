@@ -7,7 +7,7 @@ from rllab.policies.gaussian_gru_policy import GaussianGRUPolicy
 # modified to make changes to the environment
 from sandbox.ignasi.envs.pr2.pr2_disk import Pr2DiskEnv
 
-from sandbox.ignasi.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
+from sandbox.young_clgan.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
 
 matplotlib.use('Agg')
 import os
@@ -17,9 +17,9 @@ import numpy as np
 
 from rllab.misc import logger
 from collections import OrderedDict
-from sandbox.ignasi.logging import HTMLReport
-from sandbox.ignasi.logging import format_dict
-from sandbox.ignasi.logging.logger import ExperimentLogger
+from sandbox.young_clgan.logging import HTMLReport
+from sandbox.young_clgan.logging import format_dict
+from sandbox.young_clgan.logging.logger import ExperimentLogger
 
 os.environ['THEANO_FLAGS'] = 'floatX=float32,device=cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -31,12 +31,12 @@ from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.policies.gaussian_gru_policy import GaussianGRUPolicy
 
-from sandbox.ignasi.state.evaluator import convert_label, label_states, evaluate_states, label_states_from_paths
-from sandbox.ignasi.envs.base import UniformListStateGenerator, FixedStateGenerator
-from sandbox.ignasi.state.utils import StateCollection, SmartStateCollection
+from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states, label_states_from_paths
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator
+from sandbox.young_clgan.state.utils import StateCollection, SmartStateCollection
 
-from sandbox.ignasi.envs.start_env import generate_starts, find_all_feasible_states
-from sandbox.ignasi.envs.goal_start_env import GoalStartExplorationEnv
+from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasible_states
+from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -49,7 +49,7 @@ def run_task(v):
     logger.log("Initializing report...")
     log_dir = logger.get_snapshot_dir()  # problem with logger module here!!
     if log_dir is None:
-        log_dir = "/home/ignasi"
+        log_dir = "/home/young_clgan"
     report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=4)
 
     report.add_header("{}".format(EXPERIMENT_TYPE))
@@ -97,6 +97,7 @@ def run_task(v):
             env_spec=env.spec,
             hidden_sizes=(32,),
             learn_std=v['learn_std'],
+            trunc_steps=v['trunc_steps'],
         )
     #
     if v['baseline'] == 'linear':
@@ -119,9 +120,8 @@ def run_task(v):
         all_starts = StateCollection(distance_threshold=v['coll_eps'])
     brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
     with gen_states_env.set_kill_outside():
-        seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=100 * v['brownian_horizon'], animated=True, speedup=100,
-                                      variance=v['brownian_variance'], subsample=v['num_new_starts'], zero_action=True
-                                      )
+        seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=v['brownian_horizon'], animated=False, speedup=100,
+                                      variance=v['brownian_variance'], subsample=v['num_new_starts'], zero_action=False,                                      )
                                       #   animated=True, speedup=1)
 
     if v['generating_test_set']:

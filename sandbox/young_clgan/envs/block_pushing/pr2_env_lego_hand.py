@@ -54,7 +54,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
         self.counter = 1
         self._goal_generator = goal_generator
         self._lego_generator = lego_generator
-        self.old_generators_used = 0 # TODO: for some reason, the old generators Ignasi uses are still sometimes used
+        self.old_generators_used = 0 # TODO: for some reason, the old generators young_clgan uses are still sometimes used
         self._action_limiter = action_limiter
         self.allow_random_restarts = allow_random_restarts
         self.allow_random_vel_restarts = allow_random_vel_restarts
@@ -287,7 +287,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
                 # # self.theta = np.random.uniform(0, 2 * np.pi)
                 # quat = np.array([np.cos(self.theta / 2), 0, 0, np.sin(self.theta / 2)]) + np.random.randn(4, ) * 0.0005
                 # self.lego = np.concatenate([self.lego[:3], quat])
-                # qpos[-goal_dims - lego_dims - 1:-goal_dims, 0] = self.lego # ignasi's code
+                # qpos[-goal_dims - lego_dims - 1:-goal_dims, 0] = self.lego # young_clgan's code
 
                 self.old_generators_used += 1
                 self.lego = self._lego_generator.generate_goal(lego_position)
@@ -296,7 +296,7 @@ class Pr2EnvLego(MujocoEnv, Serializable):
                 # print("No lego generator!")
                 qpos[-goal_dims - lego_dims - 1:-goal_dims] = np.array((0.6, 0.2, 0.5025, 1, 0, 0, 0))[:, None]
 
-        # Generate a new goal (target position of the lego) <- weird that Ignasi previously has a goal generator
+        # Generate a new goal (target position of the lego) <- weird that young_clgan previously has a goal generator
         if goal is not None:
             self.goal = np.array(goal)
             qpos[-goal_dims:] = self.goal[:goal_dims, None]

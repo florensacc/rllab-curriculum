@@ -468,15 +468,15 @@
         </body>
 
         <body name="base_obj" pos ="0.4146814 0.47640087  0.47057914">
-            <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>
+            <inertial pos="0 0 0" mass="1000" diaginertia="0.01 0.01 0.01"/>
             <geom name="base_obj" pos="0 0 0.02" type="box" size="0.03 0.03 0.02" rgba="1 0 0 1" contype="1" conaffinity="1"/>
             <body name="cyl" pos="0 0 0.04">
                 <!--geom name="base_obj" pos="0 0 0" mesh="base_plate" rgba="1 1 0 1" solref="0.001 1" contype="1" conaffinity="1" solimp="0.999 0.999 0.001"/-->
                 <geom name="cyl" pos="0 0 0.0325" type="cylinder" size="0.0125 0.0325" rgba="1 1 0 1" solref="0.001 1" solimp="0.999 0.999 0.001" contype="1" conaffinity="1"/>
                 <!--joint pos="0 0 0" type="slide" name="slider1" axis="0 0 1" damping="0.0" range="-4 4" /-->
             </body>
-            <joint pos="0 0 0" type="slide" name="slider1" axis="1 0 0" damping="0.0"/>
-            <joint pos="0 0 0" type="slide" name="slider2" axis="0 1 0" damping="0.0" />
+            <joint pos="0 0 0" type="slide" name="slider1" axis="1 0 0" damping="0.0" limited="true" range="-0.03 0.03"/>
+            <joint pos="0 0 0" type="slide" name="slider2" axis="0 1 0" damping="0.0" limited="true" range="-0.03 0.03"/>
         </body>
 
 
@@ -530,8 +530,8 @@
     <motor joint="l_forearm_roll_joint" ctrlrange="-1 1" ctrllimited="true"/>
     <motor joint="l_wrist_flex_joint" ctrlrange="-1 1" ctrllimited="true"/>
     <motor joint="l_wrist_roll_joint" ctrlrange="-1 1" ctrllimited="true"/>
-    <motor joint="slider1" ctrlrange="-1 1" ctrllimited="true"/>
-    <motor joint="slider2" ctrlrange="-1 1" ctrllimited="true"/>
+    <position joint="slider1" kp="50"/>
+    <position joint="slider2" kp="50"/>
     <!--general site="lego_target" gear="0 0 -1 0 0 0" dynprm="0 0 0" gainprm="0 0 0" biastype="affine" biasprm="0.981 0 0"/-->
 </actuator>
 </mujoco>

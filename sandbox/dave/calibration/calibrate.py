@@ -31,7 +31,7 @@ all_params = ['joint_damping', \
 
 
 @click.command()
-@click.option('--data_path', default='/home/ignasi/GitRepos/rllab-private/sandbox/dave/calibration/calibration', 
+@click.option('--data_path', default='/home/young_clgan/GitRepos/rllab-private/sandbox/dave/calibration/calibration',
               help='directory from which to pull fetch data')
 @click.option('--evaluate_only', is_flag=False, default=True,
               help='only evaluate the current .xml model, no optimization performed')
@@ -71,8 +71,8 @@ def main(data_path, evaluate_only, joint):
     vg.add("joint_stiffness", [0.05, 0.1, 0.5, 1, 2.5, 5, 7.5])
     v = vg.variants()
 
-    path_to_xml = '/home/ignasi/GitRepos/rllab-private/sandbox/dave/vendor/mujoco_models/pr2_lego_calibration.xml'
-    best_xml_path = '/home/ignasi/GitRepos/rllab-private/sandbox/dave/vendor/mujoco_models/pr2_lego_calibration_best.xml'
+    path_to_xml = '/home/young_clgan/GitRepos/rllab-private/sandbox/dave/vendor/mujoco_models/pr2_lego_calibration.xml'
+    best_xml_path = '/home/young_clgan/GitRepos/rllab-private/sandbox/dave/vendor/mujoco_models/pr2_lego_calibration_best.xml'
     # param_updates = {joint: dict([('joint_damping', v['joint_damping']),
     #                               ('joint_frictionloss', v['joint_frictionloss']),
     #                               ('joint_armature', v['joint_armature']),

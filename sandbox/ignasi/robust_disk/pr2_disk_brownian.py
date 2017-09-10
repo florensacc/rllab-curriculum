@@ -32,17 +32,14 @@ if __name__ == '__main__':
         autoclone.autoclone(__file__, args)
 
     # setup ec2
-    subnets = [
-        'us-east-2a', 'us-east-2b', 'us-east-2c', 'ap-southeast-2c', 'ap-southeast-2b', 'ap-southeast-1b',
-        'eu-central-1b', 'eu-central-1c', 'eu-central-1a', 'us-west-2a', 'eu-west-1c', 'us-west-2c', 'eu-west-1a',
-        'eu-west-1b'
+    subnets = ['us-east-2c', 'us-east-2b', 'us-east-2a'
         # 'us-east-1a', 'us-east-1d', 'us-east-1e'
     ]
     # subnets = [
     #     'ap-northeast-2a', 'ap-northeast-2c', 'us-east-2b', 'ap-south-1a', 'us-east-2c', 'us-east-2a', 'ap-south-1b',
     #     'us-east-1b', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'eu-west-1c', 'eu-west-1a', 'eu-west-1b'
     # ]
-    ec2_instance = args.type if args.type else 'm4.4xlarge'
+    ec2_instance = args.type if args.type else 'm4.16xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -65,7 +62,7 @@ if __name__ == '__main__':
     #        [[(-2.2854, -.05236, -3.9, -2.3213, -3.15, -2.094, -3.15, 0, 0),
     #          (1.714602, 1.3963, 0.0, 0.0, 3.15, 0.0, 3.15, 0, 0)]])
     # vg.add('start_goal', [(0.386884635, 1.13705218, -2.02754147, -1.74429440, 2.02916096, -0.873269847, 1.54785694)])
-    vg.add('start_goal', [(1.42616709, -0.01514247, 2.64956251, -1.88308175, 4.79495397, -1.05910442, -1.339634)])
+    vg.add('start_goal', [[ 1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335,-0.90467269, -1.56926878]])
     vg.add('ultimate_goal', [(0.4146814, 0.47640087, 0.5305665)])
     vg.add('goal_size', [3]) # changed
     vg.add('terminal_eps', [0.01])
@@ -73,7 +70,7 @@ if __name__ == '__main__':
     # vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
     vg.add('seed_with', ['only_goods'])  # good from brown, onPolicy, previousBrown (ie no good)
     # vg.add('brownian_horizon', lambda seed_with: [0, 50, 500] if seed_with == 'on_policy' else [50, 500])
-    vg.add('brownian_horizon', [100])
+    vg.add('brownian_horizon', [200])
     vg.add('brownian_variance', [0.1])
     vg.add('regularize_starts', [0])
     # goal-algo params
@@ -101,7 +98,7 @@ if __name__ == '__main__':
     vg.add('smart_replay_eps', [0.5])
     # vg.add('smart_replay_eps', [1.0])  # should break
     # sampling params
-    vg.add('horizon', [500])
+    vg.add('horizon', [100])
     vg.add('outer_iters', [5000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
     vg.add('pg_batch_size', [100000])
@@ -113,12 +110,13 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
     vg.add('baseline', ["g_mlp"])
-    # vg.add('policy', ['recurrent'])
     vg.add('policy', ['recurrent'])
+    # vg.add('policy', ['mlp'])
     # vg.add('policy', ['recurrent', 'mlp'])
+    vg.add('trunc_steps', [100, 25])
 
     # vg.add('seed', range(100, 600, 100))
-    vg.add('seed', [13,23,33])
+    vg.add('seed', [13, 23,33, 43])
 
     vg.add('generating_test_set', [False]) #TODO can change
     vg.add('move_peg', [False]) # whether or not to move peg
@@ -128,15 +126,15 @@ if __name__ == '__main__':
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position
 
-    exp_prefix = "randomize_with_rnn"
+    exp_prefix = "random/3_torque"
     # exp_prefix = 'robust-disk-gen-states-density2'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
-    # mode = "ec2"
-    mode="local"
+    mode = "ec2"
+    # mode="local"
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
             # choose subnet

@@ -30,8 +30,8 @@ policy = PretrainGaussianMLPPolicy(
     hidden_sizes=(64, 64, 64),
     # output_gain=1,
     init_std=1,
-    npz_path="/home/ignasi/GitRepos/rllab-private/sandbox/dave/data/params/finetune/train139/params.npz",
-    json_path="/home/ignasi/GitRepos/rllab-private/sandbox/dave/data/params/finetune/train139/params.json",
+    npz_path="/home/young_clgan/GitRepos/rllab-private/sandbox/dave/data/params/finetune/train139/params.npz",
+    json_path="/home/young_clgan/GitRepos/rllab-private/sandbox/dave/data/params/finetune/train139/params.json",
     )
 
 baseline = LinearFeatureBaseline(env_spec=env.spec)

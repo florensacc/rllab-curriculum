@@ -99,7 +99,7 @@ def run_task(v):
         goal_weight = v['goal_weight'],
     )
 
-    # Follows Ignasi's code
+    # Follows young_clgan's code
     policy = GaussianMLPPolicy(
         env_spec=env.spec,
         # The neural network policy should have n hidden layers, each with k hidden units.

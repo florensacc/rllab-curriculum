@@ -38,14 +38,14 @@ policy = DepthGaussianMLPPolicy(
     hidden_sizes=(64, 64, 64),
     # output_gain=1,
     init_std=1,
-    npz_path="/home/ignasi/GitRepos/rllab-private/data/local/pkl_files/caffe_AlexNet/python3/params.npz",
-    # json_path="/home/ignasi/GitRepos/rllab-goals/data/local/train-Lego/rand_init_angle_reward_shaping_continuex2_2016_10_17_12_48_20_0001/params.json",
+    npz_path="/home/young_clgan/GitRepos/rllab-private/data/local/pkl_files/caffe_AlexNet/python3/params.npz",
+    # json_path="/home/young_clgan/GitRepos/rllab-goals/data/local/train-Lego/rand_init_angle_reward_shaping_continuex2_2016_10_17_12_48_20_0001/params.json",
     )
 
 baseline = GaussianConvMLPBaseline(env_spec=env.spec,
                                 # subsample_factor=0.2,
                                 regressor_args={'subsample_factor': 0.1,
-                                                'npz_path':"/home/ignasi/GitRepos/rllab-private/data/local/pkl_files/caffe_AlexNet/python3/params.npz"},
+                                                'npz_path':"/home/young_clgan/GitRepos/rllab-private/data/local/pkl_files/caffe_AlexNet/python3/params.npz"},
                                 optimizer_args={'num_slices': 500,},
                                 )
 # baseline = ZeroBaseline(env.spec)

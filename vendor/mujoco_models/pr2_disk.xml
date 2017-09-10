@@ -517,13 +517,13 @@
 
     </worldbody>
 <actuator>
-    <motor joint="l_shoulder_pan_joint" ctrlrange="-1 1" ctrllimited="true"/>
-    <motor joint="l_shoulder_lift_joint" ctrlrange="-1 1" ctrllimited="true"/>
-    <motor joint="l_upper_arm_roll_joint" ctrlrange="-1 1" ctrllimited="true"/>
-    <motor joint="l_elbow_flex_joint" ctrlrange="-1 1" ctrllimited="true"/>
-    <motor joint="l_forearm_roll_joint" ctrlrange="-1 1" ctrllimited="true"/>
-    <motor joint="l_wrist_flex_joint" ctrlrange="-1 1" ctrllimited="true"/>
-    <motor joint="l_wrist_roll_joint" ctrlrange="-1 1" ctrllimited="true"/>
+    <motor joint="l_shoulder_pan_joint" ctrlrange="-3 3" ctrllimited="true"/>
+    <motor joint="l_shoulder_lift_joint" ctrlrange="-3 3" ctrllimited="true"/>
+    <motor joint="l_upper_arm_roll_joint" ctrlrange="-3 3" ctrllimited="true"/>
+    <motor joint="l_elbow_flex_joint" ctrlrange="-3 3" ctrllimited="true"/>
+    <motor joint="l_forearm_roll_joint" ctrlrange="-3 3" ctrllimited="true"/>
+    <motor joint="l_wrist_flex_joint" ctrlrange="-3 3" ctrllimited="true"/>
+    <motor joint="l_wrist_roll_joint" ctrlrange="-3 3" ctrllimited="true"/>
     <!--general site="lego_target" gear="0 0 -1 0 0 0" dynprm="0 0 0" gainprm="0 0 0" biastype="affine" biasprm="0.981 0 0"/-->
 </actuator>
 </mujoco>

@@ -128,7 +128,7 @@ if __name__ == "__main__":
         # output_gain=1,
         init_std=1,
         trainable=False,
-#       pkl_path="/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/state/random_random_pixel_penalty_p0005_d_06_reward_distance_1_angle_02/params.pkl",
+#       pkl_path="/home/young_clgan/GitRepos/rllab-private/data/s3/train-Lego/state/random_random_pixel_penalty_p0005_d_06_reward_distance_1_angle_02/params.pkl",
         json_path="~/data/data_ported/random_random_pixel_penalty_p0005_d_06_reward_distance_1_angle_02_right_goal_normal_sample/params.json",
     )
 

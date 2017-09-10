@@ -64,7 +64,7 @@ def run_task(v):
         init_std=0.1,
         output_gain=0.1,
         # pkl_path= "data/local/train-Lego/IROS/3Dangle/exp_2/params.pkl"
-        # json_path="/home/ignasi/GitRepos/rllab-goals/data/local/train-Lego/rand_init_angle_reward_shaping_continuex2_2016_10_17_12_48_20_0001/params.json",
+        # json_path="/home/young_clgan/GitRepos/rllab-goals/data/local/train-Lego/rand_init_angle_reward_shaping_continuex2_2016_10_17_12_48_20_0001/params.json",
         )
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)

@@ -57,10 +57,10 @@ joint_ranges = { "l_shoulder_pan_joint": (-0.714602, 2.285398),
              }
 
 if not six.PY2:
-    default_xml_path = '/home/ignasi/GitRepos/rllab-private/sandbox/dave/vendor/mujoco_models/pr2_lego_calibration.xml'
+    default_xml_path = '/home/young_clgan/GitRepos/rllab-private/sandbox/dave/vendor/mujoco_models/pr2_lego_calibration.xml'
     default_xml = dom.parse(default_xml_path).toxml()
 else:
-    default_xml_path = '/home/ignasi/GitRepos/rllab-private/sandbox/dave/vendor/mujoco_models/pr2_lego_calibration.xml'
+    default_xml_path = '/home/young_clgan/GitRepos/rllab-private/sandbox/dave/vendor/mujoco_models/pr2_lego_calibration.xml'
     default_xml = dom.parse(default_xml_path).toxml()
 
 def scale_param(param, val):
