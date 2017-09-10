@@ -470,7 +470,7 @@ def find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_
                 return
         starts = all_feasible_starts.sample(100)
         new_starts = generate_starts(env, starts=starts, horizon=horizon, size=10000, variance=brownian_variance,
-                                     inimated=animate, speedup=10)
+                                     animated=animate, speedup=10)
         logger.log("Done generating new starts")
         all_feasible_starts.append(new_starts, n_process=1)
         num_new_starts = all_feasible_starts.size - total_num_starts
