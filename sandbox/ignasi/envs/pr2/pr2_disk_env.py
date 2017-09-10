@@ -68,6 +68,22 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
     id_tool = self.model.body_names.index('gear')
     xfrc[id_tool, 2] = - 9.81 * np.random.uniform(0.05, 0.5)
     self.model.data.xfrc_applied = xfrc
+
+    if init_state is not None:
+      # hack if generated states don't have peg position
+      if len(init_state) == 7:
+        x = random.random() * 0.1
+        y = random.random() * 0.1
+        init_state.extend([x, y])
+
+      # sets peg to desired position
+      print(init_state)
+      pos = self.model.body_pos.copy()
+      pos[-2, 0] += init_state[-2]
+      pos[-2, 1] += init_state[-1]
+      self.model.body_pos = pos
+      init_state = init_state[:7] # sliced so that super reset can reset joints correctly
+
     ret = super(Pr2DiskEnv, self).reset(init_state, *args, **kwargs)
     # geom_pos = self.model.body_pos.copy()
     # geom_pos[-2,:] += np.array([0,0,10])
@@ -98,7 +114,8 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
     return self.model.data.xpos[id_gear]
 
   def get_goal_position(self):
-    return np.array([0.4146814, 0.47640087, 0.5305665])
+    return self.model.data.site_xpos[-1] # note, slightly different from previous, set to bottom of peg
+    # return np.array([0.4146814, 0.47640087, 0.5305665])
 
   def get_vec_to_goal(self):
     disc_pos = self.get_disc_position()
