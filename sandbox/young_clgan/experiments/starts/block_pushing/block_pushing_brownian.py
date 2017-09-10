@@ -97,7 +97,7 @@ def run_task(v):
         terminate_env = v['terminate_env'],
     )
 
-    # Follows Ignasi's code
+    # Follows young_clgan's code
     policy = GaussianMLPPolicy(
         env_spec=env.spec,
         # The neural network policy should have n hidden layers, each with k hidden units.

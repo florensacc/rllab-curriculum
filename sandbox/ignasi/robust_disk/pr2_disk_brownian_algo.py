@@ -5,7 +5,7 @@ from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.policies.gaussian_gru_policy import GaussianGRUPolicy
 
 # modified to make changes to the environment
-from sandbox.ignasi.envs.pr2.pr2_disk_env import Pr2DiskEnv
+from sandbox.ignasi.envs.pr2.pr2_disk import Pr2DiskEnv
 
 from sandbox.young_clgan.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
 

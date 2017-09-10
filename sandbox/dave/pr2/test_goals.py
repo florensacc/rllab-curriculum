@@ -110,13 +110,13 @@ if __name__ == "__main__":
     # To test something on the robot, this would be the best.
     #pkl_file = "data/s3/train139/train139_2016_09_01_15_59_53_0001/params.pkl"
 
-    # pkl_file = "/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/RSS/position-control-01/position-control-01-lego-gravity-eve-fix1/params.pkl"
-    # pkl_file = "/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/RSS/position-control-random-lego/position-control-random-lego-1/params.pkl"
-    # pkl_file = "/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/RSS/reward-guiding-0999/reward-guiding-09991/params.pkl"
-    # pkl_file = "/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/RSS/position-control-random-everything/position_control_random_everything1/params.pkl"
-    # pkl_file = "/home/ignasi/GitRepos/rllab-private/data/local/train-Lego/RSS/debug-beta-02/debug-beta-0221/params.pkl"
-    # pkl_file = "/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/RSS/debug-constant-time/debug-constant-time21/params.pkl"
-    # pkl_file = "/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/RSS/stds-random-lego-mean-gain-001/std-0005-good-random-lego-mean-gain-0010.1/params.pkl"
+    # pkl_file = "/home/young_clgan/GitRepos/rllab-private/data/s3/train-Lego/RSS/position-control-01/position-control-01-lego-gravity-eve-fix1/params.pkl"
+    # pkl_file = "/home/young_clgan/GitRepos/rllab-private/data/s3/train-Lego/RSS/position-control-random-lego/position-control-random-lego-1/params.pkl"
+    # pkl_file = "/home/young_clgan/GitRepos/rllab-private/data/s3/train-Lego/RSS/reward-guiding-0999/reward-guiding-09991/params.pkl"
+    # pkl_file = "/home/young_clgan/GitRepos/rllab-private/data/s3/train-Lego/RSS/position-control-random-everything/position_control_random_everything1/params.pkl"
+    # pkl_file = "/home/young_clgan/GitRepos/rllab-private/data/local/train-Lego/RSS/debug-beta-02/debug-beta-0221/params.pkl"
+    # pkl_file = "/home/young_clgan/GitRepos/rllab-private/data/s3/train-Lego/RSS/debug-constant-time/debug-constant-time21/params.pkl"
+    # pkl_file = "/home/young_clgan/GitRepos/rllab-private/data/s3/train-Lego/RSS/stds-random-lego-mean-gain-001/std-0005-good-random-lego-mean-gain-0010.1/params.pkl"
     # pkl_file = "data/local/train-Lego/RSS/position-control-fine-tune/position_control_fine_tune1/params.pkl"
     # pkl_file = "data/s3/train-Lego/RSS/comparision-torque-position/position-control-n05-arm-fixed-lego//params.pkl"
     # pkl_file = "data/s3/train-Lego/RSS/fixed-arm-position-ctrl-tip/fixed-arm-position-ctrl-tip1/params.pkl"
@@ -213,7 +213,7 @@ if __name__ == "__main__":
             output_gain=0.1,
             init_std=0,
             # beta=0.1,
-            # pkl_path="/home/ignasi/GitRepos/rllab-private/data/s3/train-Lego/state/random_random_pixel_penalty_p0005_d_06_reward_distance_1_angle_02_crown_normal_sample_001_50000/params.pkl"
+            # pkl_path="/home/young_clgan/GitRepos/rllab-private/data/s3/train-Lego/state/random_random_pixel_penalty_p0005_d_06_reward_distance_1_angle_02_crown_normal_sample_001_50000/params.pkl"
             # json_path=json_path,
             # npz_path=npz_path,
             # pkl_path=pkl_file,

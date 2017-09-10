@@ -11,7 +11,7 @@ from collections import OrderedDict
 
 ACCESS_KEY = os.environ["AWS_ACCESS_KEY"]
 ACCESS_SECRET = os.environ["AWS_ACCESS_SECRET"]
-S3_BUCKET_NAME = os.environ["RLLAB_S3_BUCKET2"]
+S3_BUCKET_NAME = os.environ["RLLAB_S3_BUCKET"]
 PREFIX = os.environ.get("RLLAB_PREFIX2", "")
 
 SECURITY_GROUP_NAME = PREFIX + "rllab-sg"
@@ -435,5 +435,6 @@ def query_yes_no(question, default="yes", allow_skip=False):
 
 
 if __name__ == "__main__":
-    setup()
-    # setup_ec2()
+    # setup()
+    setup_ec2()
+    write_config()

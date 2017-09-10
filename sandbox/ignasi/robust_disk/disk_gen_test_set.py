@@ -26,11 +26,10 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states, label_states_from_paths
 from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator
 from sandbox.young_clgan.state.utils import StateCollection, SmartStateCollection
-from sandbox.young_clgan.robust_disk.envs.arm3d_disc_env import Arm3dDiscEnv
 
 from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasible_states
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
-from sandbox.young_clgan.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
+from sandbox.ignasi.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
 
 """
 Generates the test set
@@ -40,28 +39,31 @@ def run_task(v):
     random.seed(v['seed'])
     np.random.seed(v['seed'])
 
+    inner_env = normalize(DiskGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'], kill_radius=v['kill_radius']))
 
-    if v['move_peg']:
-        gen_states_env = DiskGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'], kill_radius=v['kill_radius'])
-    else:
-        # cannot move the peg
-        gen_states_env = Arm3dDiscEnv()
+    fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
+    fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
+
+    gen_states_env = GoalStartExplorationEnv(
+        env=inner_env,
+        start_generator=fixed_start_generator,
+        obs2start_transform=lambda x: x[:v['start_size']],
+        goal_generator=fixed_goal_generator,
+        obs2goal_transform=lambda x: x[-1 * v['goal_size']:], # changed!
+        terminal_eps=v['terminal_eps'],
+        distance_metric=v['distance_metric'],
+        extend_dist_rew=v['extend_dist_rew'],
+        inner_weight=v['inner_weight'],
+        goal_weight=v['goal_weight'],
+        terminate_env=True,
+        append_goal_to_observation = False, # prevents goal environment from appending observation
+    )
+
+
     with gen_states_env.set_kill_outside():
         seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=v['brownian_horizon'], animated=False,
                                       variance=v['brownian_variance'], subsample=v['num_new_starts'])  # , animated=True, speedup=1)
 
-    #
-    # if v['peg_positions']:
-    #     def states_transform(x):
-    #         y = list(x)
-    #         for joint in (7,8):
-    #             y[joint] *= 10
-    #         # for joint in v['peg_positions']:
-    #         #     y[joint] *= v['peg_scaling']
-    #         return y
-    # else:
-    #     states_transform = None
-    with gen_states_env.set_kill_outside():
         find_all_feasible_states(gen_states_env, seed_starts, distance_threshold=0.1,
                                  brownian_variance=1, animate=False, max_states=v['max_gen_states'],
                                  horizon=500,
@@ -174,7 +176,7 @@ if __name__ == '__main__':
 
     vg.add('generating_test_set', [False]) #TODO can change
     vg.add('move_peg', [True]) # whether or not to move peg
-    vg.add('kill_radius', [3])
+    vg.add('kill_radius', [0.5])
     vg.add('kill_peg_radius', [0.05])
     vg.add('max_gen_states', [50000])
     # vg.add('peg_positions', [(7,8)])  # joint numbers for peg

@@ -32,7 +32,7 @@ if __name__ == '__main__':
         autoclone.autoclone(__file__, args)
 
     # setup ec2
-    subnets = ['us-west-2b', 'us-west-1b', 'us-west-1c'
+    subnets = ['us-east-2c', 'us-east-2b', 'us-east-2a'
         # 'us-east-1a', 'us-east-1d', 'us-east-1e'
     ]
     # subnets = [
@@ -70,7 +70,7 @@ if __name__ == '__main__':
     # vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
     vg.add('seed_with', ['only_goods'])  # good from brown, onPolicy, previousBrown (ie no good)
     # vg.add('brownian_horizon', lambda seed_with: [0, 50, 500] if seed_with == 'on_policy' else [50, 500])
-    vg.add('brownian_horizon', [100])
+    vg.add('brownian_horizon', [200])
     vg.add('brownian_variance', [0.1])
     vg.add('regularize_starts', [0])
     # goal-algo params
@@ -110,13 +110,13 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
     vg.add('baseline', ["g_mlp"])
-    # vg.add('policy', ['recurrent'])
     vg.add('policy', ['recurrent'])
+    # vg.add('policy', ['mlp'])
     # vg.add('policy', ['recurrent', 'mlp'])
-    vg.add('trunc_steps', [30])
+    vg.add('trunc_steps', [100, 25])
 
     # vg.add('seed', range(100, 600, 100))
-    vg.add('seed', [13,23,33, 43, 53])
+    vg.add('seed', [13, 23,33, 43])
 
     vg.add('generating_test_set', [False]) #TODO can change
     vg.add('move_peg', [False]) # whether or not to move peg
@@ -126,15 +126,15 @@ if __name__ == '__main__':
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position
 
-    exp_prefix = "random/50_path"
+    exp_prefix = "random/3_torque"
     # exp_prefix = 'robust-disk-gen-states-density2'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
-    # mode = "ec2"
-    mode="local"
+    mode = "ec2"
+    # mode="local"
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
             # choose subnet
