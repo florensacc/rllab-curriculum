@@ -28,6 +28,7 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
     self.init_solved = init_solved
     self.kill_radius = kill_radius
     self.kill_outside = False
+    self.body_pos = self.model.body_pos.copy()
     # print("yo!")
 
   @overrides
@@ -78,13 +79,14 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
 
       # sets peg to desired position
       print(init_state)
-      pos = self.model.body_pos.copy()
+      pos = self.body_pos.copy()
       pos[-2, 0] += init_state[-2]
       pos[-2, 1] += init_state[-1]
       self.model.body_pos = pos
       init_state = init_state[:7] # sliced so that super reset can reset joints correctly
 
     ret = super(Pr2DiskEnv, self).reset(init_state, *args, **kwargs)
+    print(self.get_goal_position())
     # geom_pos = self.model.body_pos.copy()
     # geom_pos[-2,:] += np.array([0,0,10])
     # self.model.body_pos = geom_pos
