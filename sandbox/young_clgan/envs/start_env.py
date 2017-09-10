@@ -429,15 +429,12 @@ def find_all_feasible_states_plotting(env, seed_starts, report, distance_thresho
 
 
 def brownian(start, env, kill_outside, kill_radius, horizon, variance, policy=None):
-    # print("just when entering brownian, kill_outside, kill_radius; ", env.kill_outside, env.kill_radius)
     with env.set_kill_outside(kill_outside=kill_outside, radius=kill_radius):
-        # print("starting brownian, we have kill_outside, ,kill_radius: ", env.kill_outside, env.kill_radius)
         done = False
         goal_reached = False
         noise = 0
         steps = 0
         states = [start]
-        # print("before reset, we have kill_outside: ", env.kill_outside)
         obs = env.reset(start)
         while not done and steps < horizon:
             steps += 1
@@ -446,7 +443,6 @@ def brownian(start, env, kill_outside, kill_radius, horizon, variance, policy=No
                 action, _ = policy.get_action(obs)
             else:
                 action = noise
-            # print("before steps, we have kill_outside: ", env.kill_outside)
             obs, _, done, env_info = env.step(action)
             states.append(env.start_observation)
             if done and 'goal_reached' in env_info and env_info['goal_reached']:  # we don't care about goal done, otherwise will never advance!

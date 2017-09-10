@@ -133,7 +133,7 @@ if __name__ == '__main__':
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
-    
+
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
             # choose subnet
