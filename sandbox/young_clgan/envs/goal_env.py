@@ -155,7 +155,10 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
             # modified so that inner environment can pass in goal via step
             dist = info['distance']
             info['goal_reached'] = 1.0 * (dist < self.terminal_eps)
-            info['reward_dist'] = reward_dist = info['goal_reached'] * self.goal_weight
+            reward_dist = info['goal_reached'] * self.goal_weight
+            if self.extend_dist_rew:
+                reward_dist -= dist
+            info['reward_dist'] = reward_dist
             # print(dist)
 
             # print(info['goal_reached'])
@@ -167,7 +170,8 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         if self.terminate_env and info['goal_reached']:
             done = True
         if self.append_goal_to_observation:
-            observation = self.append_goal_to_observation(observation)
+            print("appending goal to obs")
+            observation = self.append_goal_observation(observation)
         return (
             observation,
             reward_dist + reward_inner,
