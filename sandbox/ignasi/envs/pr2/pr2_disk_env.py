@@ -53,9 +53,13 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
             self.kill_outside = False
             self.kill_radius = old_kill_radius
 
+    # @property
+    # def start_observation(self):
+    #     return np.copy(self.model.data.qpos).flatten()
+
     @property
     def start_observation(self):
-        return np.copy(self.model.data.qpos).flatten()
+        return np.concatenate([np.copy(self.model.data.qpos).flatten(), self.get_goal_position()])
 
     def reset(self, init_state=None, *args, **kwargs):
         # if randomize:
@@ -80,7 +84,7 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
                 init_state.extend([x, y])
 
             # sets peg to desired position
-            print(init_state)
+            # print(init_state)
             pos = self.body_pos.copy()
             pos[-2, 0] += init_state[-2]
             pos[-2, 1] += init_state[-1]
@@ -88,7 +92,7 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
             init_state = init_state[:7]  # sliced so that super reset can reset joints correctly
 
         ret = super(Pr2DiskEnv, self).reset(init_state, *args, **kwargs)
-        print(self.get_goal_position())
+        # print(self.get_goal_position())
         # geom_pos = self.model.body_pos.copy()
         # geom_pos[-2,:] += np.array([0,0,10])
         # self.model.body_pos = geom_pos
@@ -100,17 +104,19 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
         # print(action.shape)
         self.forward_dynamics(action)
         distance_to_goal = self.get_distance_to_goal()
+        goal = self.get_goal_position()
         reward = -distance_to_goal
         ob = self.get_current_obs()
         done = False
-        # print("dist_to_goal: {}, rew: {}, next_obs: {}".format(distance_to_goal, reward, ob))
+        # if distance_to_goal < 0.3:
+        #     print("dist_to_goal: {}, rew: {}, next_obs: {}".format(distance_to_goal, reward, ob))
 
         if self.kill_outside and (distance_to_goal > self.kill_radius):
             print("******** OUT of region ********")
             done = True
 
         return Step(
-            ob, reward, done, distance=distance_to_goal
+            ob, reward, done, distance=distance_to_goal, goal_position=goal,
         )
 
     def get_disc_position(self):
@@ -139,17 +145,21 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
         # self.model._compute_subtree() #pylint: disable=W0212
         self.model.forward()
 
-        # def is_feasible(self, goal):
-        #     return np.all(np.logical_and(self.goal_lb <= goal, goal <= self.goal_ub))
-        #
-        # @property
-        # def goal_lb(self):
-        #     return self.model.jnt_range[:self.model.nq // 2, 0]
-        #
-        # @property
-        # def goal_ub(self):
-        #     return self.model.jnt_range[:self.model.nq // 2, 1]
-        #
-        # @property
-        # def goal_dim(self):
-        #     return self.model.njnt // 2
+    def transform_to_start_space(self, obs, env_infos):  # hard-coded that the first 7 coord are the joint pos.
+        return np.concatenate([obs[:7], env_infos['goal_position']])  # using 'goal' takes the one from the goal_env
+
+
+    # def is_feasible(self, goal):
+    #     return np.all(np.logical_and(self.goal_lb <= goal, goal <= self.goal_ub))
+    #
+    # @property
+    # def goal_lb(self):
+    #     return self.model.jnt_range[:self.model.nq // 2, 0]
+    #
+    # @property
+    # def goal_ub(self):
+    #     return self.model.jnt_range[:self.model.nq // 2, 1]
+    #
+    # @property
+    # def goal_dim(self):
+    #     return self.model.njnt // 2
