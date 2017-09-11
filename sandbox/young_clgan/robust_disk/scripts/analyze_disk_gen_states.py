@@ -16,6 +16,7 @@ import os
 
 from PIL import Image
 # import scipy.misc
+from sandbox.young_clgan.state.utils import StateCollection
 
 """
 Various utils to inspect/evaluate generated states
@@ -35,6 +36,8 @@ def partition_sampled_states(states, lb, spacing, num_grid = NUM_GRID, transform
     """
     Given list of states, returns list of lists of states in each grid
     Assumes square big grid
+    lb: lower bound
+    spacing: space between grid
     :return:
     """
     grid_states = []
@@ -45,34 +48,37 @@ def partition_sampled_states(states, lb, spacing, num_grid = NUM_GRID, transform
         grid_states.append(to_add)
     for i, state in enumerate(states):
         if i % 10000 == 0:
-            print(i)
+            print("States processed:", i)
         x, y = transform(state)
         x_index = min(int((x - lb) / spacing), num_grid - 1)
         y_index = min(int((y - lb) / spacing), num_grid - 1)
         grid_states[x_index][y_index].append(state)
     return grid_states
 
-def trim_data_set(data, max_states = 5000):
+def trim_data_set(data, max_states = 5000, lb = -0.05, spacing = 0.02, num_grid = NUM_GRID):
     print("Dividing states into grid spaces")
-    grid_states = partition_sampled_states(data, -0.05, 0.02, NUM_GRID)
+    grid_states = partition_sampled_states(data, lb, spacing, num_grid)
     trimmed_set = []
-    for i in range(NUM_GRID):
-        for j in range(NUM_GRID):
+    for i in range(num_grid):
+        for j in range(num_grid):
             grid = grid_states[i][j]
             num_states_in_grid = len(grid)
             if num_states_in_grid < max_states:
+                print("Warning: only {} states in position {} {}".format(num_states_in_grid, i, j))
                 trimmed_set.extend(grid)
             else:
                 indices = np.random.choice(num_states_in_grid, max_states, replace=False)
                 # import ipdb; ipdb.set_trace()
                 trimmed_set.extend(np.array(grid)[indices].tolist())
     trimmed_set = np.array(trimmed_set)
-    folder = "data/trimmed_data_set/"
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-    file = folder + "all_feasible_states.pkl"
+    trimmed_starts = StateCollection(distance_threshold=all_feasible_starts.distance_threshold)
+    print("Total number of states (before appending to state collection): {}".format(len(trimmed_set)))
+    trimmed_starts.append(trimmed_set)
+    print("Total number of states (after appending to state collection): {}".format(trimmed_starts.size))
+
+    file = args.file + "trimmed{}.pkl".format(max_states)
     with open(file, "wb") as f:
-        pickle.dump(trimmed_set, f)
+        pickle.dump(trimmed_starts, f)
     return
 
 def eval_success_grid(data, save_dir="success_breakdown.csv"):
@@ -193,13 +199,14 @@ def grid_and_sample_states(data, save_images = False, file_name ='num_starts_bre
         scipy.misc.imsave('gen_states.jpg', result)
         # fig.savefig("generated_states.png")
 
-def plot_peg_position_density(data):
+def plot_peg_position_density(data, num_bins = 5, bound =-0.05):
     x_peg = data[:, peg_joints[0]]
     y_peg = data[:, peg_joints[1]]
     fig, ax = plt.subplots()
     heatmap, xedges, yedges = np.histogram2d(x_peg,
                                              y_peg,
-                                             bins=[10, 10])
+                                             range=[[bound, -bound], [bound, -bound]],
+                                             bins=[num_bins, num_bins])
     heatmap /= np.sum(heatmap)
     # Plot peg density
     # eventual todo? we can use grid_states to plot density heatmap
@@ -254,6 +261,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     # args.file = "/home/michael/rllab_goal_rl/data/local/robust-disk-gen-states-uniform2/robust-disk-gen-states-uniform2_2017_08_20_16_02_56_0001/"
     file = args.file + "all_feasible_states.pkl"
+    # file = args.file + "trimmed50.pkl"
     all_feasible_starts = pickle.load(open(file, "rb"))
 
     num_states = all_feasible_starts.size
@@ -262,13 +270,16 @@ if __name__ == "__main__":
     data = all_feasible_starts.states
     peg_joints = 7, 8
 
-    # trim_data_set(data)
+    # trims data set and saves collection in pkl file!
+    trim_data_set(data, max_states=50, lb=-0.03, spacing=0.01, num_grid =6)
+
+    plot_peg_position_density(data, bound=-0.03, num_bins= 6)
+    plot_joint_variations(data)
+    show_generated_states(data)
+
     # eval_success_grid(data, "success_breakdown_new_policy.csv")
-    grid_and_sample_states(data, save_images=True, file_name="success_breakdown_num_states.csv")
+    # grid_and_sample_states(data, save_images=True, file_name="success_breakdown_num_states.csv")
     #
-    # plot_peg_position_density(data)
-    # plot_joint_variations(data)
-    # show_generated_states(data)
 
 
 
