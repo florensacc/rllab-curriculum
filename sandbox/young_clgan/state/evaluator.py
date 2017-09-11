@@ -118,7 +118,8 @@ def label_states_from_paths(all_paths, min_reward=0, max_reward=1, key='rewards'
             if as_goal:
                 state = tuple(path['env_infos']['goal'][0])
             else:
-                state = tuple(env.transform_to_start_space(path['observations'][0]))
+                env_infos_first_time_step = {key: value[0] for key, value in path['env_infos'].items()}
+                state = tuple(env.transform_to_start_space(path['observations'][0], env_infos_first_time_step))
             if state in state_dict:
                 state_dict[state].append(reward)
             else:

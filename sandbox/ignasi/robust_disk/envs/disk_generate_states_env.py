@@ -55,8 +55,9 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
             self.kill_outside = False
 
     @property
-    def start_observation(self):
-        return np.copy(self.model.data.qpos).flatten()
+    def start_observation(self):  # this is already good as a 9dim: base of peg has joints
+        joint_position = self.get_current_obs()[:9]
+        return joint_position
 
     def reset(self, init_state=None, *args, **kwargs):  # todo: init_state should have (joints, peg, phy)
         self.init_peg_pos = np.random.multivariate_normal((0,0), 0.01*np.eye(2)) + self.model.data.qpos[-2:,0]

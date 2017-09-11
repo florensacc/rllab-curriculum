@@ -32,8 +32,9 @@ if __name__ == '__main__':
         autoclone.autoclone(__file__, args)
 
     # setup ec2
-    subnets = ['us-east-2c', 'us-east-2b', 'us-east-2a'
-        # 'us-east-1a', 'us-east-1d', 'us-east-1e'
+    subnets = [
+        'ap-southeast-2b', 'ap-southeast-2c', 'ap-southeast-1a', 'eu-central-1b', 'eu-west-1a', 'eu-west-1b',
+        'eu-west-1c'
     ]
     # subnets = [
     #     'ap-northeast-2a', 'ap-northeast-2c', 'us-east-2b', 'ap-south-1a', 'us-east-2c', 'us-east-2a', 'ap-south-1b',
@@ -76,10 +77,12 @@ if __name__ == '__main__':
     # goal-algo params
     vg.add('min_reward', [0.1])
     vg.add('max_reward', [0.9])
+    vg.add('ctrl_regularizer_weight', [1])
+    vg.add('action_torque_lambda', [1])
+    vg.add('inner_weight', [1e-3])
+    vg.add('goal_weight', lambda inner_weight: [1000] if inner_weight > 0 else [1])
     vg.add('distance_metric', ['L2'])
     vg.add('extend_dist_rew', [False])
-    vg.add('inner_weight', [0])
-    vg.add('goal_weight', lambda inner_weight: [1000] if inner_weight > 0 else [1])
     vg.add('persistence', [1])
     vg.add('n_traj', [3])   #  if use_trpo_paths it uses 2!
     vg.add('with_replacement', [True])
@@ -109,13 +112,13 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
     vg.add('baseline', ["g_mlp"])
-    vg.add('policy', ['recurrent'])
+    vg.add('policy', ['mlp', 'recurrent'])
     # vg.add('policy', ['mlp'])
     # vg.add('policy', ['recurrent', 'mlp'])
     vg.add('trunc_steps', [100, 25])
 
     # vg.add('seed', range(100, 600, 100))
-    vg.add('seed', [13, 23,33, 43])
+    vg.add('seed', [100, 200, 300, 400, 500])
 
     vg.add('generating_test_set', [False]) #TODO can change
     vg.add('move_peg', [True]) # whether or not to move peg
@@ -125,8 +128,7 @@ if __name__ == '__main__':
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position
 
-    exp_prefix = "random/3_torque"
-    # exp_prefix = 'robust-disk-gen-states-density2'
+    exp_prefix = 'robust-disk'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,

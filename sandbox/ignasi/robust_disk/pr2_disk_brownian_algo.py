@@ -55,7 +55,8 @@ def run_task(v):
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
 
-    inner_env = normalize(Pr2DiskEnv())
+    inner_env = normalize(Pr2DiskEnv(ctrl_regularizer_weight=v['ctrl_regularizer_weight'],
+                                     action_torque_lambda=v['action_torque_lambda']))
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
     fixed_start_generator = FixedStateGenerator(state=v['start_goal'])
@@ -121,13 +122,13 @@ def run_task(v):
     # load the state collection from data_upload
     # load_dir = 'data_upload/peg'
     load_dir = "data_upload/pr2_peg"
-    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states.pkl'), 'rb'))
+    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states_trimmed100.pkl'), 'rb'))
 
     # # show where these states are:
     # shuffled_starts = np.array(all_feasible_starts.state_list)
     # np.random.shuffle(shuffled_starts)
     # generate_starts(env, starts=shuffled_starts, horizon=100, variance=v['brownian_variance'],
-    #                 animated=True, speedup=10,
+    #                 animated=True, speedup=100,
     #                 zero_action=True,
     #                 )
 
@@ -213,6 +214,14 @@ def run_task(v):
             logger.log("labeling starts manually")
             labels, paths = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'],
                                          key='goal_reached', full_path=True)
+
+        # # visualize the starts
+        # shuffled_starts = np.array(starts)
+        # np.random.shuffle(shuffled_starts)
+        # generate_starts(env, starts=shuffled_starts, horizon=100, variance=v['brownian_variance'],
+        #                 animated=True, speedup=100,
+        #                 zero_action=True,
+        #                 )
 
         with logger.tabular_prefix("OnStarts_"):
             env.log_diagnostics(paths)

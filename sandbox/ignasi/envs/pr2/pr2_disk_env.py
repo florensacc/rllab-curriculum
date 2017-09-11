@@ -18,6 +18,9 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
     def __init__(self,
                  init_solved=True,
                  kill_radius=0.4,
+                 dist_weight=0,
+                 ctrl_regularizer_weight=1,
+                 action_torque_lambda=0,
                  *args, **kwargs):
         MujocoEnv.__init__(self, *args, **kwargs)
         self.frame_skip = 5
@@ -28,13 +31,17 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
         self.init_solved = init_solved
         self.kill_radius = kill_radius
         self.kill_outside = False
+        self.dist_weight = dist_weight
+        self.ctrl_regularizer_weight = ctrl_regularizer_weight
+        self.action_torque_lambda = action_torque_lambda
         self.body_pos = self.model.body_pos.copy()
         # print("yo!")
 
     @overrides
     def get_current_obs(self):
         joint_position = np.copy(self.model.data.qpos.flat)
-        joint_position[4], joint_position[6] = np.unwrap(joint_position[[4, 6]])
+        _, joint_position[4] = np.unwrap([0, joint_position[4]])
+        _, joint_position[6] = np.unwrap([0, joint_position[6]])
         return np.concatenate([
             joint_position,  # [:self.model.nq // 2],
             self.model.data.qvel.flat,  # [:self.model.nq // 2],
@@ -53,13 +60,11 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
             self.kill_outside = False
             self.kill_radius = old_kill_radius
 
-    # @property
-    # def start_observation(self):
-    #     return np.copy(self.model.data.qpos).flatten()
-
     @property
     def start_observation(self):
-        return np.concatenate([np.copy(self.model.data.qpos).flatten(), self.get_goal_position()])
+        joint_position = self.get_current_obs()[:7]
+        goal_xy = self.get_goal_position(relative=True)[:2]
+        return np.concatenate([joint_position, goal_xy])
 
     def reset(self, init_state=None, *args, **kwargs):
         # if randomize:
@@ -104,8 +109,12 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
         # print(action.shape)
         self.forward_dynamics(action)
         distance_to_goal = self.get_distance_to_goal()
-        goal = self.get_goal_position()
-        reward = -distance_to_goal
+        goal_relative = self.get_goal_position(relative=True)
+        # penalty for torcs:
+        action_norm = np.linalg.norm(action)
+        velocity_norm = np.linalg.norm(self.model.data.qvel)
+        ctrl_penalty = - self.ctrl_regularizer_weight * (self.action_torque_lambda * action_norm + velocity_norm)
+        reward = ctrl_penalty - self.dist_weight * distance_to_goal
         ob = self.get_current_obs()
         done = False
         # if distance_to_goal < 0.3:
@@ -116,16 +125,18 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
             done = True
 
         return Step(
-            ob, reward, done, distance=distance_to_goal, goal_position=goal,
+            ob, reward, done, distance=distance_to_goal, goal_relative=goal_relative, ctrl_penalty=ctrl_penalty,
         )
 
     def get_disc_position(self):
         id_gear = self.model.body_names.index('gear')
         return self.model.data.xpos[id_gear]
 
-    def get_goal_position(self):
-        return self.model.data.site_xpos[-1]  # note, slightly different from previous, set to bottom of peg
-        # return np.array([0.4146814, 0.47640087, 0.5305665])
+    def get_goal_position(self, relative=False):
+        if relative:
+            return self.model.data.site_xpos[-1] - np.array([0.4146814, 0.47640087, 0.5305665])  # todo: not hardcode this?
+        else:
+            return self.model.data.site_xpos[-1]  # note, slightly different from previous, set to bottom of peg
 
     def get_vec_to_goal(self):
         disc_pos = self.get_disc_position()
@@ -146,7 +157,8 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
         self.model.forward()
 
     def transform_to_start_space(self, obs, env_infos):  # hard-coded that the first 7 coord are the joint pos.
-        return np.concatenate([obs[:7], env_infos['goal_position']])  # using 'goal' takes the one from the goal_env
+        return np.concatenate([obs[:7], env_infos['goal_relative'][:2]])  # using 'goal' takes the one from the goal_env
+        # remove the last one, it's the z coordinate of the peg and it doesn't move.
 
 
     # def is_feasible(self, goal):
