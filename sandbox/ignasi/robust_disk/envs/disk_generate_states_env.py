@@ -34,8 +34,13 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
 
     @overrides
     def get_current_obs(self):
+        joint_position = np.copy(self.model.data.qpos.flat)
+        _, joint_position[4] = np.unwrap([0, joint_position[4]])
+        _, joint_position[6] = np.unwrap([0, joint_position[6]])
+        if joint_position[4] > np.pi or joint_position[4] < -np.pi:
+            import pdb; pdb.set_trace()
         return np.concatenate([
-            self.model.data.qpos.flat,  # [:self.model.nq // 2],
+            joint_position,      # in this env the base of the peg is a join, so included in qpos!!
             self.model.data.qvel.flat,  # [:self.model.nq // 2],
             # self.model.data.site_xpos[0],  # disc position
             # self.target_position,
