@@ -278,9 +278,9 @@ def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsa
         logger.log("Generating starts, rollouts that reached goal: " + str(num_roll_reached_goal) + " out of " + str(num_roll))
     logger.log("Starts generated.")
     if subsample is None:
-        return np.array(states)
+        return np.stack([np.array(state) for state in states])
     else:
-        states = np.array(states)
+        states = np.stack([np.array(state) for state in states])
         if len(states) < subsample:
             return states
         return states[np.random.choice(np.shape(states)[0], size=subsample)]
@@ -429,6 +429,7 @@ def find_all_feasible_states_plotting(env, seed_starts, report, distance_thresho
 
 
 def brownian(start, env, kill_outside, kill_radius, horizon, variance, policy=None):
+    # print('starting rollout from : ', start)
     with env.set_kill_outside(kill_outside=kill_outside, radius=kill_radius):
         done = False
         goal_reached = False
@@ -451,7 +452,7 @@ def brownian(start, env, kill_outside, kill_radius, horizon, variance, policy=No
     return states, goal_reached
 
 
-def find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_variance=1, animate=False,
+def find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_variance=1, animate=False, speedup=10,
                              max_states = None, horizon = 1000, states_transform = None):
     # states_transform is optional transform of states
     # print('the seed_starts are of shape: ', seed_starts.shape)
@@ -470,7 +471,7 @@ def find_all_feasible_states(env, seed_starts, distance_threshold=0.1, brownian_
                 return
         starts = all_feasible_starts.sample(100)
         new_starts = generate_starts(env, starts=starts, horizon=horizon, size=10000, variance=brownian_variance,
-                                     animated=animate, speedup=10)
+                                     animated=animate, speedup=speedup)
         logger.log("Done generating new starts")
         all_feasible_starts.append(new_starts, n_process=1)
         num_new_starts = all_feasible_starts.size - total_num_starts

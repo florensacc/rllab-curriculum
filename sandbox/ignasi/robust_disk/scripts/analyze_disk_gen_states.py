@@ -27,7 +27,7 @@ NUM_TIME_STEPS = 500
 NUM_STATES = 30
 
 
-def partition_sampled_states(states, lb, spacing, num_grid = NUM_GRID, transform = lambda x: x[-2:]):
+def partition_sampled_states(states, lb, spacing, num_grid=NUM_GRID, transform=lambda x: x[-2:]):
     """
     Given list of states, returns list of lists of states in each grid
     Assumes square big grid
@@ -48,7 +48,8 @@ def partition_sampled_states(states, lb, spacing, num_grid = NUM_GRID, transform
         grid_states[x_index][y_index].append(state)
     return grid_states
 
-def trim_data_set(data, max_states = 2000):
+
+def trim_data_set(data, max_states=2000):
     print("Dividing states into grid spaces")
     grid_states = partition_sampled_states(data, -0.05, 0.02, NUM_GRID)
     trimmed_set = []
@@ -71,13 +72,13 @@ def trim_data_set(data, max_states = 2000):
         pickle.dump(trimmed_set, f)
     return
 
-def grid_and_analyze_grid(data, rollouts = False, save_images = False, file_name = 'success_breakdown.csv'):
-    # Iterates through points in the grid and performs rollouts to estimate percentage of success
 
+def grid_and_analyze_grid(data, rollouts=False, save_images=False, file_name='success_breakdown.csv'):
+    # Iterates through points in the grid and performs rollouts to estimate percentage of success
 
     print("Dividing states into grid spaces")
     grid_states = partition_sampled_states(data, -0.05, 0.02, NUM_GRID)
-    save_dir = "data/" # us.uped to save images of state
+    save_dir = "data/"  # us.uped to save images of state
     data = joblib.load(POLICY_PATH)
     if "algo" in data:
         policy = data["algo"].policy
@@ -88,8 +89,6 @@ def grid_and_analyze_grid(data, rollouts = False, save_images = False, file_name
 
     # viewer = env.get_viewer()
     cam_pos = [0, 0.6, 0.5, 0.75, -60, 270]
-
-
 
     with open('data/' + file_name, 'w', newline='') as csvfile:
         csvwriter = csv.writer(csvfile)
@@ -142,6 +141,7 @@ def grid_and_analyze_grid(data, rollouts = False, save_images = False, file_name
                 print(out)
                 csvwriter.writerow(out)
 
+
 def plot_peg_position_density(data):
     x_peg = data[:, peg_joints[0]]
     y_peg = data[:, peg_joints[1]]
@@ -171,6 +171,7 @@ def plot_peg_position_density(data):
     plt.show()
     fig.savefig(args.file + "peg_positions.png")
 
+
 def plot_joint_variations(data):
     # Plots variation for each joint
     fig, ax = plt.subplots()
@@ -184,6 +185,7 @@ def plot_joint_variations(data):
     plt.show()
     fig.savefig(args.file + "joint_variations.png")
 
+
 def show_generated_states(data):
     # Simulates policy to visualize generated states
     env = DiskGenerateStatesEnv(evaluate=True)
@@ -194,14 +196,12 @@ def show_generated_states(data):
         rollout(env, policy, animated=True, max_path_length=10, init_state=data[int(random.random() * num_states)])
 
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('file', type=str,
-                        help='path to the directory with states generated')
+    parser.add_argument('file', type=str, help='path to the file with StatesCollection of generated starts')
     args = parser.parse_args()
     # args.file = "/home/michael/rllab_goal_rl/data/local/robust-disk-gen-states-uniform2/robust-disk-gen-states-uniform2_2017_08_20_16_02_56_0001/"
-    file = args.file + "all_feasible_states.pkl"
+    file = args.file
     all_feasible_starts = pickle.load(open(file, "rb"))
 
     num_states = all_feasible_starts.size
@@ -213,9 +213,9 @@ if __name__ == "__main__":
     # trim_data_set(data)
     # grid_and_analyze_grid(data, rollouts=True, save_images=False, file_name="success_breakdown_new.csv")
     #
+    print("plotting peg_position_density")
     plot_peg_position_density(data)
+    print("plotting joint variations")
     plot_joint_variations(data)
+    print("showing generated states")
     show_generated_states(data)
-
-
-
