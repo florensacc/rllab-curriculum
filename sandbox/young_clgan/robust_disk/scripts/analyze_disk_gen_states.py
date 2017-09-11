@@ -22,7 +22,7 @@ from sandbox.young_clgan.state.utils import StateCollection
 Various utils to inspect/evaluate generated states
 """
 
-NUM_GRID = 5
+NUM_GRID = 10
 # put good trained policy
 POLICY_PATH = None
 # POLICY_PATH = "data/s3/robust-disk-test/robust-disk-test_2017_08_23_09_58_01_0001/itr_150/params.pkl"
@@ -32,7 +32,8 @@ NUM_TIME_STEPS = 500
 # NUM_STATES = 30
 NUM_STATES = 5
 
-def partition_sampled_states(states, lb, spacing, num_grid = NUM_GRID, transform = lambda x: x[-2:]):
+
+def partition_sampled_states(states, lb, spacing=None, num_grid=NUM_GRID, transform=lambda x: x[-2:]):
     """
     Given list of states, returns list of lists of states in each grid
     Assumes square big grid
@@ -40,6 +41,8 @@ def partition_sampled_states(states, lb, spacing, num_grid = NUM_GRID, transform
     spacing: space between grid
     :return:
     """
+    if spacing <= 0:
+        spacing = (2 * lb) / num_grid
     grid_states = []
     for i in range(num_grid):
         to_add = []
@@ -55,7 +58,8 @@ def partition_sampled_states(states, lb, spacing, num_grid = NUM_GRID, transform
         grid_states[x_index][y_index].append(state)
     return grid_states
 
-def trim_data_set(data, max_states = 5000, lb = -0.05, spacing = 0.02, num_grid = NUM_GRID):
+
+def trim_data_set(data, max_states=5000, lb=-0.05, spacing=0.02, num_grid=NUM_GRID):
     print("Dividing states into grid spaces")
     grid_states = partition_sampled_states(data, lb, spacing, num_grid)
     trimmed_set = []
@@ -71,7 +75,7 @@ def trim_data_set(data, max_states = 5000, lb = -0.05, spacing = 0.02, num_grid 
                 # import ipdb; ipdb.set_trace()
                 trimmed_set.extend(np.array(grid)[indices].tolist())
     trimmed_set = np.array(trimmed_set)
-    trimmed_starts = StateCollection(distance_threshold=all_feasible_starts.distance_threshold)
+    trimmed_starts = StateCollection(distance_threshold=0)  # (distance_threshold=all_feasible_starts.distance_threshold)
     print("Total number of states (before appending to state collection): {}".format(len(trimmed_set)))
     trimmed_starts.append(trimmed_set)
     print("Total number of states (after appending to state collection): {}".format(trimmed_starts.size))
@@ -80,6 +84,7 @@ def trim_data_set(data, max_states = 5000, lb = -0.05, spacing = 0.02, num_grid 
     with open(file, "wb") as f:
         pickle.dump(trimmed_starts, f)
     return
+
 
 def eval_success_grid(data, save_dir="success_breakdown.csv"):
     print("Dividing states into grid spaces")
@@ -116,8 +121,7 @@ def eval_success_grid(data, save_dir="success_breakdown.csv"):
                     env.update_start_generator(FixedStateGenerator(sampled_state))
                     env.reset()
 
-
-                    #unplot for roll out
+                    # unplot for roll out
                     path = rollout(env, policy, 500, animated=False, speedup=2)
                     success = path["rewards"][-1]
                     num_success += success
@@ -127,12 +131,13 @@ def eval_success_grid(data, save_dir="success_breakdown.csv"):
                 csvwriter.writerow(out)
     return
 
-def grid_and_sample_states(data, save_images = False, file_name ='num_starts_breakdown.csv'):
+
+def grid_and_sample_states(data, save_images=False, file_name='num_starts_breakdown.csv'):
     # Iterates through points in the grid and performs rollouts to estimate percentage of success
 
     print("Dividing states into grid spaces")
     grid_states = partition_sampled_states(data, -0.05, 0.02, NUM_GRID)
-    save_dir = "data/" # us.uped to save images of state
+    save_dir = "data/"  # us.uped to save images of state
     data = joblib.load(POLICY_PATH)
     if "algo" in data:
         policy = data["algo"].policy
@@ -144,7 +149,6 @@ def grid_and_sample_states(data, save_images = False, file_name ='num_starts_bre
     # viewer = env.get_viewer()
     cam_pos = [0, 0.6, 0.5, 0.75, -60, 270]
 
-
     # don't actually need CSV here ... can remove
     with open('data/' + file_name, 'w', newline='') as csvfile:
         csvwriter = csv.writer(csvfile)
@@ -155,7 +159,7 @@ def grid_and_sample_states(data, save_images = False, file_name ='num_starts_bre
         result = np.zeros((NUM_STATES * 100, NUM_GRID * NUM_GRID * 100, 3))
         for i in range(NUM_GRID):
             for j in range(NUM_GRID):
-                plot_num = i * NUM_GRID + j # range from 0 to NUM_GRID * NUM_GRID - 1
+                plot_num = i * NUM_GRID + j  # range from 0 to NUM_GRID * NUM_GRID - 1
                 print("Progress", plot_num)
                 grid = grid_states[i][j]
                 num_states_in_grid = len(grid)
@@ -165,7 +169,6 @@ def grid_and_sample_states(data, save_images = False, file_name ='num_starts_bre
                 # may cause race condition
                 if not os.path.exists(folder):
                     os.makedirs(folder)
-
 
                 indices = np.random.choice(num_states_in_grid, NUM_STATES, replace=False)
                 for n, index in enumerate(indices):
@@ -199,7 +202,8 @@ def grid_and_sample_states(data, save_images = False, file_name ='num_starts_bre
         scipy.misc.imsave('gen_states.jpg', result)
         # fig.savefig("generated_states.png")
 
-def plot_peg_position_density(data, num_bins = 5, bound =-0.05):
+
+def plot_peg_position_density(data, num_bins=5, bound=-0.05):
     x_peg = data[:, peg_joints[0]]
     y_peg = data[:, peg_joints[1]]
     fig, ax = plt.subplots()
@@ -229,6 +233,7 @@ def plot_peg_position_density(data, num_bins = 5, bound =-0.05):
     # plt.show()
     fig.savefig(args.file + "peg_positions.png")
 
+
 def plot_joint_variations(data):
     # Plots variation for each joint
     fig, ax = plt.subplots()
@@ -242,6 +247,7 @@ def plot_joint_variations(data):
     # plt.show()
     fig.savefig(args.file + "joint_variations.png")
 
+
 def show_generated_states(data):
     # Simulates policy to visualize generated states
     env = DiskGenerateStatesEnv(evaluate=True)
@@ -250,7 +256,6 @@ def show_generated_states(data):
             env_spec=env.spec,
         )
         rollout(env, policy, animated=True, max_path_length=10, init_state=data[int(random.random() * num_states)])
-
 
 
 if __name__ == "__main__":
@@ -269,9 +274,9 @@ if __name__ == "__main__":
     peg_joints = 7, 8
 
     # trims data set and saves collection in pkl file!
-    trim_data_set(data, max_states=50, lb=-0.03, spacing=0.01, num_grid =6)
+    trim_data_set(data, max_states=100, lb=-0.03, num_grid=10, spacing=0)
 
-    plot_peg_position_density(data, bound=-0.03, num_bins= 6)
+    plot_peg_position_density(data, bound=-0.03, num_bins=6)
     plot_joint_variations(data)
     show_generated_states(data)
 
@@ -281,6 +286,3 @@ if __name__ == "__main__":
     plot_peg_position_density(data)
     plot_joint_variations(data)
     # show_generated_states(data)
-
-
-
