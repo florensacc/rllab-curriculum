@@ -120,7 +120,7 @@ if __name__ == '__main__':
         # n_parallel = multiprocessing.cpu_count()
 
     vg = VariantGenerator()
-    vg.add('start_size', [9])
+    vg.add('start_size', [9])  # this is 9 because it has the 2 extra joints!
 
     # changed
     vg.add('start_goal', [[1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335, -0.90467269,
@@ -154,36 +154,13 @@ if __name__ == '__main__':
     vg.add('num_new_starts', [200])
     vg.add('num_old_starts', [100])
     vg.add('smart_replay_buffer', [True])
-    # vg.add('smart_replay_buffer', [True])
-    vg.add('smart_replay_abs', [True])
-    # vg.add('smart_replay_abs', [True, False])
-    # vg.add('smart_replay_eps', [0.2, 0.5, 1])
-    vg.add('smart_replay_eps', [0.5])
-    # vg.add('smart_replay_eps', [1.0])  # should break
-    # sampling params
-    vg.add('horizon', [500])
-    vg.add('outer_iters', [5000])
-    vg.add('inner_iters', [5])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size', [100000])
-    # policy initialization
-    vg.add('output_gain', [0.1])
-    vg.add('policy_init_std', [1])
-    vg.add('learn_std', [False])
-    vg.add('adaptive_std', [False])
-    vg.add('discount', [0.995])
-    vg.add('baseline', ["g_mlp"])
-    # vg.add('policy', ['recurrent'])
-    vg.add('policy', ['mlp'])
-    # vg.add('policy', ['recurrent', 'mlp'])
-
-    # vg.add('seed', range(100, 600, 100))
-    vg.add('seed', [13, 23, 33])
+    vg.add('seed', [10])
 
     vg.add('generating_test_set', [True])  # TODO can change
     vg.add('move_peg', [True])  # whether or not to move peg
-    vg.add('kill_radius', [0.4])
-    vg.add('kill_peg_radius', [0.04])
-    vg.add('max_gen_states', [50000])
+    vg.add('kill_radius', [0.3])
+    vg.add('kill_peg_radius', [0.03])
+    vg.add('max_gen_states', [500000])
     # vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     # vg.add('peg_scaling', [10]) # multiplicative factor to peg position
 

@@ -55,7 +55,7 @@ class StartEnv(Serializable):
         else:
             self._obs2start_transform = obs2start_transform
 
-    def transform_to_start_space(self, obs):
+    def transform_to_start_space(self, obs, *args, **kwargs):
         """ Apply the start space transformation to the given observation. """
         return self._obs2start_transform(obs)
 
@@ -226,7 +226,7 @@ def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsa
                     noise = 0
                     done = False
                     obs = env.reset(init_state=starts[i % n_starts])
-                    # print(obs)
+                    # import pdb; pdb.set_trace()
                     states.append(env.start_observation)
                     num_roll += 1
                     if goal_reached:

@@ -57,15 +57,15 @@ if __name__ == '__main__':
 
 
     vg = VariantGenerator()
-    vg.add('start_size', [7])
+    vg.add('start_size', [9])  # for the generation it's +2!!
     # vg.add('start_bounds',
     #        [[(-2.2854, -.05236, -3.9, -2.3213, -3.15, -2.094, -3.15, 0, 0),
     #          (1.714602, 1.3963, 0.0, 0.0, 3.15, 0.0, 3.15, 0, 0)]])
     # vg.add('start_goal', [(0.386884635, 1.13705218, -2.02754147, -1.74429440, 2.02916096, -0.873269847, 1.54785694)])
-    vg.add('start_goal', [[ 1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335,-0.90467269, -1.56926878]])
+    vg.add('start_goal', [[ 1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335,-0.90467269, -1.56926878, 0, 0]])
     vg.add('ultimate_goal', [(0.4146814, 0.47640087, 0.5305665)])
     vg.add('goal_size', [3]) # changed
-    vg.add('terminal_eps', [0.01])
+    vg.add('terminal_eps', [0.03])
     # brownian params
     # vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
     vg.add('seed_with', ['only_goods'])  # good from brown, onPolicy, previousBrown (ie no good)
@@ -81,11 +81,10 @@ if __name__ == '__main__':
     vg.add('inner_weight', [0])
     vg.add('goal_weight', lambda inner_weight: [1000] if inner_weight > 0 else [1])
     vg.add('persistence', [1])
-    vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
+    vg.add('n_traj', [3])   #  if use_trpo_paths it uses 2!
     vg.add('with_replacement', [True])
     vg.add('use_trpo_paths', [True])
     # replay buffer
-
     vg.add('replay_buffer', [True])  # todo: attention!!
     vg.add('coll_eps', lambda terminal_eps: [terminal_eps])
     vg.add('num_new_starts', [200])
@@ -119,9 +118,9 @@ if __name__ == '__main__':
     vg.add('seed', [13, 23,33, 43])
 
     vg.add('generating_test_set', [False]) #TODO can change
-    vg.add('move_peg', [False]) # whether or not to move peg
-    vg.add('kill_radius', [0.4])
-    vg.add('kill_peg_radius', [0.05])
+    vg.add('move_peg', [True]) # whether or not to move peg
+    vg.add('kill_radius', [0.3])
+    vg.add('kill_peg_radius', [0.03])
     vg.add('max_gen_states', [300])
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position

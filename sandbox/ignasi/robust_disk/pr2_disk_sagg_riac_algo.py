@@ -33,14 +33,13 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from rllab.policies.gaussian_gru_policy import GaussianGRUPolicy
 
 from sandbox.young_clgan.state.evaluator import convert_label, label_states_from_paths, compute_rewards_from_paths, evaluate_states
-from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator
+from sandbox.young_clgan.envs.base import UniformListStateGenerator, FixedStateGenerator, UniformStateGenerator
 from sandbox.young_clgan.state.generator import StateGAN
 from sandbox.young_clgan.state.utils import StateCollection
 
-from sandbox.young_clgan.envs.goal_env import GoalExplorationEnv
-
-from sandbox.young_clgan.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
+from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
 from sandbox.ignasi.envs.pr2.pr2_disk_env import Pr2DiskEnv
+# from sandbox.ignasi.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -74,26 +73,24 @@ def run_task(v):
 
     inner_env = normalize(Pr2DiskEnv())  # todo: actually the env to use should be moving the peg? at least to generate news?
 
-    uniform_goal_generator = UniformStateGenerator(state_size=v['goal_size'], bounds=v['goal_range'],  # todo??
-                                                   center=v['goal_center'])
-    env = GoalExplorationEnv(
-        env=inner_env, goal_generator=uniform_goal_generator,
-        #obs2goal_transform=lambda x: x[:int(len(x) / 2)],  # todo
-        obs2goal_transform=lambda x: x[:v['goal_size']],
+    fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
+    uniform_start_generator = UniformStateGenerator(state_size=v['start_size'], bounds=v['start_range'],  # todo??
+                                                   center=v['start_center'])
+
+    env = GoalStartExplorationEnv(
+        env=inner_env,
+        start_generator=uniform_start_generator,
+        obs2start_transform=lambda x: x[:v['start_size']],  # todo: this is actually wrong as now no joints here!
+        goal_generator=fixed_goal_generator,
+        obs2goal_transform=lambda x: x[-1 * v['goal_size']:],  # changed!
         terminal_eps=v['terminal_eps'],
         distance_metric=v['distance_metric'],
         extend_dist_rew=v['extend_dist_rew'],
-        only_feasible=v['only_feasible'],
+        inner_weight=v['inner_weight'],
         goal_weight=v['goal_weight'],
         terminate_env=True,
-        append_goal_to_observation=False,
+        append_goal_to_observation=False,  # prevents goal environment from appending observation
     )
-
-    # if v['move_peg']:  # todo: change this to the PR2 model
-    #     gen_states_env = DiskGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'], kill_radius=v['kill_radius'])
-    # else:
-    #     # cannot move the peg
-    #     gen_states_env = env
 
     if v['policy'] == 'mlp':
         policy = GaussianMLPPolicy(
@@ -119,30 +116,30 @@ def run_task(v):
     elif v['baseline'] == 'g_mlp':
         baseline = GaussianMLPBaseline(env_spec=env.spec)
 
-    sagg_riac = SaggRIAC(state_size=v['goal_size'],  # todo: change from goals to full task parametrization!!!!
-                         # state_bounds=env.observation_space.bounds,
-                         state_range=v['goal_range'],
-                         state_center=v['goal_center'],
+
+    bounds = env.observation_space.bounds
+    start_bounds = [bounds[0].extend(v['kill_peg_radius'] * np.ones(2)),
+                    bounds[1].extend(v['kill_peg_radius'] * np.ones(2))]
+    import pdb; pdb.set_trace()
+    sagg_riac = SaggRIAC(state_size=v['start_size'],  # todo: change from goals to full task parametrization!!!!
+                         state_bounds=start_bounds,
                          max_goals=v['max_goals'],
                          max_history=v['max_history'])
 
     # load the state collection from data_upload
-    load_dir = 'data_upload/peg'  # todo: get the dataset!
+    load_dir = 'data_upload/pr2_peg'
     all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states_.pkl'), 'rb'))
 
     for outer_iter in range(1, v['outer_iters']):
-
         logger.log("Outer itr # %i" % outer_iter)
 
-        raw_goals = sagg_riac.sample_states(num_samples=v['num_new_goals'])
-
-        goals = raw_goals
+        starts = sagg_riac.sample_states(num_samples=v['num_new_goals'])
 
         with ExperimentLogger(log_dir, 'last', snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment goal generator")
-            env.update_goal_generator(
+            env.update_start_generator(
                 UniformListStateGenerator(
-                    goals, persistence=v['persistence'], with_replacement=v['with_replacement'],
+                    starts, persistence=v['persistence'], with_replacement=v['with_replacement'],
                 )
             )
 

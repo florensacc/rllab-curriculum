@@ -73,4 +73,25 @@ class GoalStartExplorationEnv(StartEnv, GoalExplorationEnv, Serializable):
         goal_obs = GoalExplorationEnv.get_current_obs(self)
         return StartEnv.append_start_observation(self, goal_obs)
 
+    @overrides
+    def transform_to_start_space(self, obs, *args, **kwargs):
+        obj = self.wrapped_env
+        while not hasattr(obj, 'transform_to_start_space') and hasattr(obj, 'wrapped_env'):
+            obj = obj.wrapped_env
+        if hasattr(obj, 'transform_to_start_space'):
+            return obj.transform_to_start_space(obs, *args, **kwargs) # but the goal might not leave in the same space!
+        else:
+            return super(GoalStartExplorationEnv, self).transform_to_start_space(obs, *args, **kwargs)
+
+    @overrides
+    @property  # this is needed for the reset! When we reset we don't have the env_infos..
+    def start_observation(self):
+        obj = self.wrapped_env
+        while not hasattr(obj, 'start_observation') and hasattr(obj, 'wrapped_env'):
+            obj = obj.wrapped_env
+        if hasattr(obj, 'start_observation'):
+            return obj.start_observation # but the goal might not leave in the same space!
+        else:
+            return self.transform_to_start_space(obj.get_current_obs())
+
 

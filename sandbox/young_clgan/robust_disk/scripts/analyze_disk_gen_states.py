@@ -216,7 +216,7 @@ def plot_peg_position_density(data, num_bins = 5, bound =-0.05):
     plt.colorbar()
     plt.title("Generated peg positions density")
     plt.gca().set_aspect('equal', adjustable='box')
-    plt.show()
+    # plt.show()
     fig.savefig(args.file + "peg_densities.png")
 
     # Plots x-y peg positions
@@ -226,7 +226,7 @@ def plot_peg_position_density(data, num_bins = 5, bound =-0.05):
     plt.ylim([-0.2, 0.2])
     plt.title("Generated peg positions")
     plt.gca().set_aspect('equal', adjustable='box')
-    plt.show()
+    # plt.show()
     fig.savefig(args.file + "peg_positions.png")
 
 def plot_joint_variations(data):
@@ -239,7 +239,7 @@ def plot_joint_variations(data):
             plt.scatter([joint] * num_states, data[:, joint], c="lightgreen")
     plt.scatter(range(9), (0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0), c="black")
     plt.title("Variation for each joint")
-    plt.show()
+    # plt.show()
     fig.savefig(args.file + "joint_variations.png")
 
 def show_generated_states(data):
@@ -256,12 +256,10 @@ def show_generated_states(data):
 if __name__ == "__main__":
     POLICY_PATH = "data/s3/robust-disk-test5/robust-disk-test5_2017_08_31_11_04_43_0001/itr_60/params.pkl"
     parser = argparse.ArgumentParser()
-    parser.add_argument('file', type=str,
-                        help='path to the directory with states generated')
+    parser.add_argument('file', type=str, help='path to the file with StatesCollection of generated starts')
     args = parser.parse_args()
     # args.file = "/home/michael/rllab_goal_rl/data/local/robust-disk-gen-states-uniform2/robust-disk-gen-states-uniform2_2017_08_20_16_02_56_0001/"
-    file = args.file + "all_feasible_states.pkl"
-    # file = args.file + "trimmed50.pkl"
+    file = args.file
     all_feasible_starts = pickle.load(open(file, "rb"))
 
     num_states = all_feasible_starts.size
@@ -280,6 +278,9 @@ if __name__ == "__main__":
     # eval_success_grid(data, "success_breakdown_new_policy.csv")
     # grid_and_sample_states(data, save_images=True, file_name="success_breakdown_num_states.csv")
     #
+    plot_peg_position_density(data)
+    plot_joint_variations(data)
+    # show_generated_states(data)
 
 
 

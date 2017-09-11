@@ -135,7 +135,7 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
             ret = self.append_goal_observation(ProxyEnv.reset(self, goal=self.current_goal, **kwargs))  # the wrapped env needs to use or ignore it
         else:
             ret = ProxyEnv.reset(self, goal=self.current_goal, **kwargs)
-        # used by disk environment # todo: make more generalizable!
+        # used by disk environment # todo: make more generalizable!  NOT USABLE FOR OTHER ENVS!!
         if 'init_state' in kwargs and len(kwargs['init_state']) == 9:
             delta = tuple(kwargs['init_state'][-2:])  # joint position is in terms of amount moved
             original_goal = self.wrapped_env.model.data.site_xpos[-1]
