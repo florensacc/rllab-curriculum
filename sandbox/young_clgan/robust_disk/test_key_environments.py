@@ -6,8 +6,8 @@ from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
 # from sandbox.young_clgan.robust_disk.envs import DiskGenerateStatesEnv
 
 from sandbox.young_clgan.robust_disk.envs.arm3d_disc_env import Arm3dDiscEnv
-from sandbox.young_clgan.robust_disk.envs.pr2_key_env import PR2_key_env
-from sandbox.young_clgan.robust_disk.envs.find_init_key_pr2 import InitPR2_key_env
+from sandbox.young_clgan.robust_disk.envs.pr2_key_env import Pr2KeyEnv
+# from sandbox.young_clgan.robust_disk.envs.find_init_key_pr2 import InitPR2_key_env
 """
 Script for launching an environment
 
@@ -25,10 +25,10 @@ def run_task(v):
     # env = normalize(Arm3dDiscEnv(random_torques=False))
     if 'shift_val' not in v:
         v["shift_val"] = -0.1
-    # env = normalize(PR2_key_env(
-    #     shift_val=v["shift_val"]
-    # ))
-    env = normalize(InitPR2_key_env())
+    env = normalize(Pr2KeyEnv(
+        # shift_val=v["shift_val"]
+    ))
+    # env = normalize(InitPR2_key_env())
     # env = normalize(Arm3dDiscEnv(random_torques=True)) # "normal" disk environment
 
     # These two environments below test training a policy that moves the peg to a particular point
@@ -41,7 +41,7 @@ def run_task(v):
     )
     baseline = LinearFeatureBaseline(env_spec=env.spec)
     if 'max_path_length' not in v:
-        v['max_path_length'] = 300
+        v['max_path_length'] = 270
     algo = TRPO(
         env=env,
         policy=policy,
@@ -56,7 +56,7 @@ def run_task(v):
 
 run_task({})
 vg = VariantGenerator()
-# vg.add('max_path_length', [700])
+vg.add('max_path_length', [500])
 # vg.add('shift_val', [0, 0.05, 0.1, 0.15])
 for vv in vg.variants():
     run_experiment_lite(
@@ -69,7 +69,7 @@ for vv in vg.variants():
         # Specifies the seed for the experiment. If this is not provided, a random seed
         # will be used
         seed=2,
-        exp_prefix="key28",
+        exp_prefix="initkey6",
         # variant=dict(),
         plot=False,
     )

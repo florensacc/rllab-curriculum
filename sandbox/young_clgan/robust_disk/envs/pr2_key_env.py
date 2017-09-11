@@ -1,176 +1,170 @@
-from rllab.envs.base import Step
-from rllab.misc.overrides import overrides
-from rllab.envs.mujoco.mujoco_env import MujocoEnv
+import random
+
 import numpy as np
-import os.path as osp
-import pickle
-import cloudpickle
+
 from rllab.core.serializable import Serializable
-from rllab.misc import logger
+from rllab.envs.base import Step
+from rllab.envs.mujoco.mujoco_env import MujocoEnv
 from rllab.misc import autoargs
+from rllab.misc import logger
+from rllab.spaces.box import Box
+from rllab.misc.overrides import overrides
 from contextlib import contextmanager
-from sandbox.young_clgan.state.utils import StateCollection
-from sandbox.young_clgan.envs.start_env import generate_starts
 
 
-class PR2_key_env(MujocoEnv, Serializable):
-    # FILE = 'arm3d_key_tight.xml'
-    FILE = "pr2_key.xml"
+class Pr2KeyEnv(MujocoEnv, Serializable):
 
-    @autoargs.arg('ctrl_cost_coeff', type=float,
-                  help='cost coefficient for controls')
-    def __init__(
-            self,
-            ctrl_cost_coeff=1e1,
-            goal_dist=3e-2,
-            kill_radius=0.4,
-            shift_val = 0.0,
-            *args, **kwargs):
-        self.shift_val = shift_val
-        self.ctrl_cost_coeff = ctrl_cost_coeff
-        super(PR2_key_env, self).__init__(*args, **kwargs)
-        Serializable.quick_init(self, locals())
-        self.goal_dist = goal_dist
-        self.kill_radius = kill_radius
-        self.key_hole_center = np.array([0.0, 0.3, -0.55])
-        self.ee_indices = [14, 23] # the hill z-axis is 16
-        self.frame_skip = 1
-        self.init_qpos = np.array([0.1, 0.1, -1.54, -1.7, 1.54, -0.2, 0])
-        self.kill_outside = False
+  FILE = "pr2_key_find_init.xml"
 
-        theta = -np.pi / 2
-        d = 0.15
-        self.goal_position = np.array(
-            [0.0, 0.3, -0.55 - d,  # heel
-             0.0, 0.3, -0.25 - d,  # top
-             0.0 + 0.15 * np.sin(theta), 0.3 + 0.15 * np.cos(theta), -0.4 - d])  # side
-        self.cost_params = {
-            'wp': np.array([1, 1, 1, 1, 1, 1, 1, 1, 1]),
-            'l1': 0.1,
-            'l2': 10.0,
-            'alpha': 1e-5}
+  def __init__(self,
+               init_solved=True,
+               kill_radius=0.4,
+               *args, **kwargs):
+    MujocoEnv.__init__(self, *args, **kwargs)
+    self.frame_skip = 5
+    Serializable.quick_init(self, locals())
 
+    self.init_solved = init_solved
+    self.kill_radius = kill_radius
+    self.kill_outside = False
+    self.body_pos = self.model.body_pos.copy()
 
-    def get_current_obs(self):
-        return np.concatenate([
-            self.model.data.qpos.flat,
-            self.model.data.qvel.flat,
-            self.model.data.site_xpos[0].flat,
-            self.model.data.site_xpos[1].flat
-            # self.model.data.site_xpos.flat,
-        ]).reshape(-1)
+  @overrides
+  def get_current_obs(self):
+    return np.concatenate([
+      self.model.data.qpos.flat,     # [:self.model.nq // 2],
+      self.model.data.qvel.flat,     # [:self.model.nq // 2],
+      self.model.data.site_xpos[0],  # disc position
+    ])
 
-    @contextmanager
-    def set_kill_outside(self, kill_outside=True, radius=None):
-        self.kill_outside = kill_outside
-        old_kill_radius = self.kill_radius
-        if radius is not None:
-            self.kill_radius = radius
-        try:
-            yield
-        finally:
-            self.kill_outside = False
-            self.kill_radius = old_kill_radius
+  @contextmanager
+  def set_kill_outside(self, kill_outside=True, radius=None):
+    self.kill_outside = True
+    old_kill_radius = self.kill_radius
+    if radius is not None:
+      self.kill_radius = radius
+    try:
+      yield
+    finally:
+      self.kill_outside = False
+      self.kill_radius = old_kill_radius
 
-    def step(self, action):
-        # print("entering step, kill_outside is: ", self.kill_outside)
-        # action = np.zeros_like(action)
+  @property
+  def start_observation(self):
+    return np.copy(self.model.data.qpos).flatten()
 
-        # xfrc = np.zeros_like(self.model.data.xfrc_applied)
-        # id_kh = self.model.body_names.index('keyhole')
-        # xfrc[id_kh, 2] = -9.81 * 1
-        # self.model.data.xfrc_applied = xfrc
+  def reset(self, init_state=None, *args, **kwargs):
+    # if randomize:
+    #   init_state = (0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0) # TODO: used for debugging only!
+    # init_state = [ 0.46808831,  0.68477385,  1.22024562, -2.32114235, -2.58833853, -2.07115401, -2.49469938] # very close
+    #even warmer
+    # init_state = [0.3326968224334913, 0.51069807363422348, 0.91457796350298493, -1.623275354231555, -3.9850499577912193, -2.0506470318735297, -1.6932902946856201]
 
-        # print(self.model.data.xfrc_applied
-        if len(action) == 9:
-            action[-2] = 0
-            action[-1] = 0
+    # very close to parallel
+    # init_state = [0.34853855873484002, 0.37303888703108479, 1.2605103343415729, -1.8974411314510942, -4.4413078760856184, -1.9653540688328985, -1.4956710631295072]
 
-        self.forward_dynamics(action)
-        next_obs = self.get_current_obs()
-        lb, ub = self.action_bounds
-        scaling = (ub - lb) * 0.5
-        ctrl_cost = 0.5 * self.ctrl_cost_coeff * np.sum(
-            np.square(action / scaling))
-        # todo check which object has to be at goal position
-        # todo also check the meaning of alpha
-        # key_position = self.get_body_com('key_head1')
-        # ee_position = self.model.data.site_xpos[0]
+    # parallel (best)
+    init_state = [0.34396303529542571, 0.36952090462532139, 1.2508105774646641, -1.8499649619190317, -4.4254893018593906, -1.9586739159844251, -1.3942096934113373]
 
-        # top_of_key = self.model.data.xpos[self.model.body_names.index('key')]
-        velocity = np.linalg.norm(self.model.data.qvel)
-        reward_velocity = velocity * 1e-4
-        key_pos = self.model.data.site_xpos[0]
-        goal_pos = self.model.data.site_xpos[-1]
-        reward_distance = np.linalg.norm(key_pos - goal_pos) #+ np.linalg.norm(key_pos[:2] - goal_pos[:2]) * 3 # want to make sure XY is correct
-        reward = - (reward_distance + reward_velocity)
-        # print(top_of_key, key_pos, goal_pos, reward)
-        done = False
-        # todo: uncomment below til step
-        # ee_position = next_obs[self.ee_indices[0]:self.ee_indices[1]]
-        # hill_pos = np.array(ee_position[:3])
-        # dist = np.sum(np.square(self.goal_position - ee_position) * self.cost_params['wp'])
-        # dist_cost = np.sqrt(dist) * self.cost_params['l1'] + dist * self.cost_params['l2']
-        # reward = - dist_cost - ctrl_cost
-        # done = True if np.sqrt(dist) < self.goal_dist else False
-        #
-        # # print("making a step in the env, we have kill_outside: ", self.kill_outside)
-        # if self.kill_outside and np.linalg.norm(hill_pos - self.key_hole_center) > self.kill_radius:
-        # # if self.kill_outside and np.linalg.norm(hill_pos - self.goal_position[:3]) > self.kill_radius:
-        #     print("\n****** OUT of region ******")
-        #     done = True
-        # if np.isnan(reward):
-        #     reward = -100
-        return Step(next_obs, reward, done, velocity = velocity, reward_distance=reward_distance)
+    # init_state = [ 1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335,-0.90467269, -1.56926878]
+    # init_state = [1.2216135759588189, -0.52360156360043431, 2.3835233005680774, -2.0034129651264809, 4.4187603231907362, 2.1186197187178173e-05, -1.5864904744727759]
+    # dim = len(self.init_damping)
+    # damping = np.maximum(0, np.random.multivariate_normal(self.init_damping, 2 * np.eye(dim)))
+    # armature = np.maximum(0, np.random.multivariate_normal(self.init_armature, 2 * np.eye(dim)))
+    # frictionloss = np.maximum(0, np.random.multivariate_normal(self.init_frictionloss, 2 * np.eye(dim)))
+    # self.model.dof_damping = damping[:, None]
+    # self.model.dof_frictionloss = frictionloss[:, None]
+    # self.model.dof_armature = armature[:, None]
+    # xfrc = np.zeros_like(self.model.data.xfrc_applied)
+    # id_tool = self.model.body_names.index('gear')
+    # xfrc[id_tool, 2] = - 9.81 * np.random.uniform(0.05, 0.5)
+    # self.model.data.xfrc_applied = xfrc
 
-    def log_diagnostics(self, paths):
-        velocities = [path["env_infos"]["velocity"] for path in paths]
-        logger.record_tabular('velocity', np.mean([np.mean(d) for d in velocities]))
-        rd = [path["env_infos"]["reward_distance"] for path in paths]
-        logger.record_tabular('reward_distance', np.mean([d[-1] for d in rd]))
+    # if init_state is not None:
+    #   # hack if generated states don't have peg position
+    #   if len(init_state) == 7:
+    #     x = random.random() * 0.1
+    #     y = random.random() * 0.1
+    #     init_state.extend([x, y])
+    #
+    #   # sets peg to desired position
+    #   print(init_state)
+    #   pos = self.body_pos.copy()
+    #   pos[-2, 0] += init_state[-2]
+    #   pos[-2, 1] += init_state[-1]
+    #   self.model.body_pos = pos
+    #   init_state = init_state[:7] # sliced so that super reset can reset joints correctly
+    ret = super(Pr2KeyEnv, self).reset(init_state, *args, **kwargs)
+    # sets gravity
+    # xfrc = np.zeros_like(self.model.data.xfrc_applied)
+    # id_tool = self.model.body_names.index('keyhole')
+    # xfrc[id_tool, 0] = 9.81 * 0.005 # moves away from robot
+    # xfrc[id_tool, 1] =  -9.81 * 0.003 # moves parallel to robot
+    # xfrc[id_tool, 2] = - 9.81 * 0.01 #gravity
+    # xfrc[id_tool, 3] = 0.03 #rotates clockwise
+    # xfrc[id_tool, 4] = 0.04
+    # self.model.data.xfrc_applied = xfrc
 
-    def reset(self, init_state=None, *args, **kwargs):
-        # init_state = [0.32735376160809521, -0.52170347540410189, 2.0336760360359354, -1.8511337078149441, 1.3562810265832648,
-        #  -0.95029451024504419, -2.0000607832102406, -0.10000008191586322, 2.2566119141622387e-07]
-        # init_state = (0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55)
+    # print(self.get_goal_position())
+    # geom_pos = self.model.body_pos.copy()
+    # geom_pos[-2,:] += np.array([0,0,10])
+    # self.model.body_pos = geom_pos
+    # self.current_goal = self.model.data.geom_xpos[-1][:2]
+    # print(self.current_goal) # I think this is the location of the peg
+    return ret
 
-        if init_state is None and abs(self.shift_val) > 1e-4:
-            init_state = np.zeros(9)
-            init_state[-2] = self.shift_val # moves in plane parallel to robot
-        # init_state = (0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0) # TODO: used for debugging only!
-        ret = super(PR2_key_env, self).reset(init_state, *args, **kwargs)
-        return ret
-        # xfrc = np.zeros_like(self.model.data.xfrc_applied)
-        # id_kh = self.model.body_names.index('keyhole')
-        # xfrc[id_kh, 2] = -9.81 * 0.1
-        # self.model.data.xfrc_applied = xfrc
+  def step(self, action):
 
+    # action = np.zeros_like(action)
+    # print(action.shape)
+    self.forward_dynamics(action)
+    distance_to_goal = 0 # delete
+    # distance_to_goal = self.get_distance_to_goal()
+    reward = -distance_to_goal
+    # reward = - np.linalg.norm(self.model.data.qpos) * 1e-2 - (self.model.data.site_xpos[0][2] - 0.47) ** 2
+         # abs(self.model.data.site_xpos[0][0] - 0.55) ** 2
+    ob = self.get_current_obs()
+    done = False
 
-def find_out_feasible_states(env, log_dir, distance_threshold=0.1, brownian_variance=1, animate=False):
-    no_new_states = 0
-    with env.set_kill_outside():
-        load_dir = 'data_upload/state_collections/'
-        old_all_feasible_starts = pickle.load(open(osp.join(load_dir, 'all_feasible_states.pkl'), 'rb'))
-        out_feasible_starts = StateCollection(distance_threshold=distance_threshold)
-        print('number of feasible starts: ', old_all_feasible_starts.size)
-        for start in old_all_feasible_starts.state_list:
-            obs = env.reset(init_state=start)
-            if obs[16] > -0.5:
-                # print("got one more up to ", out_feasible_starts.size)
-                out_feasible_starts.append([start])
-        print("number of out feasible starts:", out_feasible_starts.size)
-        while no_new_states < 5:
-            total_num_starts = out_feasible_starts.size
-            starts = out_feasible_starts.sample(100)
-            new_starts = generate_starts(env, starts=starts, horizon=1000, size=100000, variance=brownian_variance,
-                                         animated=animate, speedup=10)
-            out_feasible_starts.append(new_starts)
-            num_new_starts = out_feasible_starts.size - total_num_starts
-            logger.log("number of new states: " + str(num_new_starts))
-            if num_new_starts < 10:
-                no_new_states += 1
-            with open(osp.join(log_dir, 'all_out_feasible_states.pkl'), 'wb') as f:
-                cloudpickle.dump(out_feasible_starts, f, protocol=3)
+    # if (self.model.data.site_xpos[0][2] - 0.47) < 0.005:
+    #     print(list(self.model.data.qpos.flatten()))
+    #     raise Exception
 
+    # print("dist_to_goal: {}, rew: {}, next_obs: {}".format(distance_to_goal, reward, ob))
+    #
+    # if self.kill_outside and (distance_to_goal > self.kill_radius):
+    #   print("******** OUT of region ********")
+    #   done = True
 
+    # Uncomment lines below to help get initial positoin
+    # print(list(self.model.data.qpos.flatten())) # for getting initial position
+    # print(reward)
+    return Step(
+      ob, reward, done, distance=distance_to_goal
+    )
 
+  # def get_disc_position(self):
+  #   id_gear = self.model.body_names.index('gear')
+  #   return self.model.data.xpos[id_gear]
+  #
+  # def get_goal_position(self):
+  #   return self.model.data.site_xpos[-1] # note, slightly different from previous, set to bottom of peg
+  #   # return np.array([0.4146814, 0.47640087, 0.5305665])
+  #
+  # def get_vec_to_goal(self):
+  #   disc_pos = self.get_disc_position()
+  #   goal_pos = self.get_goal_position()
+  #   # print("disc pos: {}, goal_pos: {}".format(disc_pos, goal_pos))
+  #   return disc_pos - goal_pos  # note: great place for breakpoint!
+  #
+  # def get_distance_to_goal(self):
+  #   vec_to_goal = self.get_vec_to_goal()
+  #   return np.linalg.norm(vec_to_goal)
+  #
+  # def set_state(self, qpos, qvel):
+  #   # assert qpos.shape == (self.model.nq, 1) and qvel.shape == (self.model.nv, 1)
+  #   # print('SET STATE')
+  #   self.model.data.qpos = qpos
+  #   self.model.data.qvel = qvel
+  #   # self.model._compute_subtree() #pylint: disable=W0212
+  #   self.model.forward()

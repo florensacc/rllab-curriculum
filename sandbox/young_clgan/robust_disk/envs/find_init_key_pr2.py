@@ -74,7 +74,7 @@ class InitPR2_key_env(MujocoEnv, Serializable):
 
     def step(self, action):
         # print("entering step, kill_outside is: ", self.kill_outside)
-        # action = np.zeros_like(action)
+        action = np.zeros_like(action)
         # print(action)
 
         # xfrc = np.zeros_like(self.model.data.xfrc_applied)
@@ -130,7 +130,7 @@ class InitPR2_key_env(MujocoEnv, Serializable):
         rd = [path["env_infos"]["reward_distance"] for path in paths]
         logger.record_tabular('reward_distance', np.mean([d[-1] for d in rd]))
 
-    # def reset(self, init_state=None, *args, **kwargs):
+    def reset(self, init_state=None, *args, **kwargs):
     #     # init_state = [0.32735376160809521, -0.52170347540410189, 2.0336760360359354, -1.8511337078149441, 1.3562810265832648,
     #     #  -0.95029451024504419, -2.0000607832102406, -0.10000008191586322, 2.2566119141622387e-07]
     #     # init_state = (0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55)
@@ -139,12 +139,13 @@ class InitPR2_key_env(MujocoEnv, Serializable):
     #     #     init_state = np.zeros(9)
     #     #     init_state[-2] = self.shift_val # moves in plane parallel to robot
     #     # init_state = (0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0) # TODO: used for debugging only!
-    #     ret = super(InitPR2_key_env, self).reset(init_state, *args, **kwargs)
-    #     xfrc = np.zeros_like(self.model.data.xfrc_applied)
+        ret = super(InitPR2_key_env, self).reset(init_state, *args, **kwargs)
+        # xfrc = np.zeros_like(self.model.data.xfrc_applied)
     #     id_kh = self.model.body_names.index('keyhole')
     #     xfrc[id_kh, 2] = -9.81 * 0.1
     #     self.model.data.xfrc_applied = xfrc
-    #     return ret
+
+        return ret
 
 
 def find_out_feasible_states(env, log_dir, distance_threshold=0.1, brownian_variance=1, animate=False):
