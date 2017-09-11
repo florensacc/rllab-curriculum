@@ -62,43 +62,41 @@ if __name__ == '__main__':
     exp_prefix = 'goal-sagg-riac-pr2Disk'
 
     vg = VariantGenerator()
-    vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
-    vg.add('terminal_eps', [0.3])
-    vg.add('only_feasible', [True])
-    vg.add('maze_id', [0])
+    vg.add('start_size', [9])
+    vg.add('start_goal', [[ 1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335,-0.90467269, -1.56926878, 0, 0]])
+    vg.add('ultimate_goal', [(0.4146814, 0.47640087, 0.5305665)])
+    vg.add('goal_size', [3])  # this is the ultimate goal we care about: getting the pendulum upright
+    vg.add('terminal_eps', [0.03])
     # goal-algo params
-    vg.add('min_reward', [0])
-    vg.add('max_reward', [1])
+    vg.add('min_reward', [0.1])
+    vg.add('max_reward', [0.9])
     vg.add('distance_metric', ['L2'])
     vg.add('extend_dist_rew', [False])  # !!!!
     vg.add('use_competence_ratio', [False, True])  # !!!!
-    vg.add('goal_weight', lambda extend_dist_rew: [0] if extend_dist_rew else [1])
-    vg.add('persistence', [1])
-    if fast_mode:
-        vg.add('n_traj', [1])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
-    else:
-        vg.add('n_traj', [1])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
-    vg.add('sampling_res', [2])
+    vg.add('goal_weight', lambda extend_dist_rew: [1000] if extend_dist_rew else [1])
+    # vg.add('persistence', [1])
+    vg.add('n_traj', [3])  # todo: what does this do with SAGG??
+    vg.add('sampling_res', [2])  # todo: is this used in SAGG?
     vg.add('num_new_goals', [300]) #TODO - change back to 200 when we restore replay buffer
     # # replay buffer
-    # vg.add('num_old_goals', [0])    #TODO - change back to 100 when we restore replay buffer
     # vg.add('replay_buffer', [False]) #TODO - try with replay buffer
+    # vg.add('num_old_goals', [0])
     vg.add('coll_eps', [0])
     vg.add('with_replacement', [False])
     # vg.add('add_on_policy', [False]) #TODO - change back to true
     # # sampling params
-    vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
-    vg.add('outer_iters', [300]) #lambda maze_id: [400] if maze_id == 0 else [10000])
+    vg.add('horizon', [100])
+    vg.add('outer_iters', [5000]) #lambda maze_id: [400] if maze_id == 0 else [10000])
     # baseline
     vg.add('baseline', ['linear'])   # can also be 'g_mlp'
     # policy
     vg.add('policy', ['mlp'])  # this can also be 'recurrent'
     vg.add('trunc_steps', [100])
-    vg.add('output_gain', [1])
+    vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
-    vg.add('discount', [0.99]) #lambda horizon: [1-1.0/horizon])
+    vg.add('discount', [0.995]) #lambda horizon: [1-1.0/horizon])
     # Oudeyer params
     vg.add('max_goals', [100, 250, 500])
     vg.add('max_history', [100])
@@ -108,7 +106,7 @@ if __name__ == '__main__':
         vg.add('pg_batch_size', [20000])
         vg.add('inner_iters', [1])
     else:
-        vg.add('pg_batch_size', [20000])
+        vg.add('pg_batch_size', [100000])
         vg.add('inner_iters', [5])
 
     if args.ec2:
