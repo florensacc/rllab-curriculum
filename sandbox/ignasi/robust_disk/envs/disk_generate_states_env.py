@@ -76,7 +76,8 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
         distance_to_goal = self.get_distance_to_goal()
         reward = 0
         # print(self.get_peg_displacement())
-        # print(distance_to_goal, self.get_peg_displacement()) # useful for debugging
+        # if distance_to_goal < 0.3:
+        #     print(distance_to_goal, self.get_peg_displacement()) # useful for debugging
         if self.kill_outside and (
                 distance_to_goal > self.kill_radius or self.get_peg_displacement() > self.kill_peg_radius):
             print("******** OUT of region ********")
