@@ -143,7 +143,7 @@ def run_task(v):
         all_starts = StateCollection(distance_threshold=v['coll_eps'])
     brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
     with gen_states_env.set_kill_outside():
-        seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon= ['brownian_horizon'],
+        seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=v['brownian_horizon'],
                                       variance=v['brownian_variance'], subsample=v['num_new_starts'],
                                       # zero_action=True,
                                       # animated=True, speedup=100,

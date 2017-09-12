@@ -21,10 +21,11 @@ from sandbox.young_clgan.state.evaluator import parallel_map, disable_cuda_initi
 class StateCollection(object):
     """ A collection of states, with minimum distance threshold for new states. """
 
-    def __init__(self, distance_threshold=None, states_transform = None):
+    def __init__(self, distance_threshold=None, states_transform = None, idx_lim=None):
         self.distance_threshold = distance_threshold
         self.state_list = []
         self.states_transform = states_transform
+        self.idx_lim = idx_lim
         if self.states_transform:
             self.transformed_state_list = []
 
@@ -68,9 +69,11 @@ class StateCollection(object):
     def _select_states(self, states):
         # print('selecting states from ', states.shape)
         selected_states = states
+        selected_states_idx_lim = np.array([state[:self.idx_lim] for state in states])
+        state_list_idx_lim = np.array([state[:self.idx_lim] for state in self.state_list])
         if self.distance_threshold is not None and self.distance_threshold > 0:
             if len(self.state_list) > 0:
-                dists = scipy.spatial.distance.cdist(self.state_list, selected_states)
+                dists = scipy.spatial.distance.cdist(state_list_idx_lim, selected_states_idx_lim)
                 indices = np.amin(dists, axis=0) > self.distance_threshold
                 selected_states = selected_states[indices, :]
         # print('the selected states are: {}'.format(selected_states.shape))
@@ -81,10 +84,12 @@ class StateCollection(object):
         # adding a states transform allows you to maintain full state information while possibly disregarding some dim
         states = np.array(states)
         results = [states[0]]
+        results_idx_lim = [states[0][:self.idx_lim]]
         for i, state in enumerate(states[1:]):
             # print("analyzing state : ", i)
-            if np.amin(scipy.spatial.distance.cdist(results, state.reshape(1, -1))) > self.distance_threshold:
+            if np.amin(scipy.spatial.distance.cdist(results_idx_lim, state.reshape(1, -1)[:self.idx_lim])) > self.distance_threshold:
                 results.append(state)
+                results_idx_lim.append(state[:self.idx_lim])
         return np.array(results)
 
     def _process_states_transform(self, states, transformed_states):
@@ -100,6 +105,7 @@ class StateCollection(object):
         return np.array(results), np.array(transformed_results)
 
     def append_states_transform(self, states):
+        assert self.idx_lim is None, "Can't use state transform and idx_lim with StateCollection!"
         if len(states) > 0:
             states = np.array(states)
             transformed_states = self.states_transform(states)
