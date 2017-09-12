@@ -4,11 +4,12 @@ import matplotlib
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.policies.gaussian_gru_policy import GaussianGRUPolicy
 
+from sandbox.ignasi.envs.pr2.pr2_key_env import Pr2KeyEnv
+
 # modified to make changes to the environment
 # from sandbox.ignasi.envs.pr2.pr2_disk_env import Pr2DiskEnv
-from sandbox.young_clgan.robust_disk.envs.find_init_key_pr2 import InitPR2_key_env
-
-from sandbox.young_clgan.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
+#
+# from sandbox.ignasi.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
 
 matplotlib.use('Agg')
 import os
@@ -50,34 +51,48 @@ def run_task(v):
     logger.log("Initializing report...")
     log_dir = logger.get_snapshot_dir()  # problem with logger module here!!
     if log_dir is None:
-        log_dir = "/home/young_clgan"
+        log_dir = "/home/michael/"
     report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=4)
 
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
 
-    inner_env = normalize(InitPR2_key_env())
+    inner_env = normalize(Pr2KeyEnv(ctrl_regularizer_weight=v['ctrl_regularizer_weight'],
+                                     action_torque_lambda=v['action_torque_lambda']))
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
-    fixed_start_generator = FixedStateGenerator(state=v['ultimate_goal'])
+    fixed_start_generator = FixedStateGenerator(state=v['start_goal'])
 
     env = GoalStartExplorationEnv(
         env=inner_env,
         start_generator=fixed_start_generator,
-        obs2start_transform=lambda x: x[:v['start_size']],
+        obs2start_transform=lambda x: x[:v['start_size']], # todo: this is actually wrong as now no joints here!
         goal_generator=fixed_goal_generator,
-        obs2goal_transform=lambda x: x[-1 * v['goal_size']:], # changed!
+        obs2goal_transform=lambda x: x[-1 * v['goal_size']:],  # changed!
         terminal_eps=v['terminal_eps'],
         distance_metric=v['distance_metric'],
         extend_dist_rew=v['extend_dist_rew'],
         inner_weight=v['inner_weight'],
         goal_weight=v['goal_weight'],
         terminate_env=True,
-        append_goal_to_observation = False, # prevents goal environment from appending observation
+        append_goal_to_observation=False,  # prevents goal environment from appending observation
     )
 
-    if v['move_peg']:  # todo: change this to the PR2 model
-        gen_states_env = DiskGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'], kill_radius=v['kill_radius'])
+    if v['move_peg']:
+        gen_states_env = GoalStartExplorationEnv(
+            env=DiskGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'], kill_radius=v['kill_radius']),
+            start_generator=fixed_start_generator,
+            obs2start_transform=lambda x: x[:v['start_size']],
+            goal_generator=fixed_goal_generator,
+            obs2goal_transform=lambda x: x[-1 * v['goal_size']:],  # changed!
+            terminal_eps=v['terminal_eps'],
+            distance_metric=v['distance_metric'],
+            extend_dist_rew=v['extend_dist_rew'],
+            inner_weight=v['inner_weight'],
+            goal_weight=v['goal_weight'],
+            terminate_env=True,
+            append_goal_to_observation=False,  # prevents goal environment from appending observation
+        )
     else:
         # cannot move the peg
         gen_states_env = env
@@ -106,16 +121,17 @@ def run_task(v):
     elif v['baseline'] == 'g_mlp':
         baseline = GaussianMLPBaseline(env_spec=env.spec)
 
-    # todo: get a testset for the key task!
-    # # load the state collection from data_upload
+    # load the state collection from data_upload
     # load_dir = 'data_upload/peg'
-    # all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states_.pkl'), 'rb'))
+    # load_dir = "data_upload/pr2_peg"
+    load_file = "data/local/key-no-joint100/key_no_joint100_2017_09_12_08_48_58_0001/all_feasible_states.pkl"
+    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_file), 'rb'))
 
     # # show where these states are:
     # shuffled_starts = np.array(all_feasible_starts.state_list)
     # np.random.shuffle(shuffled_starts)
     # generate_starts(env, starts=shuffled_starts, horizon=100, variance=v['brownian_variance'],
-    #                 animated=True, speedup=10,
+    #                 animated=True, speedup=100,
     #                 zero_action=True,
     #                 )
 
@@ -129,35 +145,11 @@ def run_task(v):
         all_starts = StateCollection(distance_threshold=v['coll_eps'])
     brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
     with gen_states_env.set_kill_outside():
-        seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=100 * v['brownian_horizon'],
+        seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=v['brownian_horizon'],
                                       variance=v['brownian_variance'], subsample=v['num_new_starts'],
-                                      zero_action=True,
-                                      # )
-                                      animated=True, speedup=1)
-
-    # with env.set_kill_outside():
-    #     find_all_feasible_states(gen_states_env, seed_starts, distance_threshold=0.1, brownian_variance=1, animate=False)
-
-    if v['generating_test_set']:
-        # change distance metric for states generated
-        if v['peg_positions']:
-            def states_transform(x):
-                y = list(x)
-                for joint in (7, 8):
-                    y[joint] *= 10
-                # for joint in v['peg_positions']:
-                #     y[joint] *= v['peg_scaling']
-                return y
-        else:
-            states_transform = None
-        with gen_states_env.set_kill_outside():
-            print("generating dataset!")
-            find_all_feasible_states(gen_states_env, seed_starts, distance_threshold=0.1,
-                                     brownian_variance=1, animate=False, max_states=v['max_gen_states'],
-                                     horizon=500,
-                                     states_transform=states_transform
-                                     )
-            import sys; sys.exit(0)
+                                      # , zero_action=True
+                                      # animated=True, speedup=100,
+                                      )
 
     algo = TRPO(
         env=env,
@@ -182,7 +174,7 @@ def run_task(v):
         with gen_states_env.set_kill_outside():
             starts = generate_starts(gen_states_env, starts=seed_starts, horizon=v['brownian_horizon'],
                                      variance=v['brownian_variance'],
-                                     animated=False,
+                                     # animated=True,
                                      )
 
         # regularization of the brownian starts
@@ -196,19 +188,19 @@ def run_task(v):
             starts = np.vstack([starts, old_starts])
 
         # todo: indent!!
-        with ExperimentLogger(log_dir, outer_iter // 10, snapshot_mode='last', hold_outter_log=True):
-            logger.log("Updating the environment start generator")
-            env.update_start_generator(
-                UniformListStateGenerator(
-                    starts.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
-                )
+        # with ExperimentLogger(log_dir, outer_iter // 10, snapshot_mode='last', hold_outter_log=True):
+        logger.log("Updating the environment start generator")
+        env.update_start_generator(
+            UniformListStateGenerator(
+                starts.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
             )
+        )
 
-            logger.log("Training the algorithm")
+        logger.log("Training the algorithm")
 
-            algo.current_itr = 0
-            trpo_paths = algo.train(already_init=outer_iter > 1)
-
+        algo.current_itr = 0
+        trpo_paths = algo.train(already_init=outer_iter > 1)
+        
 
         if v['use_trpo_paths']:
             logger.log("labeling starts with trpo rollouts")
@@ -218,13 +210,22 @@ def run_task(v):
                                                                          as_goal=False, env=env,
                                                                          return_mean_rewards=True)
             else:
-                [starts, labels] = label_states_from_paths(trpo_paths, n_traj=2, key='goal_reached',  # using the min n_traj
-                                                                 as_goal=False, env=env)
+                [starts, labels] = label_states_from_paths(trpo_paths, n_traj=2, key='goal_reached',
+                                                           # using the min n_traj
+                                                           as_goal=False, env=env)
             paths = [path for paths in trpo_paths for path in paths]
         else:
             logger.log("labeling starts manually")
             labels, paths = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'],
                                          key='goal_reached', full_path=True)
+
+        # # visualize the starts
+        # shuffled_starts = np.array(starts)
+        # np.random.shuffle(shuffled_starts)
+        # generate_starts(env, starts=shuffled_starts, horizon=100, variance=v['brownian_variance'],
+        #                 animated=True, speedup=100,
+        #                 zero_action=True,
+        #                 )
 
         with logger.tabular_prefix("OnStarts_"):
             env.log_diagnostics(paths)
@@ -255,7 +256,6 @@ def run_task(v):
         logger.log("Number of raw starts")
         filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1]
 
-
         if v['seed_with'] == 'only_goods':
             if len(filtered_raw_starts) > 0:  # add a tone of noise if all the states I had ended up being high_reward!
                 seed_starts = filtered_raw_starts
@@ -263,14 +263,15 @@ def run_task(v):
                 seed_starts = all_starts.sample(300)  # sample them from the replay
             else:
                 with gen_states_env.set_kill_outside():
-                    seed_starts = generate_starts(gen_states_env, starts=starts, horizon=int(v['horizon'] * 10), subsample=v['num_new_starts'],
+                    seed_starts = generate_starts(gen_states_env, starts=starts, horizon=int(v['horizon'] * 10),
+                                                  subsample=v['num_new_starts'],
                                                   variance=v['brownian_variance'] * 10)
         elif v['seed_with'] == 'all_previous':
             seed_starts = starts
         elif v['seed_with'] == 'on_policy':
             with gen_states_env.set_kill_outside():
-                seed_starts = generate_starts(gen_states_env, policy, horizon=v['horizon'], subsample=v['num_new_starts'])
-
+                seed_starts = generate_starts(gen_states_env, policy, horizon=v['horizon'],
+                                              subsample=v['num_new_starts'])
 
         # update replay buffer!
         if v['smart_replay_buffer']:

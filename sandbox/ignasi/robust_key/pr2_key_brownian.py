@@ -32,8 +32,9 @@ if __name__ == '__main__':
         autoclone.autoclone(__file__, args)
 
     # setup ec2
-    subnets = ['us-east-2c', 'us-east-2b', 'us-east-2a'
-        # 'us-east-1a', 'us-east-1d', 'us-east-1e'
+    subnets = [
+        'ap-southeast-2b', 'ap-southeast-2c', 'ap-southeast-1a', 'eu-central-1b', 'eu-west-1a', 'eu-west-1b',
+        'eu-west-1c'
     ]
     # subnets = [
     #     'ap-northeast-2a', 'ap-northeast-2c', 'us-east-2b', 'ap-south-1a', 'us-east-2c', 'us-east-2a', 'ap-south-1b',
@@ -57,15 +58,17 @@ if __name__ == '__main__':
 
 
     vg = VariantGenerator()
-    vg.add('start_size', [7])
+    vg.add('start_size', [9])  # for the generation it's +2!!
     # vg.add('start_bounds',
     #        [[(-2.2854, -.05236, -3.9, -2.3213, -3.15, -2.094, -3.15, 0, 0),
     #          (1.714602, 1.3963, 0.0, 0.0, 3.15, 0.0, 3.15, 0, 0)]])
     # vg.add('start_goal', [(0.386884635, 1.13705218, -2.02754147, -1.74429440, 2.02916096, -0.873269847, 1.54785694)])
-    vg.add('start_goal', [[ 1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335,-0.90467269, -1.56926878]])
+    # vg.add('start_goal', [[ 1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335,-0.90467269, -1.56926878, 0, 0]])
+    vg.add("start_goal", [[0.34396303529542571, 0.36952090462532139, 1.2508105774646641, -1.8499649619190317,
+                  -4.4254893018593906, -1.9586739159844251, -1.3942096934113373, 0, 0]])
     vg.add('ultimate_goal', [(0.4146814, 0.47640087, 0.5305665)])
     vg.add('goal_size', [3]) # changed
-    vg.add('terminal_eps', [0.01])
+    vg.add('terminal_eps', [0.03])
     # brownian params
     # vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
     vg.add('seed_with', ['only_goods'])  # good from brown, onPolicy, previousBrown (ie no good)
@@ -76,16 +79,17 @@ if __name__ == '__main__':
     # goal-algo params
     vg.add('min_reward', [0.1])
     vg.add('max_reward', [0.9])
+    vg.add('ctrl_regularizer_weight', [1])
+    vg.add('action_torque_lambda', [1])
+    vg.add('inner_weight', [1e-3])
+    vg.add('goal_weight', lambda inner_weight: [1000] if inner_weight > 0 else [1])
     vg.add('distance_metric', ['L2'])
     vg.add('extend_dist_rew', [False])
-    vg.add('inner_weight', [0])
-    vg.add('goal_weight', lambda inner_weight: [1000] if inner_weight > 0 else [1])
     vg.add('persistence', [1])
-    vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
+    vg.add('n_traj', [3])   #  if use_trpo_paths it uses 2!
     vg.add('with_replacement', [True])
     vg.add('use_trpo_paths', [True])
     # replay buffer
-
     vg.add('replay_buffer', [True])  # todo: attention!!
     vg.add('coll_eps', lambda terminal_eps: [terminal_eps])
     vg.add('num_new_starts', [200])
@@ -101,7 +105,7 @@ if __name__ == '__main__':
     vg.add('horizon', [100])
     vg.add('outer_iters', [5000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size', [100000])
+    vg.add('pg_batch_size', [10000])
     # vg.add('pg_batch_size', [50000, 100000])
     # policy initialization
     vg.add('output_gain', [0.1])
@@ -110,24 +114,23 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
     vg.add('baseline', ["g_mlp"])
-    vg.add('policy', ['recurrent'])
+    vg.add('policy', ['mlp', 'recurrent'])
     # vg.add('policy', ['mlp'])
     # vg.add('policy', ['recurrent', 'mlp'])
     vg.add('trunc_steps', [100, 25])
 
     # vg.add('seed', range(100, 600, 100))
-    vg.add('seed', [13, 23,33, 43])
+    vg.add('seed', [100, 200, 300, 400, 500])
 
     vg.add('generating_test_set', [False]) #TODO can change
     vg.add('move_peg', [False]) # whether or not to move peg
-    vg.add('kill_radius', [0.4])
-    vg.add('kill_peg_radius', [0.05])
+    vg.add('kill_radius', [0.3])
+    vg.add('kill_peg_radius', [0.03])
     vg.add('max_gen_states', [300])
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position
 
-    exp_prefix = "random/3_torque"
-    # exp_prefix = 'robust-disk-gen-states-density2'
+    exp_prefix = 'robust-key'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
@@ -189,7 +192,7 @@ if __name__ == '__main__':
             # if mode == 'local_docker':
             #     sys.exit()
         else:
-            # run_task(vv)
+            run_task(vv)
             # import pdb;
             # pdb.set_trace()
             run_experiment_lite(
