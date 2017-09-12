@@ -56,7 +56,8 @@ def run_task(v):
     report.add_text(format_dict(v))
 
     inner_env = normalize(Pr2DiskEnv(ctrl_regularizer_weight=v['ctrl_regularizer_weight'],
-                                     action_torque_lambda=v['action_torque_lambda']))
+                                     action_torque_lambda=v['action_torque_lambda'],
+                                     physics_variances=v['physics_variances']))
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
     fixed_start_generator = FixedStateGenerator(state=v['start_goal'])
@@ -142,9 +143,9 @@ def run_task(v):
         all_starts = StateCollection(distance_threshold=v['coll_eps'])
     brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
     with gen_states_env.set_kill_outside():
-        seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=v['brownian_horizon'],
+        seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon= ['brownian_horizon'],
                                       variance=v['brownian_variance'], subsample=v['num_new_starts'],
-                                      # , zero_action=True
+                                      # zero_action=True,
                                       # animated=True, speedup=100,
                                       )
 
@@ -240,7 +241,7 @@ def run_task(v):
 
         logger.log("Labeling on uniform starts")
         with logger.tabular_prefix("Uniform_"):
-            unif_starts = all_feasible_starts.sample(1000)
+            unif_starts = all_feasible_starts.sample(300)
             mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=1, key='goal_reached',
                                                  as_goals=False, full_path=True)
             env.log_diagnostics(paths)

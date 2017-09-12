@@ -21,21 +21,34 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
                  dist_weight=0,
                  ctrl_regularizer_weight=1,
                  action_torque_lambda=0,
+                 disc_mass=0.1,
+                 physics_variances=(0, 0, 0, 0),
                  *args, **kwargs):
-        MujocoEnv.__init__(self, *args, **kwargs)
-        self.frame_skip = 5
+        """
+        :param init_solved: 
+        :param kill_radius: 
+        :param dist_weight: 
+        :param ctrl_regularizer_weight: 
+        :param action_torque_lambda: 
+        :param physics_variances: in this order -> damping, armature, friction, disk mass
+        :param args: 
+        :param kwargs: 
+        """
         Serializable.quick_init(self, locals())
-
-        # self.init_qvel = np.zeros_like(self.init_qvel)
-        # self.init_qacc = np.zeros_like(self.init_qacc)
         self.init_solved = init_solved
         self.kill_radius = kill_radius
         self.kill_outside = False
         self.dist_weight = dist_weight
         self.ctrl_regularizer_weight = ctrl_regularizer_weight
         self.action_torque_lambda = action_torque_lambda
+        self.disc_mass = disc_mass
+        self.physics_variances = physics_variances
+
+        MujocoEnv.__init__(self, *args, **kwargs)
         self.body_pos = self.model.body_pos.copy()
-        # print("yo!")
+        # self.init_qvel = np.zeros_like(self.init_qvel)
+        # self.init_qacc = np.zeros_like(self.init_qacc)
+        self.frame_skip = 5
 
     @overrides
     def get_current_obs(self):
@@ -70,15 +83,15 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
         # if randomize:
         #   init_state = (0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0) # TODO: used for debugging only!
         dim = len(self.init_damping)
-        damping = np.maximum(0, np.random.multivariate_normal(self.init_damping, 2 * np.eye(dim)))
-        armature = np.maximum(0, np.random.multivariate_normal(self.init_armature, 2 * np.eye(dim)))
-        frictionloss = np.maximum(0, np.random.multivariate_normal(self.init_frictionloss, 2 * np.eye(dim)))
+        damping = np.maximum(0, np.random.multivariate_normal(self.init_damping, self.physics_variances[0] * np.eye(dim)))
+        armature = np.maximum(0, np.random.multivariate_normal(self.init_armature, self.physics_variances[1] * np.eye(dim)))
+        frictionloss = np.maximum(0, np.random.multivariate_normal(self.init_frictionloss, self.physics_variances[2] * np.eye(dim)))
         self.model.dof_damping = damping[:, None]
         self.model.dof_frictionloss = frictionloss[:, None]
         self.model.dof_armature = armature[:, None]
         xfrc = np.zeros_like(self.model.data.xfrc_applied)
         id_tool = self.model.body_names.index('gear')
-        xfrc[id_tool, 2] = - 9.81 * np.random.uniform(0.05, 0.5)
+        xfrc[id_tool, 2] = - 9.81 * np.maximum(0, self.disc_mass + np.random.uniform(0, self.physics_variances[3]))
         self.model.data.xfrc_applied = xfrc
 
         if init_state is not None:

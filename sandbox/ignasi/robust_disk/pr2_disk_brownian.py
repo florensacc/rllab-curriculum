@@ -71,9 +71,10 @@ if __name__ == '__main__':
     # vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
     vg.add('seed_with', ['only_goods'])  # good from brown, onPolicy, previousBrown (ie no good)
     # vg.add('brownian_horizon', lambda seed_with: [0, 50, 500] if seed_with == 'on_policy' else [50, 500])
-    vg.add('brownian_horizon', [200])
+    vg.add('brownian_horizon', [20, 50, 100, 200])
     vg.add('brownian_variance', [0.1])
     vg.add('regularize_starts', [0])
+    vg.add('physics_variances', [[0, 0, 0, 0], [0.01, 0.005, 0.01, 0.05]])  # damping, armature, frictionloss, mass
     # goal-algo params
     vg.add('min_reward', [0.1])
     vg.add('max_reward', [0.9])
@@ -103,7 +104,7 @@ if __name__ == '__main__':
     vg.add('horizon', [100])
     vg.add('outer_iters', [5000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size', [100000])
+    vg.add('pg_batch_size', [50000])
     # vg.add('pg_batch_size', [50000, 100000])
     # policy initialization
     vg.add('output_gain', [0.1])
@@ -112,10 +113,10 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
     vg.add('baseline', ["g_mlp"])
-    vg.add('policy', ['mlp', 'recurrent'])
+    vg.add('policy', ['mlp'])
     # vg.add('policy', ['mlp'])
     # vg.add('policy', ['recurrent', 'mlp'])
-    vg.add('trunc_steps', [100, 25])
+    vg.add('trunc_steps', [100])
 
     # vg.add('seed', range(100, 600, 100))
     vg.add('seed', [100, 200, 300, 400, 500])
