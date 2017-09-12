@@ -128,6 +128,7 @@ if __name__ == '__main__':
     vg.add('max_gen_states', [300])
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position
+    vg.add('start_dyn', [False])
 
     exp_prefix = 'robust-disk'
     # Launching
@@ -199,7 +200,7 @@ if __name__ == '__main__':
                 stub_method_call=run_task,
                 variant=vv,
                 mode='local',
-                n_parallel=n_parallel,
+                n_parallel=12,
                 # Only keep the snapshot parameters for the last iteration
                 snapshot_mode="last",
                 seed=vv['seed'],

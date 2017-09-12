@@ -57,7 +57,9 @@ def run_task(v):
 
     inner_env = normalize(Pr2DiskEnv(ctrl_regularizer_weight=v['ctrl_regularizer_weight'],
                                      action_torque_lambda=v['action_torque_lambda'],
-                                     physics_variances=v['physics_variances']))
+                                     physics_variances=v['physics_variances'],
+                                     start_peg=v['move_peg'],
+                                     start_dyn=v['start_dyn']))
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
     fixed_start_generator = FixedStateGenerator(state=v['start_goal'])
@@ -79,7 +81,8 @@ def run_task(v):
 
     if v['move_peg']:
         gen_states_env = GoalStartExplorationEnv(
-            env=DiskGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'], kill_radius=v['kill_radius']),
+            env=DiskGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'],
+                                      kill_radius=v['kill_radius'], start_dyn=v['start_dyn']),
             start_generator=fixed_start_generator,
             obs2start_transform=lambda x: x[:v['start_size']],
             goal_generator=fixed_goal_generator,
@@ -90,7 +93,8 @@ def run_task(v):
             inner_weight=v['inner_weight'],
             goal_weight=v['goal_weight'],
             terminate_env=True,
-            append_goal_to_observation=False,  # prevents goal environment from appending observation
+            append_goal_to_observation=False, # prevents goal environment from appending observation
+
         )
     else:
         # cannot move the peg
@@ -128,7 +132,6 @@ def run_task(v):
     # # show where these states are:
     # shuffled_starts = np.array(all_feasible_starts.state_list)
     # np.random.shuffle(shuffled_starts)
-    # generate_starts(env, starts=shuffled_starts, horizon=100, variance=v['brownian_variance'],
     #                 animated=True, speedup=100,
     #                 zero_action=True,
     #                 )
@@ -240,12 +243,18 @@ def run_task(v):
         labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
 
         logger.log("Labeling on uniform starts")
-        with logger.tabular_prefix("Uniform_"):
+        with logger.tabular_prefix("Uniform_w_rand"):
             unif_starts = all_feasible_starts.sample(300)
             mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=1, key='goal_reached',
                                                  as_goals=False, full_path=True)
             env.log_diagnostics(paths)
-
+        logger.dump_tabular(with_prefix=True)
+        with logger.tabular_prefix("Uniform_wo_rand"):
+            with gen_states_env.set_randomization():
+                unif_starts = all_feasible_starts.sample(300)
+                mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=1, key='goal_reached',
+                                                 as_goals=False, full_path=True)
+                env.log_diagnostics(paths)
         logger.dump_tabular(with_prefix=True)
 
         # append new states to list of all starts (replay buffer): Not the low reward ones!!

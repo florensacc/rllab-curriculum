@@ -20,6 +20,9 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
                  evaluate = False, # allows for rollouts over generated states
                  kill_radius=0.4, #TODO: can tune!
                  kill_peg_radius = 0.1, # TODO: can tune!
+                 gen_dyn=False,
+                 disc_mass=0.1,
+                 start_dyn=False,
                  *args, **kwargs):
         # self.amount_moved = 0.1
         MujocoEnv.__init__(self, *args, **kwargs)
@@ -31,6 +34,9 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
         self.kill_radius = kill_radius
         self.kill_peg_radius = kill_peg_radius
         self.kill_outside = False
+        self.gen_dyn = gen_dyn
+        self.disc_mass = disc_mass
+        self.start_dyn = start_dyn
 
     @overrides
     def get_current_obs(self):
@@ -46,6 +52,14 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
             # self.target_position,
         ])
 
+    def get_current_dyn(self):
+        damping = (self.model.dof_damping[:, 0]).copy()
+        armature = (self.model.dof_armature[:, 0]).copy()
+        frictionloss = (self.model.dof_frictionloss[:, 0]).copy()
+        disc_mass = np.array([self.disc_mass])
+        return np.concatenate([damping, armature, frictionloss, disc_mass])
+
+
     @contextmanager
     def set_kill_outside(self, *args, **kwargs):
         self.kill_outside = True
@@ -57,7 +71,11 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
     @property
     def start_observation(self):  # this is already good as a 9dim: base of peg has joints
         joint_position = self.get_current_obs()[:9]
-        return joint_position
+        if self.start_dyn:
+            dynamics = self.get_current_dyn()
+            return np.concatenate([joint_position, dynamics])
+        else:
+            return joint_position
 
     def reset(self, init_state=None, *args, **kwargs):  # todo: init_state should have (joints, peg, phy)
         self.init_peg_pos = np.random.multivariate_normal((0,0), 0.01*np.eye(2)) + self.model.data.qpos[-2:,0]

@@ -23,6 +23,8 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
                  action_torque_lambda=0,
                  disc_mass=0.1,
                  physics_variances=(0, 0, 0, 0),
+                 start_peg=True,
+                 start_dyn=True,
                  *args, **kwargs):
         """
         :param init_solved: 
@@ -43,6 +45,8 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
         self.action_torque_lambda = action_torque_lambda
         self.disc_mass = disc_mass
         self.physics_variances = physics_variances
+        self.start_peg = start_peg
+        self.start_dyn = start_dyn
 
         MujocoEnv.__init__(self, *args, **kwargs)
         self.body_pos = self.model.body_pos.copy()
@@ -61,6 +65,13 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
             self.model.data.site_xpos[0],  # disc position
         ])
 
+    def get_current_dyn(self):
+        damping = (self.model.dof_damping[:, 0]).copy()
+        armature = (self.model.dof_armature[:, 0]).copy()
+        frictionloss = (self.model.dof_frictionloss[:, 0]).copy()
+        disc_mass = np.array([self.disc_mass])
+        return np.concatenate([damping, armature, frictionloss, disc_mass])
+
     @contextmanager
     def set_kill_outside(self, kill_outside=True, radius=None):
         self.kill_outside = True
@@ -73,30 +84,56 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
             self.kill_outside = False
             self.kill_radius = old_kill_radius
 
+    @contextmanager
+    def set_randomization(self, physics_variances=np.zeros(4,)):
+        curr_physics_var = self.physics_variances.copy()
+        self.physics_variances = physics_variances
+        try:
+            yield
+        finally:
+            self.physics_variances = curr_physics_var
+
+
     @property
     def start_observation(self):
         joint_position = self.get_current_obs()[:7]
         goal_xy = self.get_goal_position(relative=True)[:2]
-        return np.concatenate([joint_position, goal_xy])
+        if self.start_dyn:
+            dynamics = self.get_current_dyn()
+            return np.concatenate([joint_position, goal_xy, dynamics])
+        else:
+             return np.concatenate([joint_position, goal_xy])
 
     def reset(self, init_state=None, *args, **kwargs):
         # if randomize:
         #   init_state = (0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0) # TODO: used for debugging only!
-        dim = len(self.init_damping)
-        damping = np.maximum(0, np.random.multivariate_normal(self.init_damping, self.physics_variances[0] * np.eye(dim)))
-        armature = np.maximum(0, np.random.multivariate_normal(self.init_armature, self.physics_variances[1] * np.eye(dim)))
-        frictionloss = np.maximum(0, np.random.multivariate_normal(self.init_frictionloss, self.physics_variances[2] * np.eye(dim)))
-        self.model.dof_damping = damping[:, None]
-        self.model.dof_frictionloss = frictionloss[:, None]
-        self.model.dof_armature = armature[:, None]
-        xfrc = np.zeros_like(self.model.data.xfrc_applied)
-        id_tool = self.model.body_names.index('gear')
-        xfrc[id_tool, 2] = - 9.81 * np.maximum(0, self.disc_mass + np.random.uniform(0, self.physics_variances[3]))
-        self.model.data.xfrc_applied = xfrc
-
         if init_state is not None:
+            xfrc = np.zeros_like(self.model.data.xfrc_applied)
+            id_tool = self.model.body_names.index('gear')
+            if self.start_dyn:
+                id_start = 9 if self.start_peg else 7
+                self.model.dof_damping = np.maximum(0, init_state[id_start:(id_start + 7)])
+                self.model.dof_armature = np.maximum(0, init_state[(id_start + 7):(id_start + 14)])
+                self.model.dof_frictionloss = np.maximum(0, init_state[(id_start + 14):(id_start + 21)])
+                xfrc[id_tool, 2] = -9.81 * np.maximum(0, init_state[(id_start + 21)])
+            else:
+                dim = len(self.init_damping)
+                damping = np.maximum(0, np.random.multivariate_normal(self.init_damping,
+                                                                      self.physics_variances[0] * np.eye(dim)))
+                armature = np.maximum(0, np.random.multivariate_normal(self.init_armature,
+                                                                       self.physics_variances[1] * np.eye(dim)))
+                frictionloss = np.maximum(0, np.random.multivariate_normal(self.init_frictionloss,
+                                                                           self.physics_variances[2] * np.eye(dim)))
+                self.model.dof_damping = damping[:, None]
+                self.model.dof_armature = armature[:, None]
+                self.model.dof_frictionloss = frictionloss[:, None]
+                xfrc[id_tool, 2] = - 9.81 * np.maximum(0,
+                                                       self.disc_mass + np.random.uniform(0, self.physics_variances[3]))
+            self.model.data.xfrc_applied = xfrc
+
+
             # hack if generated states don't have peg position
-            if len(init_state) == 7:
+            if self.start_peg:
                 x = random.random() * 0.1
                 y = random.random() * 0.1
                 init_state.extend([x, y])
@@ -129,6 +166,7 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
         ctrl_penalty = - self.ctrl_regularizer_weight * (self.action_torque_lambda * action_norm + velocity_norm)
         reward = ctrl_penalty - self.dist_weight * distance_to_goal
         ob = self.get_current_obs()
+        dynamics = self.get_current_dyn()
         done = False
         # if distance_to_goal < 0.3:
         #     print("dist_to_goal: {}, rew: {}, next_obs: {}".format(distance_to_goal, reward, ob))
@@ -139,6 +177,7 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
 
         return Step(
             ob, reward, done, distance=distance_to_goal, goal_relative=goal_relative, ctrl_penalty=ctrl_penalty,
+            dynamics=dynamics,
         )
 
     def get_disc_position(self):
@@ -170,7 +209,7 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
         self.model.forward()
 
     def transform_to_start_space(self, obs, env_infos):  # hard-coded that the first 7 coord are the joint pos.
-        return np.concatenate([obs[:7], env_infos['goal_relative'][:2]])  # using 'goal' takes the one from the goal_env
+        return np.concatenate([obs[:7], env_infos['goal_relative'][:2], env_infos['dynamics']])  # using 'goal' takes the one from the goal_env
         # remove the last one, it's the z coordinate of the peg and it doesn't move.
 
 
