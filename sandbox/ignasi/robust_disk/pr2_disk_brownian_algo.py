@@ -140,11 +140,12 @@ def run_task(v):
     if v['smart_replay_buffer']:
         all_starts = SmartStateCollection(distance_threshold=v['coll_eps'],
                                           abs=v["smart_replay_abs"],
-                                          eps=v["smart_replay_eps"]
+                                          eps=v["smart_replay_eps"],
+                                          idx_lim=v["idx_lim"],
                                           )
     else:
-        all_starts = StateCollection(distance_threshold=v['coll_eps'])
-    brownian_starts = StateCollection(distance_threshold=v['regularize_starts'])
+        all_starts = StateCollection(distance_threshold=v['coll_eps'], idx_lim=v["idx_lim"],)
+    brownian_starts = StateCollection(distance_threshold=v['regularize_starts'], idx_lim=v["idx_lim"], )
     with gen_states_env.set_kill_outside():
         seed_starts = generate_starts(gen_states_env, starts=[v['start_goal']], horizon=v['brownian_horizon'],
                                       variance=v['brownian_variance'], subsample=v['num_new_starts'],

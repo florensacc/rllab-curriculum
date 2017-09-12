@@ -131,6 +131,7 @@ if __name__ == '__main__':
     vg.add('max_gen_states', [300])
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position
+    vg.add('idx_lim', [None])
 
 
     exp_prefix = 'robust-disk'
