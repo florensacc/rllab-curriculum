@@ -134,7 +134,7 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
 
 
             # hack if generated states don't have peg position
-            if self.start_peg:
+            if len(init_state) == 7:
                 x = random.random() * 0.1
                 y = random.random() * 0.1
                 init_state.extend([x, y])
@@ -142,8 +142,8 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
             # sets peg to desired position
             # print(init_state)
             pos = self.body_pos.copy()
-            pos[-2, 0] += init_state[-2]
-            pos[-2, 1] += init_state[-1]
+            pos[-2, 0] += init_state[7]
+            pos[-2, 1] += init_state[8]
             self.model.body_pos = pos
             init_state = init_state[:7]  # sliced so that super reset can reset joints correctly
 
