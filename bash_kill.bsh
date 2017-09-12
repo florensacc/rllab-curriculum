@@ -1,5 +1,5 @@
 #!/bin/bash
-for i in {6..9}
+for i in {10..20}
 do
-	echo -e "y\n" | ec2ctl.py kill_f "start-trpo-unif-arm3d-disc-bigBS-test_2017_07_17_23_15_42_000$i";
+	echo -e "y\n" | ec2ctl.py kill_f "robust-disk_2017_09_11_17_43_04_000$i";
 done

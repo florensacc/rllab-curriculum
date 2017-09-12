@@ -467,10 +467,10 @@
             <geom name="table_geom" type="box" pos="0.6 0 0.42" size="0.5 1.0 0.05" rgba="0 0.3 0 1" contype="1" conaffinity="1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
         </body>
 
-        <body name="base_obj" pos ="0.4146814 0.47640087  0.47057914">
+        <body name="base_obj" pos ="0.4146814 0.47640087  0.47607914">
             <inertial pos="0 0 0" mass="1000" diaginertia="0.01 0.01 0.01"/>
-            <geom name="base_obj" pos="0 0 0.02" type="box" size="0.03 0.03 0.02" rgba="1 0 0 1" contype="1" conaffinity="1"/>
-            <body name="cyl" pos="0 0 0.04">
+            <geom name="base_obj" pos="0 0 0.0255" type="box" size="0.03 0.03 0.0255" rgba="1 0 0 1" contype="1" conaffinity="1"/>
+            <body name="cyl" pos="0 0 0.051">
                 <site name="goal_position" type="sphere" pos="0 0 0.0" rgba="0.0 1.0 0.0 0.5" size="0.03" />
                 <!--geom name="base_obj" pos="0 0 0" mesh="base_plate" rgba="1 1 0 1" solref="0.001 1" contype="1" conaffinity="1" solimp="0.999 0.999 0.001"/-->
                 <geom name="cyl" pos="0 0 0.0325" type="cylinder" size="0.0125 0.0325" rgba="1 1 0 1" solref="0.001 1" solimp="0.999 0.999 0.001" contype="1" conaffinity="1"/>
