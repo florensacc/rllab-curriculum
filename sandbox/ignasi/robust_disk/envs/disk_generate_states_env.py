@@ -53,9 +53,9 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
         ])
 
     def get_current_dyn(self):
-        damping = (self.model.dof_damping[:, 0]).copy()
-        armature = (self.model.dof_armature[:, 0]).copy()
-        frictionloss = (self.model.dof_frictionloss[:, 0]).copy()
+        damping = (self.model.dof_damping[:7, 0]).copy()
+        armature = (self.model.dof_armature[:7, 0]).copy()
+        frictionloss = (self.model.dof_frictionloss[:7, 0]).copy()
         disc_mass = np.array([self.disc_mass])
         return np.concatenate([damping, armature, frictionloss, disc_mass])
 

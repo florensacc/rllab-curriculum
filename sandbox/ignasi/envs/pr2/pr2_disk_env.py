@@ -110,7 +110,8 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
         if init_state is not None:
             xfrc = np.zeros_like(self.model.data.xfrc_applied)
             id_tool = self.model.body_names.index('gear')
-            if self.start_dyn:
+            if self.start_dyn and len(init_state) > 9:
+                #I don't know why but the (x,y) position of the peg is set after the dyn
                 id_start = 9 if self.start_peg else 7
                 self.model.dof_damping = np.maximum(0, init_state[id_start:(id_start + 7)])
                 self.model.dof_armature = np.maximum(0, init_state[(id_start + 7):(id_start + 14)])

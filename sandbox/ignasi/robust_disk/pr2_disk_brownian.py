@@ -56,14 +56,17 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-
     vg = VariantGenerator()
     vg.add('start_size', [9])  # for the generation it's +2!!
+    vg.add('start_dyn', [True])
     # vg.add('start_bounds',
     #        [[(-2.2854, -.05236, -3.9, -2.3213, -3.15, -2.094, -3.15, 0, 0),
     #          (1.714602, 1.3963, 0.0, 0.0, 3.15, 0.0, 3.15, 0, 0)]])
     # vg.add('start_goal', [(0.386884635, 1.13705218, -2.02754147, -1.74429440, 2.02916096, -0.873269847, 1.54785694)])
-    vg.add('start_goal', [[ 1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335,-0.90467269, -1.56926878, 0, 0]])
+    vg.add('start_goal', lambda start_dyn:
+    [[1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335,-0.90467269, -1.56926878, 0, 0]] if not start_dyn\
+           else [[1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335,-0.90467269, -1.56926878, 0, 0] +7*[0.01]
+                 + 7*[0.005] + 7*[0] + [0.1]])
     vg.add('ultimate_goal', [(0.4146814, 0.47640087, 0.5305665)])
     vg.add('goal_size', [3]) # changed
     vg.add('terminal_eps', [0.03])
@@ -128,7 +131,7 @@ if __name__ == '__main__':
     vg.add('max_gen_states', [300])
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position
-    vg.add('start_dyn', [False])
+
 
     exp_prefix = 'robust-disk'
     # Launching
