@@ -30,8 +30,8 @@ from sandbox.young_clgan.robust_disk.envs.arm3d_disc_env import Arm3dDiscEnv
 
 from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasible_states
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
-from sandbox.young_clgan.robust_disk.envs.disk_generate_states_env_old import DiskGenerateStatesEnv
 
+from sandbox.ignasi.robust_disk.envs.key_generate_states_env import KeyGenerateStatesEnv
 from sandbox.ignasi.envs.pr2.pr2_key_env import Pr2KeyEnv
 
 """
@@ -46,8 +46,9 @@ def run_task(v):
     fixed_start_generator = FixedStateGenerator(state=v['start_goal'])
 
     if v['move_peg']:
-        inner_env = DiskGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'], kill_radius=v['kill_radius'])
-        env = GoalStartExplorationEnv(
+        inner_env = KeyGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'],
+                                      kill_radius=v['kill_radius'], start_dyn=v['start_dyn'])
+        gen_states_env = GoalStartExplorationEnv(
             env=inner_env,
             start_generator=fixed_start_generator,
             obs2start_transform=lambda x: x[:v['start_size']],  # todo: this is actually wrong as now no joints here!
@@ -137,6 +138,7 @@ if __name__ == '__main__':
     vg.add('ultimate_goal', [(0., 0.3, -0.4)])
     vg.add('goal_size', [3]) # changed
     vg.add('terminal_eps', [0.03])
+    vg.add('start_dyn', [False])
     # brownian params
     # vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
     vg.add('seed_with', ['only_goods'])  # good from brown, onPolicy, previousBrown (ie no good)
@@ -188,15 +190,15 @@ if __name__ == '__main__':
     vg.add('seed', [13])
 
     vg.add('generating_test_set', [False]) #TODO can change
-    vg.add('move_peg', [False]) # whether or not to move peg
-    vg.add('kill_radius', [0.5])
-    vg.add('kill_peg_radius', [0.05])
+    vg.add('move_peg', [True]) # whether or not to move peg
+    vg.add('kill_radius', [0.3])
+    vg.add('kill_peg_radius', [0.03])
     vg.add('max_gen_states', [100000])
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position
 
     # exp_prefix = "robust-disk-test2"
-    exp_prefix = 'key_no_joint100'
+    exp_prefix = 'key_joint100'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
@@ -206,7 +208,7 @@ if __name__ == '__main__':
     mode="local"
     for vv in vg.variants():
 
-        run_task(vv)
+        # run_task(vv)
         run_experiment_lite(
             # use_cloudpickle=False,
             stub_method_call=run_task,

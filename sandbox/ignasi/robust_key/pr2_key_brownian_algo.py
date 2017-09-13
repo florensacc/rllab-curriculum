@@ -39,6 +39,7 @@ from sandbox.young_clgan.state.utils import StateCollection, SmartStateCollectio
 
 from sandbox.young_clgan.envs.start_env import generate_starts, find_all_feasible_states
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
+from sandbox.ignasi.robust_disk.envs.key_generate_states_env import KeyGenerateStatesEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 
@@ -58,7 +59,10 @@ def run_task(v):
     report.add_text(format_dict(v))
 
     inner_env = normalize(Pr2KeyEnv(ctrl_regularizer_weight=v['ctrl_regularizer_weight'],
-                                     action_torque_lambda=v['action_torque_lambda']))
+                                     action_torque_lambda=v['action_torque_lambda'],
+                                    physics_variances=v['physics_variances'],
+                                    start_peg=v['move_peg'],
+                                    start_dyn=v['start_dyn']))
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
     fixed_start_generator = FixedStateGenerator(state=v['start_goal'])
@@ -80,7 +84,8 @@ def run_task(v):
 
     if v['move_peg']:
         gen_states_env = GoalStartExplorationEnv(
-            env=DiskGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'], kill_radius=v['kill_radius']),
+            env=KeyGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'], kill_radius=v['kill_radius'],
+                                     start_dyn=v['start_dyn']),
             start_generator=fixed_start_generator,
             obs2start_transform=lambda x: x[:v['start_size']],
             goal_generator=fixed_goal_generator,
@@ -124,7 +129,8 @@ def run_task(v):
     # load the state collection from data_upload
     # load_dir = 'data_upload/peg'
     # load_dir = "data_upload/pr2_peg"
-    load_file = "data/local/key-no-joint100/key_no_joint100_2017_09_12_08_48_58_0001/all_feasible_states.pkl"
+    load_file = "data_upload/pr2_key/fixed_pos/all_feasible_states.pkl"
+    # load_file = "data/local/key-no-joint100/key_no_joint100_2017_09_12_08_48_58_0001/all_feasible_states.pkl"
     all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_file), 'rb'))
 
     # # show where these states are:

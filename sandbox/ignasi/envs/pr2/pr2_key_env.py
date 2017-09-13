@@ -21,6 +21,10 @@ class Pr2KeyEnv(MujocoEnv, Serializable):
                  dist_weight = 0,
                  ctrl_regularizer_weight=1,
                  action_torque_lambda=1,
+                 disc_mass=0.1,
+                 physics_variances=(0, 0, 0, 0),
+                 start_peg=True,
+                 start_dyn=True,
                  *args, **kwargs):
         MujocoEnv.__init__(self, *args, **kwargs)
         self.frame_skip = 5
@@ -32,7 +36,13 @@ class Pr2KeyEnv(MujocoEnv, Serializable):
         self.ctrl_regularizer_weight = ctrl_regularizer_weight
         self.action_torque_lambda = action_torque_lambda
         self.kill_outside = False
+        self.disc_mass = disc_mass
+        self.physics_variances = physics_variances
+        self.start_peg = start_peg
+        self.start_dyn = start_dyn
+
         self.body_pos = self.model.body_pos.copy()
+        self.frame_skip = 5 #todo: just set!
 
     @overrides
     def get_current_obs(self):
@@ -44,6 +54,13 @@ class Pr2KeyEnv(MujocoEnv, Serializable):
             self.model.data.qvel.flat,  # [:self.model.nq // 2],
             self.model.data.site_xpos[0],  # disc position, possibly remove?
         ])
+
+    def get_current_dyn(self):
+        damping = (self.model.dof_damping[:, 0]).copy()
+        armature = (self.model.dof_armature[:, 0]).copy()
+        frictionloss = (self.model.dof_frictionloss[:, 0]).copy()
+        disc_mass = np.array([self.disc_mass])
+        return np.concatenate([damping, armature, frictionloss, disc_mass])
 
     @contextmanager
     def set_kill_outside(self, kill_outside=True, radius=None):
@@ -71,11 +88,34 @@ class Pr2KeyEnv(MujocoEnv, Serializable):
 
 
         if init_state is not None:
+            xfrc = np.zeros_like(self.model.data.xfrc_applied)
+            id_tool = self.model.body_names.index('key')
             pos = self.body_pos.copy()
             pos[-2, 0] += init_state[-2]
             pos[-2, 1] += init_state[-1]
             self.model.body_pos = pos
             init_state = init_state[:7]
+            if self.start_dyn and len(init_state) > 9:
+                #I don't know why but the (x,y) position of the peg is set after the dyn
+                id_start = 9 if self.start_peg else 7
+                self.model.dof_damping = np.maximum(0, init_state[id_start:(id_start + 7)])
+                self.model.dof_armature = np.maximum(0, init_state[(id_start + 7):(id_start + 14)])
+                self.model.dof_frictionloss = np.maximum(0, init_state[(id_start + 14):(id_start + 21)])
+                xfrc[id_tool, 2] = -9.81 * np.maximum(0, init_state[(id_start + 21)])
+            else:
+                dim = len(self.init_damping)
+                damping = np.maximum(0, np.random.multivariate_normal(self.init_damping,
+                                                                      self.physics_variances[0] * np.eye(dim)))
+                armature = np.maximum(0, np.random.multivariate_normal(self.init_armature,
+                                                                       self.physics_variances[1] * np.eye(dim)))
+                frictionloss = np.maximum(0, np.random.multivariate_normal(self.init_frictionloss,
+                                                                           self.physics_variances[2] * np.eye(dim)))
+                self.model.dof_damping = damping[:, None]
+                self.model.dof_armature = armature[:, None]
+                self.model.dof_frictionloss = frictionloss[:, None]
+                xfrc[id_tool, 2] = - 9.81 * np.maximum(0,
+                                                       self.disc_mass + np.random.uniform(0, self.physics_variances[3]))
+            self.model.data.xfrc_applied = xfrc
         ret = super(Pr2KeyEnv, self).reset(init_state, *args, **kwargs)
 
 

@@ -206,6 +206,7 @@ def grid_and_sample_states(data, save_images=False, file_name='num_starts_breakd
 def plot_peg_position_density(data, num_bins=5, bound=-0.05):
     x_peg = data[:, peg_joints[0]]
     y_peg = data[:, peg_joints[1]]
+    print("hi")
     fig, ax = plt.subplots()
     heatmap, xedges, yedges = np.histogram2d(x_peg,
                                              y_peg,
@@ -255,7 +256,8 @@ def show_generated_states(data, env = None):
     # Simulates policy to visualize generated states
 
     for i in range(100):
-        gen_state = data[int(random.random() * num_states)][:7]
+        gen_state = data[int(random.random() * num_states)]
+        # gen_state[-2] = 0.2
         print(gen_state)
         print(len(gen_state))
         policy = GaussianMLPPolicy(
@@ -285,11 +287,17 @@ if __name__ == "__main__":
     # plot_peg_position_density(data, bound=-0.03, num_bins=6)
     # plot_joint_variations(data)
     from sandbox.ignasi.envs.pr2.pr2_key_env import Pr2KeyEnv
-    show_generated_states(data, env = Pr2KeyEnv())
+    from sandbox.ignasi.robust_disk.envs.key_generate_states_env import KeyGenerateStatesEnv
+
+    # from sandbox.ignasi.envs.pr2.pr2_key_env import Pr2KeyEnv
+    # show_generated_states(data, env = Pr2KeyEnv())
 
     # eval_success_grid(data, "success_breakdown_new_policy.csv")
     # grid_and_sample_states(data, save_images=True, file_name="success_breakdown_num_states.csv")
-    #
-    # plot_peg_position_density(data)
-    # plot_joint_variations(data)
-    # show_generated_states(data, env = )
+
+    print("bro")
+    import pdb; pdb.set_trace()
+    plot_peg_position_density(data)
+    plot_joint_variations(data)
+    show_generated_states(data, env=KeyGenerateStatesEnv())
+    # show_generated_states(sdata, env = )

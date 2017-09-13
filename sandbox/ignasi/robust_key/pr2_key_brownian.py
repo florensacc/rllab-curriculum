@@ -32,10 +32,11 @@ if __name__ == '__main__':
         autoclone.autoclone(__file__, args)
 
     # setup ec2
-    subnets = [
-        'ap-southeast-2b', 'ap-southeast-2c', 'ap-southeast-1a', 'eu-central-1b', 'eu-west-1a', 'eu-west-1b',
-        'eu-west-1c'
-    ]
+    subnets = ['us-east-2a', 'us-east-2b', 'us-east-2c']
+    # subnets = [
+    #     'ap-southeast-2b', 'ap-southeast-2c', 'ap-southeast-1a', 'eu-central-1b', 'eu-west-1a', 'eu-west-1b',
+    #     'eu-west-1c'
+    # ]
     # subnets = [
     #     'ap-northeast-2a', 'ap-northeast-2c', 'us-east-2b', 'ap-south-1a', 'us-east-2c', 'us-east-2a', 'ap-south-1b',
     #     'us-east-1b', 'us-east-1a', 'us-east-1d', 'us-east-1e', 'eu-west-1c', 'eu-west-1a', 'eu-west-1b'
@@ -69,6 +70,9 @@ if __name__ == '__main__':
     vg.add('ultimate_goal', [(0.4146814, 0.47640087, 0.5305665)])
     vg.add('goal_size', [3]) # changed
     vg.add('terminal_eps', [0.03])
+    vg.add('start_dyn', [False])
+
+    vg.add('physics_variances', [[0.01, 0.005, 0.01, 0.05]])
     # brownian params
     # vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
     vg.add('seed_with', ['only_goods'])  # good from brown, onPolicy, previousBrown (ie no good)
@@ -79,7 +83,7 @@ if __name__ == '__main__':
     # goal-algo params
     vg.add('min_reward', [0.1])
     vg.add('max_reward', [0.9])
-    vg.add('ctrl_regularizer_weight', [1])
+    vg.add('ctrl_regularizer_weight', [1, 100])
     vg.add('action_torque_lambda', [1])
     vg.add('inner_weight', [1e-3])
     vg.add('goal_weight', lambda inner_weight: [1000] if inner_weight > 0 else [1])
@@ -105,7 +109,7 @@ if __name__ == '__main__':
     vg.add('horizon', [100])
     vg.add('outer_iters', [5000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size', [100000])
+    vg.add('pg_batch_size', [50000])
     # vg.add('pg_batch_size', [50000, 100000])
     # policy initialization
     vg.add('output_gain', [0.1])
@@ -114,13 +118,14 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
     vg.add('baseline', ["g_mlp"])
-    vg.add('policy', ['mlp', 'recurrent'])
-    # vg.add('policy', ['mlp'])
+    # vg.add('policy', ['mlp', 'recurrent'])
+    vg.add('policy', ['mlp'])
     # vg.add('policy', ['recurrent', 'mlp'])
-    vg.add('trunc_steps', [100, 25])
+    vg.add('trunc_steps', [25])
 
     # vg.add('seed', range(100, 600, 100))
-    vg.add('seed', [100, 200, 300, 400, 500])
+    # vg.add('seed', [100, 200, 300, 400, 500])
+    vg.add('seed', [101, 201, 301])
 
     vg.add('generating_test_set', [False]) #TODO can change
     vg.add('move_peg', [False]) # whether or not to move peg
@@ -130,12 +135,15 @@ if __name__ == '__main__':
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position
 
-    exp_prefix = 'robust-key3'
+    exp_prefix = 'robust-key-fixedpos4'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
                                                                                    config.AWS_SPOT_PRICE, n_parallel),
           *subnets)
+
+    # mode = "ec2"
+    mode = "local"
 
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:

@@ -12,8 +12,8 @@ from rllab.misc.overrides import overrides
 from contextlib import contextmanager
 
 
-class DiskGenerateStatesEnv(MujocoEnv, Serializable):
-    FILE = "pr2_disk_w_joints.xml"
+class KeyGenerateStatesEnv(MujocoEnv, Serializable):
+    FILE = "pr2_key_w_joints.xml"
 
     def __init__(self,
                  init_solved=False,
@@ -78,9 +78,10 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
             return joint_position
 
     def reset(self, init_state=None, *args, **kwargs):  # todo: init_state should have (joints, peg, phy)
-        self.init_peg_pos = np.random.multivariate_normal((0,0), 0.01*np.eye(2)) + self.model.data.qpos[-2:,0]
+        # todo: just set, should be good
+        self.init_peg_pos = np.random.multivariate_normal((0,0), 0.0004*np.eye(2)) + self.model.data.qpos[-2:,0]
         # init_state = (0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0)
-        ret = super(DiskGenerateStatesEnv, self).reset(init_state, *args, **kwargs)
+        ret = super(KeyGenerateStatesEnv, self).reset(init_state, *args, **kwargs)
         return ret
 
     def step(self, action):
@@ -99,7 +100,7 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
         #     print(distance_to_goal, self.get_peg_displacement()) # useful for debugging
         if self.kill_outside and (
                 distance_to_goal > self.kill_radius or self.get_peg_displacement() > self.kill_peg_radius):
-            print("******** OUT of region ********")
+            # print("******** OUT of region ********")
             done = True
 
         return Step(
@@ -108,16 +109,18 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
 
     #todo: should be good
     def get_peg_displacement(self):
+        return np.linalg.norm(self.init_peg_pos) # todo: I don't think this changes anymore?
         # geom of peg moves
-        self.curr_position = np.array(self.model.data.xpos[-1][:2])
-        return np.linalg.norm(self.curr_position - self.original_position)
+        # self.curr_position = np.array(self.model.data.xpos[-1][:2])
+        # return np.linalg.norm(self.curr_position - self.original_position)
 
     #todo: should be good
     def get_disc_position(self):
         # return self.model.data.geom_xpos[-1] - np.array([0, 0, 0.0125])
         # return self.model.data.site_xpos[0]
-        id_gear = self.model.body_names.index('gear')
-        return self.model.data.xpos[id_gear]
+        # id_gear = self.model.body_names.index('gear')
+        # return self.model.data.xpos[id_gear]
+        return self.model.data.site_xpos[0]
 
     #todo: should be good
     def get_goal_position(self):
