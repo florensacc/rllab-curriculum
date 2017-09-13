@@ -69,7 +69,7 @@ if __name__ == '__main__':
                   -4.4254893018593906, -1.9586739159844251, -1.3942096934113373, 0, 0]])
     vg.add('ultimate_goal', [(0.4146814, 0.47640087, 0.5305665)])
     vg.add('goal_size', [3]) # changed
-    vg.add('terminal_eps', [0.03])
+    vg.add('terminal_eps', [0.02])
     vg.add('start_dyn', [False])
 
     vg.add('physics_variances', [[0.01, 0.005, 0.01, 0.05]])

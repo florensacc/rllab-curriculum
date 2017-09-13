@@ -59,7 +59,7 @@ def run_task(v):
     report.add_text(format_dict(v))
 
     inner_env = normalize(Pr2KeyEnv(ctrl_regularizer_weight=v['ctrl_regularizer_weight'],
-                                     action_torque_lambda=v['action_torque_lambda'],
+                                    action_torque_lambda=v['action_torque_lambda'],
                                     physics_variances=v['physics_variances'],
                                     start_peg=v['move_peg'],
                                     start_dyn=v['start_dyn']))
@@ -118,6 +118,7 @@ def run_task(v):
             env_spec=env.spec,
             hidden_sizes=(32,),
             learn_std=v['learn_std'],
+            output_gain=v['output_gain'],
             trunc_steps=v['trunc_steps'],
         )
     #
@@ -136,9 +137,9 @@ def run_task(v):
     # # show where these states are:
     # shuffled_starts = np.array(all_feasible_starts.state_list)
     # np.random.shuffle(shuffled_starts)
-    # generate_starts(env, starts=shuffled_starts, horizon=100, variance=v['brownian_variance'],
-    #                 animated=True, speedup=100,
-    #                 zero_action=True,
+    # generate_starts(gen_states_env, starts=shuffled_starts, horizon=100, variance=v['brownian_variance'],
+    #                 # animated=True, speedup=100,
+    #                 # zero_action=True,
     #                 )
 
 
