@@ -43,7 +43,7 @@ if __name__ == '__main__':
         'us-east-2c', 'us-east-2b', 'us-east-2a', 'eu-central-1b', 'eu-central-1a', 'ap-southeast-2c',
         'ap-southeast-2b', 'ap-southeast-2a'
     ]
-    ec2_instance = args.type if args.type else 'm4.4xlarge' #'m4.10xlarge'
+    ec2_instance = args.type if args.type else 'm4.4xlarge'  # 'm4.10xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -59,55 +59,63 @@ if __name__ == '__main__':
         n_parallel = cpu_count() if not args.debug else 1
         # n_parallel = multiprocessing.cpu_count()
 
-    exp_prefix = 'goal-sagg-riac-pr2Disk'
+    exp_prefix = 'pr2Disk-sagg'
 
     vg = VariantGenerator()
     vg.add('start_size', [9])
-    vg.add('start_goal', [[ 1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335,-0.90467269, -1.56926878, 0, 0]])
+    vg.add('start_goal',
+           [[1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335, -0.90467269, -1.56926878, 0, 0]])
     vg.add('ultimate_goal', [(0.4146814, 0.47640087, 0.5305665)])
     vg.add('goal_size', [3])  # this is the ultimate goal we care about: getting the pendulum upright
     vg.add('terminal_eps', [0.03])
-    # goal-algo params
-    vg.add('min_reward', [0.1])
-    vg.add('max_reward', [0.9])
+    # randomization of physics
+    vg.add('physics_variances', [[0.01, 0.005, 0.01, 0.05]])  # damping, armature, frictionloss, mass #todo use this!
+    # rewards
+    vg.add('inner_weight', [0])  # todo: add the torc penalty
+    vg.add('ctrl_regularizer_weight', [1])  # todo: use this
+    vg.add('action_torque_lambda', [1])
     vg.add('distance_metric', ['L2'])
     vg.add('extend_dist_rew', [False])  # !!!!
-    vg.add('use_competence_ratio', [False, True])  # !!!!
     vg.add('goal_weight', lambda extend_dist_rew: [1000] if extend_dist_rew else [1])
+    # vg.add('min_reward', [0.1])
+    # vg.add('max_reward', [0.9])
+
+    # goal-algo params
+    vg.add('use_competence_ratio', [False, True])  # !!!!
     # vg.add('persistence', [1])
     vg.add('n_traj', [3])  # todo: what does this do with SAGG??
     vg.add('sampling_res', [2])  # todo: is this used in SAGG?
-    vg.add('num_new_goals', [300]) #TODO - change back to 200 when we restore replay buffer
+    vg.add('num_new_goals', [300])  # TODO - change back to 200 when we restore replay buffer
     # # replay buffer
     # vg.add('replay_buffer', [False]) #TODO - try with replay buffer
     # vg.add('num_old_goals', [0])
-    vg.add('coll_eps', [0])
+    vg.add('persistence', [1])
+    vg.add('n_traj', [3])  # if use_trpo_paths it uses 2!
     vg.add('with_replacement', [False])
     # vg.add('add_on_policy', [False]) #TODO - change back to true
     # # sampling params
     vg.add('horizon', [100])
-    vg.add('outer_iters', [5000]) #lambda maze_id: [400] if maze_id == 0 else [10000])
-    # baseline
-    vg.add('baseline', ['linear'])   # can also be 'g_mlp'
+    vg.add('outer_iters', [5000])  # lambda maze_id: [400] if maze_id == 0 else [10000])
+    vg.add('inner_iters', [5])
+    vg.add('pg_batch_size', [100000])
     # policy
-    vg.add('policy', ['mlp'])  # this can also be 'recurrent'
-    vg.add('trunc_steps', [100])
     vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
     vg.add('learn_std', [False])
     vg.add('adaptive_std', [False])
-    vg.add('discount', [0.995]) #lambda horizon: [1-1.0/horizon])
+    vg.add('discount', [0.995])  # lambda horizon: [1-1.0/horizon])
+    vg.add('baseline', ['linear'])  # can also be 'g_mlp'
+    vg.add('policy', ['mlp'])  # this can also be 'recurrent'
+    vg.add('trunc_steps', [100])
     # Oudeyer params
     vg.add('max_goals', [100, 250, 500])
     vg.add('max_history', [100])
-
-    vg.add('fast_mode', [fast_mode])
-    if args.debug or fast_mode:
-        vg.add('pg_batch_size', [20000])
-        vg.add('inner_iters', [1])
-    else:
-        vg.add('pg_batch_size', [100000])
-        vg.add('inner_iters', [5])
+    # key task specific
+    vg.add('move_peg', [True])  # whether or not to move peg
+    vg.add('kill_radius', [0.3])
+    vg.add('kill_peg_radius', [0.03])
+    vg.add('peg_positions', [(7, 8)])  # joint numbers for peg
+    vg.add('peg_scaling', [10])  # multiplicative factor to peg position
 
     if args.ec2:
         vg.add('seed', range(100, 400, 100))

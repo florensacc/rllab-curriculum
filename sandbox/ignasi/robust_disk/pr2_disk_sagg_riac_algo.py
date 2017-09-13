@@ -74,12 +74,11 @@ def run_task(v):
     inner_env = normalize(Pr2DiskEnv())  # todo: actually the env to use should be moving the peg? at least to generate news?
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
-    uniform_start_generator = UniformStateGenerator(state_size=v['start_size'], bounds=v['start_range'],  # todo??
-                                                   center=v['start_center'])
+    fixed_start_generator = FixedStateGenerator(state=v['start_goal'])
 
     env = GoalStartExplorationEnv(
         env=inner_env,
-        start_generator=uniform_start_generator,
+        start_generator=fixed_start_generator,
         obs2start_transform=lambda x: x[:v['start_size']],  # todo: this is actually wrong as now no joints here!
         goal_generator=fixed_goal_generator,
         obs2goal_transform=lambda x: x[-1 * v['goal_size']:],  # changed!
@@ -116,19 +115,17 @@ def run_task(v):
     elif v['baseline'] == 'g_mlp':
         baseline = GaussianMLPBaseline(env_spec=env.spec)
 
-
     bounds = env.observation_space.bounds
-    start_bounds = [bounds[0].extend(v['kill_peg_radius'] * np.ones(2)),
-                    bounds[1].extend(v['kill_peg_radius'] * np.ones(2))]
-    import pdb; pdb.set_trace()
+    start_bounds = [np.concatenate([bounds[0], v['kill_peg_radius'] * np.ones(2)]),
+                    np.concatenate([bounds[1], v['kill_peg_radius'] * np.ones(2)])]
+
     sagg_riac = SaggRIAC(state_size=v['start_size'],  # todo: change from goals to full task parametrization!!!!
                          state_bounds=start_bounds,
                          max_goals=v['max_goals'],
                          max_history=v['max_history'])
 
-    # load the state collection from data_upload
-    load_dir = 'data_upload/pr2_peg'
-    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states_.pkl'), 'rb'))
+    load_dir = "data_upload/pr2_peg"
+    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states_trimmed100.pkl'), 'rb'))
 
     for outer_iter in range(1, v['outer_iters']):
         logger.log("Outer itr # %i" % outer_iter)
