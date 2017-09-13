@@ -77,25 +77,6 @@ def run_task(v):
         append_goal_to_observation=False,  # prevents goal environment from appending observation
     )
 
-    if v['move_peg']:
-        gen_states_env = GoalStartExplorationEnv(
-            env=DiskGenerateStatesEnv(kill_peg_radius=v['kill_peg_radius'], kill_radius=v['kill_radius']),
-            start_generator=fixed_start_generator,
-            obs2start_transform=lambda x: x[:v['start_size']],
-            goal_generator=fixed_goal_generator,
-            obs2goal_transform=lambda x: x[-1 * v['goal_size']:],  # changed!
-            terminal_eps=v['terminal_eps'],
-            distance_metric=v['distance_metric'],
-            extend_dist_rew=v['extend_dist_rew'],
-            inner_weight=v['inner_weight'],
-            goal_weight=v['goal_weight'],
-            terminate_env=True,
-            append_goal_to_observation=False,  # prevents goal environment from appending observation
-        )
-    else:
-        # cannot move the peg
-        gen_states_env = env
-
     if v['policy'] == 'mlp':
         policy = GaussianMLPPolicy(
             env_spec=env.spec,
@@ -163,6 +144,7 @@ def run_task(v):
 
         with logger.tabular_prefix("OnStarts_"):
             env.log_diagnostics(paths)
+            algo.sampler.process_samples(itr=outer_iter, paths=trpo_paths[-1])
 
         start_classes, text_labels = convert_label(labels)
         total_starts = labels.shape[0]

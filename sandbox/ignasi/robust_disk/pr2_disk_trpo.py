@@ -68,14 +68,14 @@ if __name__ == '__main__':
     vg.add('goal_size', [3]) # changed
     vg.add('terminal_eps', [0.03])
 
-    vg.add('physics_variances', [[0, 0, 0, 0], [0.01, 0.005, 0.01, 0.05]])  # damping, armature, frictionloss, mass
+    vg.add('physics_variances', [[0.01, 0.005, 0.01, 0.05]])  # damping, armature, frictionloss, mass
     # goal-algo params
     vg.add('ctrl_regularizer_weight', [1])
     vg.add('action_torque_lambda', [1])
     vg.add('inner_weight', [1e-3])
-    vg.add('goal_weight', lambda inner_weight: [1000] if inner_weight > 0 else [1])
+    vg.add('goal_weight', lambda inner_weight, extend_dist_rew: [1000] if inner_weight > 0 or extend_dist_rew else [1])
     vg.add('distance_metric', ['L2'])
-    vg.add('extend_dist_rew', [False])
+    vg.add('extend_dist_rew', [100])
     vg.add('persistence', [1])
     vg.add('with_replacement', [True])
     vg.add('n_traj', [3])   #  if use_trpo_paths it uses 2!
@@ -107,7 +107,7 @@ if __name__ == '__main__':
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position
 
-    exp_prefix = 'robust-disk-trpo'
+    exp_prefix = 'robust-disk-trpoL2'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,

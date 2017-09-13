@@ -68,8 +68,17 @@ if __name__ == '__main__':
            else [[1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335,-0.90467269, -1.56926878, 0, 0] +7*[0.01]
                  + 7*[0.005] + 7*[0] + [0.1]])
     vg.add('ultimate_goal', [(0.4146814, 0.47640087, 0.5305665)])
-    vg.add('goal_size', [3]) # changed
+    vg.add('goal_size', [3])  # changed
     vg.add('terminal_eps', [0.03])
+    # randomization of physics
+    vg.add('physics_variances', [[0.01, 0.005, 0.01, 0.05]])  # damping, armature, frictionloss, mass
+    # rewards
+    vg.add('inner_weight', [1e-3])
+    vg.add('ctrl_regularizer_weight', [1])
+    vg.add('action_torque_lambda', [1])
+    vg.add('distance_metric', ['L2'])
+    vg.add('extend_dist_rew', [False])
+    vg.add('goal_weight', lambda inner_weight: [1000] if inner_weight > 0 else [1])
     # brownian params
     # vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
     vg.add('seed_with', ['only_goods'])  # good from brown, onPolicy, previousBrown (ie no good)
@@ -77,18 +86,11 @@ if __name__ == '__main__':
     vg.add('brownian_horizon', [100])
     vg.add('brownian_variance', [0.1])
     vg.add('regularize_starts', [0])
-    vg.add('physics_variances', [[0.01, 0.005, 0.01, 0.05]])  # damping, armature, frictionloss, mass
     # goal-algo params
     vg.add('min_reward', [0.1])
     vg.add('max_reward', [0.9])
-    vg.add('ctrl_regularizer_weight', [1])
-    vg.add('action_torque_lambda', [1])
-    vg.add('inner_weight', [1e-3])
-    vg.add('goal_weight', lambda inner_weight: [1000] if inner_weight > 0 else [1])
-    vg.add('distance_metric', ['L2'])
-    vg.add('extend_dist_rew', [False])
     vg.add('persistence', [1])
-    vg.add('n_traj', [3])   #  if use_trpo_paths it uses 2!
+    vg.add('n_traj', [3])  # if use_trpo_paths it uses 2!
     vg.add('with_replacement', [True])
     vg.add('use_trpo_paths', [True])
     # replay buffer
@@ -97,12 +99,8 @@ if __name__ == '__main__':
     vg.add('num_new_starts', [200])
     vg.add('num_old_starts', [100])
     vg.add('smart_replay_buffer', [False])
-    # vg.add('smart_replay_buffer', [True])
     vg.add('smart_replay_abs', [True])
-    # vg.add('smart_replay_abs', [True, False])
-    # vg.add('smart_replay_eps', [0.2, 0.5, 1])
     vg.add('smart_replay_eps', [0.5])
-    # vg.add('smart_replay_eps', [1.0])  # should break
     # sampling params
     vg.add('horizon', [100])
     vg.add('outer_iters', [5000])
@@ -116,23 +114,18 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
     vg.add('baseline', ["g_mlp"])
-    vg.add('policy', ['mlp'])  # ['recurrent'])
-    # vg.add('policy', ['mlp'])
-    # vg.add('policy', ['recurrent', 'mlp'])
+    vg.add('policy', ['recurrent'])
     vg.add('trunc_steps', [100])
-
-    # vg.add('seed', range(100, 600, 100))
-    vg.add('seed', [100, 200, 300, 400, 500])
-
-    vg.add('generating_test_set', [False]) #TODO can change
-    vg.add('move_peg', [True]) # whether or not to move peg
+    # key task specific
+    vg.add('move_peg', [True])  # whether or not to move peg
     vg.add('kill_radius', [0.3])
     vg.add('kill_peg_radius', [0.03])
+    vg.add('peg_positions', [(7, 8)])  # joint numbers for peg
+    vg.add('peg_scaling', [10])  # multiplicative factor to peg position
     vg.add('max_gen_states', [300])
-    vg.add('peg_positions', [(7,8)])  # joint numbers for peg
-    vg.add('peg_scaling', [10]) # multiplicative factor to peg position
     vg.add('idx_lim', [None])
 
+    vg.add('seed', [100, 200, 300, 400, 500])
 
     exp_prefix = 'robust-disk'
     # Launching
@@ -192,7 +185,7 @@ if __name__ == '__main__':
                 ],
                 # terminate_machine=False,
             )
-            #sys.exit()
+            # sys.exit()
             # if mode == 'local_docker':
             #     sys.exit()
         else:
