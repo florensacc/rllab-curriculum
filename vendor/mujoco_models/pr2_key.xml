@@ -169,60 +169,66 @@
                                                                             <geom name="gear_20" pos="0 0 0" euler="0 0 6.17347" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
                                                                             <geom name="gear_21" pos="0 0 0" euler="0 0 6.49839" mesh="gear_one_tenth" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
                                                                         </body-->
+                                                                <!--can completely negate the first number-->
                                                                 <body name="key" pos="0 0.0 0.015" euler="1.5707963267948966 1.5707963267948966 0">
                                                                     <!--<geom name="key_geom" rgba="0.545098 0.270588 0.07450987 1" type="cylinder" fromto="0 0 -0.25 0 0 0.05" size="0.028" density="2000" contype="1" conaffinity="1" />-->
                                                                     <geom name="key_geom" rgba="0.545098 0.270588 0.07450987 1"  type="box" size="0.0175 0.0175 0.025" contype="1" conaffinity="1"  />
-                                                                            <!--<body name="keyhole" pos="-0.07 -0.075 0.075" euler="-3.141592653589793 0 -1.57079632679">-->
+                                                                    <!--1st up down 2nd parallel to robot 3rd distance to robot-->
+                                                                          <!--<body name="keyhole" pos="0.085 0.075 0.08" euler="3.141592653589793 0 1.57079632679">-->
 
-                                                                               <!--<body name="a1" pos="0.03 0.075 0.045">-->
-                                                                                    <!--<geom name="a1" rgba="0.2 0.2 0.8 1" type="box" size="0.03 0.075 0.005" contype="1" conaffinity="1" />-->
-                                                                                <!--</body>-->
-
-                                                                                <!--<body name="a2" pos="0.12 0.075 0.045">-->
-                                                                                    <!--<geom name="a2" rgba="0.2 0.2 0.8 0.5" type="box" size="0.03 0.075 0.005" contype="1" conaffinity="1" />-->
-                                                                                <!--</body>-->
-
-                                                                                <!--<body name="a3" pos="0.075 0.025 0.045">-->
-                                                                                    <!--<geom name="a3" rgba="0.2 0.2 0.8 0.5" type="box" size="0.015 0.025 0.005" contype="1" conaffinity="1" />-->
-                                                                                <!--</body>-->
-
-                                                                                <!--<body name="a4" pos="0.075 0.125 0.045">-->
-                                                                                    <!--<geom name="a4" rgba="0.2 0.2 0.8 0.5" type="box" size="0.015 0.025 0.005" contype="1" conaffinity="1" />-->
-                                                                                <!--</body>-->
-
-                                                                                <!--<body name="b1" pos="0.045 0.125 0.0325">-->
-                                                                                    <!--<geom name="b1" rgba="0.2 1 1 0.5" type="box" size="0.045 0.025 0.0075" contype="1" conaffinity="1" />-->
-                                                                                <!--</body>-->
-
-                                                                                <!--<body name="b2" pos="0.12 0.075 0.0325">-->
-                                                                                    <!--<geom name="b2" rgba="0.2 1 1 0.5" type="box" size="0.03 0.075 0.0075" contype="1" conaffinity="1" />-->
-                                                                                <!--</body>-->
-
-                                                                                <!--<body name="c1" pos="0.045 0.125 0.02">-->
-                                                                                    <!--<geom name="c1" rgba="1 0 0 0.5" type="box" size="0.045 0.025 0.005" contype="1" conaffinity="1" />-->
-                                                                                <!--</body>-->
-
-                                                                                <!--<body name="c2" pos="0.12 0.075 0.02">-->
-                                                                                    <!--<geom name="c2" rgba="1 0.1 0.1 0.5" type="box" size="0.03 0.075 0.005" contype="1" conaffinity="1" />-->
-                                                                                <!--</body>-->
-
-                                                                                <!--&lt;!&ndash;extra piece&ndash;&gt;-->
-                                                                                <!--<body name="c3" pos="0.07 0.035 0.02">-->
-                                                                                    <!--<geom name="c3" rgba="1 0.1 0.1 0.5" type="box" size="0.02 0.035 0.005" contype="1" conaffinity="1" />-->
-                                                                                <!--</body>-->
+                                                                             <!--&lt;!&ndash;<inertial pos="0 0 0 " mass="1000.0" diaginertia="1.0 1.0 1.0"/>&ndash;&gt;-->
+                                                                            <!--&lt;!&ndash;<joint pos="0 0 0" type="slide" name="slider1" axis="1 0 0" damping="0.0"/>&ndash;&gt;-->
+                                                                            <!--&lt;!&ndash;<joint pos="0 0 0" type="slide" name="slider2" axis="0 1 0" damping="0.0" />&ndash;&gt;-->
 
 
-                                                                                <!--<body name="d1" pos="0.045 0.125 0.0075">-->
-                                                                                    <!--<geom name="d1" rgba="0.1 0.5 0.1 0.5" type="box" size="0.045 0.025 0.0075" contype="1" conaffinity="1" />-->
-                                                                                <!--</body>-->
+                                                                           <!--&lt;!&ndash;<body name="a1" pos="0.03 0.075 0.045">&ndash;&gt;-->
+                                                                                <!--<geom name="a1" rgba="0.2 0.2 0.8 1" type="box" pos="0.03 0.075 0.045" size="0.03 0.075 0.005" contype="1" conaffinity="1" />-->
+                                                                            <!--&lt;!&ndash;</body>&ndash;&gt;-->
 
-                                                                                <!--<body name="d2" pos="0.12 0.075 0.0075">-->
-                                                                                    <!--<geom name="d2" rgba="0.1 0.5 0.1 0.5" type="box" size="0.03 0.075 0.0075" contype="1" conaffinity="1" />-->
-                                                                                <!--</body>-->
+                                                                            <!--&lt;!&ndash;<body name="a2" pos="0.12 0.075 0.045">&ndash;&gt;-->
+                                                                                <!--<geom name="a2" rgba="0.2 0.2 0.8 0.5" type="box" pos="0.12 0.075 0.045" size="0.03 0.075 0.005" contype="1" conaffinity="1" />-->
+                                                                            <!--&lt;!&ndash;</body>&ndash;&gt;-->
 
-                                                                                 <!--<body name="debug" pos="0.075 0.055 0">-->
-                                                                                    <!--<geom name="debug" type="sphere" rgba="0.0 1.0 0.0 0.5" size="0.005" />-->
-                                                                                <!--</body>-->
+                                                                            <!--&lt;!&ndash;<body name="a3" pos="0.075 0.025 0.045">&ndash;&gt;-->
+                                                                                <!--<geom name="a3" rgba="0.2 0.2 0.8 0.5" type="box" pos="0.075 0.025 0.045" size="0.015 0.025 0.005" contype="1" conaffinity="1" />-->
+                                                                            <!--&lt;!&ndash;</body>&ndash;&gt;-->
+
+                                                                            <!--&lt;!&ndash;<body name="a4" pos="0.075 0.125 0.045">&ndash;&gt;-->
+                                                                                <!--<geom name="a4" rgba="0.2 0.2 0.8 0.5" type="box" pos="0.075 0.125 0.045" size="0.015 0.025 0.005" contype="1" conaffinity="1" />-->
+                                                                            <!--&lt;!&ndash;</body>&ndash;&gt;-->
+
+                                                                            <!--&lt;!&ndash;<body name="b1" pos="0.045 0.125 0.0325">&ndash;&gt;-->
+                                                                                <!--<geom name="b1" rgba="0.2 1 1 0.5" type="box" pos="0.045 0.125 0.0325" size="0.045 0.025 0.0075" contype="1" conaffinity="1" />-->
+                                                                            <!--&lt;!&ndash;</body>&ndash;&gt;-->
+
+                                                                            <!--&lt;!&ndash;<body name="b2" pos="0.12 0.075 0.0325">&ndash;&gt;-->
+                                                                                <!--<geom name="b2" rgba="0.2 1 1 0.5" type="box" pos="0.12 0.075 0.0325" size="0.03 0.075 0.0075" contype="1" conaffinity="1" />-->
+                                                                            <!--&lt;!&ndash;</body>&ndash;&gt;-->
+
+                                                                            <!--&lt;!&ndash;<body name="c1" pos="0.045 0.125 0.02">&ndash;&gt;-->
+                                                                                <!--<geom name="c1" rgba="1 0 0 0.5" type="box" pos="0.045 0.125 0.02" size="0.045 0.025 0.005" contype="1" conaffinity="1" />-->
+                                                                            <!--&lt;!&ndash;</body>&ndash;&gt;-->
+
+                                                                            <!--&lt;!&ndash;<body name="c2" pos="0.12 0.075 0.02">&ndash;&gt;-->
+                                                                                <!--<geom name="c2" rgba="1 0.1 0.1 0.5" type="box" pos="0.12 0.075 0.02" size="0.03 0.075 0.005" contype="1" conaffinity="1" />-->
+                                                                            <!--&lt;!&ndash;</body>&ndash;&gt;-->
+
+                                                                            <!--&lt;!&ndash;extra piece&ndash;&gt;-->
+                                                                            <!--&lt;!&ndash;<body name="c3" pos="0.07 0.035 0.02">&ndash;&gt;-->
+                                                                                <!--<geom name="c3" rgba="1 0.1 0.1 0.5" type="box" pos="0.07 0.035 0.02" size="0.02 0.035 0.005" contype="1" conaffinity="1" />-->
+                                                                            <!--&lt;!&ndash;</body>&ndash;&gt;-->
+
+
+                                                                            <!--&lt;!&ndash;<body name="d1" pos="0.045 0.125 0.0075">&ndash;&gt;-->
+                                                                                <!--<geom name="d1" rgba="0.1 0.5 0.1 0.5" type="box" pos="0.045 0.125 0.0075" size="0.045 0.025 0.0075" contype="1" conaffinity="1" />-->
+                                                                            <!--&lt;!&ndash;</body>&ndash;&gt;-->
+
+                                                                            <!--&lt;!&ndash;<body name="d2" pos="0.12 0.075 0.0075">&ndash;&gt;-->
+                                                                                <!--<geom name="d2" rgba="0.1 0.5 0.1 0.5" type="box" pos="0.12 0.075 0.0075" size="0.03 0.075 0.0075" contype="1" conaffinity="1" />-->
+                                                                            <!--&lt;!&ndash;</body>&ndash;&gt;-->
+
+                                                                             <!--&lt;!&ndash;<body name="goal_position" pos="0.075 0.055 0">&ndash;&gt;-->
+                                                                                <!--<site name="goal_position" type="sphere" pos="0.075 0.055 0" rgba="0.0 1.0 0.0 0.5" size="0.005" />-->
 
                                                                             <!--</body>-->
                                                                     <site name="key_tip" type="sphere" rgba="0.0 1.0 0.0 0.5" pos="0.03075 0.0 0.08" size="0.005" />
@@ -433,11 +439,11 @@
             </body>
         </body>
 
-         <body name="keyhole" pos="0.6 -0.03 0.47" euler="0 0 1.57079632679">
+         <body name="keyhole" pos="0.362326 0.1443085 0.47" euler="0 0 -1.57079632679">
 
              <inertial pos="0 0 0 " mass="1000.0" diaginertia="1.0 1.0 1.0"/>
-            <joint pos="0 0 0" type="slide" name="slider1" axis="1 0 0" damping="0.0"/>
-            <joint pos="0 0 0" type="slide" name="slider2" axis="0 1 0" damping="0.0" />
+            <!--<joint pos="0 0 0" type="slide" name="slider1" axis="1 0 0" damping="0.0"/>-->
+            <!--<joint pos="0 0 0" type="slide" name="slider2" axis="0 1 0" damping="0.0" />-->
 
 
            <!--<body name="a1" pos="0.03 0.075 0.045">-->
@@ -474,7 +480,7 @@
 
             <!--extra piece-->
             <!--<body name="c3" pos="0.07 0.035 0.02">-->
-                <!--<geom name="c3" rgba="1 0.1 0.1 0.5" type="box" pos="0.07 0.035 0.02" size="0.02 0.035 0.005" contype="1" conaffinity="1" />-->
+                <geom name="c3" rgba="1 0.1 0.1 0.5" type="box" pos="0.07 0.035 0.02" size="0.02 0.035 0.005" contype="1" conaffinity="1" />
             <!--</body>-->
 
 
@@ -488,171 +494,17 @@
 
              <!--<body name="goal_position" pos="0.075 0.055 0">-->
                 <site name="goal_position" type="sphere" pos="0.075 0.055 0" rgba="0.0 1.0 0.0 0.5" size="0.005" />
-            <!--</body>-->
-
-           <!--<body name="a1" pos="0.03 0.075 0.045">-->
-                <!--<geom name="a1" rgba="0.2 0.2 0.8 1" type="box" size="0.03 0.075 0.005" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-            <!--<body name="a2" pos="0.12 0.075 0.045">-->
-                <!--<geom name="a2" rgba="0.2 0.2 0.8 0.5" type="box" size="0.03 0.075 0.005" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-            <!--<body name="a3" pos="0.075 0.025 0.045">-->
-                <!--<geom name="a3" rgba="0.2 0.2 0.8 0.5" type="box" size="0.015 0.025 0.005" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-            <!--<body name="a4" pos="0.075 0.125 0.045">-->
-                <!--<geom name="a4" rgba="0.2 0.2 0.8 0.5" type="box" size="0.015 0.025 0.005" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-            <!--<body name="b1" pos="0.045 0.125 0.0325">-->
-                <!--<geom name="b1" rgba="0.2 1 1 0.5" type="box" size="0.045 0.025 0.0075" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-            <!--<body name="b2" pos="0.12 0.075 0.0325">-->
-                <!--<geom name="b2" rgba="0.2 1 1 0.5" type="box" size="0.03 0.075 0.0075" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-            <!--<body name="c1" pos="0.045 0.125 0.02">-->
-                <!--<geom name="c1" rgba="1 0 0 0.5" type="box" size="0.045 0.025 0.005" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-            <!--<body name="c2" pos="0.12 0.075 0.02">-->
-                <!--<geom name="c2" rgba="1 0.1 0.1 0.5" type="box" size="0.03 0.075 0.005" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-            <!--&lt;!&ndash;extra piece&ndash;&gt;-->
-            <!--&lt;!&ndash;<body name="c3" pos="0.07 0.035 0.02">&ndash;&gt;-->
-                <!--&lt;!&ndash;<geom name="c3" rgba="1 0.1 0.1 0.5" type="box" size="0.02 0.035 0.005" contype="1" conaffinity="1" />&ndash;&gt;-->
-            <!--&lt;!&ndash;</body>&ndash;&gt;-->
+            </body>
 
 
-            <!--<body name="d1" pos="0.045 0.125 0.0075">-->
-                <!--<geom name="d1" rgba="0.1 0.5 0.1 0.5" type="box" size="0.045 0.025 0.0075" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-            <!--<body name="d2" pos="0.12 0.075 0.0075">-->
-                <!--<geom name="d2" rgba="0.1 0.5 0.1 0.5" type="box" size="0.03 0.075 0.0075" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-             <!--<body name="goal_position" pos="0.075 0.055 0">-->
-                <!--<site name="goal_position" type="sphere" rgba="0.0 1.0 0.0 0.5" size="0.005" />-->
-            <!--</body>-->
-
-        </body>
 
 
-        <!--<body name="keyhole" pos="0.6 0.4 0.47" >-->
-            <!--&lt;!&ndash;<body name="g1" pos="0.0 0.3 -0.72">&ndash;&gt;-->
-                <!--&lt;!&ndash;<geom name="g1" type="sphere" rgba="1.0 0.0 0.0 1" pos="0.0 0.0 0.0" size="0.01" />&ndash;&gt;-->
-            <!--&lt;!&ndash;</body>&ndash;&gt;-->
-            <!--&lt;!&ndash;<body name="g2" pos="0.0 0.3 -0.4">&ndash;&gt;-->
-                <!--&lt;!&ndash;<geom name="g2" type="sphere" rgba="1.0 0.0 0.0 1" pos="0.0 0.0 0.0" size="0.01" />&ndash;&gt;-->
-            <!--&lt;!&ndash;</body>&ndash;&gt;-->
-            <!--&lt;!&ndash;<body name="g3" pos="-0.15 0.3 -0.55">&ndash;&gt;-->
-                <!--&lt;!&ndash;<geom name="g3" type="sphere" rgba="1.0 0.0 0.0 1" pos="0.0 0.0 0.0" size="0.01" />&ndash;&gt;-->
-            <!--&lt;!&ndash;</body>&ndash;&gt;-->
-
-           <!--<body name="a1" pos="0.03 0.075 0.045">-->
-                <!--<geom name="a1" rgba="0.2 0.2 0.8 1" type="box" size="0.03 0.075 0.005" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-            <!--<body name="a2" pos="0.12 0.075 0.045">-->
-                <!--<geom name="a2" rgba="0.2 0.2 0.8 0.5" type="box" size="0.03 0.075 0.005" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-            <!--<body name="a3" pos="0.075 0.025 0.045">-->
-                <!--<geom name="a3" rgba="0.2 0.2 0.8 0.5" type="box" size="0.015 0.025 0.005" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-            <!--<body name="a4" pos="0.075 0.125 0.045">-->
-                <!--<geom name="a4" rgba="0.2 0.2 0.8 0.5" type="box" size="0.015 0.025 0.005" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-            <!--<body name="b1" pos="0.045 0.125 0.0325">-->
-                <!--<geom name="b1" rgba="0.2 1 1 0.5" type="box" size="0.045 0.025 0.0075" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-            <!--<body name="b2" pos="0.12 0.075 0.0325">-->
-                <!--<geom name="b2" rgba="0.2 1 1 0.5" type="box" size="0.03 0.075 0.0075" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-            <!--<body name="c1" pos="0.045 0.125 0.02">-->
-                <!--<geom name="c1" rgba="1 0 0 0.5" type="box" size="0.045 0.025 0.005" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-            <!--<body name="c2" pos="0.12 0.075 0.02">-->
-                <!--<geom name="c2" rgba="1 0.1 0.1 0.5" type="box" size="0.03 0.075 0.005" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-            <!--&lt;!&ndash;extra piece&ndash;&gt;-->
-            <!--<body name="c3" pos="0.07 0.035 0.02">-->
-                <!--<geom name="c3" rgba="1 0.1 0.1 0.5" type="box" size="0.02 0.035 0.005" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-
-            <!--<body name="d1" pos="0.045 0.125 0.0075">-->
-                <!--<geom name="d1" rgba="0.1 0.5 0.1 0.5" type="box" size="0.045 0.025 0.0075" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-            <!--<body name="d2" pos="0.12 0.075 0.0075">-->
-                <!--<geom name="d2" rgba="0.1 0.5 0.1 0.5" type="box" size="0.03 0.075 0.0075" contype="1" conaffinity="1" />-->
-            <!--</body>-->
-
-         <!--</body>-->
 
        <body name="table" pos="0 0 0">
             <inertial pos="0 0 0" mass="100.0" diaginertia="1.0 1.0 1.0"/>
             <geom name="table_geom" type="box" pos="0.6 0 0.42" size="0.5 1.0 0.05" rgba="0 0.3 0 1" contype="1" conaffinity="1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
         </body>
 
-        <!--<body name="base_obj" pos ="0.4146814 0.47640087  0.47057914">-->
-            <!--<inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>-->
-            <!--&lt;!&ndash;geom name="base_obj" pos="0 0 0" mesh="base_plate" rgba="1 1 0 1" solref="0.001 1" contype="1" conaffinity="1" solimp="0.999 0.999 0.001"/&ndash;&gt;-->
-             <!--<geom name="cyl" pos="0 0 0.0525" type="cylinder" size="0.0125 0.0525" rgba="1 1 0 1" solref="0.001 1" solimp="0.999 0.999 0.001" contype="1" conaffinity="1"/>-->
-            <!--&lt;!&ndash;joint pos="0 0 0" type="slide" name="slider1" axis="0 0 1" damping="0.0" range="-4 4" /&ndash;&gt;-->
-        <!--</body>-->
-
-
-        <!--<body name="OBJ_brick1" pos ="0.6 0.2 0.5249">
-            <joint type="free" />
-            <site name="lego_target" pos="0 0 0" size="0.005"/>
-
-            <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>  #mass was 0.00001
-            <geom name="brick1_base" pos="0 0 0" type="box" size="0.035 0.055 0.055" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
-
-            <geom name="brick1_l" pos="0.045 0.05 0" type="box" size="0.01 0.005 0.055" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
-            <geom name="brick1_r" pos="0.045 -0.05 0" type="box" size="0.01 0.005 0.055" contype="1" conaffinity="1" rgba="1 0 0 1"  solref="0.001 1" solimp="0.999 0.999 0.001"/>
-            <geom name="brick1_b" pos="0.045 0 0.05" type="box" size="0.01 0.055 0.005" contype="1" conaffinity="1" rgba="1 0 0 1"  solref="0.001 1" solimp="0.999 0.999 0.001"/>
-            <geom name="brick1_t" pos="0.045 0 -0.05" type="box" size="0.01 0.055 0.005" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
-            <geom name="brick1_cross1" pos="0.045 0 0" type="box" size="0.01 0.055 0.01" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
-            <geom name="brick1_cross2" pos="0.045 0 0" type="box" size="0.01 0.01 0.055" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
-        </body>-->
-
-        <!--<body name="fixed_piece" pos ="0.6 0.4 0.5025">
-            <joint type="free" />
-
-            <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>  #mass was 0.00001
-            <geom name="fixed_piece" pos="0 0 0" mesh="fixed_piece" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
-
-        </body>
-
-           <body name="held_piece" pos ="0.6 0.5 0.5025">
-            <joint type="free" />
-
-            <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>  #mass was 0.00001
-            <geom name="held_piece" pos="0 0 0" mesh="held_piece" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
-
-        </body>
-
-       <body name="shaft2" pos ="0.6 0.6 0.5025">
-            <joint type="free" />
-
-            <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>  #mass was 0.00001
-            <geom name="shaft2" pos="0 0 0" mesh="shaft2" contype="1" conaffinity="1" rgba="1 0 0 1" solref="0.001 1" solimp="0.999 0.999 0.001"/>
-
-        </body>-->
 
 
     </worldbody>
@@ -664,8 +516,8 @@
     <motor joint="l_forearm_roll_joint" ctrlrange="-0.5 0.5" ctrllimited="true"/>
     <motor joint="l_wrist_flex_joint" ctrlrange="-0.5 0.5" ctrllimited="true"/>
     <motor joint="l_wrist_roll_joint" ctrlrange="-0.5 0.5" ctrllimited="true"/>
-    <motor joint="slider1" ctrlrange="-1 1" ctrllimited="true"/>
-    <motor joint="slider2" ctrlrange="-1 1" ctrllimited="true"/>
+    <!--<motor joint="slider1" ctrlrange="-1 1" ctrllimited="true"/>-->
+    <!--<motor joint="slider2" ctrlrange="-1 1" ctrllimited="true"/>-->
 
     <!--can potentially limit forces-->
     <!--<motor joint="l_shoulder_pan_joint" ctrlrange="-0.5 0.5" ctrllimited="true" forcelimited="true" forcerange="-0.1 0.1"/>-->

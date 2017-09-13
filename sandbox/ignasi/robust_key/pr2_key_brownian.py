@@ -105,7 +105,7 @@ if __name__ == '__main__':
     vg.add('horizon', [100])
     vg.add('outer_iters', [5000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size', [10000])
+    vg.add('pg_batch_size', [100000])
     # vg.add('pg_batch_size', [50000, 100000])
     # policy initialization
     vg.add('output_gain', [0.1])
@@ -130,7 +130,7 @@ if __name__ == '__main__':
     vg.add('peg_positions', [(7,8)])  # joint numbers for peg
     vg.add('peg_scaling', [10]) # multiplicative factor to peg position
 
-    exp_prefix = 'robust-key'
+    exp_prefix = 'robust-key3'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
@@ -192,7 +192,7 @@ if __name__ == '__main__':
             # if mode == 'local_docker':
             #     sys.exit()
         else:
-            run_task(vv)
+            # run_task(vv)
             # import pdb;
             # pdb.set_trace()
             run_experiment_lite(
@@ -201,6 +201,7 @@ if __name__ == '__main__':
                 variant=vv,
                 mode='local',
                 n_parallel=n_parallel,
+                # n_parallel=4, # decreased so that GPS can install
                 # Only keep the snapshot parameters for the last iteration
                 snapshot_mode="last",
                 seed=vv['seed'],

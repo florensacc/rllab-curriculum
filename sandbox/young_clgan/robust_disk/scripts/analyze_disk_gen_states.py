@@ -248,14 +248,20 @@ def plot_joint_variations(data):
     fig.savefig(args.file + "joint_variations.png")
 
 
-def show_generated_states(data):
+def show_generated_states(data, env = None):
+    if env is None:
+        from sandbox.ignasi.envs.pr2.pr2_key_env import Pr2KeyEnv
+        env = Pr2KeyEnv()
     # Simulates policy to visualize generated states
-    env = DiskGenerateStatesEnv(evaluate=True)
+
     for i in range(100):
+        gen_state = data[int(random.random() * num_states)][:7]
+        print(gen_state)
+        print(len(gen_state))
         policy = GaussianMLPPolicy(
             env_spec=env.spec,
         )
-        rollout(env, policy, animated=True, max_path_length=10, init_state=data[int(random.random() * num_states)])
+        rollout(env, policy, animated=True, max_path_length=10, init_state=gen_state, no_action=True)
 
 
 if __name__ == "__main__":
@@ -274,15 +280,16 @@ if __name__ == "__main__":
     peg_joints = 7, 8
 
     # trims data set and saves collection in pkl file!
-    trim_data_set(data, max_states=100, lb=-0.03, num_grid=10, spacing=0)
-
-    plot_peg_position_density(data, bound=-0.03, num_bins=6)
-    plot_joint_variations(data)
-    show_generated_states(data)
+    # trim_data_set(data, max_states=100, lb=-0.03, num_grid=10, spacing=0)
+    #
+    # plot_peg_position_density(data, bound=-0.03, num_bins=6)
+    # plot_joint_variations(data)
+    from sandbox.ignasi.envs.pr2.pr2_key_env import Pr2KeyEnv
+    show_generated_states(data, env = Pr2KeyEnv())
 
     # eval_success_grid(data, "success_breakdown_new_policy.csv")
     # grid_and_sample_states(data, save_images=True, file_name="success_breakdown_num_states.csv")
     #
-    plot_peg_position_density(data)
-    plot_joint_variations(data)
-    # show_generated_states(data)
+    # plot_peg_position_density(data)
+    # plot_joint_variations(data)
+    # show_generated_states(data, env = )

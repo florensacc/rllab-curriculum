@@ -42,7 +42,7 @@ class Pr2KeyEnv(MujocoEnv, Serializable):
         return np.concatenate([
             self.model.data.qpos.flat,  # [:self.model.nq // 2],
             self.model.data.qvel.flat,  # [:self.model.nq // 2],
-            self.model.data.site_xpos[0],  # disc position
+            self.model.data.site_xpos[0],  # disc position, possibly remove?
         ])
 
     @contextmanager
@@ -60,6 +60,7 @@ class Pr2KeyEnv(MujocoEnv, Serializable):
     @property
     def start_observation(self):
         joint_position = self.get_current_obs()[:7]
+        # return joint_position # change back!
         goal_xy = self.get_goal_position(relative=True)[:2]
         return np.concatenate([joint_position, goal_xy])
 
@@ -68,16 +69,14 @@ class Pr2KeyEnv(MujocoEnv, Serializable):
         # init_state = [0.34396303529542571, 0.36952090462532139, 1.2508105774646641, -1.8499649619190317,
         #               -4.4254893018593906, -1.9586739159844251, -1.3942096934113373]
 
+
+        if init_state is not None:
+            pos = self.body_pos.copy()
+            pos[-2, 0] += init_state[-2]
+            pos[-2, 1] += init_state[-1]
+            self.model.body_pos = pos
+            init_state = init_state[:7]
         ret = super(Pr2KeyEnv, self).reset(init_state, *args, **kwargs)
-        # sets gravity
-        # xfrc = np.zeros_like(self.model.data.xfrc_applied)
-        # id_tool = self.model.body_names.index('keyhole')
-        # xfrc[id_tool, 0] = 9.81 * 0.005 # moves away from robot
-        # xfrc[id_tool, 1] =  -9.81 * 0.003 # moves parallel to robot
-        # xfrc[id_tool, 2] = - 9.81 * 0.01 #gravity
-        # xfrc[id_tool, 3] = 0.03 #rotates clockwise
-        # xfrc[id_tool, 4] = 0.04
-        # self.model.data.xfrc_applied = xfrc
 
 
         return ret

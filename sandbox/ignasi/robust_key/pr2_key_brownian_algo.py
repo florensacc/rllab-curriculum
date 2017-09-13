@@ -188,19 +188,19 @@ def run_task(v):
             starts = np.vstack([starts, old_starts])
 
         # todo: indent!!
-        # with ExperimentLogger(log_dir, outer_iter // 10, snapshot_mode='last', hold_outter_log=True):
-        logger.log("Updating the environment start generator")
-        env.update_start_generator(
-            UniformListStateGenerator(
-                starts.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
+        with ExperimentLogger(log_dir, outer_iter // 10, snapshot_mode='last', hold_outter_log=True):
+            logger.log("Updating the environment start generator")
+            env.update_start_generator(
+                UniformListStateGenerator(
+                    starts.tolist(), persistence=v['persistence'], with_replacement=v['with_replacement'],
+                )
             )
-        )
 
-        logger.log("Training the algorithm")
+            logger.log("Training the algorithm")
 
-        algo.current_itr = 0
-        trpo_paths = algo.train(already_init=outer_iter > 1)
-        
+            algo.current_itr = 0
+            trpo_paths = algo.train(already_init=outer_iter > 1)
+
 
         if v['use_trpo_paths']:
             logger.log("labeling starts with trpo rollouts")
