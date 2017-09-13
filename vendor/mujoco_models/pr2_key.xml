@@ -186,7 +186,7 @@
                                                                     <geom name="key_head_geom1" rgba="0.545098 0.270588 0.07450987 1" type="cylinder" size="0.0125" fromto="0 0 0.025 0 0 0.08"  contype="1" conaffinity="1" />
                                                                 <!--cylinder takes radius and half length-->
                                                                     <!--<geom name="key_head_geom2" rgba="0.545098 0.270588 0.07450987 1" pos="0.0125 0 0.075" type="box" size="0.01075 0.005 0.005" density="2000" contype="1" conaffinity="1" />-->
-                                                                    <geom name="key_head_geom2" rgba="0.545098 0.270588 0.07450987 1" pos="0.0125 0 0.075" type="box" size="0.01875 0.005 0.005"  contype="1" conaffinity="1" />
+                                                                    <geom name="key_head_geom2" rgba="0.545098 0.270588 0.07450987 1" pos="0.0125 0 0.075" type="box" size="0.01875 0.0125 0.005"  contype="1" conaffinity="1" />
                                                                 </body>
 
                                                                 <!--<body name="key_head1" pos="0 -0.028 -0.225">-->
