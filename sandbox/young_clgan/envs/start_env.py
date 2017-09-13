@@ -232,7 +232,7 @@ def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsa
                     if goal_reached:
                         num_roll_reached_goal += 1
                 else:
-                    noise += np.random.randn(env.action_space.flat_dim) * variance
+                    noise = np.random.uniform(env.action_space.bounds)
                     if policy:
                         action, _ = policy.get_action(obs)
                     else:

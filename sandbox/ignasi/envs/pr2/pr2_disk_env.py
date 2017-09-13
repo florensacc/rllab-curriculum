@@ -107,6 +107,23 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
     def reset(self, init_state=None, *args, **kwargs):
         # if randomize:
         #   init_state = (0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0) # TODO: used for debugging only!
+        dim = len(self.init_damping)
+        damping = np.random.uniform(np.maximum(0., self.init_damping - self.physics_variances[0]),
+                                    self.init_damping + self.physics_variances[0], dim)
+        armature = np.random.uniform(np.maximum(0., self.init_armature - self.physics_variances[1]),
+                                     self.init_armature + self.physics_variances[1], dim)
+        frictionloss = np.random.uniform(np.maximum(0., self.init_frictionloss - self.physics_variances[2]),
+                                         self.init_frictionloss + self.physics_variances[2], dim)
+
+        self.model.dof_damping = damping[:, None]
+        self.model.dof_frictionloss = frictionloss[:, None]
+        self.model.dof_armature = armature[:, None]
+        xfrc = np.zeros_like(self.model.data.xfrc_applied)
+        id_tool = self.model.body_names.index('gear')
+        xfrc[id_tool, 2] = - 9.81 * np.random.uniform(max(0., self.disc_mass - self.physics_variances[3]),
+                                                      self.disc_mass + self.physics_variances[3])
+        self.model.data.xfrc_applied = xfrc
+
         if init_state is not None:
             xfrc = np.zeros_like(self.model.data.xfrc_applied)
             id_tool = self.model.body_names.index('gear')
@@ -195,7 +212,7 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
         disc_pos = self.get_disc_position()
         goal_pos = self.get_goal_position()
         # print("disc pos: {}, goal_pos: {}".format(disc_pos, goal_pos))
-        return disc_pos - goal_pos  # note: great place for breakpoint!
+        return disc_pos - goal_pos
 
     def get_distance_to_goal(self):
         vec_to_goal = self.get_vec_to_goal()
