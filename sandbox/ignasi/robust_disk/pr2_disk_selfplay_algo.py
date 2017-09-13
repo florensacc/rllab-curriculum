@@ -30,7 +30,7 @@ from sandbox.young_clgan.state.utils import StateCollection
 from sandbox.young_clgan.envs.start_env import generate_starts, generate_starts_alice
 from sandbox.young_clgan.envs.goal_start_env import GoalStartExplorationEnv
 
-from sandbox.young_clgan.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
+# from sandbox.ignasi.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
 from sandbox.ignasi.envs.pr2.pr2_disk_env import Pr2DiskEnv
 
 EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]

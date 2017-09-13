@@ -61,7 +61,7 @@ class GoalEnv(Serializable):
 
 class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
     def __init__(self, env, goal_generator, obs2goal_transform=None, terminal_eps=0.05, only_feasible=False,
-                 terminate_env=False, goal_bounds=None, distance_metric='L2', extend_dist_rew=False, goal_weight=1,
+                 terminate_env=False, goal_bounds=None, distance_metric='L2', extend_dist_rew=0., goal_weight=1,
                  inner_weight=0, append_transformed_obs=False, append_goal_to_observation=True, **kwargs):
         """
         This environment wraps around a normal environment to facilitate goal based exploration.
@@ -94,7 +94,7 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         self.only_feasible = only_feasible
         
         self.distance_metric = distance_metric
-        self.extend_dist_rew = extend_dist_rew
+        self.extend_dist_rew_weight = extend_dist_rew
         self.goal_weight = goal_weight
         self.inner_weight = inner_weight
         
@@ -155,14 +155,8 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
             # modified so that inner environment can pass in goal via step
             dist = info['distance']
             info['goal_reached'] = 1.0 * (dist < self.terminal_eps)
-            reward_dist = info['goal_reached'] * self.goal_weight
-            if self.extend_dist_rew:
-                reward_dist -= dist
-            info['reward_dist'] = reward_dist
-            # print(dist)
+            info['reward_dist'] = reward_dist = - self.extend_dist_rew_weight * dist
 
-            # print(info['goal_reached'])
-            # print(done)
         info['goal'] = self.current_goal
         # print(reward_dist)
         # print(reward_inner)
@@ -174,7 +168,7 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
             observation = self.append_goal_observation(observation)
         return (
             observation,
-            reward_dist + reward_inner,
+            reward_dist + reward_inner + info['goal_reached'] * self.goal_weight,
             done,
             info
         )
@@ -188,10 +182,7 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
 
     def compute_dist_reward(self, observation):
         """ Compute the 0 or 1 reward for reaching the goal. """
-        reward = self.goal_weight * self.is_goal_reached(observation)
-        if self.extend_dist_rew:
-            reward -= self.dist_to_goal(observation)
-        return reward
+        return - self.extend_dist_rew_weight * self.dist_to_goal(observation)
 
     def dist_to_goal(self, obs):
         """ Compute the distance of the given observation to the current goal. """

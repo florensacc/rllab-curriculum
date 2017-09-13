@@ -5,7 +5,7 @@ from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.policies.gaussian_gru_policy import GaussianGRUPolicy
 
 # modified to make changes to the environment
-from sandbox.ignasi.envs.pr2.pr2_disk_env import Pr2DiskEnv
+from sandbox.ignasi.envs.pr2.pr2_reach_env import Pr2ReachEnv
 
 from sandbox.ignasi.robust_disk.envs.disk_generate_states_env import DiskGenerateStatesEnv
 
@@ -55,9 +55,10 @@ def run_task(v):
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
 
-    inner_env = normalize(Pr2DiskEnv(ctrl_regularizer_weight=v['ctrl_regularizer_weight'],
-                                     action_torque_lambda=v['action_torque_lambda'],
-                                     physics_variances=v['physics_variances']))
+    inner_env = normalize(Pr2ReachEnv(ctrl_regularizer_weight=v['ctrl_regularizer_weight'],
+                                      action_torque_lambda=v['action_torque_lambda'],
+                                      physics_variances=v['physics_variances'],
+                                      disc_mass=v['disc_mass']))
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
     fixed_start_generator = FixedStateGenerator(state=v['start_goal'])
@@ -102,8 +103,8 @@ def run_task(v):
         baseline = GaussianMLPBaseline(env_spec=env.spec)
 
     # load the state collection from data_upload
-    load_dir = "data_upload/pr2_peg"
-    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states_trimmed100.pkl'), 'rb'))
+    load_dir = "data_upload/pr2_reach"
+    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states.pkl'), 'rb'))
 
     algo = TRPO(
         env=env,
@@ -122,7 +123,24 @@ def run_task(v):
         logger.log("Outer itr # %i" % outer_iter)
         logger.log("Sampling starts")
 
+        # with env.set_kill_outside(radius=v['kill_radius']):
+        #     seed_starts = generate_starts(env, starts=[v['start_goal']], horizon=500,
+        #                                   # animated=True, # speedup=100,  # zero_action=True,
+        #                                   variance=1,
+        #                                   subsample=100)  # , animated=True, speedup=1)
+        #     find_all_feasible_states(env, seed_starts, distance_threshold=0.1,
+        #                              brownian_variance=1, max_states=500000,
+        #                              horizon=500,
+        #                              # animate=True, speedup=100,
+        #                              # states_transform= states_transform
+        #                              )
+
         starts = all_feasible_starts.sample(size=v['num_new_starts'])
+        s = generate_starts(env, starts=starts.tolist(), horizon=10, variance=1,
+                                 animated=True, speedup=1,
+                                 zero_action=True,
+                                 # states_transform= states_transform
+                                 )
 
         with ExperimentLogger(log_dir, outer_iter // 10, snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment start generator")

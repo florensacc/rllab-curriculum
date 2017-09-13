@@ -11,7 +11,7 @@ from rllab.misc.instrument import VariantGenerator
 from sandbox.carlos_snn.autoclone import autoclone
 from rllab import config
 
-from sandbox.ignasi.robust_disk.pr2_disk_brownian_algo import run_task
+from sandbox.ignasi.robust_disk.pr2_reach_trpo_algo import run_task
 
 if __name__ == '__main__':
 
@@ -54,59 +54,34 @@ if __name__ == '__main__':
     else:
         mode = 'local'
         n_parallel = cpu_count() if not args.debug else 1
-        # n_parallel = multiprocessing.cpu_count()
 
     vg = VariantGenerator()
     vg.add('start_size', [9])  # for the generation it's +2!!
-    vg.add('start_dyn', [True])
-    # vg.add('start_bounds',
-    #        [[(-2.2854, -.05236, -3.9, -2.3213, -3.15, -2.094, -3.15, 0, 0),
-    #          (1.714602, 1.3963, 0.0, 0.0, 3.15, 0.0, 3.15, 0, 0)]])
-    # vg.add('start_goal', [(0.386884635, 1.13705218, -2.02754147, -1.74429440, 2.02916096, -0.873269847, 1.54785694)])
-    vg.add('start_goal', lambda start_dyn:
-    [[1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335,-0.90467269, -1.56926878, 0, 0]] if not start_dyn\
-           else [[1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335,-0.90467269, -1.56926878, 0, 0] +7*[0.01]
-                 + 7*[0.005] + 7*[0] + [0.1]])
-    vg.add('ultimate_goal', [(0.4146814, 0.47640087, 0.5305665)])
+    vg.add('start_goal', [[1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335, -0.90467269, -1.56926878]])
+    vg.add('ultimate_goal', [(0.5, 0.5, 0.8)])
     vg.add('goal_size', [3])  # changed
     vg.add('terminal_eps', [0.03])
-    # randomization of physics
-    vg.add('physics_variances', [[0.01, 0.005, 0.01, 0.05]])  # damping, armature, frictionloss, mass
-    # rewards
-    vg.add('inner_weight', [1e-3])
+
+    vg.add('physics_variances', [[0, 0, 0, 0], [0.01, 0.005, 0.01, 0.05],
+                                 [0.1, 0.05, 0.1, 0.5], ])  # damping, armature, frictionloss, mass
+    vg.add('disc_mass', [0.1])
+    # goal-algo params
     vg.add('ctrl_regularizer_weight', [1])
     vg.add('action_torque_lambda', [1])
+    vg.add('inner_weight', [10])
+    vg.add('goal_weight', lambda inner_weight, extend_dist_rew: [1000] if inner_weight > 0 or extend_dist_rew else [1])
     vg.add('distance_metric', ['L2'])
-    vg.add('extend_dist_rew', [False])
-    vg.add('goal_weight', lambda inner_weight: [1000] if inner_weight > 0 else [1])
-    # brownian params
-    # vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
-    vg.add('seed_with', ['only_goods'])  # good from brown, onPolicy, previousBrown (ie no good)
-    # vg.add('brownian_horizon', lambda seed_with: [0, 50, 500] if seed_with == 'on_policy' else [50, 500])
-    vg.add('brownian_horizon', [100])
-    vg.add('brownian_variance', [0.1])
-    vg.add('regularize_starts', [0])
-    # goal-algo params
-    vg.add('min_reward', [0.1])
-    vg.add('max_reward', [0.9])
+    vg.add('extend_dist_rew', [100])
     vg.add('persistence', [1])
-    vg.add('n_traj', [3])  # if use_trpo_paths it uses 2!
     vg.add('with_replacement', [True])
-    vg.add('use_trpo_paths', [True])
-    # replay buffer
-    vg.add('replay_buffer', [True])  # todo: attention!!
-    vg.add('coll_eps', lambda terminal_eps: [terminal_eps])
-    vg.add('num_new_starts', [200])
-    vg.add('num_old_starts', [100])
-    vg.add('smart_replay_buffer', [False])
-    vg.add('smart_replay_abs', [True])
-    vg.add('smart_replay_eps', [0.5])
+    vg.add('n_traj', [3])  # if use_trpo_paths it uses 2!
+    vg.add('num_new_starts', [300])
     # sampling params
     vg.add('horizon', [100])
+    vg.add('kill_radius', [0.5])
     vg.add('outer_iters', [5000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
     vg.add('pg_batch_size', [50000])
-    # vg.add('pg_batch_size', [50000, 100000])
     # policy initialization
     vg.add('output_gain', [0.1])
     vg.add('policy_init_std', [1])
@@ -114,20 +89,11 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
     vg.add('baseline', ["g_mlp"])
-    vg.add('policy', ['recurrent'])
+    vg.add('policy', ['mlp', 'recurrent'])
     vg.add('trunc_steps', [100])
-    # key task specific
-    vg.add('move_peg', [True])  # whether or not to move peg
-    vg.add('kill_radius', [0.3])
-    vg.add('kill_peg_radius', [0.03])
-    vg.add('peg_positions', [(7, 8)])  # joint numbers for peg
-    vg.add('peg_scaling', [10])  # multiplicative factor to peg position
-    vg.add('max_gen_states', [300])
-    vg.add('idx_lim', [None])
+    vg.add('seed', [100, 200])
 
-    vg.add('seed', [100, 200, 300, 400, 500])
-
-    exp_prefix = 'robust-disk'
+    exp_prefix = 'robust-reach-trpoL2'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
@@ -197,7 +163,7 @@ if __name__ == '__main__':
                 stub_method_call=run_task,
                 variant=vv,
                 mode='local',
-                n_parallel=12,
+                n_parallel=n_parallel,
                 # Only keep the snapshot parameters for the last iteration
                 snapshot_mode="last",
                 seed=vv['seed'],
