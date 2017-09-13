@@ -62,8 +62,6 @@ def compute_final_states_from_paths(all_paths, as_goal=True, env=None):
 def run_task(v):
     random.seed(v['seed'])
     np.random.seed(v['seed'])
-    sampling_res = 2 if 'sampling_res' not in v.keys() else v['sampling_res']
-
     # Log performance of randomly initialized policy with FIXED goal [0.1, 0.1]
     logger.log("Initializing report and plot_policy_reward...")
     log_dir = logger.get_snapshot_dir()  # problem with logger module here!!
@@ -182,6 +180,7 @@ def run_task(v):
             mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=1, key='goal_reached',
                                                  as_goals=False, full_path=True)
             env.log_diagnostics(paths)
+            algo.sampler.process_samples(itr=outer_iter, paths=all_paths[-1])
 
         logger.dump_tabular(with_prefix=True)
 

@@ -39,28 +39,23 @@ EXPERIMENT_TYPE = osp.basename(__file__).split('.')[0]
 def run_task(v):
     random.seed(v['seed'])
     np.random.seed(v['seed'])
-    sampling_res = 2 if 'sampling_res' not in v.keys() else v['sampling_res']
-    samples_per_cell = 10  # for the oracle rejection sampling
-
     # Log performance of randomly initialized policy with FIXED goal [0.1, 0.1]
     logger.log("Initializing report and plot_policy_reward...")
     log_dir = logger.get_snapshot_dir()  # problem with logger module here!!
     if log_dir is None:
         log_dir = "/home/davheld/repos/rllab_goal_rl/data/local/debug"
     report = HTMLReport(osp.join(log_dir, 'report.html'), images_per_row=5)
-
     report.add_header("{}".format(EXPERIMENT_TYPE))
     report.add_text(format_dict(v))
 
-    inner_env = normalize(PointMazeEnv(maze_id=v['maze_id']))
+    inner_env = normalize(Pr2DiskEnv())
 
     fixed_goal_generator = FixedStateGenerator(state=v['ultimate_goal'])
-    uniform_start_generator = UniformStateGenerator(state_size=v['start_size'], bounds=v['start_range'],
-                                                    center=v['start_center'])
+    fixed_start_generator = FixedStateGenerator(state=v['start_goal'])
 
     env = GoalStartExplorationEnv(
         env=inner_env,
-        start_generator=uniform_start_generator,
+        start_generator=fixed_start_generator,
         obs2start_transform=lambda x: x[:v['start_size']],
         goal_generator=fixed_goal_generator,
         obs2goal_transform=lambda x: x[:v['goal_size']],

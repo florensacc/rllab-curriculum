@@ -230,6 +230,7 @@ def run_task(v):
 
         with logger.tabular_prefix("OnStarts_"):
             env.log_diagnostics(paths)
+            algo.sampler.process_samples(itr=outer_iter, paths=trpo_paths[-1])
         logger.record_tabular('brownian_starts', brownian_starts.size)
 
         start_classes, text_labels = convert_label(labels)

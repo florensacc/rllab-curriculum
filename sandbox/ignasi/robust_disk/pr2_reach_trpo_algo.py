@@ -136,11 +136,6 @@ def run_task(v):
         #                              )
 
         starts = all_feasible_starts.sample(size=v['num_new_starts'])
-        s = generate_starts(env, starts=starts.tolist(), horizon=10, variance=1,
-                                 animated=True, speedup=1,
-                                 zero_action=True,
-                                 # states_transform= states_transform
-                                 )
 
         with ExperimentLogger(log_dir, outer_iter // 10, snapshot_mode='last', hold_outter_log=True):
             logger.log("Updating the environment start generator")
