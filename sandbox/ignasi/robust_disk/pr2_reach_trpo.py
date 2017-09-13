@@ -62,14 +62,15 @@ if __name__ == '__main__':
     vg.add('goal_size', [3])  # changed
     vg.add('terminal_eps', [0.03])
 
-    vg.add('physics_variances', [[0, 0, 0, 0], [0.01, 0.005, 0.01, 0.05],
-                                 [0.1, 0.05, 0.1, 0.5], ])  # damping, armature, frictionloss, mass
+    vg.add('physics_variances', [[0.1, 0.05, 0.1, 0.5], [1, 1, 1, 0.1], [5, 5, 5, 0.1]])  # damping, armature, frictionloss, mass
+    # vg.add('physics_variances', [[0, 0, 0, 0], [0.01, 0.005, 0.01, 0.05],
+    #                              [0.1, 0.05, 0.1, 0.5], ])  # damping, armature, frictionloss, mass
     vg.add('disc_mass', [0.1])
     # goal-algo params
     vg.add('ctrl_regularizer_weight', [1])
     vg.add('action_torque_lambda', [1])
     vg.add('inner_weight', [10])
-    vg.add('goal_weight', lambda inner_weight, extend_dist_rew: [1000] if inner_weight > 0 or extend_dist_rew else [1])
+    vg.add('goal_weight', lambda inner_weight, extend_dist_rew: [0] if inner_weight > 0 or extend_dist_rew else [1])
     vg.add('distance_metric', ['L2'])
     vg.add('extend_dist_rew', [100])
     vg.add('persistence', [1])
@@ -77,7 +78,7 @@ if __name__ == '__main__':
     vg.add('n_traj', [3])  # if use_trpo_paths it uses 2!
     vg.add('num_new_starts', [300])
     # sampling params
-    vg.add('horizon', [100])
+    vg.add('horizon', [50])
     vg.add('kill_radius', [0.5])
     vg.add('outer_iters', [5000])
     vg.add('inner_iters', [5])  # again we will have to divide/adjust the
@@ -89,8 +90,8 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
     vg.add('baseline', ["g_mlp"])
-    vg.add('policy', ['mlp', 'recurrent'])
-    vg.add('trunc_steps', [100])
+    vg.add('policy', ['recurrent'])
+    vg.add('trunc_steps', [50])
     vg.add('seed', [100, 200])
 
     exp_prefix = 'robust-reach-trpoL2'

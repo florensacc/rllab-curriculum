@@ -58,7 +58,7 @@ if __name__ == '__main__':
 
     vg = VariantGenerator()
     vg.add('start_size', [9])  # for the generation it's +2!!
-    vg.add('start_dyn', [True])
+    vg.add('start_dyn', [False])
     # vg.add('start_bounds',
     #        [[(-2.2854, -.05236, -3.9, -2.3213, -3.15, -2.094, -3.15, 0, 0),
     #          (1.714602, 1.3963, 0.0, 0.0, 3.15, 0.0, 3.15, 0, 0)]])
@@ -73,12 +73,12 @@ if __name__ == '__main__':
     # randomization of physics
     vg.add('physics_variances', [[0.01, 0.005, 0.01, 0.05]])  # damping, armature, frictionloss, mass
     # rewards
-    vg.add('inner_weight', [1e-3])
+    vg.add('inner_weight', [1e-2])
     vg.add('ctrl_regularizer_weight', [1])
     vg.add('action_torque_lambda', [1])
     vg.add('distance_metric', ['L2'])
     vg.add('extend_dist_rew', [False])
-    vg.add('goal_weight', lambda inner_weight: [1000] if inner_weight > 0 else [1])
+    vg.add('goal_weight', lambda inner_weight, extend_dist_rew: [1000] if inner_weight > 0 or extend_dist_rew else [1])
     # brownian params
     # vg.add('seed_with', ['on_policy', 'only_goods', 'all_previous'])  # good from brown, onPolicy, previousBrown (ie no good)
     vg.add('seed_with', ['only_goods'])  # good from brown, onPolicy, previousBrown (ie no good)
