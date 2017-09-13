@@ -1,4 +1,5 @@
 import lasagne.layers as L
+import lasagne.init as LI
 import lasagne.nonlinearities as NL
 import lasagne.init
 import numpy as np
@@ -25,6 +26,7 @@ class GaussianGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
             init_std=1.0,
             output_nonlinearity=None,
             trunc_steps=20,
+            output_gain=1,
     ):
         """
         :param env_spec: A spec for the env.
@@ -49,7 +51,8 @@ class GaussianGRUPolicy(StochasticPolicy, LasagnePowered, Serializable):
             hidden_dim=hidden_sizes[0],
             hidden_nonlinearity=hidden_nonlinearity,
             output_nonlinearity=output_nonlinearity,
-            trunc_steps=trunc_steps
+            trunc_steps=trunc_steps,
+            output_W_init=LI.GlorotUniform(gain=output_gain),
         )
 
         l_mean = mean_network.output_layer

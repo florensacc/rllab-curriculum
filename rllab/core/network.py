@@ -196,7 +196,7 @@ class GRUStepLayer(L.MergeLayer):
 
 class GRUNetwork(object):
     def __init__(self, input_shape, output_dim, hidden_dim, hidden_nonlinearity=LN.rectify,
-                 output_nonlinearity=None, name=None, input_var=None, input_layer=None, trunc_steps=20):
+                 output_nonlinearity=None, output_W_init=LI.GlorotUniform(), name=None, input_var=None, input_layer=None, trunc_steps=20, output_gain=1):
         if input_layer is None:
             l_in = L.InputLayer(shape=(None, None) + input_shape, input_var=input_var, name="input")
         else:
@@ -212,6 +212,7 @@ class GRUNetwork(object):
             l_gru_flat,
             num_units=output_dim,
             nonlinearity=output_nonlinearity,
+            W=output_W_init,
         )
         l_output = OpLayer(
             l_output_flat,

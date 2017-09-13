@@ -95,6 +95,7 @@ def run_task(v):
             hidden_sizes=(32,),
             learn_std=v['learn_std'],
             trunc_steps=v['trunc_steps'],
+            output_gain=v['output_gain']
         )
     #
     if v['baseline'] == 'linear':
