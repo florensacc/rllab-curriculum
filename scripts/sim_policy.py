@@ -22,6 +22,8 @@ if __name__ == "__main__":
                         help='vector of init_state')
     parser.add_argument("-cf", '--collection_file', type=str,
                         help='path to the pkl file with start positions Collection')
+    parser.add_argument("-d", '--deterministic', action='store_true', default=False,
+                        help='whether to use a deterministic policy')
     args = parser.parse_args()
 
     policy = None
@@ -55,6 +57,11 @@ if __name__ == "__main__":
                 from sandbox.young_clgan.envs.base import UniformListStateGenerator
                 init_states = all_feasible_starts.sample(1000)
                 env.update_start_generator(UniformListStateGenerator(init_states))
-            path = rollout(env, policy, max_path_length=args.max_path_length,
-                           animated=True, speedup=args.speedup)
+            if args.deterministic:
+                with policy.set_std_to_0():
+                    path = rollout(env, policy, max_path_length=args.max_path_length,
+                                   animated=True, speedup=args.speedup)
+            else:
+                path = rollout(env, policy, max_path_length=args.max_path_length,
+                               animated=True, speedup=args.speedup)
             print(path["rewards"][-1])
