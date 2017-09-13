@@ -49,7 +49,7 @@ class AliceEnv(ProxyEnv, Serializable):
     def action_space(self):
         if isinstance(self._wrapped_env.action_space, Box):
             wrapped_low = np.append(self._wrapped_env.action_space.low,[-1])
-            wrapped_high =  np.append(self._wrapped_env.action_space.high, [1])
+            wrapped_high = np.append(self._wrapped_env.action_space.high, [1])
             return spaces.Box(wrapped_low, wrapped_high)
         else:
             raise NotImplementedError

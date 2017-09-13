@@ -20,8 +20,10 @@ os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
 from rllab.algos.trpo import TRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
+from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.envs.normalized_env import normalize
 from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
+from rllab.policies.gaussian_gru_policy import GaussianGRUPolicy
 
 from sandbox.young_clgan.state.evaluator import convert_label, label_states, evaluate_states, label_states_from_paths
 from sandbox.young_clgan.envs.base import UniformListStateGenerator, UniformStateGenerator, FixedStateGenerator
@@ -62,49 +64,55 @@ def run_task(v):
         terminal_eps=v['terminal_eps'],
         distance_metric=v['distance_metric'],
         extend_dist_rew=v['extend_dist_rew'],
-        only_feasible=v['only_feasible'],
+        inner_weight=v['inner_weight'],
+        goal_weight=v['goal_weight'],
         terminate_env=True,
+        append_goal_to_observation=False,
+        kill_radius=v['kill_radius'],  # we help Alice here to not generate states that are too far. #todo: have 2 envs?
+        kill_peg_radius=v['kill_peg_radius'],
     )
 
-    policy = GaussianMLPPolicy(
-        env_spec=env.spec,
-        hidden_sizes=(64, 64),
-        # Fix the variance since different goals will require different variances, making this parameter hard to learn.
-        learn_std=v['learn_std'],
-        adaptive_std=v['adaptive_std'],
-        std_hidden_sizes=(16, 16),  # this is only used if adaptive_std is true!
-        output_gain=v['output_gain'],
-        init_std=v['policy_init_std'],
-    )
-
-    baseline = LinearFeatureBaseline(env_spec=env.spec)
-
-    # initialize all logging arrays on itr0
-    outer_iter = 0
-
-    logger.log('Generating the Initial Heatmap...')
-    plot_policy_means(policy, env, sampling_res=sampling_res, report=report, limit=v['goal_range'], center=v['goal_center'])
-    test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=sampling_res,
-                         n_traj=v['n_traj'],
-                         itr=outer_iter, report=report, center=v['goal_center'], limit=v['goal_range'])
-    report.new_row()
-
-    all_starts = StateCollection(distance_threshold=v['coll_eps'])
-
-    # Use asymmetric self-play to run Alice to generate starts for Bob.
-    # Use a double horizon because the horizon is shared between Alice and Bob.
-    env_alice = AliceEnv(env_alice=env, env_bob=env, policy_bob=policy, max_path_length=v['alice_horizon'], alice_factor=v['alice_factor'],
-                                       alice_bonus=v['alice_bonus'], gamma=1, stop_threshold=v['stop_threshold'])
-
-    policy_alice = GaussianMLPPolicy(
-            env_spec=env_alice.spec,
+    if v['policy'] == 'mlp':
+        policy = GaussianMLPPolicy(
+            env_spec=env.spec,
             hidden_sizes=(64, 64),
             # Fix the variance since different goals will require different variances, making this parameter hard to learn.
             learn_std=v['learn_std'],
             adaptive_std=v['adaptive_std'],
             std_hidden_sizes=(16, 16),  # this is only used if adaptive_std is true!
-            output_gain = v['output_gain_alice'],
-            init_std = v['policy_init_std_alice'],
+            output_gain=v['output_gain'],
+            init_std=v['policy_init_std'],
+        )
+    elif v['policy'] == 'recurrent':
+        policy = GaussianGRUPolicy(
+            env_spec=env.spec,
+            hidden_sizes=(32,),
+            learn_std=v['learn_std'],
+            trunc_steps=v['trunc_steps'],
+        )
+
+    if v['baseline'] == 'linear':
+        baseline = LinearFeatureBaseline(env_spec=env.spec)
+    elif v['baseline'] == 'g_mlp':
+        baseline = GaussianMLPBaseline(env_spec=env.spec)
+
+    all_starts = StateCollection(distance_threshold=v['coll_eps'])
+
+    # Use asymmetric self-play to run Alice to generate starts for Bob.
+    # Use a double horizon because the horizon is shared between Alice and Bob.
+    env_alice = AliceEnv(env_alice=env, env_bob=env, policy_bob=policy, max_path_length=v['alice_horizon'],  # todo: alice need to have the moving peg env!
+                         alice_factor=v['alice_factor'],
+                         alice_bonus=v['alice_bonus'], gamma=1, stop_threshold=v['stop_threshold'])
+
+    policy_alice = GaussianMLPPolicy(
+        env_spec=env_alice.spec,
+        hidden_sizes=(64, 64),
+        # Fix the variance since different goals will require different variances, making this parameter hard to learn.
+        learn_std=v['learn_std'],
+        adaptive_std=v['adaptive_std'],
+        std_hidden_sizes=(16, 16),  # this is only used if adaptive_std is true!
+        output_gain=v['output_gain_alice'],
+        init_std=v['policy_init_std_alice'],
     )
     baseline_alice = LinearFeatureBaseline(env_spec=env_alice.spec)
 
@@ -120,23 +128,34 @@ def run_task(v):
         plot=False,
     )
 
+    algo = TRPO(
+        env=env,
+        policy=policy,
+        baseline=baseline,
+        batch_size=v['pg_batch_size'],
+        max_path_length=v['horizon'],
+        n_itr=v['inner_iters'],
+        step_size=v['step_size'],
+        discount=v['discount'],
+        plot=False,
+    )
+
+    load_dir = "data_upload/pr2_peg"
+    all_feasible_starts = pickle.load(open(osp.join(config.PROJECT_PATH, load_dir, 'all_feasible_states_trimmed100.pkl'), 'rb'))
+
     for outer_iter in range(1, v['outer_iters']):
 
         logger.log("Outer itr # %i" % outer_iter)
         logger.log("Sampling starts")
 
         starts, t_alices = generate_starts_alice(env_alice=env_alice,
-                                       algo_alice=algo_alice, start_states=[v['start_goal']],
-                                       num_new_starts=v['num_new_starts'], log_dir=log_dir)
+                                                 algo_alice=algo_alice, start_states=[v['start_goal']],
+                                                 num_new_starts=v['num_new_starts'], log_dir=log_dir)
 
-        labels = label_states(starts, env, policy, v['horizon'],
-                              as_goals=False, n_traj=v['n_traj'], key='goal_reached')
-        plot_labeled_states(starts, labels, report=report, itr=outer_iter, limit=v['goal_range'],
-                            center=v['goal_center'], maze_id=v['maze_id'],
-                            summary_string_base='initial starts labels:\n')
-        report.save()
+        generate_starts(env, starts=starts, horizon=100,  # just for visualization
+                        variance=1, subsample=v['num_new_starts'], zero_action=True, animated=True, speedup=100)
 
-        if v['replay_buffer'] and outer_iter > 0 and all_starts.size > 0:
+        if v['replay_buffer'] and outer_iter > 0 and all_starts.size > 0:   #todo: add replay buffer!
             old_starts = all_starts.sample(v['num_old_starts'])
             starts = np.vstack([starts, old_starts])
 
@@ -149,61 +168,35 @@ def run_task(v):
             )
 
             logger.log("Training the algorithm")
-            algo = TRPO(
-                env=env,
-                policy=policy,
-                baseline=baseline,
-                batch_size=v['pg_batch_size'],
-                max_path_length=v['horizon'],
-                n_itr=v['inner_iters'],
-                step_size=v['step_size'],
-                discount=v['discount'],
-                plot=False,
-            )
+            algo.current_itr = 0
+            trpo_paths = algo.train(already_init=outer_iter > 1)
 
-            # We don't use these labels anyway, so we might as well take them from training.
-            #trpo_paths = algo.train()
-            algo.train()
+        logger.log("labeling starts with trpo rollouts")
+        [starts, labels] = label_states_from_paths(trpo_paths, n_traj=2, key='goal_reached',  # using the min n_traj
+                                                   as_goal=False, env=env)
 
-        # logger.log("labeling starts with trpo rollouts")
-        # [starts, labels] = label_states_from_paths(trpo_paths, n_traj=2, key='goal_reached',  # using the min n_traj
-        #                                            as_goal=False, env=env)
-        # paths = [path for paths in trpo_paths for path in paths]
+        paths = [path for paths in trpo_paths for path in paths]
+        with logger.tabular_prefix("OnStarts_"):
+            env.log_diagnostics(paths)
+            algo.sampler.process_samples(itr=outer_iter, paths=trpo_paths[-1])
+
+        logger.log("Labeling on uniform starts")
+        with logger.tabular_prefix("Uniform_w_rand"):
+            unif_starts = all_feasible_starts.sample(300)
+            mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=1, key='goal_reached',
+                                                 as_goals=False, full_path=True)
+            env.log_diagnostics(paths)
 
         with logger.tabular_prefix('Outer_'):
             logger.record_tabular('t_alices', np.mean(t_alices))
 
-        logger.log('Generating the Heatmap...')
-        plot_policy_means(policy, env, sampling_res=sampling_res, report=report, limit=v['goal_range'], center=v['goal_center'])
-        test_and_plot_policy(policy, env, as_goals=False, max_reward=v['max_reward'], sampling_res=sampling_res,
-                             n_traj=v['n_traj'],
-                             itr=outer_iter, report=report, center=v['goal_center'], limit=v['goal_range'])
-
         logger.log("Labeling the starts")
-        labels = label_states(starts, env, policy, v['horizon'], as_goals=False, n_traj=v['n_traj'], key='goal_reached')
-
-        plot_labeled_states(starts, labels, report=report, itr=outer_iter, limit=v['goal_range'],
-                            center=v['goal_center'], maze_id=v['maze_id'])
-
-        # ###### extra for deterministic:
-        # logger.log("Labeling the goals deterministic")
-        # with policy.set_std_to_0():
-        #     labels_det = label_states(goals, env, policy, v['horizon'], n_traj=v['n_traj'], n_processes=1)
-        # plot_labeled_states(goals, labels_det, report=report, itr=outer_iter, limit=v['goal_range'], center=v['goal_center'])
-
         labels = np.logical_and(labels[:, 0], labels[:, 1]).astype(int).reshape((-1, 1))
-
-        logger.dump_tabular(with_prefix=False)
-        report.new_row()
-
         # append new states to list of all starts (replay buffer): Not the low reward ones!!
         filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1]
-
+        all_starts.append(filtered_raw_starts)
         if len(filtered_raw_starts) == 0:  # add a tone of noise if all the states I had ended up being high_reward!
             logger.log("Bad Alice!  All goals are high reward!")
 
-        #     seed_starts = filtered_raw_starts
-        # else:
-        #     seed_starts = generate_starts(env, starts=starts, horizon=v['horizon'] * 2, subsample=v['num_new_starts'],
-        #                                   variance=v['brownian_variance'] * 10)
-        all_starts.append(filtered_raw_starts)
+        logger.dump_tabular(with_prefix=False)
+

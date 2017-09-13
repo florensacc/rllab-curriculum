@@ -20,7 +20,7 @@ if __name__ == '__main__':
     fast_mode = False
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ec2', '-e', action='store_true', default=True, help="add flag to run in ec2")
+    parser.add_argument('--ec2', '-e', action='store_true', default=False, help="add flag to run in ec2")
     parser.add_argument('--clone', '-c', action='store_true', default=False,
                         help="add flag to copy file and checkout current")
     parser.add_argument('--local_docker', '-d', action='store_true', default=False,
@@ -54,45 +54,32 @@ if __name__ == '__main__':
     else:
         mode = 'local'
         n_parallel = cpu_count() if not args.debug else 1
-        # n_parallel = multiprocessing.cpu_count()
 
-    #exp_prefix = 'start-selfplay-maze0-run7'
-    exp_prefix = 'start-selfplay-maze11-run18'
+    exp_prefix = 'robust-selfplay-disk'
 
     vg = VariantGenerator()
-    vg.add('maze_id', [11])  # default is 0
-    #vg.add('maze_id', [0])  # default is 0
-    vg.add('start_size', [2])  # this is the ultimate start we care about: getting the pendulum upright
-    vg.add('start_range',
-           lambda maze_id: [4] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
-    # vg.add('start_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
-    vg.add('start_center', lambda maze_id, start_size: [(2, 2)] if maze_id == 0 and start_size == 2
-                                                else [(2, 2, 0, 0)] if maze_id == 0 and start_size == 4
-                                                else [(0, 0)] if start_size == 2
-                                                else [(0, 0, 0, 0)])
-
-
-    ultimate_goal = lambda maze_id: [(0, 4)] if maze_id == 0 else [(2, 4), (0, 0)] if maze_id == 12 else [(4, 4)]
-    vg.add('ultimate_goal', ultimate_goal)
-    vg.add('start_goal', ultimate_goal)
-
-    vg.add('goal_size', [2])  # this is the ultimate goal we care about: getting the pendulum upright
-    vg.add('terminal_eps', [0.3])
-    vg.add('only_feasible', [True])
-    vg.add('goal_range',
-           lambda maze_id: [4] if maze_id == 0 else [7])  # this will be used also as bound of the state_space
-    vg.add('goal_center', lambda maze_id: [(2, 2)] if maze_id == 0 else [(0, 0)])
-    # brownian params
-    #vg.add('brownian_variance', [0.1, 1])
-    #vg.add('brownian_horizon', [50, 100])
+    vg.add('start_size', [9])
+    vg.add('start_goal',
+           [[1.38781535, -0.2317441, 2.65237236, -1.94273868, 4.78109335, -0.90467269, -1.56926878, 0, 0]])
+    vg.add('ultimate_goal', [(0.4146814, 0.47640087, 0.5305665)])
+    vg.add('goal_size', [3])  # this is the ultimate goal we care about: getting the pendulum upright
+    vg.add('terminal_eps', [0.03])
+    # randomization of physics
+    vg.add('physics_variances', [[0.01, 0.005, 0.01, 0.05]])  # damping, armature, frictionloss, mass #todo use this!
+    # rewards
+    vg.add('inner_weight', [1e-2])  # todo: add the torc penalty
+    vg.add('ctrl_regularizer_weight', [1])  # todo: use this
+    vg.add('action_torque_lambda', [1])
+    vg.add('distance_metric', ['L2'])
+    vg.add('extend_dist_rew', [False])
+    vg.add('goal_weight', lambda extend_dist_rew, inner_weight: [1000] if extend_dist_rew or inner_weight > 0 else [1])
+    # sampling of Alice
+    vg.add('kill_radius', [0.3])
+    vg.add('kill_peg_radius', [0.03])
     # goal-algo params
     vg.add('min_reward', [0.1])
     vg.add('max_reward', [0.9])
-    vg.add('distance_metric', ['L2'])
-    vg.add('extend_dist_rew', [False])  # !!!!
-    vg.add('persistence', [1])
-    vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
-    vg.add('sampling_res', [2])
+    vg.add('persistence', [1])  # todo: do I need this?
     vg.add('with_replacement', [True])
     # replay buffer
     vg.add('replay_buffer', [True])
@@ -100,11 +87,10 @@ if __name__ == '__main__':
     vg.add('num_new_starts', [200])
     vg.add('num_old_starts', [100])
     # sampling params
-    vg.add('horizon', lambda maze_id: [200] if maze_id == 0 else [500])
-    #vg.add('horizon', [500])
-    vg.add('outer_iters', lambda maze_id: [100] if maze_id == 0 else [300])
-    vg.add('inner_iters', [1])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size', [20000])
+    vg.add('horizon', [100])
+    vg.add('outer_iters', [5000])
+    vg.add('inner_iters', [5])  # again we will have to divide/adjust the # todo: this was 1, is it needed for asym?
+    vg.add('pg_batch_size', [50000])
     # baseline
     vg.add('baseline', ['linear'])  # this can also be 'mlp'
     # policy
@@ -125,15 +111,9 @@ if __name__ == '__main__':
     vg.add('alice_bonus', [0])
     vg.add('inner_iters_alice', [1])  # again we will have to divide/adjust the
     vg.add('stop_threshold', [0.99])
-    if args.debug or fast_mode:
-        vg.add('pg_batch_size_alice', [200])
-    else:
-        vg.add('pg_batch_size_alice', lambda pg_batch_size: [pg_batch_size])
+    vg.add('pg_batch_size_alice', lambda pg_batch_size: [pg_batch_size])
 
-    if args.ec2:
-        vg.add('seed', range(100, 700, 100))
-    else:
-        vg.add('seed', [100])
+    vg.add('seed', range(100, 700, 100))
 
     # # gan_configs
     # vg.add('GAN_batch_size', [128])  # proble with repeated name!!
