@@ -459,13 +459,13 @@
 
     </worldbody>
 <actuator>
-    <motor joint="l_shoulder_pan_joint" ctrlrange="-1 1" ctrllimited="true"/>
-    <motor joint="l_shoulder_lift_joint" ctrlrange="-1 1" ctrllimited="true"/>
-    <motor joint="l_upper_arm_roll_joint" ctrlrange="-1 1" ctrllimited="true"/>
-    <motor joint="l_elbow_flex_joint" ctrlrange="-1 1" ctrllimited="true"/>
-    <motor joint="l_forearm_roll_joint" ctrlrange="-1 1" ctrllimited="true"/>
-    <motor joint="l_wrist_flex_joint" ctrlrange="-1 1" ctrllimited="true"/>
-    <motor joint="l_wrist_roll_joint" ctrlrange="-1 1" ctrllimited="true"/>
+    <motor joint="l_shoulder_pan_joint" ctrlrange="-5 5" ctrllimited="true"/>
+    <motor joint="l_shoulder_lift_joint" ctrlrange="-5 5" ctrllimited="true"/>
+    <motor joint="l_upper_arm_roll_joint" ctrlrange="-5 5" ctrllimited="true"/>
+    <motor joint="l_elbow_flex_joint" ctrlrange="-5 5" ctrllimited="true"/>
+    <motor joint="l_forearm_roll_joint" ctrlrange="-5 5" ctrllimited="true"/>
+    <motor joint="l_wrist_flex_joint" ctrlrange="-20 20" ctrllimited="true"/>
+    <motor joint="l_wrist_roll_joint" ctrlrange="-5 5" ctrllimited="true"/>
     <!--<motor joint="slider1" ctrlrange="-1 1" ctrllimited="true"/>-->
     <!--<motor joint="slider2" ctrlrange="-1 1" ctrllimited="true"/>-->
 
