@@ -33,8 +33,8 @@ if __name__ == '__main__':
 
     # setup ec2
     subnets = [
-        'ap-southeast-2b', 'ap-southeast-2c', 'ap-southeast-1a', 'eu-central-1b', 'eu-west-1a', 'eu-west-1b',
-        'eu-west-1c'
+        'ap-southeast-2b', 'ap-southeast-1a', 'ap-southeast-2c', 'eu-central-1b',
+        'eu-west-1a', 'eu-west-1c', 'eu-west-1b', 'us-west-2c', 'ap-northeast-2a',
     ]
     # subnets = [
     #     'ap-northeast-2a', 'ap-northeast-2c', 'us-east-2b', 'ap-south-1a', 'us-east-2c', 'us-east-2a', 'ap-south-1b',
@@ -71,7 +71,7 @@ if __name__ == '__main__':
     vg.add('goal_size', [3])  # changed
     vg.add('terminal_eps', [0.03])
     # randomization of physics
-    vg.add('physics_variances', [[0.01, 0.005, 0.01, 0.05]])  # damping, armature, frictionloss, mass
+    vg.add('physics_variances', [[0.1, 0.05, 0.1, 0.1], [1, 1, 1, 0.5]])  # damping, armature, frictionloss, mass
     # rewards
     vg.add('inner_weight', [1e-2])
     vg.add('ctrl_regularizer_weight', [1])
@@ -104,8 +104,8 @@ if __name__ == '__main__':
     # sampling params
     vg.add('horizon', [100])
     vg.add('outer_iters', [5000])
-    vg.add('inner_iters', [5])  # again we will have to divide/adjust the
-    vg.add('pg_batch_size', [50000])
+    vg.add('inner_iters', [2])  # again we will have to divide/adjust the
+    vg.add('pg_batch_size', [5000])
     # vg.add('pg_batch_size', [50000, 100000])
     # policy initialization
     vg.add('output_gain', [0.1])
@@ -114,7 +114,7 @@ if __name__ == '__main__':
     vg.add('adaptive_std', [False])
     vg.add('discount', [0.995])
     vg.add('baseline', ["g_mlp"])
-    vg.add('policy', ['recurrent'])
+    vg.add('policy', ['mlp', 'recurrent'])
     vg.add('trunc_steps', [100])
     # key task specific
     vg.add('move_peg', [True])  # whether or not to move peg
@@ -125,9 +125,9 @@ if __name__ == '__main__':
     vg.add('max_gen_states', [300])
     vg.add('idx_lim', [None])
 
-    vg.add('seed', [100, 200, 300, 400, 500])
+    vg.add('seed', [100, 200, 300])
 
-    exp_prefix = 'robust-disk'
+    exp_prefix = 'robust-disk-troque5'
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
