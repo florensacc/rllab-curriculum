@@ -94,7 +94,6 @@ def run_task(v):
             goal_weight=v['goal_weight'],
             terminate_env=True,
             append_goal_to_observation=False, # prevents goal environment from appending observation
-
         )
     else:
         # cannot move the peg
@@ -114,7 +113,7 @@ def run_task(v):
     elif v['policy'] == 'recurrent':
         policy = GaussianGRUPolicy(
             env_spec=env.spec,
-            hidden_sizes=(32,),
+            hidden_sizes=(128,),
             learn_std=v['learn_std'],
             trunc_steps=v['trunc_steps'],
             output_gain=v['output_gain'],
@@ -253,7 +252,7 @@ def run_task(v):
             env.log_diagnostics(paths)
         logger.dump_tabular(with_prefix=True)
         with logger.tabular_prefix("Uniform_wo_rand"):
-            with gen_states_env.set_randomization():
+            with env.set_randomization():
                 unif_starts = all_feasible_starts.sample(300)
                 mean_reward, paths = evaluate_states(unif_starts, env, policy, v['horizon'], n_traj=1, key='goal_reached',
                                                  as_goals=False, full_path=True)

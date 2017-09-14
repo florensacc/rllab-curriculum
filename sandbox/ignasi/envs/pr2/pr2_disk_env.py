@@ -21,7 +21,7 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
                  dist_weight=0,
                  ctrl_regularizer_weight=1,
                  action_torque_lambda=0,
-                 disc_mass=0.1,
+                 disc_mass=0.15,
                  physics_variances=(0, 0, 0, 0),
                  start_peg=True,
                  start_dyn=True,
@@ -69,7 +69,10 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
         damping = (self.model.dof_damping[:, 0]).copy()
         armature = (self.model.dof_armature[:, 0]).copy()
         frictionloss = (self.model.dof_frictionloss[:, 0]).copy()
-        disc_mass = np.array([self.disc_mass])
+        id_tool = self.model.body_names.index('gear')
+        xfrc = np.copy(self.model.data.xfrc_applied)
+        mass = xfrc[id_tool, 2] / (-9.81)
+        disc_mass = np.array([mass])
         return np.concatenate([damping, armature, frictionloss, disc_mass])
 
     @contextmanager
@@ -135,18 +138,10 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
                 self.model.dof_frictionloss = np.maximum(0, init_state[(id_start + 14):(id_start + 21)])
                 xfrc[id_tool, 2] = -9.81 * np.maximum(0, init_state[(id_start + 21)])
             else:
-                dim = len(self.init_damping)
-                damping = np.maximum(0, np.random.multivariate_normal(self.init_damping,
-                                                                      self.physics_variances[0] * np.eye(dim)))
-                armature = np.maximum(0, np.random.multivariate_normal(self.init_armature,
-                                                                       self.physics_variances[1] * np.eye(dim)))
-                frictionloss = np.maximum(0, np.random.multivariate_normal(self.init_frictionloss,
-                                                                           self.physics_variances[2] * np.eye(dim)))
                 self.model.dof_damping = damping[:, None]
                 self.model.dof_armature = armature[:, None]
                 self.model.dof_frictionloss = frictionloss[:, None]
-                xfrc[id_tool, 2] = - 9.81 * np.maximum(0,
-                                                       self.disc_mass + np.random.uniform(0, self.physics_variances[3]))
+
             self.model.data.xfrc_applied = xfrc
 
 
@@ -227,7 +222,10 @@ class Pr2DiskEnv(MujocoEnv, Serializable):
         self.model.forward()
 
     def transform_to_start_space(self, obs, env_infos):  # hard-coded that the first 7 coord are the joint pos.
-        return np.concatenate([obs[:7], env_infos['goal_relative'][:2], env_infos['dynamics']])  # using 'goal' takes the one from the goal_env
+        if self.start_dyn:
+            return np.concatenate([obs[:7], env_infos['goal_relative'][:2], env_infos['dynamics']])  # using 'goal' takes the one from the goal_env
+        else:
+            return np.concatenate([obs[:7], env_infos['goal_relative'][:2]])  # using 'goal' takes the one from the goal_env
         # remove the last one, it's the z coordinate of the peg and it doesn't move.
 
 

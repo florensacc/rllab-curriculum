@@ -56,7 +56,10 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
         damping = (self.model.dof_damping[:7, 0]).copy()
         armature = (self.model.dof_armature[:7, 0]).copy()
         frictionloss = (self.model.dof_frictionloss[:7, 0]).copy()
-        disc_mass = np.array([self.disc_mass])
+        id_tool = self.model.body_names.index('gear')
+        xfrc = np.copy(self.model.data.xfrc_applied)
+        mass = xfrc[id_tool, 2] / (-9.81)
+        disc_mass = np.array([mass])
         return np.concatenate([damping, armature, frictionloss, disc_mass])
 
 
@@ -78,7 +81,7 @@ class DiskGenerateStatesEnv(MujocoEnv, Serializable):
             return joint_position
 
     def reset(self, init_state=None, *args, **kwargs):  # todo: init_state should have (joints, peg, phy)
-        self.init_peg_pos = np.random.multivariate_normal((0,0), 0.01*np.eye(2)) + self.model.data.qpos[-2:,0]
+        self.init_peg_pos = np.random.uniform((0.03, 0.03), 2) + self.model.data.qpos[-2:,0]
         # init_state = (0.387, 1.137, -2.028, -1.744, 2.029, -0.873, 1.55, 0, 0)
         ret = super(DiskGenerateStatesEnv, self).reset(init_state, *args, **kwargs)
         return ret
