@@ -1,3 +1,0 @@
-"""
-Autoregressive Q Learning.
-"""
