@@ -164,7 +164,7 @@ class GoalExplorationEnv(GoalEnv, ProxyEnv, Serializable):
         if self.terminate_env and info['goal_reached']:
             done = True
         if self.append_goal_to_observation:
-            print("appending goal to obs")
+            # print("appending goal to obs")
             observation = self.append_goal_observation(observation)
         return (
             observation,
