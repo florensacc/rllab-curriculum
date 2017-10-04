@@ -1,7 +1,7 @@
 from rllab.envs.normalized_env import normalize
 
-from sandbox.young_clgan.lib.envs.base import FixedGoalGenerator
-from sandbox.young_clgan.lib.envs.maze.point_maze_env import PointMazeEnv
+from sandbox.curriculum.lib.envs.base import FixedGoalGenerator
+from sandbox.curriculum.lib.envs.maze.point_maze_env import PointMazeEnv
 env = normalize(PointMazeEnv(goal_generator=FixedGoalGenerator([0.1, 0.1])))
 
 # from rllab.envs.mujoco.maze.point_maze_env import PointMazeEnv

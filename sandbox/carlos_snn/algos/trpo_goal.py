@@ -2,8 +2,8 @@ import numpy as np
 from rllab.algos.trpo import TRPO
 from rllab.misc import logger
 from rllab.misc.overrides import overrides
-from sandbox.young_clgan.goal.evaluator import evaluate_goal_env
-from sandbox.young_clgan.lib.envs.base import UniformGoalGenerator
+from sandbox.curriculum.goal.evaluator import evaluate_goal_env
+from sandbox.curriculum.lib.envs.base import UniformGoalGenerator
 
 
 class TRPOGoal(TRPO):

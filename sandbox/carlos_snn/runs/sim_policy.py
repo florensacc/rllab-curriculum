@@ -6,7 +6,7 @@ import os
 import random
 import numpy as np
 
-from sandbox.young_clgan.envs.base import FixedStateGenerator
+from sandbox.curriculum.envs.base import FixedStateGenerator
 
 filename = str(uuid.uuid4())
 
