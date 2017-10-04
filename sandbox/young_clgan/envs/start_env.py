@@ -211,19 +211,17 @@ def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsa
         obs = env.reset(init_state=starts[i % n_starts])
         states = [env.start_observation]
         steps = 0
-        noise = 0
         num_roll_reached_goal = 0
         num_roll = 0
         goal_reached = False
-        if animated:
-            env.render()
+        # if animated:
+        #     env.render()
         while len(states) < size:
             if animated:
                 steps += 1
                 if done or steps >= horizon:
                     i += 1
                     steps = 0
-                    noise = 0
                     done = False
                     obs = env.reset(init_state=starts[i % n_starts])
                     # import pdb; pdb.set_trace()
@@ -232,7 +230,7 @@ def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsa
                     if goal_reached:
                         num_roll_reached_goal += 1
                 else:
-                    noise = np.random.uniform(env.action_space.bounds)
+                    noise = np.random.uniform(*env.action_space.bounds)
                     if policy:
                         action, _ = policy.get_action(obs)
                     else:
@@ -244,9 +242,9 @@ def generate_starts(env, policy=None, starts=None, horizon=50, size=10000, subsa
                     if done and env_info['goal_reached']:  # we don't care about goal done, otherwise will never advance!
                         goal_reached = True
                         done = False
-                env.render()
-                timestep = 0.05
-                time.sleep(timestep / speedup)
+                # env.render()
+                # timestep = 0.05
+                # time.sleep(timestep / speedup)
             else:
                 # import pdb; pdb.set_trace()
                 brownian_state_wrapper = FunctionWrapper(
@@ -433,13 +431,12 @@ def brownian(start, env, kill_outside, kill_radius, horizon, variance, policy=No
     with env.set_kill_outside(kill_outside=kill_outside, radius=kill_radius):
         done = False
         goal_reached = False
-        noise = 0
         steps = 0
         states = [start]
         obs = env.reset(start)
         while not done and steps < horizon:
             steps += 1
-            noise += np.random.randn(env.action_space.flat_dim) * variance
+            noise = np.random.uniform(*env.action_space.bounds)
             if policy is not None:
                 action, _ = policy.get_action(obs)
             else:
