@@ -1,4 +1,4 @@
-# rllab-goal
+# rllab-curriculum
 
 For `rllab` setup, please see documentation at [https://rllab.readthedocs.org/en/latest/](https://rllab.readthedocs.org/en/latest/).
 
