@@ -93,12 +93,12 @@ class Arm3dKeyEnv(MujocoEnv, Serializable):
             reward = -100
         return Step(next_obs, reward, done)
 
-    def reset(self, init_state=None):
-        xfrc = self.model.data.xfrc_applied().copy()
-        id_kh = self.model.data.body_names.index('keyhole')
-        xfrc[id_kh, 2] = -9.81 * 0.1
-        self.model.data.xfrc_applied = xfrc
-        super(Arm3dKeyEnv).reset(init_state=init_state)
+    # def reset(self, init_state=None):
+    #     xfrc = self.model.data.xfrc_applied().copy()
+    #     id_kh = self.model.data.body_names.index('keyhole')
+    #     xfrc[id_kh, 2] = -9.81 * 0.1
+    #     self.model.data.xfrc_applied = xfrc
+    #     super(Arm3dKeyEnv).reset(init_state=init_state)
 
 
 def find_out_feasible_states(env, log_dir, distance_threshold=0.1, brownian_variance=1, animate=False):
