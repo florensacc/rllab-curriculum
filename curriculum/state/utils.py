@@ -55,7 +55,7 @@ class StateCollection(object):
                 n_process = singleton_pool.n_parallel
             elif n_process in [-1, 0]:
                 n_process = 1
-            if n_process > 1:
+            if states.shape[0] >= n_process > 1:
                 states_per_process = states.shape[0] // singleton_pool.n_parallel
                 list_of_states = [states[i * states_per_process: (i+1) * states_per_process, :] for i in range(n_process-1)]
                 list_of_states.append(states[states_per_process * (n_process - 1):, :])
@@ -67,10 +67,12 @@ class StateCollection(object):
             return states
 
     def _select_states(self, states):
-        # print('selecting states from ', states.shape)
+        # print('selecting states from shape: ', states.shape)
         selected_states = states
         selected_states_idx_lim = np.array([state[:self.idx_lim] for state in states])
+        # print('selecting states from shape (after idx_lim of ', self.idx_lim, ': ', selected_states_idx_lim.shape)
         state_list_idx_lim = np.array([state[:self.idx_lim] for state in self.state_list])
+        # print('the state_list_idx_lim shape: ', np.shape(self.state_list))
         if self.distance_threshold is not None and self.distance_threshold > 0:
             if len(self.state_list) > 0:
                 dists = scipy.spatial.distance.cdist(state_list_idx_lim, selected_states_idx_lim)
