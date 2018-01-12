@@ -1,5 +1,6 @@
 data
 data_upload
+!data_upload/state_collections/*
 *.pyc
 *-checkpoint.ipynb
 .DS_Store
