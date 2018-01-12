@@ -103,10 +103,11 @@ def run_task(v):
     #     open(osp.join(config.PROJECT_PATH, load_dir, 'key_all_feasible_04_230000.pkl'), 'rb'))
     # all_feasible_starts = pickle.load(
     #     open(osp.join(config.PROJECT_PATH, load_dir, 'key_all_feasible_states_med_rad4.pkl'), 'rb'))
-    all_feasible_starts2 = pickle.load(
-        open(osp.join(config.PROJECT_PATH, load_dir, 'key_all_feasible_states_min_rad4.pkl'), 'rb'))
-    all_feasible_starts3 = pickle.load(
-        open(osp.join(config.PROJECT_PATH, load_dir, 'key_all_feasible_states_max_rad2.pkl'), 'rb'))
+    
+    # all_feasible_starts2 = pickle.load(
+    #     open(osp.join(config.PROJECT_PATH, load_dir, 'key_all_feasible_states_min_rad4.pkl'), 'rb'))
+    # all_feasible_starts3 = pickle.load(
+    #     open(osp.join(config.PROJECT_PATH, load_dir, 'key_all_feasible_states_max_rad2.pkl'), 'rb'))
     print("we have %d feasible starts" % all_feasible_starts.size)
 
     all_starts = StateCollection(distance_threshold=v['coll_eps'])
