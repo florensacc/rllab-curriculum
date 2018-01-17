@@ -1,6 +1,7 @@
-data
-data_upload
-!data_upload/state_collections/*
+data/*
+!data/Figures/
+data_upload/*
+!data_upload/state_collections/
 *.pyc
 *-checkpoint.ipynb
 .DS_Store
@@ -45,10 +46,8 @@ rllab/config_personal.py
 *.sh
 MNIST/
 logs/
-*.pkl
 *.html
 *.csv
-*.png
 *.ipynb
 .remote-sync.json
 sandbox/rocky/exp_data

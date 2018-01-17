@@ -1,0 +1,27 @@
+
+KEY:
+key_all_feasible_states_max_rad2.pkl: 544,575 states; 120,784 inside; 423,791 outside (78%)
+key_all_feasible_states_med_rad2.pkl: 292,703 states; 107,893 inside; 184,810 outside (63%)
+key_all_feasible_states_min_rad2.pkl: 181,975 states;  92,317 inside;  89,658 outside (49%)
+
+key_all_feasible_states_med_rad4.pkl:  86,095 states;  51,228 inside;  34,867 outside (40%)
+key_all_feasible_states_min_rad4.pkl:  31,484 states;
+
+key_all_feasible_04_230000.pkl:   228,422 states; 82,444 inside; 145,978 outside (64%)
+
+check if the key is inside:
+for s in cc.states:
+    ...:     s = env.reset(s)
+    ...:     if s[16] < -0.55:
+    ...:         nn +=1
+
+=======================================
+
+DISC:
+disc_all_feasible_states_med.pkl: 300,708 states
+disc_all_feasible_states_old.pkl: 206,077 states
+disc_all_feasible_states_min.pkl:  39,530 states; 5,660 inside; 33,870 outside (83%)
+disc_all_feasible_states_min2.pkl: 42,919 states; 3,309 inside;        outside (92%)
+
+
+disc_all_feasible_04_154700.pkl: 154700 states; 

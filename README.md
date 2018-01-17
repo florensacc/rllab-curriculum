@@ -9,7 +9,7 @@ To run the maze-ant goal experiments, run:
 
 In the same directory are all the files to lauch all the baselines presented in the [*Automatic Goal Generation for RL Agents*](https://arxiv.org/abs/1705.06366) paper, and more. The performances obtained should match the figure found in 
 
-`data/Figures/maze_goal/maze_ant_baselines_long.png`
+`data/Figures/maze_ant/maze_ant_baselines_long.png`
 
 ## Reverse Curriculum
 To run the key-hole manipulation experiments, run:
