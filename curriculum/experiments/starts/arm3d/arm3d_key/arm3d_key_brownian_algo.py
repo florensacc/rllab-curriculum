@@ -218,11 +218,10 @@ def run_task(v):
         logger.dump_tabular(with_prefix=True)
 
         # append new states to list of all starts (replay buffer):
-        logger.log("Appending good goals to replay and generating seeds")
-        filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1]
-        all_starts.append(filtered_raw_starts)
-
         if v['seed_with'] == 'only_goods':
+            logger.log("Appending good goals to replay and generating seeds")
+            filtered_raw_starts = [start for start, label in zip(starts, labels) if label[0] == 1]
+            all_starts.append(filtered_raw_starts)
             if len(filtered_raw_starts) > 0:
                 seed_starts = filtered_raw_starts
             elif np.sum(start_classes == 0) > np.sum(start_classes == 1):  # if more low reward than high reward
@@ -233,8 +232,10 @@ def run_task(v):
                                                   subsample=v['num_new_starts'],
                                                   variance=v['brownian_variance'] * 10)
         elif v['seed_with'] == 'all_previous':
+            logger.log("Appending all goals to replay and generating seeds")
             all_starts.append(starts)
             seed_starts = starts
         elif v['seed_with'] == 'on_policy':
+            all_starts.append(starts)
             with algo.env.set_kill_outside(radius=v['kill_radius']):
                 seed_starts = generate_starts(algo.env, policy, horizon=v['horizon'], subsample=v['num_new_starts'])
