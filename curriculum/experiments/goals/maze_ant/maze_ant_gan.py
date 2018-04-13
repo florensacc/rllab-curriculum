@@ -28,11 +28,7 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true', default=False, help="run code without multiprocessing")
     args = parser.parse_args()
 
-    # setup ec2
-    subnets = [
-        'us-east-2b', 'us-east-2c', 'us-east-2a', 'eu-central-1b', 'eu-central-1a'
-    ]
-    ec2_instance = args.type if args.type else 'm4.4xlarge'
+    ec2_instance = args.type if args.type else 'm4.10xlarge'
     # configure instan
     info = config.INSTANCE_TYPE_INFO[ec2_instance]
     config.AWS_INSTANCE_TYPE = ec2_instance
@@ -66,8 +62,8 @@ if __name__ == '__main__':
     vg.add('n_traj', [3])  # only for labeling and plotting (for now, later it will have to be equal to persistence!)
     vg.add('with_replacement', [False])
     vg.add('smart_init', [True])
-    vg.add('label_with_variation', [True])
-    vg.add('use_trpo_paths', lambda label_with_variation: [False] if label_with_variation else [False, True])
+    vg.add('label_with_variation', [False])
+    vg.add('use_trpo_paths', lambda label_with_variation: [False] if label_with_variation else [False])
     # replay buffer
     vg.add('replay_buffer', [True])
     vg.add('coll_eps', [0.3])
@@ -112,29 +108,10 @@ if __name__ == '__main__':
     # Launching
     print("\n" + "**********" * 10 + "\nexp_prefix: {}\nvariants: {}".format(exp_prefix, vg.size))
     print('Running on type {}, with price {}, parallel {} on the subnets: '.format(config.AWS_INSTANCE_TYPE,
-                                                                                   config.AWS_SPOT_PRICE, n_parallel),
-          *subnets)
+                                                                                   config.AWS_SPOT_PRICE, n_parallel),)
 
     for vv in vg.variants():
         if mode in ['ec2', 'local_docker']:
-            # # choose subnet
-            subnet = random.choice(subnets)
-            config.AWS_REGION_NAME = subnet[:-1]
-            config.AWS_KEY_NAME = config.ALL_REGION_AWS_KEY_NAMES[
-                config.AWS_REGION_NAME]
-            config.AWS_IMAGE_ID = config.ALL_REGION_AWS_IMAGE_IDS[
-                config.AWS_REGION_NAME]
-            config.AWS_SECURITY_GROUP_IDS = \
-                config.ALL_REGION_AWS_SECURITY_GROUP_IDS[
-                    config.AWS_REGION_NAME]
-            config.AWS_NETWORK_INTERFACES = [
-                dict(
-                    SubnetId=config.ALL_SUBNET_INFO[subnet]["SubnetID"],
-                    Groups=config.AWS_SECURITY_GROUP_IDS,
-                    DeviceIndex=0,
-                    AssociatePublicIpAddress=True,
-                )
-            ]
 
             run_experiment_lite(
                 # use_cloudpickle=False,
