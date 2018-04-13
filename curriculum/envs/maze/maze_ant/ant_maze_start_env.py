@@ -1,6 +1,6 @@
 from curriculum.envs.maze.maze_env import MazeEnv
 from curriculum.envs.maze.maze_ant.ant_env import AntEnv
-# from sandbox.young_clgan.envs.maze.maze_ant.ant_target_env import AntEnv
+# from curriculum.envs.maze.maze_ant.ant_target_env import AntEnv
 
 
 class AntMazeEnv(MazeEnv):

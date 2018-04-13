@@ -34,8 +34,7 @@ if __name__ == '__main__':
     if args.debug:
         fast_mode = True
 
-    if args.clone:
-        autoclone.autoclone(__file__, args)
+
 
     # setup ec2
     subnets = [

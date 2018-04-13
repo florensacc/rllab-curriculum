@@ -170,8 +170,7 @@ if __name__ == '__main__':
     )
     args = parser.parse_args()
 
-    if args.clone:
-        autoclone.autoclone(__file__, args)
+
 
     # setup ec2
     ec2_instance = args.type if args.type else 'm4.4xlarge'

@@ -31,7 +31,7 @@ from curriculum.envs.base import FixedStateGenerator, UniformStateGenerator, Uni
 
 from curriculum.state.evaluator import *
 from curriculum.state.generator import StateGAN
-# from sandbox.young_clgan.lib.goal.utils import *
+# from curriculum.lib.goal.utils import *
 from curriculum.logging.html_report import format_dict, HTMLReport
 from curriculum.logging.visualization import *
 from curriculum.logging.logger import ExperimentLogger

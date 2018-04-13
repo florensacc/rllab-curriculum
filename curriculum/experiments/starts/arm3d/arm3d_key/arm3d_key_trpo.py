@@ -27,8 +27,7 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true', default=False, help="run code without multiprocessing")
     args = parser.parse_args()
 
-    if args.clone:
-        autoclone.autoclone(__file__, args)
+
 
     # setup ec2
     subnets = [
